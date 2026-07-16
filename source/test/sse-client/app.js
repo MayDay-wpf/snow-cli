@@ -7,8 +7,20 @@
 // ----------------------------------------------------------------------------
 let eventSource = null; // SSE 连接实例
 let serverUrl = 'http://localhost:3000';
+let authToken = '';
 let currentSessionId = null; // 当前会话 ID
 let selectedImages = []; // 待发送的图片（Base64 data URI）数组
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+	const url = typeof input === 'string' ? input : input.url;
+	if (!authToken || !url.startsWith(serverUrl)) {
+		return nativeFetch(input, init);
+	}
+	const headers = new Headers(init.headers || {});
+	headers.set('Authorization', `Bearer ${authToken}`);
+	return nativeFetch(input, {...init, headers});
+};
 
 // 会话列表 UI 状态
 const sessionListState = {
@@ -1045,8 +1057,12 @@ function updateStatus(connected) {
 // 连接到 SSE 服务器
 function connect() {
 	serverUrl = document.getElementById('serverUrl').value;
+	authToken = document.getElementById('authToken').value.trim();
 
-	eventSource = new EventSource(`${serverUrl}/events`);
+	const eventUrl = authToken
+		? `${serverUrl}/events?token=${encodeURIComponent(authToken)}`
+		: `${serverUrl}/events`;
+	eventSource = new EventSource(eventUrl);
 
 	eventSource.onopen = () => {
 		updateStatus(true);

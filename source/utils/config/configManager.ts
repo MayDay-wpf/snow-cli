@@ -63,6 +63,34 @@ function ensureProfilesDirectory(): void {
 	}
 }
 
+function isValidProfileName(profileName: unknown): profileName is string {
+	return (
+		typeof profileName === 'string' &&
+		profileName.length > 0 &&
+		profileName.length <= 128 &&
+		profileName === profileName.trim() &&
+		profileName !== '.' &&
+		profileName !== '..' &&
+		!/[\\/\u0000-\u001F\u007F]/u.test(profileName)
+	);
+}
+
+function assertValidProfileName(profileName: string): void {
+	if (!isValidProfileName(profileName)) {
+		throw new Error('Invalid profile name');
+	}
+}
+
+function emitActiveProfileChanged(profileName: string): void {
+	void import('./configEvents.js')
+		.then(({configEvents}) => {
+			configEvents.emitConfigChange({type: 'profile', value: profileName});
+		})
+		.catch(() => {
+			// Optional during early startup.
+		});
+}
+
 /**
  * Get the current active profile name
  */
@@ -79,7 +107,9 @@ export function getActiveProfileName(): string {
 				LEGACY_ACTIVE_PROFILE_FILE,
 				'utf8',
 			).trim();
-			const profileName = legacyProfileName || 'default';
+			const profileName = isValidProfileName(legacyProfileName)
+				? legacyProfileName
+				: 'default';
 			// Save in new JSON format
 			setActiveProfileName(profileName);
 			// Delete old .txt file
@@ -97,7 +127,9 @@ export function getActiveProfileName(): string {
 	try {
 		const fileContent = readFileSync(ACTIVE_PROFILE_FILE, 'utf8').trim();
 		const data = JSON.parse(fileContent);
-		return data.activeProfile || 'default';
+		return isValidProfileName(data.activeProfile)
+			? data.activeProfile
+			: 'default';
 	} catch {
 		return 'default';
 	}
@@ -108,6 +140,7 @@ export function getActiveProfileName(): string {
  */
 function setActiveProfileName(profileName: string): void {
 	ensureProfilesDirectory();
+	assertValidProfileName(profileName);
 
 	try {
 		const data = {activeProfile: profileName};
@@ -128,6 +161,7 @@ export function setActiveProfileFromImport(profileName: string): void {
  * Get the path to a profile file
  */
 function getProfilePath(profileName: string): string {
+	assertValidProfileName(profileName);
 	return join(PROFILES_DIR, `${profileName}.json`);
 }
 
@@ -375,6 +409,7 @@ export function switchProfile(profileName: string): void {
 
 	// Update the active profile marker
 	setActiveProfileName(profileName);
+	emitActiveProfileChanged(profileName);
 
 	// Clear all agent caches when switching profiles
 	clearAllAgentCaches();
@@ -401,15 +436,7 @@ export function getNextProfileName(): string {
  */
 export function createProfile(profileName: string, config?: AppConfig): void {
 	ensureProfilesDirectory();
-
-	// Validate profile name
-	if (
-		!profileName.trim() ||
-		profileName.includes('/') ||
-		profileName.includes('\\')
-	) {
-		throw new Error('Invalid profile name');
-	}
+	assertValidProfileName(profileName);
 
 	const profilePath = getProfilePath(profileName);
 
@@ -456,10 +483,10 @@ export function deleteProfile(profileName: string): void {
  */
 export function renameProfile(oldName: string, newName: string): void {
 	ensureProfilesDirectory();
-
-	// Validate new name
-	if (!newName.trim() || newName.includes('/') || newName.includes('\\')) {
-		throw new Error('Invalid profile name');
+	assertValidProfileName(oldName);
+	assertValidProfileName(newName);
+	if (oldName === 'default') {
+		throw new Error('Cannot rename the default profile');
 	}
 
 	if (oldName === newName) {
@@ -489,6 +516,7 @@ export function renameProfile(oldName: string, newName: string): void {
 		// Update active profile if necessary
 		if (getActiveProfileName() === oldName) {
 			setActiveProfileName(newName);
+			emitActiveProfileChanged(newName);
 		}
 
 		// Delete old profile

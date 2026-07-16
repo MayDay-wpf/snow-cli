@@ -1,5 +1,6 @@
-import {useState, type Dispatch, type SetStateAction} from 'react';
+import {useEffect, useState, type Dispatch, type SetStateAction} from 'react';
 import {reloadConfig} from '../../utils/config/apiConfig.js';
+import {configEvents} from '../../utils/config/configEvents.js';
 import {
 	getAllProfiles,
 	getActiveProfileName,
@@ -157,6 +158,17 @@ export function usePanelState(): PanelState & PanelActions {
 		const profile = profiles.find(p => p.name === activeName);
 		return profile?.displayName || activeName;
 	});
+
+	useEffect(() => {
+		const handleConfigChange = (event: {type: string; value: unknown}) => {
+			if (event.type !== 'profile' || typeof event.value !== 'string') return;
+			const profiles = getAllProfiles();
+			const profile = profiles.find(item => item.name === event.value);
+			setCurrentProfileName(profile?.displayName || event.value);
+		};
+		configEvents.onConfigChange(handleConfigChange);
+		return () => configEvents.removeConfigChangeListener(handleConfigChange);
+	}, []);
 
 	const handleSwitchProfile = (options: {
 		isStreaming: boolean;

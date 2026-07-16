@@ -97,9 +97,21 @@ import {
 	type SessionCommandMeta,
 	type SessionCommandResult,
 } from './sessionCommandTypes.js';
+import {
+	getUsageHistorySnapshot,
+	parseUsagePeriod,
+} from '../core/usageHistory.js';
 
 function parseTokens(args?: string): string[] {
-	return (args ?? '').trim().split(/\s+/).filter(Boolean);
+	const tokens: string[] = [];
+	const input = (args ?? '').trim();
+	const pattern = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|(\S+)/g;
+	let match: RegExpExecArray | null;
+	while ((match = pattern.exec(input)) !== null) {
+		const value = match[1] ?? match[2] ?? match[3] ?? '';
+		tokens.push(value.replace(/\\([\\"'])/g, '$1'));
+	}
+	return tokens;
 }
 
 function parseOnOffToggle(
@@ -1510,13 +1522,68 @@ function handlePrivacy(
 		meta.risk,
 	);
 }
+function parseUsageArgs(args?: string): ReturnType<typeof parseUsagePeriod> {
+	const tokens = parseTokens(args);
+	let periodToken: string | undefined;
+
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i]!;
+		const lower = token.toLowerCase();
+		if (lower === 'status') {
+			continue;
+		}
+		if (lower.startsWith('--period=')) {
+			if (periodToken !== undefined) {
+				return {ok: false, message: 'Usage period may only be specified once.'};
+			}
+			const value = token.slice('--period='.length);
+			if (!value) {
+				return {
+					ok: false,
+					message: 'Usage: usage [--period=hour|day|week|month]',
+				};
+			}
+			periodToken = value;
+			continue;
+		}
+		if (lower === '--period' || lower === '-p') {
+			if (periodToken !== undefined || !tokens[i + 1]) {
+				return {
+					ok: false,
+					message: 'Usage: usage [--period=hour|day|week|month]',
+				};
+			}
+			periodToken = tokens[i + 1];
+			i += 1;
+			continue;
+		}
+		if (periodToken === undefined && !token.startsWith('-')) {
+			periodToken = token;
+			continue;
+		}
+		return {
+			ok: false,
+			message: `Invalid usage argument "${token}". Usage: usage [--period=hour|day|week|month]`,
+		};
+	}
+
+	return parseUsagePeriod(periodToken);
+}
+
 async function handleUsage(
 	meta: SessionCommandMeta,
+	args?: string,
 ): Promise<SessionCommandResult> {
+	const parsed = parseUsageArgs(args);
+	if (!parsed.ok) {
+		return failResult(meta.id, 'INVALID_ARGS', parsed.message, meta.risk);
+	}
+
 	// Prefer session contextUsage when present.
 	const {sessionManager} = await import('../session/sessionManager.js');
 	const session = sessionManager.getCurrentSession();
 	const contextUsage = session?.contextUsage ?? null;
+	const history = await getUsageHistorySnapshot(parsed.period);
 	return okResult(
 		meta.id,
 		{
@@ -1529,10 +1596,9 @@ async function handleUsage(
 				plan: getPlanMode(),
 				toolSearch: getToolSearchEnabled(),
 			},
+			history,
 		},
-		contextUsage
-			? 'Usage snapshot from current session context.'
-			: 'Usage snapshot (no active session contextUsage).',
+		`Usage snapshot (${history.window}, ${history.entryCount} history entries).`,
 		meta.risk,
 	);
 }
@@ -1560,20 +1626,36 @@ function parseExportArgs(args?: string):
 		const lower = token.toLowerCase();
 
 		if (lower.startsWith('--session=')) {
-			sessionId = token.slice('--session='.length).trim() || undefined;
+			const value = token.slice('--session='.length).trim();
+			if (!value) {
+				return {ok: false, message: '--session requires a session id.'};
+			}
+			sessionId = value;
 			continue;
 		}
 		if (lower === '--session') {
-			sessionId = tokens[i + 1];
+			const value = tokens[i + 1];
+			if (!value || value.startsWith('-')) {
+				return {ok: false, message: '--session requires a session id.'};
+			}
+			sessionId = value;
 			i += 1;
 			continue;
 		}
 		if (lower.startsWith('--out=')) {
-			outPath = token.slice('--out='.length).trim() || undefined;
+			const value = token.slice('--out='.length).trim();
+			if (!value) {
+				return {ok: false, message: '--out requires an output path.'};
+			}
+			outPath = value;
 			continue;
 		}
 		if (lower === '--out' || lower === '-o') {
-			outPath = tokens[i + 1];
+			const value = tokens[i + 1];
+			if (!value || value.startsWith('-')) {
+				return {ok: false, message: `${token} requires an output path.`};
+			}
+			outPath = value;
 			i += 1;
 			continue;
 		}
@@ -1843,7 +1925,9 @@ async function handleExport(
 			parsed.outPath,
 		);
 
-		await exportSessionToFile(session, filePath, parsed.format);
+		await exportSessionToFile(session, filePath, parsed.format, {
+			exclusive: !parsed.outPath,
+		});
 
 		return okResult(
 			meta.id,
@@ -2149,7 +2233,7 @@ export async function executeSessionCommandHandler(
 		case 'telemetry':
 			return handleTelemetry(meta, normalizedArgs);
 		case 'usage':
-			return handleUsage(meta);
+			return handleUsage(meta, normalizedArgs);
 		case 'permissions': {
 			const {handlePermissions} = await import(
 				'./sessionCommandHandlersExtra.js'
@@ -2242,13 +2326,14 @@ function normalizeArgsForMeta(
 	if (!args) {
 		return args;
 	}
-	const tokens = parseTokens(args);
 	if (!meta.subcommand) {
 		return args;
 	}
-	// If first token equals subcommand, drop it (e.g. "hatch Mochi" stays, "status" becomes "")
-	if (tokens[0]?.toLowerCase() === meta.subcommand.toLowerCase()) {
-		return tokens.slice(1).join(' ');
+	// Strip only the leading subcommand text so quoted args and JSON remain byte-for-byte intact.
+	const trimmed = args.trimStart();
+	const firstToken = /^\S+/u.exec(trimmed)?.[0];
+	if (firstToken?.toLowerCase() === meta.subcommand.toLowerCase()) {
+		return trimmed.slice(firstToken.length).trimStart() || undefined;
 	}
 	return args;
 }

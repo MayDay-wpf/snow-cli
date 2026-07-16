@@ -1,4 +1,4 @@
-import {readFileSync} from 'fs';
+import {existsSync, readFileSync} from 'fs';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 
@@ -15,10 +15,18 @@ export function getPackageVersion(): string {
 	}
 
 	try {
-		// In bundled code, __filename points to bundle/cli.mjs
-		// So we need to go up one level to reach package.json
 		const currentDir = dirname(fileURLToPath(import.meta.url));
-		const packageJsonPath = join(currentDir, '../package.json');
+		const packageJsonPath = [
+			// Bundled code: bundle/cli.mjs -> ../package.json
+			join(currentDir, '../package.json'),
+			// Source code: source/utils/core/version.ts -> ../../../package.json
+			join(currentDir, '../../../package.json'),
+			// Test/dev runners may relocate modules while retaining the project cwd.
+			join(process.cwd(), 'package.json'),
+		].find(existsSync);
+		if (!packageJsonPath) {
+			throw new Error('package.json not found');
+		}
 		const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 		cachedVersion = packageJson.version || '1.0.0';
 		return cachedVersion;

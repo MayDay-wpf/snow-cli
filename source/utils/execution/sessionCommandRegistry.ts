@@ -214,6 +214,18 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		subcommand: 'switch',
 		requiresConfirm: true,
 	}),
+	meta('profiles.create', 'profiles', 'medium_write', 'Create a profile', {
+		subcommand: 'create',
+		requiresConfirm: true,
+	}),
+	meta('profiles.delete', 'profiles', 'high_risk', 'Delete a profile', {
+		subcommand: 'delete',
+		requiresConfirm: true,
+	}),
+	meta('profiles.rename', 'profiles', 'medium_write', 'Rename a profile', {
+		subcommand: 'rename',
+		requiresConfirm: true,
+	}),
 	meta(
 		'codebase',
 		'codebase',
@@ -280,8 +292,8 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		requiresConfirm: true,
 		headlessSupported: true,
 	}),
-	meta('export', 'export', 'low_write', 'Export session (headless path)', {
-		requiresConfirm: false,
+	meta('export', 'export', 'medium_write', 'Export session (headless path)', {
+		requiresConfirm: true,
 	}),
 	meta(
 		'permissions.status',
@@ -535,8 +547,9 @@ export function needsConfirmation(
 	meta: SessionCommandMeta,
 	mode: 'cli' | 'agent' | 'sse',
 	confirm?: boolean,
+	trustedConfirm?: boolean,
 ): boolean {
-	if (confirm) {
+	if (confirm || trustedConfirm) {
 		return false;
 	}
 

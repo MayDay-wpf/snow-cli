@@ -150,20 +150,22 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 // Check if this is a quick command that doesn't need loading indicator
 const args = process.argv.slice(2);
-const isQuickCommand = args.some(
-	arg =>
-		arg === '--version' ||
-		arg === '-v' ||
-		arg === '--help' ||
-		arg === '-h' ||
-		arg === '--doctor' ||
-		arg === '--update-check' ||
-		arg === '--acp' ||
-		arg === '--sse' ||
-		arg === '--sse-daemon' ||
-		arg === '--loop-daemon-execute' ||
-		arg === '--snow-agent-child-worker',
-);
+const isQuickCommand =
+	args[0] === 'cmd' ||
+	args.some(
+		arg =>
+			arg === '--version' ||
+			arg === '-v' ||
+			arg === '--help' ||
+			arg === '-h' ||
+			arg === '--doctor' ||
+			arg === '--update-check' ||
+			arg === '--acp' ||
+			arg === '--sse' ||
+			arg === '--sse-daemon' ||
+			arg === '--loop-daemon-execute' ||
+			arg === '--snow-agent-child-worker',
+	);
 
 // Show loading indicator only for non-quick commands
 if (!isQuickCommand) {

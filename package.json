@@ -159,6 +159,9 @@
 		"tough-cookie": "^6.0.0"
 	},
 	"ava": {
+		"files": [
+			"source/test/**/*.test.ts"
+		],
 		"extensions": {
 			"ts": "module",
 			"tsx": "module"

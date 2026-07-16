@@ -29,9 +29,13 @@ export interface SessionCommandRequest {
 	command: string;
 	/** Remaining args string, e.g. "hatch 小雪 --species=fox". */
 	args?: string;
+	/** Lossless argument tokens from CLI argv; `args` remains for API compatibility. */
+	argTokens?: string[];
 	mode?: SessionCommandMode;
 	/** Explicit confirmation for medium/high risk writes. */
 	confirm?: boolean;
+	/** Confirmation established by a trusted transport, never model input. */
+	trustedConfirm?: boolean;
 }
 
 export interface SessionCommandResult {

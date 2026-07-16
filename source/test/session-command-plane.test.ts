@@ -96,6 +96,48 @@ test('parseCmdArgv extracts json and yes flags', t => {
 	t.true(parsed.request.confirm);
 	t.is(parsed.request.command, 'buddy');
 	t.is(parsed.request.args, 'hatch Pip --species=fox');
+	t.deepEqual(parsed.request.argTokens, ['hatch', 'Pip', '--species=fox']);
+});
+
+test('CLI argv preserves spaces in export paths', async t => {
+	const parsed = parseCmdArgv([
+		'export',
+		'md',
+		'--session',
+		'definitely-missing-session',
+		'--out',
+		'C:/My Exports/chat.md',
+		'--yes',
+	]);
+
+	t.deepEqual(parsed.request.argTokens, [
+		'md',
+		'--session',
+		'definitely-missing-session',
+		'--out',
+		'C:/My Exports/chat.md',
+	]);
+	const result = await runSessionCommand(parsed.request);
+	t.false(result.ok);
+	t.is(result.code, 'NOT_FOUND');
+	t.regex(result.message ?? '', /definitely-missing-session/);
+	t.notRegex(result.message ?? '', /Exports\/chat\.md/);
+});
+
+test('subcommand normalization preserves quoted profile names', async t => {
+	const result = await runSessionCommand({
+		command: 'profiles',
+		args: 'rename "definitely missing profile" "new profile"',
+		mode: 'cli',
+		confirm: true,
+	});
+
+	t.false(result.ok);
+	t.is(result.code, 'NOT_FOUND');
+	t.regex(
+		result.message ?? '',
+		/Profile "definitely missing profile" not found/,
+	);
 });
 
 test('runSessionCommand rejects unknown command', async t => {
@@ -181,7 +223,7 @@ test('runSessionCommand speedometer status/on/off without confirm', async t => {
 		const on = await runSessionCommand({
 			command: 'speedometer',
 			args: 'on',
-			mode: 'agent',
+			mode: 'cli',
 		});
 		t.true(on.ok, on.message);
 		t.is((on.data as {enabled?: boolean})?.enabled, true);
@@ -189,7 +231,7 @@ test('runSessionCommand speedometer status/on/off without confirm', async t => {
 		const mid = await runSessionCommand({
 			command: 'speedometer',
 			args: 'status',
-			mode: 'agent',
+			mode: 'cli',
 		});
 		t.true(mid.ok, mid.message);
 		t.is((mid.data as {enabled?: boolean})?.enabled, true);
@@ -197,7 +239,7 @@ test('runSessionCommand speedometer status/on/off without confirm', async t => {
 		const off = await runSessionCommand({
 			command: 'speedometer',
 			args: 'off',
-			mode: 'agent',
+			mode: 'cli',
 		});
 		t.true(off.ok, off.message);
 		t.is((off.data as {enabled?: boolean})?.enabled, false);
@@ -205,7 +247,7 @@ test('runSessionCommand speedometer status/on/off without confirm', async t => {
 		await runSessionCommand({
 			command: 'speedometer',
 			args: original ? 'on' : 'off',
-			mode: 'agent',
+			mode: 'cli',
 		});
 	}
 });
@@ -223,7 +265,7 @@ test('runSessionCommand hybrid-compress status/toggle without confirm', async t 
 		const flipped = await runSessionCommand({
 			command: 'hybrid-compress',
 			args: original ? 'off' : 'on',
-			mode: 'agent',
+			mode: 'cli',
 		});
 		t.true(flipped.ok, flipped.message);
 		t.is((flipped.data as {enabled?: boolean})?.enabled, !original);
@@ -231,7 +273,7 @@ test('runSessionCommand hybrid-compress status/toggle without confirm', async t 
 		await runSessionCommand({
 			command: 'hybrid-compress',
 			args: original ? 'on' : 'off',
-			mode: 'agent',
+			mode: 'cli',
 		});
 	}
 });
@@ -410,11 +452,11 @@ test('runSessionCommand show-thinking status/toggle without confirm', async t =>
 	}
 });
 
-test('runSessionCommand privacy status/mode with confirm', async t => {
+test('runSessionCommand privacy status/mode with CLI confirmation', async t => {
 	const status = await runSessionCommand({
 		command: 'privacy',
 		args: 'status',
-		mode: 'agent',
+		mode: 'cli',
 		confirm: true,
 	});
 	t.true(status.ok, status.message);
@@ -429,7 +471,7 @@ test('runSessionCommand privacy status/mode with confirm', async t => {
 		const modeResult = await runSessionCommand({
 			command: 'privacy',
 			args: `mode ${targetMode}`,
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(modeResult.ok, modeResult.message);
@@ -438,7 +480,7 @@ test('runSessionCommand privacy status/mode with confirm', async t => {
 		const setResult = await runSessionCommand({
 			command: 'privacy',
 			args: originalEnabled ? 'off' : 'on',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(setResult.ok, setResult.message);
@@ -447,23 +489,23 @@ test('runSessionCommand privacy status/mode with confirm', async t => {
 		await runSessionCommand({
 			command: 'privacy',
 			args: `mode ${originalMode}`,
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		await runSessionCommand({
 			command: 'privacy',
 			args: originalEnabled ? 'on' : 'off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 	}
 });
 
-test('runSessionCommand codebase agent-review/reranking toggles', async t => {
+test('runSessionCommand codebase agent-review/reranking toggles via CLI', async t => {
 	const status = await runSessionCommand({
 		command: 'codebase',
 		args: 'status',
-		mode: 'agent',
+		mode: 'cli',
 		confirm: true,
 	});
 	t.true(status.ok, status.message);
@@ -478,7 +520,7 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 		const reviewOff = await runSessionCommand({
 			command: 'codebase',
 			args: 'agent-review off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(reviewOff.ok, reviewOff.message);
@@ -490,7 +532,7 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 		const rerankOn = await runSessionCommand({
 			command: 'codebase',
 			args: 'reranking on',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(rerankOn.ok, rerankOn.message);
@@ -503,13 +545,13 @@ test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 		await runSessionCommand({
 			command: 'codebase',
 			args: originalReview ? 'agent-review on' : 'agent-review off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		await runSessionCommand({
 			command: 'codebase',
 			args: originalRerank ? 'reranking on' : 'reranking off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 	}
@@ -938,6 +980,17 @@ test('runSessionCommand permissions clear without confirm requires confirmation'
 		args: 'clear',
 		mode: 'cli',
 		confirm: false,
+	});
+	t.false(result.ok);
+	t.is(result.code, 'CONFIRMATION_REQUIRED');
+});
+
+test('hardening: agent cannot self-confirm medium/high writes', async t => {
+	const result = await runSessionCommand({
+		command: 'yolo',
+		args: 'on',
+		mode: 'agent',
+		confirm: true,
 	});
 	t.false(result.ok);
 	t.is(result.code, 'CONFIRMATION_REQUIRED');
@@ -1448,11 +1501,87 @@ test('hardening: session.current structured fields', async t => {
 test('hardening: usage returns object data', async t => {
 	const result = await runSessionCommand({
 		command: 'usage',
+		args: '--period=day',
 		mode: 'cli',
 	});
 	t.true(result.ok, result.message);
 	t.is(typeof result.data, 'object');
 	t.truthy(result.data);
+	const data = result.data as {
+		history?: {period?: string; window?: string; models?: unknown[]};
+	};
+	t.is(data.history?.period, 'day');
+	t.is(data.history?.window, 'last_7d');
+	t.true(Array.isArray(data.history?.models));
+});
+
+test('hardening: usage rejects invalid periods', async t => {
+	for (const args of ['--period=century', '--period=']) {
+		const result = await runSessionCommand({
+			command: 'usage',
+			args,
+			mode: 'cli',
+		});
+		t.false(result.ok);
+		t.is(result.code, 'INVALID_ARGS');
+	}
+});
+
+test('hardening: session ids reject traversal attempts', async t => {
+	for (const command of ['session.resume', 'session.load']) {
+		const result = await runSessionCommand({
+			command,
+			args: '../../config',
+			mode: 'cli',
+			confirm: true,
+		});
+		t.false(result.ok);
+		t.is(result.code, 'NOT_FOUND');
+	}
+});
+
+test('hardening: profile paths and default profile invariant are protected', async t => {
+	const traversal = await runSessionCommand({
+		command: 'profiles.delete',
+		args: '../config',
+		mode: 'cli',
+		confirm: true,
+	});
+	t.false(traversal.ok);
+	t.regex(traversal.message ?? '', /invalid profile name/i);
+
+	const renameDefault = await runSessionCommand({
+		command: 'profiles.rename',
+		args: 'default renamed-default',
+		mode: 'cli',
+		confirm: true,
+	});
+	t.false(renameDefault.ok);
+	t.regex(renameDefault.message ?? '', /cannot rename the default profile/i);
+});
+
+test('hardening: export flags require values', async t => {
+	for (const args of ['--out', '--out=', '--session', '--session=']) {
+		const result = await runSessionCommand({
+			command: 'export',
+			args,
+			mode: 'cli',
+			confirm: true,
+		});
+		t.false(result.ok);
+		t.is(result.code, 'INVALID_ARGS');
+	}
+});
+
+test('hardening: unknown MCP services are not persisted as built-ins', async t => {
+	const result = await runSessionCommand({
+		command: 'mcp.disable',
+		args: 'definitely-not-a-service',
+		mode: 'cli',
+		confirm: true,
+	});
+	t.false(result.ok);
+	t.is(result.code, 'NOT_FOUND');
 });
 
 test('hardening: config.snapshot has no secret-like keys (deep)', async t => {
@@ -1615,7 +1744,7 @@ test('hardening: same-process plan/yolo/theme writes emit configEvents', async t
 		const planOn = await runSessionCommand({
 			command: 'plan',
 			args: originalPlan ? 'off' : 'on',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(planOn.ok, planOn.message);
@@ -1630,7 +1759,7 @@ test('hardening: same-process plan/yolo/theme writes emit configEvents', async t
 		const yoloOn = await runSessionCommand({
 			command: 'yolo',
 			args: originalYolo ? 'off' : 'on',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		t.true(yoloOn.ok, yoloOn.message);
@@ -1657,13 +1786,13 @@ test('hardening: same-process plan/yolo/theme writes emit configEvents', async t
 		await runSessionCommand({
 			command: 'plan',
 			args: originalPlan ? 'on' : 'off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		await runSessionCommand({
 			command: 'yolo',
 			args: originalYolo ? 'on' : 'off',
-			mode: 'agent',
+			mode: 'cli',
 			confirm: true,
 		});
 		await runSessionCommand({

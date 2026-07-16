@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import {existsSync} from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type {ChatMessage, Session} from './sessionManager.js';
@@ -18,7 +19,6 @@ export function buildDefaultExportFileName(
 	format: ExportFormat,
 ): string {
 	const shortId = sessionId.slice(0, 8);
-	// ISO seconds only: 2026-07-15T08-52-40 (drop ms / trailing Z)
 	const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
 	return `snow-export-${timestamp}-${shortId}.${format}`;
 }
@@ -36,10 +36,28 @@ export function resolveExportFilePath(
 	if (outPath) {
 		return path.resolve(outPath);
 	}
-	return path.join(
-		getDefaultExportDirectory(),
+	const directory = getDefaultExportDirectory();
+	const initial = path.join(
+		directory,
 		buildDefaultExportFileName(sessionId, format),
 	);
+	if (!existsSync(initial)) return initial;
+	// Avoid overwriting an existing export when multiple exports happen within
+	// the same second by advancing the timestamp until the path is unused.
+	let attempt = 1;
+	let candidate = initial;
+	while (existsSync(candidate)) {
+		const stamp = new Date(Date.now() + attempt * 1000)
+			.toISOString()
+			.slice(0, 19)
+			.replace(/:/g, '-');
+		candidate = path.join(
+			directory,
+			`snow-export-${stamp}-${sessionId.slice(0, 8)}.${format}`,
+		);
+		attempt += 1;
+	}
+	return candidate;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -609,8 +627,13 @@ export async function exportSessionToFile(
 	session: Session,
 	filePath: string,
 	format: ExportFormat = 'txt',
+	options?: {exclusive?: boolean},
 ): Promise<void> {
 	const content = renderSession(session, format);
 	await fs.mkdir(path.dirname(filePath), {recursive: true});
-	await fs.writeFile(filePath, content, 'utf-8');
+	await fs.writeFile(
+		filePath,
+		content,
+		options?.exclusive ? {encoding: 'utf-8', flag: 'wx'} : 'utf-8',
+	);
 }

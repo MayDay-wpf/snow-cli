@@ -33,11 +33,7 @@ export interface AggregatedStats {
 export type UsagePeriod = 'hour' | 'day' | 'week' | 'month';
 
 /** Human-readable rolling windows corresponding to UsagePeriod. */
-export type UsageWindow =
-	| 'last_24h'
-	| 'last_7d'
-	| 'last_30d'
-	| 'last_12m';
+export type UsageWindow = 'last_24h' | 'last_7d' | 'last_30d' | 'last_12m';
 
 export const USAGE_PERIODS: readonly UsagePeriod[] = [
 	'hour',
@@ -89,9 +85,7 @@ export function isUsagePeriod(value: string): value is UsagePeriod {
  */
 export function parseUsagePeriod(
 	raw?: string | null,
-):
-	| {ok: true; period: UsagePeriod}
-	| {ok: false; message: string} {
+): {ok: true; period: UsagePeriod} | {ok: false; message: string} {
 	const token = (raw ?? '').trim().toLowerCase();
 	if (!token) {
 		return {ok: true, period: DEFAULT_USAGE_PERIOD};
@@ -109,6 +103,11 @@ export function parseUsagePeriod(
 
 export function getUsageRootDir(homeDir: string = os.homedir()): string {
 	return path.join(homeDir, '.snow', 'usage');
+}
+
+function normalizeTokenCount(value: unknown): number {
+	const number = Number(value);
+	return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
 /**
@@ -132,7 +131,12 @@ export async function loadUsageData(
 			}
 			if (!stats.isDirectory()) continue;
 
-			const files = await fs.readdir(datePath);
+			let files: string[];
+			try {
+				files = await fs.readdir(datePath);
+			} catch {
+				continue;
+			}
 			for (const file of files) {
 				if (!file.endsWith('.jsonl')) continue;
 				const filePath = path.join(datePath, file);
@@ -153,25 +157,29 @@ export async function loadUsageData(
 						if (
 							!entry ||
 							typeof entry.timestamp !== 'string' ||
-							typeof entry.model !== 'string'
+							!Number.isFinite(Date.parse(entry.timestamp)) ||
+							typeof entry.model !== 'string' ||
+							!entry.model.trim()
 						) {
 							continue;
 						}
 						entries.push({
-							model: entry.model,
+							model: entry.model.trim(),
 							profileName:
 								typeof entry.profileName === 'string'
-									? entry.profileName
+									? entry.profileName.trim() || 'default'
 									: 'default',
-							inputTokens: Number(entry.inputTokens) || 0,
-							outputTokens: Number(entry.outputTokens) || 0,
+							inputTokens: normalizeTokenCount(entry.inputTokens),
+							outputTokens: normalizeTokenCount(entry.outputTokens),
 							...(entry.cacheCreationInputTokens !== undefined && {
-								cacheCreationInputTokens:
-									Number(entry.cacheCreationInputTokens) || 0,
+								cacheCreationInputTokens: normalizeTokenCount(
+									entry.cacheCreationInputTokens,
+								),
 							}),
 							...(entry.cacheReadInputTokens !== undefined && {
-								cacheReadInputTokens:
-									Number(entry.cacheReadInputTokens) || 0,
+								cacheReadInputTokens: normalizeTokenCount(
+									entry.cacheReadInputTokens,
+								),
 							}),
 							timestamp: entry.timestamp,
 						});
@@ -214,7 +222,10 @@ export function filterByPeriod(
 			break;
 	}
 
-	return entries.filter(e => new Date(e.timestamp) >= cutoff);
+	return entries.filter(entry => {
+		const timestamp = new Date(entry.timestamp);
+		return timestamp >= cutoff && timestamp <= now;
+	});
 }
 
 /** @deprecated Prefer filterByPeriod — kept for call-site clarity during migration. */

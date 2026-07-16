@@ -622,6 +622,38 @@ export async function handleMcpManage(
 		const toolName = tokens[1];
 
 		try {
+			const {
+				toggleBuiltInService,
+				isBuiltInServiceEnabled,
+				getDisabledBuiltInServices,
+			} = await import('../config/disabledBuiltInTools.js');
+			const {getMCPConfig} = await import('../config/apiConfig.js');
+			const mcpConfig = getMCPConfig();
+			const knownBuiltIns = new Set([
+				'filesystem',
+				'terminal',
+				'todo',
+				'ace',
+				'websearch',
+				'snow-docs',
+				'codebase',
+				'askuser',
+				'scheduler',
+				'subagent',
+				'team',
+				...getDisabledBuiltInServices(),
+			]);
+			const isKnownBuiltIn = knownBuiltIns.has(serviceName);
+			const isKnownExternal = Boolean(mcpConfig.mcpServers?.[serviceName]);
+			if (!isKnownBuiltIn && !isKnownExternal) {
+				return failResult(
+					meta.id,
+					'NOT_FOUND',
+					`MCP service "${serviceName}" not found.`,
+					meta.risk,
+				);
+			}
+
 			if (toolName) {
 				const {toggleMCPTool, isMCPToolEnabled} = await import(
 					'../config/disabledMCPTools.js'
@@ -647,32 +679,7 @@ export async function handleMcpManage(
 				);
 			}
 
-			const {
-				toggleBuiltInService,
-				isBuiltInServiceEnabled,
-				getDisabledBuiltInServices,
-			} = await import('../config/disabledBuiltInTools.js');
-			const {getMCPConfig} = await import('../config/apiConfig.js');
-			const mcpConfig = getMCPConfig();
-			const knownBuiltIns = new Set([
-				'filesystem',
-				'terminal',
-				'todo',
-				'ace',
-				'websearch',
-				'snow-docs',
-				'codebase',
-				'askuser',
-				'scheduler',
-				'subagent',
-				'team',
-				...getDisabledBuiltInServices(),
-			]);
-
-			if (
-				knownBuiltIns.has(serviceName) ||
-				!mcpConfig.mcpServers?.[serviceName]
-			) {
+			if (isKnownBuiltIn) {
 				const previous = isBuiltInServiceEnabled(serviceName);
 				if (previous !== wantEnabled) {
 					toggleBuiltInService(serviceName);

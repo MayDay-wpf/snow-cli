@@ -46,6 +46,13 @@ export interface Session {
 	hasGoal?: boolean;
 }
 
+type LegacySessionProjectFields = {
+	cwd?: unknown;
+	workingDirectory?: unknown;
+	workspaceRoot?: unknown;
+	projectRoot?: unknown;
+};
+
 export interface SessionListItem {
 	id: string;
 	title: string;
@@ -71,11 +78,18 @@ export interface PaginatedSessionList {
 	hasMore: boolean;
 }
 
+const SAFE_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+function isSafeSessionId(sessionId: string): boolean {
+	return SAFE_SESSION_ID_PATTERN.test(sessionId);
+}
+
 class SessionManager {
 	private readonly sessionsDir: string;
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
 	private readonly currentProjectPath: string;
+	private readonly currentProjectRoot: string;
 	private readonly projectAliasIds: string[];
 	// 会话列表缓存
 	private sessionListCache: SessionListItem[] | null = null;
@@ -91,6 +105,7 @@ class SessionManager {
 		const identity = resolveProjectIdentity();
 		this.currentProjectId = identity.projectId;
 		this.currentProjectPath = identity.projectPath;
+		this.currentProjectRoot = identity.projectRoot;
 		this.projectAliasIds = identity.projectAliasIds;
 	}
 
@@ -319,12 +334,19 @@ class SessionManager {
 	private async loadSessionFromDisk(
 		sessionId: string,
 	): Promise<Session | null> {
+		if (!isSafeSessionId(sessionId)) return null;
+
 		// 首先尝试从旧格式加载（向下兼容）
 		try {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
 			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
-			return session;
+			if (
+				session.id === sessionId &&
+				this.acceptCurrentProjectSession(session)
+			) {
+				return session;
+			}
 		} catch {
 			// 旧格式不存在，搜索日期文件夹
 		}
@@ -407,11 +429,25 @@ class SessionManager {
 		}));
 	}
 
-	private isCurrentProjectSession(session: Session): boolean {
-		if (!session.projectId && !session.projectPath) {
-			return true;
+	private normalizeProjectPath(value: unknown): string | undefined {
+		if (typeof value !== 'string' || !value.trim() || !path.isAbsolute(value)) {
+			return undefined;
 		}
 
+		try {
+			const normalized = path.normalize(path.resolve(value));
+			return process.platform === 'win32'
+				? normalized.toLowerCase()
+				: normalized;
+		} catch {
+			return undefined;
+		}
+	}
+
+	private isCurrentProjectSession(
+		session: Session,
+		sourceProjectOwned = false,
+	): boolean {
 		if (session.projectId) {
 			return (
 				session.projectId === this.currentProjectId ||
@@ -419,7 +455,66 @@ class SessionManager {
 			);
 		}
 
-		return session.projectPath === this.currentProjectPath;
+		const legacy = session as Session & LegacySessionProjectFields;
+		const declaredPaths = [
+			session.projectPath,
+			legacy.cwd,
+			legacy.workingDirectory,
+			legacy.workspaceRoot,
+			legacy.projectRoot,
+		].filter(value => value !== undefined && value !== null && value !== '');
+
+		if (declaredPaths.length === 0) {
+			// A project-scoped directory is reliable ownership evidence. Global
+			// legacy locations are not, so metadata-free records there stay hidden.
+			return sourceProjectOwned;
+		}
+
+		const normalizedPaths = declaredPaths.map(value =>
+			this.normalizeProjectPath(value),
+		);
+		if (normalizedPaths.some(value => value === undefined)) {
+			return false;
+		}
+
+		const currentPaths = new Set(
+			[this.currentProjectPath, this.currentProjectRoot]
+				.map(value => this.normalizeProjectPath(value))
+				.filter((value): value is string => Boolean(value)),
+		);
+		return normalizedPaths.every(value => currentPaths.has(value!));
+	}
+
+	private acceptCurrentProjectSession(
+		session: Session,
+		sourceProjectOwned = false,
+	): boolean {
+		if (!this.isCurrentProjectSession(session, sourceProjectOwned)) {
+			return false;
+		}
+
+		// Attribute accepted legacy records in memory. The next normal save moves
+		// them to the stable project directory and persists explicit ownership.
+		session.projectId ||= this.currentProjectId;
+		session.projectPath ||= this.currentProjectPath;
+		return true;
+	}
+
+	private async isOwnedSessionFile(
+		filePath: string,
+		sessionId: string,
+		sourceProjectOwned = false,
+	): Promise<boolean> {
+		try {
+			const data = await fs.readFile(filePath, 'utf8');
+			const session = JSON.parse(data) as Session;
+			return (
+				session.id === sessionId &&
+				this.acceptCurrentProjectSession(session, sourceProjectOwned)
+			);
+		} catch {
+			return false;
+		}
 	}
 
 	private toSessionListItem(session: Session): SessionListItem {
@@ -442,8 +537,12 @@ class SessionManager {
 		sessions: SessionListItem[],
 		seenIds: Set<string>,
 		session: Session,
+		sourceProjectOwned = false,
 	): void {
-		if (seenIds.has(session.id) || !this.isCurrentProjectSession(session)) {
+		if (
+			seenIds.has(session.id) ||
+			!this.acceptCurrentProjectSession(session, sourceProjectOwned)
+		) {
 			return;
 		}
 
@@ -456,7 +555,7 @@ class SessionManager {
 	 * 搜索顺序:
 	 * 1. 稳定项目目录
 	 * 2. 当前项目的旧路径别名目录
-	 * 3. 其他项目目录和旧格式日期目录（向后兼容）
+	 * 3. 旧格式日期目录（向后兼容）
 	 */
 	private async findSessionInDateFolders(
 		sessionId: string,
@@ -478,22 +577,18 @@ class SessionManager {
 				if (!stat.isDirectory()) continue;
 				if (preferredProjectIds.has(file)) continue;
 
-				// 新格式：项目文件夹（项目名-哈希）
-				if (isProjectFolder(file)) {
-					const session = await this.findSessionInProjectDir(
-						filePath,
-						sessionId,
-					);
-					if (session) return session;
-				}
-
 				// 旧格式：日期文件夹 YYYY-MM-DD（无项目层级）
 				if (isDateFolder(file)) {
 					const sessionPath = path.join(filePath, `${sessionId}.json`);
 					try {
 						const data = await fs.readFile(sessionPath, 'utf-8');
 						const session: Session = JSON.parse(data);
-						return session;
+						if (
+							session.id === sessionId &&
+							this.acceptCurrentProjectSession(session)
+						) {
+							return session;
+						}
 					} catch (error) {
 						// 文件不存在，继续搜索
 						continue;
@@ -514,6 +609,7 @@ class SessionManager {
 		projectDir: string,
 		sessionId: string,
 	): Promise<Session | null> {
+		if (!isSafeSessionId(sessionId)) return null;
 		try {
 			const dateFolders = await fs.readdir(projectDir);
 
@@ -528,7 +624,12 @@ class SessionManager {
 				try {
 					const data = await fs.readFile(sessionPath, 'utf-8');
 					const session: Session = JSON.parse(data);
-					return session;
+					if (
+						session.id === sessionId &&
+						this.acceptCurrentProjectSession(session, true)
+					) {
+						return session;
+					}
 				} catch (error) {
 					// 文件不存在，继续搜索
 					continue;
@@ -558,7 +659,7 @@ class SessionManager {
 					for (const dateFolder of dateFolders) {
 						if (!isDateFolder(dateFolder)) continue;
 						const datePath = path.join(dir, dateFolder);
-						await this.readSessionsFromDir(datePath, sessions, seenIds);
+						await this.readSessionsFromDir(datePath, sessions, seenIds, true);
 					}
 				} catch (error) {
 					// 项目目录不存在，继续读取其他兼容来源
@@ -698,6 +799,7 @@ class SessionManager {
 		dirPath: string,
 		sessions: SessionListItem[],
 		seenIds: Set<string>,
+		sourceProjectOwned = false,
 	): Promise<void> {
 		try {
 			const files = await fs.readdir(dirPath);
@@ -709,7 +811,12 @@ class SessionManager {
 					const sessionPath = path.join(dirPath, file);
 					const data = await fs.readFile(sessionPath, 'utf-8');
 					const session: Session = JSON.parse(data);
-					this.addSessionListItem(sessions, seenIds, session);
+					this.addSessionListItem(
+						sessions,
+						seenIds,
+						session,
+						sourceProjectOwned,
+					);
 				} catch (error) {
 					// Skip invalid session files
 					continue;
@@ -1109,13 +1216,16 @@ class SessionManager {
 	}
 
 	async deleteSession(sessionId: string): Promise<boolean> {
+		if (!isSafeSessionId(sessionId)) return false;
 		let sessionDeleted = false;
 
 		// 1. 首先尝试删除旧格式（向下兼容）
 		try {
 			const oldSessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
-			await fs.unlink(oldSessionPath);
-			sessionDeleted = true;
+			if (await this.isOwnedSessionFile(oldSessionPath, sessionId)) {
+				await fs.unlink(oldSessionPath);
+				sessionDeleted = true;
+			}
 		} catch (error) {
 			// 旧格式不存在，继续搜索
 		}
@@ -1128,7 +1238,7 @@ class SessionManager {
 			}
 		}
 
-		// 3. 在所有项目文件夹和旧格式日期文件夹中查找
+		// 3. 仅在旧格式日期文件夹中查找；不得跨项目删除。
 		if (!sessionDeleted) {
 			try {
 				const files = await fs.readdir(this.sessionsDir);
@@ -1146,22 +1256,15 @@ class SessionManager {
 					if (!stat.isDirectory()) continue;
 					if (preferredProjectIds.has(file)) continue;
 
-					// 新格式：项目文件夹
-					if (isProjectFolder(file)) {
-						sessionDeleted = await this.deleteSessionFromProjectDir(
-							filePath,
-							sessionId,
-						);
-						if (sessionDeleted) break;
-					}
-
 					// 旧格式：日期文件夹
 					if (isDateFolder(file)) {
 						const sessionPath = path.join(filePath, `${sessionId}.json`);
 						try {
-							await fs.unlink(sessionPath);
-							sessionDeleted = true;
-							break;
+							if (await this.isOwnedSessionFile(sessionPath, sessionId)) {
+								await fs.unlink(sessionPath);
+								sessionDeleted = true;
+								break;
+							}
 						} catch (error) {
 							// 文件不存在，继续搜索
 							continue;
@@ -1217,8 +1320,10 @@ class SessionManager {
 					`${sessionId}.json`,
 				);
 				try {
-					await fs.unlink(sessionPath);
-					return true;
+					if (await this.isOwnedSessionFile(sessionPath, sessionId, true)) {
+						await fs.unlink(sessionPath);
+						return true;
+					}
 				} catch (error) {
 					// 文件不存在，继续搜索
 					continue;

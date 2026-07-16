@@ -29,6 +29,7 @@ export type ConfigChangeEvent = {
 		| 'theme'
 		| 'customColors'
 		| 'diffOpacity'
+		| 'profile'
 		/** Active snowcfg / profile API settings (maxContextTokens, models, …) */
 		| 'apiConfig'
 		| 'other';

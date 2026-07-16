@@ -32,7 +32,7 @@ export {
 	resolveSessionCommandMeta,
 } from './sessionCommandRegistry.js';
 
-/** Treat status/list/current queries as read even when command meta is write-capable. */
+/** Treat explicit query invocations as read even when a command also supports writes. */
 function isStatusOnlyArgs(meta: SessionCommandMeta, args?: string): boolean {
 	if (meta.risk === 'read') {
 		return true;
@@ -40,8 +40,36 @@ function isStatusOnlyArgs(meta: SessionCommandMeta, args?: string): boolean {
 	const trimmed = (args ?? '').trim().toLowerCase();
 	// Only the first token decides read-vs-write. Extra flags like
 	// "status --period=day" must still count as status-only.
-	const token = trimmed.split(/\s+/).filter(Boolean)[0] ?? '';
-	if (token === 'status' || token === 'list' || token === 'current') {
+	const tokens = trimmed.split(/\s+/).filter(Boolean);
+	const token = tokens[0] ?? '';
+	// Only a command resolved as a bare/query command may use a query token as
+	// a read-only operation. Explicit write subcommands (e.g. profiles.switch
+	// status) must retain their write risk and confirmation requirement.
+	if (
+		(meta.subcommand === undefined ||
+			meta.subcommand === 'status' ||
+			meta.subcommand === 'list' ||
+			meta.subcommand === 'current') &&
+		(token === 'status' || token === 'list' || token === 'current')
+	) {
+		return true;
+	}
+	if (
+		meta.id === 'codebase' &&
+		(token === 'agent-review' ||
+			token === 'agent_review' ||
+			token === 'reranking' ||
+			token === 'rerank') &&
+		(!tokens[1] || tokens[1] === 'status')
+	) {
+		return true;
+	}
+	if (
+		meta.id === 'privacy' &&
+		token === 'scope' &&
+		(tokens[1] === 'global' || tokens[1] === 'project') &&
+		(!tokens[2] || tokens[2] === 'status')
+	) {
 		return true;
 	}
 	if (!token) {
@@ -70,12 +98,21 @@ function isStatusOnlyArgs(meta: SessionCommandMeta, args?: string): boolean {
 	return false;
 }
 
+function serializeArgTokens(tokens: readonly string[]): string | undefined {
+	const serialized = tokens
+		.map(token => (/\s|["']/u.test(token) ? JSON.stringify(token) : token))
+		.join(' ');
+	return serialized || undefined;
+}
+
 function normalizeCommandInput(request: SessionCommandRequest): {
 	command: string;
 	args?: string;
 } {
 	let command = (request.command ?? '').trim().replace(/^\//, '');
-	let args = request.args?.trim() || undefined;
+	let args = request.argTokens
+		? serializeArgTokens(request.argTokens)
+		: request.args?.trim() || undefined;
 
 	// Support "buddy hatch foo" entirely in command field
 	if (command.includes(' ') && !args) {
@@ -100,7 +137,7 @@ function normalizeCommandInput(request: SessionCommandRequest): {
 /**
  * Run an allowlisted session/slash control command.
  */
-export async function runSessionCommand(
+async function runSessionCommandUnlocked(
 	request: SessionCommandRequest,
 ): Promise<SessionCommandResult> {
 	const mode: SessionCommandMode = request.mode ?? 'cli';
@@ -172,7 +209,16 @@ export async function runSessionCommand(
 		: resolved.risk;
 	const effectiveMeta = {...resolved, risk: effectiveRisk};
 
-	if (needsConfirmation(effectiveMeta, mode, request.confirm)) {
+	if (
+		needsConfirmation(
+			effectiveMeta,
+			mode,
+			// Only the CLI's explicit flag is user-confirmed. Agent/SSE callers
+			// must provide a transport-level trusted confirmation.
+			mode === 'cli' ? request.confirm : undefined,
+			request.trustedConfirm,
+		)
+	) {
 		return failResult(
 			resolved.id,
 			'CONFIRMATION_REQUIRED',
@@ -212,6 +258,27 @@ export async function runSessionCommand(
 	}
 }
 
+let commandQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Serialize control-plane commands because handlers mutate shared process-wide
+ * session/config state and persisted JSON files. This intentionally means a
+ * long compact blocks later status reads so callers observe entry order.
+ */
+export function runSessionCommand(
+	request: SessionCommandRequest,
+): Promise<SessionCommandResult> {
+	const queuedRequest = {...request};
+	const result = commandQueue.then(() =>
+		runSessionCommandUnlocked(queuedRequest),
+	);
+	commandQueue = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
+}
+
 /**
  * Parse CLI argv after `snow cmd` into a SessionCommandRequest.
  * Example: ["buddy", "hatch", "Fox", "--species=fox", "--json", "--yes"]
@@ -233,12 +300,14 @@ export function parseCmdArgv(argv: string[]): {
 	);
 
 	const command = filtered[0] ?? '';
-	const args = filtered.slice(1).join(' ') || undefined;
+	const argTokens = filtered.slice(1);
+	const args = argTokens.join(' ') || undefined;
 
 	return {
 		request: {
 			command,
 			args,
+			argTokens,
 			mode: 'cli',
 			confirm,
 		},

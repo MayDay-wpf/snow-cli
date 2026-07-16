@@ -28,7 +28,7 @@ export const mcpTools = [
 	{
 		name: 'session-command-run',
 		description:
-			'Execute an allowlisted Snow session/slash control command without requiring the user to type /slash in the TUI. Examples: command="buddy.hatch" args with name/species; command="buddy" args="status"; command="tool-display" args="compact"; command="mcp" args="status". Medium/high risk writes require confirm=true. Returns stable JSON {ok, command, data, code, message}.',
+			'Execute an allowlisted Snow session/slash control command without requiring the user to type /slash in the TUI. Examples: command="buddy.hatch" args with name/species; command="buddy" args="status"; command="tool-display" args="compact"; command="mcp" args="status". Agent calls may execute read/low-write commands; medium/high-risk writes return CONFIRMATION_REQUIRED because this tool has no trusted user-confirmation channel. Returns stable JSON {ok, command, data, code, message}.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -41,11 +41,6 @@ export const mcpTools = [
 					type: 'string',
 					description:
 						'Optional args string, e.g. "hatch 小雪 --species=fox", "on", "compact", "status".',
-				},
-				confirm: {
-					type: 'boolean',
-					description:
-						'Set true to confirm medium_write/high_risk commands (yolo on, profile switch, buddy reset, etc.).',
 				},
 			},
 			required: ['command'],
@@ -103,7 +98,7 @@ export async function executeSessionCommandTool(
 						? undefined
 						: String(args.args),
 				mode: 'agent',
-				confirm: Boolean(args?.confirm),
+				confirm: false,
 			});
 			return JSON.stringify(result, null, 2);
 		}
