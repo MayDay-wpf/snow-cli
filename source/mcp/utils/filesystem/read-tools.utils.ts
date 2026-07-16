@@ -130,7 +130,7 @@ export async function executeGetFileContentCore(
 					if (docContent) {
 						multimodalContent.push({
 							type: 'text',
-							text: `📄 ${docContent.fileType.toUpperCase()} Document: ${file}`,
+							text: `${docContent.fileType.toUpperCase()} Document: ${file}`,
 						});
 						multimodalContent.push(docContent);
 						filesData.push({
@@ -194,7 +194,7 @@ export async function executeGetFileContentCore(
 					fileSizeBytes > FILE_SIZE_LIMIT
 						? ` [Large file: ${Math.round(fileSizeBytes / 1024 / 1024)}MB]`
 						: '';
-				let fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join('\n')}`;
+				let fileContent = `${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join('\n')}`;
 
 				if (content) {
 					try {
@@ -314,7 +314,7 @@ export async function executeGetFileContentCore(
 				content: [
 					{
 						type: 'text',
-						text: `📄 ${docContent.fileType.toUpperCase()} Document: ${filePath}`,
+						text: `${docContent.fileType.toUpperCase()} Document: ${filePath}`,
 					},
 					docContent,
 				],
