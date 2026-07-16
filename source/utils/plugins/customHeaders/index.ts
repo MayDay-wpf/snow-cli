@@ -26,10 +26,10 @@ import {
 	type FSWatcher,
 } from 'node:fs';
 import {extname, join} from 'node:path';
-import {pathToFileURL} from 'node:url';
 
 import {CUSTOM_HEADERS_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+import {importFreshPluginModule} from '../importFresh.js';
 import type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
 
 export type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
@@ -81,10 +81,6 @@ function collectFromModule(
 }
 
 /** Bust ESM import cache so edited plugins reload without process restart. */
-function buildCacheBustedModuleUrl(modulePath: string): string {
-	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
-}
-
 // ---------------------------------------------------------------------------
 // External plugin loading (lazy, hot-reloadable)
 // ---------------------------------------------------------------------------
@@ -100,10 +96,11 @@ let reloadInFlight: Promise<void> | null = null;
 let reloadQueued = false;
 let pluginWatcher: FSWatcher | null = null;
 let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
+let pluginWatchRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let watcherBootstrapped = false;
 
-async function loadExternalPlugins(): Promise<void> {
-	if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) return;
+async function loadExternalPlugins(): Promise<CustomHeaderPlugin[]> {
+	if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) return [];
 
 	let entries: Array<import('node:fs').Dirent>;
 	try {
@@ -113,7 +110,7 @@ async function loadExternalPlugins(): Promise<void> {
 			directory: CUSTOM_HEADERS_PLUGIN_DIR,
 			error,
 		});
-		return;
+		return [];
 	}
 
 	const files = entries
@@ -129,8 +126,9 @@ async function loadExternalPlugins(): Promise<void> {
 	for (const file of files) {
 		const modulePath = join(CUSTOM_HEADERS_PLUGIN_DIR, file.name);
 		try {
-			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
-			const mod = (await import(moduleUrl)) as CustomHeaderPluginModule;
+			const mod = (await importFreshPluginModule(
+				modulePath,
+			)) as CustomHeaderPluginModule;
 			const plugins = collectFromModule(mod);
 			if (plugins.length === 0) {
 				logger.warn(
@@ -149,16 +147,30 @@ async function loadExternalPlugins(): Promise<void> {
 		}
 	}
 
-	PLUGINS = nextPlugins;
+	return nextPlugins;
 }
 
 function ensurePluginWatcher(): void {
 	if (watcherBootstrapped) return;
 	watcherBootstrapped = true;
+	let shouldReloadAfterAttach = false;
+
+	const scheduleWatchRetry = (delayMs: number) => {
+		if (pluginWatcher || pluginWatchRetryTimer) return;
+		pluginWatchRetryTimer = setTimeout(() => {
+			pluginWatchRetryTimer = null;
+			startWatch();
+		}, delayMs);
+		pluginWatchRetryTimer.unref?.();
+	};
 
 	const startWatch = () => {
 		if (pluginWatcher) return;
-		if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) return;
+		if (!existsSync(CUSTOM_HEADERS_PLUGIN_DIR)) {
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(800);
+			return;
+		}
 		try {
 			pluginWatcher = watchDir(
 				CUSTOM_HEADERS_PLUGIN_DIR,
@@ -183,15 +195,20 @@ function ensurePluginWatcher(): void {
 					// ignore
 				}
 				pluginWatcher = null;
-				setTimeout(startWatch, 300);
+				shouldReloadAfterAttach = true;
+				scheduleWatchRetry(300);
 			});
+			if (shouldReloadAfterAttach) {
+				shouldReloadAfterAttach = false;
+				void reloadCustomHeaderPlugins();
+			}
 		} catch {
-			setTimeout(startWatch, 400);
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(400);
 		}
 	};
 
 	startWatch();
-	setTimeout(startWatch, 800);
 }
 
 /**
@@ -205,8 +222,9 @@ export function ensureCustomHeaderPluginsLoaded(): Promise<void> {
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
 	const gen = loadGeneration;
-	externalLoadPromise = loadExternalPlugins().then(() => {
+	externalLoadPromise = loadExternalPlugins().then(nextPlugins => {
 		if (gen === loadGeneration) {
+			PLUGINS = nextPlugins;
 			externalLoaded = true;
 		}
 	});
@@ -234,11 +252,9 @@ export async function reloadCustomHeaderPlugins(): Promise<void> {
 			const gen = loadGeneration;
 			externalLoaded = false;
 			externalLoadPromise = null;
-			// Clear only after claiming generation so ensure* waits on reloadInFlight.
-			// loadExternalPlugins assigns PLUGINS = next when done.
-			PLUGINS = [];
-			const loadPromise = loadExternalPlugins().then(() => {
+			const loadPromise = loadExternalPlugins().then(nextPlugins => {
 				if (gen === loadGeneration) {
+					PLUGINS = nextPlugins;
 					externalLoaded = true;
 				}
 			});

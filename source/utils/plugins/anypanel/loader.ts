@@ -13,6 +13,7 @@ import {pathToFileURL} from 'node:url';
 
 import {ANYPANEL_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+import {importFreshPluginModule} from '../importFresh.js';
 import type {AnyPanelPlugin, AnyPanelPluginModule} from './types.js';
 
 export const SUPPORTED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
@@ -93,12 +94,11 @@ export async function loadAnyPanelPlugins(
 	for (const file of files) {
 		const modulePath = join(ANYPANEL_PLUGIN_DIR, file.name);
 		try {
-			let moduleUrl = pathToFileURL(modulePath).href;
-			if (bustCache) {
-				// 追加随机查询参数绕过 ESM 模块缓存，实现热重载
-				moduleUrl += `?t=${Date.now()}`;
-			}
-			const mod = (await import(moduleUrl)) as AnyPanelPluginModule;
+			const mod = (
+				bustCache
+					? await importFreshPluginModule(modulePath)
+					: await import(pathToFileURL(modulePath).href)
+			) as AnyPanelPluginModule;
 			const collected = collectFromModule(mod);
 			if (collected.length === 0) {
 				logger.warn(

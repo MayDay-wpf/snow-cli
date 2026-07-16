@@ -9,10 +9,10 @@
  */
 import {existsSync, readdirSync} from 'node:fs';
 import {extname, join} from 'node:path';
-import {pathToFileURL} from 'node:url';
 
 import {GAMES_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+import {importFreshPluginModule} from '../importFresh.js';
 import {snakeGamePlugin} from './builtin/snake.js';
 import type {GamePlugin, GamePluginModule} from './types.js';
 
@@ -59,11 +59,6 @@ function collectFromModule(mod: GamePluginModule): GamePlugin[] {
 	return candidates.filter(isGamePlugin);
 }
 
-/** Bust ESM import cache so edited plugins reload without process restart. */
-function buildCacheBustedModuleUrl(modulePath: string): string {
-	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
-}
-
 /**
  * 加载外部游戏插件（从 `~/.snow/plugin/games/` 目录）。
  * 每次调用都会 cache-bust 重新 import，保证改插件后重新打开面板即可生效。
@@ -87,7 +82,8 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 
 	const files = entries
 		.filter(
-			e => e.isFile() && SUPPORTED_EXTENSIONS.has(extname(e.name).toLowerCase()),
+			e =>
+				e.isFile() && SUPPORTED_EXTENSIONS.has(extname(e.name).toLowerCase()),
 		)
 		.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -96,8 +92,9 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 	for (const file of files) {
 		const modulePath = join(GAMES_PLUGIN_DIR, file.name);
 		try {
-			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
-			const mod = (await import(moduleUrl)) as GamePluginModule;
+			const mod = (await importFreshPluginModule(
+				modulePath,
+			)) as GamePluginModule;
 			const collected = collectFromModule(mod);
 			if (collected.length === 0) {
 				logger.warn(
@@ -121,9 +118,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
  * 合并内置游戏与外部插件。
  * 外部插件的 id 与内置游戏相同时，外部插件覆盖内置游戏。
  */
-export function mergeGamePlugins(
-	externalPlugins: GamePlugin[],
-): GamePlugin[] {
+export function mergeGamePlugins(externalPlugins: GamePlugin[]): GamePlugin[] {
 	const merged = new Map<string, GamePlugin>();
 
 	// 先放内置游戏

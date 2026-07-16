@@ -304,8 +304,9 @@ let configCache: AppConfig | null = null;
 let configFileWatcher: FSWatcher | null = null;
 let configWatchBootstrapped = false;
 let configWatchDebounce: ReturnType<typeof setTimeout> | null = null;
+let configWatchRetry: ReturnType<typeof setTimeout> | null = null;
 /** Suppress re-entrant emit when saveConfig itself triggers fs.watch. */
-let suppressConfigWatchEmit = false;
+let suppressConfigWatchUntil = 0;
 
 function notifyApiConfigChanged(config?: AppConfig): void {
 	const snowcfg = config?.snowcfg ?? configCache?.snowcfg;
@@ -318,31 +319,70 @@ function notifyApiConfigChanged(config?: AppConfig): void {
 function ensureConfigFileWatcher(): void {
 	if (configWatchBootstrapped) return;
 	configWatchBootstrapped = true;
+	let shouldReloadAfterAttach = false;
+
+	const scheduleReload = (delayMs = 100) => {
+		if (configWatchDebounce) clearTimeout(configWatchDebounce);
+		configWatchDebounce = setTimeout(() => {
+			configWatchDebounce = null;
+			const suppressionRemaining = suppressConfigWatchUntil - Date.now();
+			if (suppressionRemaining > 0) {
+				scheduleReload(suppressionRemaining + 10);
+				return;
+			}
+
+			const previous = configCache;
+			// Drop cache so loadConfig re-reads disk. A parse failure leaves the
+			// cache null; restore last-known-good and emit nothing in that case.
+			configCache = null;
+			const next = loadConfig();
+			if (configCache === null) {
+				configCache = previous;
+				return;
+			}
+			if (previous && JSON.stringify(previous) === JSON.stringify(next)) {
+				return;
+			}
+			notifyApiConfigChanged(next);
+			// Best-effort: drop agent caches so model/token limits apply
+			void import('./configManager.js')
+				.then(m => m.clearAllAgentCaches())
+				.catch(() => {
+					// optional during early boot
+				});
+		}, delayMs);
+		configWatchDebounce.unref?.();
+	};
+
+	const scheduleWatchRetry = (delayMs: number) => {
+		if (configFileWatcher || configWatchRetry) return;
+		configWatchRetry = setTimeout(() => {
+			configWatchRetry = null;
+			startWatch();
+		}, delayMs);
+		configWatchRetry.unref?.();
+	};
 
 	const startWatch = () => {
 		if (configFileWatcher) return;
-		if (!existsSync(CONFIG_FILE)) return;
+		if (!existsSync(CONFIG_FILE)) {
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(400);
+			return;
+		}
 		try {
-			configFileWatcher = watch(CONFIG_FILE, {persistent: false}, () => {
-				if (suppressConfigWatchEmit) return;
-				if (configWatchDebounce) clearTimeout(configWatchDebounce);
-				configWatchDebounce = setTimeout(() => {
-					if (suppressConfigWatchEmit) return;
-					// Drop cache so next getSnowConfig() re-reads disk
-					configCache = null;
+			configFileWatcher = watch(CONFIG_FILE, {persistent: false}, eventType => {
+				scheduleReload();
+				if (eventType === 'rename') {
 					try {
-						const next = loadConfig();
-						notifyApiConfigChanged(next);
-						// Best-effort: drop agent caches so model/token limits apply
-						void import('./configManager.js')
-							.then(m => m.clearAllAgentCaches())
-							.catch(() => {
-								// optional during early boot
-							});
+						configFileWatcher?.close();
 					} catch {
-						// ignore corrupt transient writes mid-save
+						// ignore
 					}
-				}, 100);
+					configFileWatcher = null;
+					shouldReloadAfterAttach = true;
+					scheduleWatchRetry(150);
+				}
 			});
 			configFileWatcher.on('error', () => {
 				try {
@@ -351,15 +391,20 @@ function ensureConfigFileWatcher(): void {
 					// ignore
 				}
 				configFileWatcher = null;
-				setTimeout(startWatch, 300);
+				shouldReloadAfterAttach = true;
+				scheduleWatchRetry(300);
 			});
+			if (shouldReloadAfterAttach) {
+				shouldReloadAfterAttach = false;
+				scheduleReload();
+			}
 		} catch {
-			setTimeout(startWatch, 400);
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(400);
 		}
 	};
 
 	startWatch();
-	setTimeout(startWatch, 800);
 }
 
 export function loadConfig(): AppConfig {
@@ -456,7 +501,7 @@ export function loadConfig(): AppConfig {
 		configCache = mergedConfig;
 		return mergedConfig;
 	} catch (error) {
-		configCache = DEFAULT_CONFIG;
+		// Keep cache unset so a transient half-write is retried on the next read.
 		return DEFAULT_CONFIG;
 	}
 }
@@ -467,21 +512,17 @@ export function saveConfig(config: AppConfig): void {
 	try {
 		const configData = JSON.stringify(config, null, 2);
 		// Avoid double notify from our own write + fs.watch
-		suppressConfigWatchEmit = true;
-		try {
-			writeFileSync(CONFIG_FILE, configData, 'utf8');
-		} finally {
-			// Keep suppress briefly so Windows watch callbacks coalesce
-			setTimeout(() => {
-				suppressConfigWatchEmit = false;
-			}, 150);
-		}
+		suppressConfigWatchUntil = Math.max(
+			suppressConfigWatchUntil,
+			Date.now() + 150,
+		);
+		writeFileSync(CONFIG_FILE, configData, 'utf8');
 		// Keep cache in sync so getSnowConfig() sees new values immediately
 		configCache = config;
 		// Hot-refresh TUI / listeners without process restart
 		notifyApiConfigChanged(config);
 	} catch (error) {
-		suppressConfigWatchEmit = false;
+		suppressConfigWatchUntil = 0;
 		throw new Error(`Failed to save configuration: ${error}`);
 	}
 }

@@ -6,7 +6,7 @@ import React, {
 	useEffect,
 	ReactNode,
 } from 'react';
-import {existsSync, watch as watchFile, type FSWatcher} from 'fs';
+import {existsSync, readFileSync, watch as watchFile, type FSWatcher} from 'fs';
 import {homedir} from 'os';
 import {join} from 'path';
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
@@ -36,6 +36,86 @@ interface ThemeProviderProps {
 }
 
 const THEME_CONFIG_PATH = join(homedir(), '.snow', 'theme.json');
+
+/** Watch the theme config across atomic replacement and delayed recreation. */
+export function watchThemeConfigFile(onChange: () => void): () => void {
+	let watcher: FSWatcher | null = null;
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let watchRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	let disposed = false;
+	let shouldReloadAfterAttach = false;
+
+	const scheduleReload = () => {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			debounceTimer = null;
+			if (!disposed) onChange();
+		}, 80);
+	};
+
+	const scheduleWatchRetry = (delayMs: number) => {
+		if (disposed || watcher || watchRetryTimer) return;
+		watchRetryTimer = setTimeout(() => {
+			watchRetryTimer = null;
+			startWatch();
+		}, delayMs);
+		watchRetryTimer.unref?.();
+	};
+
+	const startWatch = () => {
+		if (disposed || watcher) return;
+		if (!existsSync(THEME_CONFIG_PATH)) {
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(400);
+			return;
+		}
+		try {
+			watcher = watchFile(THEME_CONFIG_PATH, {persistent: false}, eventType => {
+				scheduleReload();
+				if (eventType === 'rename') {
+					try {
+						watcher?.close();
+					} catch {
+						// ignore
+					}
+					watcher = null;
+					shouldReloadAfterAttach = true;
+					scheduleWatchRetry(150);
+				}
+			});
+			watcher.on('error', () => {
+				try {
+					watcher?.close();
+				} catch {
+					// ignore
+				}
+				watcher = null;
+				shouldReloadAfterAttach = true;
+				scheduleWatchRetry(200);
+			});
+			if (shouldReloadAfterAttach) {
+				shouldReloadAfterAttach = false;
+				scheduleReload();
+			}
+		} catch {
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(300);
+		}
+	};
+
+	startWatch();
+
+	return () => {
+		disposed = true;
+		if (watchRetryTimer) clearTimeout(watchRetryTimer);
+		if (debounceTimer) clearTimeout(debounceTimer);
+		try {
+			watcher?.close();
+		} catch {
+			// ignore
+		}
+	};
+}
 
 export function ThemeProvider({children}: ThemeProviderProps) {
 	const [themeType, setThemeTypeState] = useState<ThemeType>(() => {
@@ -90,13 +170,12 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 	// External writes to ~/.snow/theme.json (agent force-write / manual edit)
 	// must hot-refresh without restarting the process.
 	useEffect(() => {
-		let watcher: FSWatcher | null = null;
-		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-		let disposed = false;
-
 		const applyFromDisk = () => {
-			if (disposed) return;
 			try {
+				// Validate the file before calling helpers that intentionally fall back
+				// to defaults on parse errors. Transient half-writes must keep the
+				// current UI theme instead of flashing back to defaults.
+				JSON.parse(readFileSync(THEME_CONFIG_PATH, 'utf8'));
 				const nextTheme = getCurrentTheme();
 				const nextOpacity = getDiffOpacity();
 				setThemeTypeState(nextTheme);
@@ -109,48 +188,7 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 			}
 		};
 
-		const scheduleReload = () => {
-			if (debounceTimer) clearTimeout(debounceTimer);
-			debounceTimer = setTimeout(applyFromDisk, 80);
-		};
-
-		const startWatch = () => {
-			if (disposed || watcher) return;
-			if (!existsSync(THEME_CONFIG_PATH)) return;
-			try {
-				watcher = watchFile(THEME_CONFIG_PATH, {persistent: false}, () => {
-					scheduleReload();
-				});
-				watcher.on('error', () => {
-					// File may be replaced atomically; re-arm later.
-					try {
-						watcher?.close();
-					} catch {
-						// ignore
-					}
-					watcher = null;
-					setTimeout(startWatch, 200);
-				});
-			} catch {
-				// watch unsupported or race during write — retry
-				setTimeout(startWatch, 300);
-			}
-		};
-
-		startWatch();
-		// If file appears later, poll once shortly after mount.
-		const bootTimer = setTimeout(startWatch, 500);
-
-		return () => {
-			disposed = true;
-			clearTimeout(bootTimer);
-			if (debounceTimer) clearTimeout(debounceTimer);
-			try {
-				watcher?.close();
-			} catch {
-				// ignore
-			}
-		};
+		return watchThemeConfigFile(applyFromDisk);
 	}, []);
 
 	const getTheme = useCallback((): Theme => {

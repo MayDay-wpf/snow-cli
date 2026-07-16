@@ -28,9 +28,9 @@ import {
 	type FSWatcher,
 } from 'node:fs';
 import {extname, join} from 'node:path';
-import {pathToFileURL} from 'node:url';
 
 import {SEARCH_ENGINES_DIR} from '../../../utils/config/apiConfig.js';
+import {importFreshPluginModule} from '../../../utils/plugins/importFresh.js';
 import {DuckDuckGoEngine} from './duckduckgo.engine.js';
 import {BingEngine} from './bing.engine.js';
 import type {SearchEngine, SearchEngineId} from './types.js';
@@ -51,9 +51,7 @@ const BUILT_IN_ENGINES: SearchEngine[] = [
  * `ensureSearchEnginesLoaded()`. Engines explicitly setting `enable: false`
  * are NOT registered.
  */
-const ENGINES: Map<string, SearchEngine> = new Map(
-	BUILT_IN_ENGINES.filter(isEngineEnabled).map(e => [e.id, e] as const),
-);
+const ENGINES: Map<string, SearchEngine> = buildBuiltinEngineMap();
 
 let externalLoadPromise: Promise<void> | null = null;
 let externalLoaded = false;
@@ -65,6 +63,7 @@ let reloadInFlight: Promise<void> | null = null;
 let reloadQueued = false;
 let pluginWatcher: FSWatcher | null = null;
 let pluginReloadTimer: ReturnType<typeof setTimeout> | null = null;
+let pluginWatchRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let watcherBootstrapped = false;
 
 type SearchEngineModule = {
@@ -106,21 +105,26 @@ function collectFromModule(mod: SearchEngineModule): SearchEngine[] {
 }
 
 /** Bust ESM import cache so edited plugins reload without process restart. */
-function buildCacheBustedModuleUrl(modulePath: string): string {
-	return `${pathToFileURL(modulePath).href}?t=${Date.now()}`;
-}
-
-function resetEnginesToBuiltins(): void {
-	ENGINES.clear();
+function buildBuiltinEngineMap(): Map<string, SearchEngine> {
+	const engines = new Map<string, SearchEngine>();
 	for (const engine of BUILT_IN_ENGINES) {
 		if (isEngineEnabled(engine)) {
-			ENGINES.set(engine.id, engine);
+			engines.set(engine.id, engine);
 		}
+	}
+	return engines;
+}
+
+function replaceEngines(nextEngines: Map<string, SearchEngine>): void {
+	ENGINES.clear();
+	for (const [id, engine] of nextEngines) {
+		ENGINES.set(id, engine);
 	}
 }
 
-async function loadExternalEngines(): Promise<void> {
-	if (!existsSync(SEARCH_ENGINES_DIR)) return;
+async function loadExternalEngines(): Promise<Map<string, SearchEngine>> {
+	const nextEngines = buildBuiltinEngineMap();
+	if (!existsSync(SEARCH_ENGINES_DIR)) return nextEngines;
 
 	let entries: Array<import('node:fs').Dirent>;
 	try {
@@ -128,7 +132,7 @@ async function loadExternalEngines(): Promise<void> {
 	} catch (error) {
 		// eslint-disable-next-line no-console
 		console.warn('[websearch] failed to read plugin dir', error);
-		return;
+		return nextEngines;
 	}
 
 	const files = entries
@@ -142,8 +146,9 @@ async function loadExternalEngines(): Promise<void> {
 	for (const file of files) {
 		const modulePath = join(SEARCH_ENGINES_DIR, file.name);
 		try {
-			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
-			const mod = (await import(moduleUrl)) as SearchEngineModule;
+			const mod = (await importFreshPluginModule(
+				modulePath,
+			)) as SearchEngineModule;
 			const engines = collectFromModule(mod);
 			if (engines.length === 0) {
 				// eslint-disable-next-line no-console
@@ -157,10 +162,10 @@ async function loadExternalEngines(): Promise<void> {
 					// Plugin author explicitly disabled this engine — ensure it is
 					// not registered AND drop any same-id built-in so the user can
 					// also use `enable: false` as a way to mask built-ins.
-					ENGINES.delete(engine.id);
+					nextEngines.delete(engine.id);
 					continue;
 				}
-				ENGINES.set(engine.id, engine);
+				nextEngines.set(engine.id, engine);
 			}
 		} catch (error) {
 			// eslint-disable-next-line no-console
@@ -170,15 +175,31 @@ async function loadExternalEngines(): Promise<void> {
 			);
 		}
 	}
+
+	return nextEngines;
 }
 
 function ensurePluginWatcher(): void {
 	if (watcherBootstrapped) return;
 	watcherBootstrapped = true;
+	let shouldReloadAfterAttach = false;
+
+	const scheduleWatchRetry = (delayMs: number) => {
+		if (pluginWatcher || pluginWatchRetryTimer) return;
+		pluginWatchRetryTimer = setTimeout(() => {
+			pluginWatchRetryTimer = null;
+			startWatch();
+		}, delayMs);
+		pluginWatchRetryTimer.unref?.();
+	};
 
 	const startWatch = () => {
 		if (pluginWatcher) return;
-		if (!existsSync(SEARCH_ENGINES_DIR)) return;
+		if (!existsSync(SEARCH_ENGINES_DIR)) {
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(800);
+			return;
+		}
 		try {
 			pluginWatcher = watchDir(
 				SEARCH_ENGINES_DIR,
@@ -205,16 +226,20 @@ function ensurePluginWatcher(): void {
 					// ignore
 				}
 				pluginWatcher = null;
-				setTimeout(startWatch, 300);
+				shouldReloadAfterAttach = true;
+				scheduleWatchRetry(300);
 			});
+			if (shouldReloadAfterAttach) {
+				shouldReloadAfterAttach = false;
+				void reloadSearchEngines();
+			}
 		} catch {
-			setTimeout(startWatch, 400);
+			shouldReloadAfterAttach = true;
+			scheduleWatchRetry(400);
 		}
 	};
 
 	startWatch();
-	// Directory may appear later after first plugin is created.
-	setTimeout(startWatch, 800);
 }
 
 /**
@@ -229,9 +254,10 @@ export function ensureSearchEnginesLoaded(): Promise<void> {
 	if (externalLoaded) return Promise.resolve();
 	if (externalLoadPromise) return externalLoadPromise;
 	const gen = loadGeneration;
-	externalLoadPromise = loadExternalEngines().then(() => {
+	externalLoadPromise = loadExternalEngines().then(nextEngines => {
 		// Only mark loaded if no reload superseded this load.
 		if (gen === loadGeneration) {
+			replaceEngines(nextEngines);
 			externalLoaded = true;
 		}
 	});
@@ -259,10 +285,9 @@ export async function reloadSearchEngines(): Promise<void> {
 			const gen = loadGeneration;
 			externalLoaded = false;
 			externalLoadPromise = null;
-			// Reset only after claiming the generation so concurrent ensure waits on us.
-			resetEnginesToBuiltins();
-			const loadPromise = loadExternalEngines().then(() => {
+			const loadPromise = loadExternalEngines().then(nextEngines => {
 				if (gen === loadGeneration) {
+					replaceEngines(nextEngines);
 					externalLoaded = true;
 				}
 			});

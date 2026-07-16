@@ -5,10 +5,10 @@ import {
 	type FSWatcher,
 } from 'node:fs';
 import {extname, join} from 'node:path';
-import {pathToFileURL} from 'node:url';
 import React from 'react';
 import {STATUSLINE_HOOKS_DIR} from '../../../../utils/config/apiConfig.js';
 import {logger} from '../../../../utils/core/logger.js';
+import {importFreshPluginModule} from '../../../../utils/plugins/importFresh.js';
 import {gitBranchStatusLineHook} from './gitBranch.js';
 import type {
 	StatusLineHookContext,
@@ -103,15 +103,6 @@ function normalizeStatusLineHookExports(
 	});
 }
 
-/**
- * Bust ESM module cache so edited statusline plugins reload without restart.
- * Node caches dynamic import() by full URL, so a unique query is enough.
- */
-function buildCacheBustedModuleUrl(modulePath: string): string {
-	const baseUrl = pathToFileURL(modulePath).href;
-	return `${baseUrl}?t=${Date.now()}`;
-}
-
 async function loadExternalStatusLineHooks(): Promise<
 	StatusLineHookDefinition[]
 > {
@@ -142,8 +133,9 @@ async function loadExternalStatusLineHooks(): Promise<
 	for (const moduleFile of moduleFiles) {
 		const modulePath = join(STATUSLINE_HOOKS_DIR, moduleFile.name);
 		try {
-			const moduleUrl = buildCacheBustedModuleUrl(modulePath);
-			const importedModule = (await import(moduleUrl)) as StatusLineHookModule;
+			const importedModule = (await importFreshPluginModule(
+				modulePath,
+			)) as StatusLineHookModule;
 			hooks.push(...normalizeStatusLineHookExports(importedModule, modulePath));
 		} catch (error) {
 			logger.warn('Failed to load status line hook module', {
@@ -236,7 +228,9 @@ export function useStatusLineHookItems(
 	React.useEffect(() => {
 		let watcher: FSWatcher | null = null;
 		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+		let watchRetryTimer: ReturnType<typeof setTimeout> | null = null;
 		let disposed = false;
+		let shouldReloadAfterAttach = false;
 
 		const scheduleReload = () => {
 			if (disposed) return;
@@ -247,10 +241,20 @@ export function useStatusLineHookItems(
 			}, STATUSLINE_PLUGIN_RELOAD_DEBOUNCE_MS);
 		};
 
+		const scheduleWatchRetry = (delayMs: number) => {
+			if (disposed || watcher || watchRetryTimer) return;
+			watchRetryTimer = setTimeout(() => {
+				watchRetryTimer = null;
+				startWatch();
+			}, delayMs);
+			watchRetryTimer.unref?.();
+		};
+
 		const startWatch = () => {
 			if (disposed || watcher) return;
 			if (!existsSync(STATUSLINE_HOOKS_DIR)) {
-				// Directory may appear later after first plugin is created.
+				shouldReloadAfterAttach = true;
+				scheduleWatchRetry(800);
 				return;
 			}
 			try {
@@ -276,24 +280,28 @@ export function useStatusLineHookItems(
 						// ignore
 					}
 					watcher = null;
+					shouldReloadAfterAttach = true;
 					if (!disposed) {
-						setTimeout(startWatch, 300);
+						scheduleWatchRetry(300);
 					}
 				});
+				if (shouldReloadAfterAttach) {
+					shouldReloadAfterAttach = false;
+					scheduleReload();
+				}
 			} catch {
+				shouldReloadAfterAttach = true;
 				if (!disposed) {
-					setTimeout(startWatch, 400);
+					scheduleWatchRetry(400);
 				}
 			}
 		};
 
 		startWatch();
-		// Retry shortly in case the plugin dir is created after mount.
-		const bootTimer = setTimeout(startWatch, 800);
 
 		return () => {
 			disposed = true;
-			clearTimeout(bootTimer);
+			if (watchRetryTimer) clearTimeout(watchRetryTimer);
 			if (debounceTimer) clearTimeout(debounceTimer);
 			try {
 				watcher?.close();
