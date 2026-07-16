@@ -18,54 +18,51 @@ function getMessages() {
 type Pair = {toolName: string; displayName: string};
 
 /**
- * Parse one or more `tool:display` tokens.
+ * Parse one or more `tool:display` entries.
  * Supports:
  *   websearch-search:网页搜索
+ *   websearch-search:Web Search
  *   a:甲 b:乙
  *   a:甲, b:乙
- * Display may contain spaces only when a single pair uses the first `:`
- * (legacy single-pair form with spaces after colon).
+ * Without commas, whitespace is treated as a batch separator only when every
+ * token is a complete `tool:value` pair. Commas make multi-word batches
+ * unambiguous and allow display names themselves to contain spaces or colons.
  */
-function parsePairs(raw: string): Pair[] | null {
+export function parseToolDisplayNamePairs(raw: string): Pair[] | null {
 	const trimmed = raw.trim();
 	if (!trimmed) {
 		return [];
 	}
 
-	// Prefer multi-token: split on commas / whitespace that separate pairs.
-	const tokens = trimmed
-		.split(/[\s,]+/)
-		.map(t => t.trim())
-		.filter(Boolean);
+	const parseEntry = (entry: string): Pair | null => {
+		const colon = entry.indexOf(':');
+		if (colon <= 0) return null;
+		return {
+			toolName: entry.slice(0, colon).trim(),
+			displayName: entry.slice(colon + 1).trim(),
+		};
+	};
 
-	if (tokens.length > 1) {
-		const pairs: Pair[] = [];
-		for (const token of tokens) {
+	if (trimmed.includes(',')) {
+		const entries = trimmed.split(',').map(entry => entry.trim());
+		if (entries.some(entry => entry.length === 0)) return null;
+		const pairs = entries.map(parseEntry);
+		return pairs.every((pair): pair is Pair => pair !== null) ? pairs : null;
+	}
+
+	const tokens = trimmed.split(/\s+/);
+	if (
+		tokens.length > 1 &&
+		tokens.every(token => {
 			const colon = token.indexOf(':');
-			if (colon <= 0) {
-				return null;
-			}
-			const toolName = token.slice(0, colon).trim();
-			const displayName = token.slice(colon + 1);
-			if (!toolName) {
-				return null;
-			}
-			pairs.push({toolName, displayName});
-		}
-		return pairs;
+			return colon > 0;
+		})
+	) {
+		return tokens.map(token => parseEntry(token)!);
 	}
 
-	// Single token or single pair with spaces in display name.
-	const colon = trimmed.indexOf(':');
-	if (colon <= 0) {
-		return null;
-	}
-	const toolName = trimmed.slice(0, colon).trim();
-	const displayName = trimmed.slice(colon + 1);
-	if (!toolName) {
-		return null;
-	}
-	return [{toolName, displayName}];
+	const pair = parseEntry(trimmed);
+	return pair ? [pair] : null;
 }
 
 function applyPairs(pairs: Pair[]): {set: number; cleared: number} {
@@ -118,7 +115,7 @@ function executeToolNames(args?: string): CommandResult {
 		};
 	}
 
-	const pairs = parsePairs(raw);
+	const pairs = parseToolDisplayNamePairs(raw);
 	if (!pairs || pairs.length === 0) {
 		return {success: false, message: messages.invalid};
 	}

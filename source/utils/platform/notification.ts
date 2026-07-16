@@ -29,7 +29,6 @@ export type AgentTurnCompletionNotificationState = {
 	wasUserInterrupted?: boolean;
 	willAutoContinue?: boolean;
 	pendingMessageCount?: number;
-	hasOnStopHook?: boolean;
 };
 
 type NotificationPayload = {
@@ -131,15 +130,13 @@ export function shouldNotifyAgentTurnCompletion({
 	wasUserInterrupted = false,
 	willAutoContinue = false,
 	pendingMessageCount = 0,
-	hasOnStopHook = false,
 }: AgentTurnCompletionNotificationState): boolean {
 	// Snow only asks the terminal for attention when it is actually unfocused.
 	return (
 		!terminalFocused &&
 		!wasUserInterrupted &&
 		!willAutoContinue &&
-		pendingMessageCount === 0 &&
-		!hasOnStopHook
+		pendingMessageCount === 0
 	);
 }
 
@@ -187,13 +184,6 @@ function Register-SnowCliToastIdentity {
     New-Item -Path $regPath -Force | Out-Null
   }
   New-ItemProperty -Path $regPath -Name 'DisplayName' -Value $displayName -PropertyType String -Force | Out-Null
-
-  $settingsPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings\\$appUserModelId"
-  if (-not (Test-Path -LiteralPath $settingsPath)) {
-    New-Item -Path $settingsPath -Force | Out-Null
-  }
-  New-ItemProperty -Path $settingsPath -Name 'Enabled' -Value 1 -PropertyType DWord -Force | Out-Null
-  New-ItemProperty -Path $settingsPath -Name 'ShowInActionCenter' -Value 1 -PropertyType DWord -Force | Out-Null
 }
 
 function Show-SnowCliWinRtToast {
@@ -297,10 +287,15 @@ function writeTerminalNotification(title: string, body: string): void {
 	}
 }
 
-function spawnDetachedBestEffort(command: string, args: string[]): void {
+function spawnBestEffort(
+	command: string,
+	args: string[],
+	options: {detached?: boolean} = {},
+): void {
 	try {
+		const detached = options.detached ?? true;
 		const child = spawn(command, args, {
-			detached: true,
+			detached,
 			stdio: 'ignore',
 			windowsHide: true,
 		});
@@ -312,45 +307,48 @@ function spawnDetachedBestEffort(command: string, args: string[]): void {
 	}
 }
 
-function showWindowsToastNotification({
-	title,
-	body,
-}: NotificationPayload): void {
+export function buildWindowsNotificationArguments(
+	title: string,
+	body: string,
+): string[] {
 	const encodedCommand = Buffer.from(
 		buildToastScript(title, body),
 		'utf16le',
 	).toString('base64');
 
-	spawnDetachedBestEffort('cmd.exe', [
-		'/d',
-		'/s',
-		'/c',
-		'start',
-		'""',
-		'/min',
-		'powershell',
+	// windowsHide already suppresses the console window. PowerShell's
+	// -WindowStyle Hidden can exit before running EncodedCommand on Windows.
+	return [
 		'-NoProfile',
-		'-WindowStyle',
-		'Hidden',
 		'-ExecutionPolicy',
 		'Bypass',
 		'-EncodedCommand',
 		encodedCommand,
-	]);
+	];
+}
+
+function showWindowsToastNotification({
+	title,
+	body,
+}: NotificationPayload): void {
+	// Do not use DETACHED_PROCESS here: on Windows it can report success while
+	// the encoded PowerShell payload never runs. A normal hidden child plus
+	// unref keeps notification dispatch non-blocking without opening a console.
+	spawnBestEffort(
+		'powershell',
+		buildWindowsNotificationArguments(title, body),
+		{
+			detached: false,
+		},
+	);
 }
 
 function showMacOsNotification({title, body}: NotificationPayload): void {
-	spawnDetachedBestEffort(
-		'osascript',
-		buildMacOsNotificationArguments(title, body),
-	);
+	spawnBestEffort('osascript', buildMacOsNotificationArguments(title, body));
 }
 
 function showLinuxNotification({title, body}: NotificationPayload): void {
-	spawnDetachedBestEffort(
-		'notify-send',
-		buildLinuxNotificationArguments(title, body),
-	);
+	spawnBestEffort('notify-send', buildLinuxNotificationArguments(title, body));
 }
 
 function showDesktopNotification(payload: NotificationPayload): void {
