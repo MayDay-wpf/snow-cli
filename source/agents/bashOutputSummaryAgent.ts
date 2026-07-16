@@ -109,11 +109,7 @@ export class BashOutputSummaryAgent {
 				throw new Error('Request aborted');
 			}
 
-			if (this.requestMethod === 'chat') {
-				if (chunk.choices && chunk.choices[0]?.delta?.content) {
-					content += chunk.choices[0].delta.content;
-				}
-			} else if (chunk.type === 'content' && chunk.content) {
+			if (chunk.type === 'content' && chunk.content) {
 				content += chunk.content;
 			}
 		}
