@@ -43,6 +43,7 @@ export function buildToolResultMessages(
 
 			resultMessages.push({
 				role: 'assistant',
+				toolName: toolCall.function.name,
 				content: formatToolTitleLine(toolCall.function.name, statusKey),
 				streaming: false,
 				messageStatus: isError ? 'error' : 'success',
@@ -62,6 +63,7 @@ export function buildToolResultMessages(
 
 		resultMessages.push({
 			role: 'assistant',
+			toolName: toolCall.function.name,
 			content: formatToolTitleLine(toolCall.function.name, statusKey),
 			streaming: false,
 			messageStatus: isError ? 'error' : 'success',

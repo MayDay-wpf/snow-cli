@@ -9,6 +9,7 @@ export type HookStatusPhase =
 	| 'idle';
 
 export type HookStatusEvent = {
+	executionId: string;
 	phase: HookStatusPhase;
 	hookType: HookType;
 	/** Current action label (command / prompt snippet) */

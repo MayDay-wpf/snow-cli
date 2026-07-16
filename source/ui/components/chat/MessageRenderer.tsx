@@ -164,7 +164,9 @@ function MessageRendererImpl({
 		// 先折叠 Skill / GitLine，再剥离 onUserMessage hook 注入（snow-mode 等）。
 		const afterSkill = maskSkillInjectedText(removeAnsiCodes(content || ''));
 		const afterGit = maskGitLineText(afterSkill.displayText).displayText;
-		return maskHookInjectedText(afterGit).displayText;
+		return message.role === 'user'
+			? maskHookInjectedText(afterGit).displayText
+			: afterGit;
 	};
 
 	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
@@ -562,14 +564,17 @@ function MessageRendererImpl({
 																message.messageStatus === 'success' &&
 																message.toolResult &&
 																(() => {
-																	const toolName = removeAnsiCodes(titleLine)
-																		// Status glyphs + optional tool-type emoji (when toolIcons enabled)
-																		.replace(
-																			/^[✓✗⚡✅❌⚠️⏳]\s*(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*)?/u,
-																			'',
-																		)
-																		.replace(/.*⚇✓\s*/, '')
-																		.trim();
+																	const toolName =
+																		message.toolName ??
+																		message.toolCall?.name ??
+																		removeAnsiCodes(titleLine)
+																			// Status glyphs + optional tool-type emoji (when toolIcons enabled)
+																			.replace(
+																				/^[✓✗⚡✅❌⚠️⏳]\s*(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*)?/u,
+																				'',
+																			)
+																			.replace(/.*⚇✓\s*/, '')
+																			.trim();
 																	const summary = getToolResultSummary(
 																		toolName,
 																		message.toolResult,
@@ -856,13 +861,16 @@ function MessageRendererImpl({
 										toolDisplayMode === 'full' && (
 											<ToolResultPreview
 												toolName={
-													(message.content || '')
+													message.toolName ??
+													message.toolCall?.name ??
+													((message.content || '')
 														.replace(/^✓\s*/, '') // Remove leading ✓
 														.replace(/^⚇✓\s*/, '') // Remove leading ⚇✓
 														.replace(/.*⚇✓\s*/, '') // Remove any prefix before ⚇✓
 														.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI color codes
 														.split('\n')[0]
-														?.trim() || ''
+														?.trim() ||
+														'')
 												}
 												result={message.toolResult}
 												maxLines={5}

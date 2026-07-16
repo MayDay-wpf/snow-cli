@@ -329,13 +329,18 @@ export class ACECodeSearchService {
 		}
 	}
 
-	dispose(): void {
+	/** Clear restartable caches without disabling the process-lifetime service. */
+	clearSessionCaches(): void {
 		if (this.idleCleanupTimer) {
 			clearTimeout(this.idleCleanupTimer);
 			this.idleCleanupTimer = undefined;
 		}
 
 		this.clearCaches();
+	}
+
+	dispose(): void {
+		this.clearSessionCaches();
 		this.isDisposed = true;
 	}
 
@@ -1294,7 +1299,9 @@ export class ACECodeSearchService {
 
 			child.once('error', err => {
 				finalize(() => {
-					reject(new Error(`Failed to start ${displayCommand}: ${err.message}`));
+					reject(
+						new Error(`Failed to start ${displayCommand}: ${err.message}`),
+					);
 				});
 			});
 

@@ -1,7 +1,8 @@
 /**
  * Centralized cleanup for global/singleton resources.
- * Called by /clear command and application exit (incl. fatal crash path)
- * to reclaim memory and avoid orphaned MCP / browser / OTEL handles on Windows.
+ * Called by /clear and application exit to reclaim restartable in-process
+ * resources. Process-lifetime services (MCP clients and OpenTelemetry) are
+ * shut down only by the CLI exit path, because /clear keeps the process alive.
  */
 
 import {logger} from './logger.js';
@@ -25,40 +26,15 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// websearch module not loaded or already closed
 	}
 
-	// 3. Dispose ACECodeSearchService caches
+	// 3. Clear ACECodeSearchService caches without disposing its process singleton
 	try {
 		const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
-		aceCodeSearchService.dispose();
+		aceCodeSearchService.clearSessionCaches();
 	} catch {
 		// ACE module not loaded
 	}
 
-	// 4. Close persistent MCP clients + drop tools cache (prevents orphaned children)
-	try {
-		const {closeAllMCPConnections, clearMCPToolsCache} = await import(
-			'../execution/mcpToolsManager.js'
-		);
-		await Promise.race([
-			closeAllMCPConnections(),
-			new Promise<void>(resolve => setTimeout(resolve, 2000)),
-		]);
-		clearMCPToolsCache();
-	} catch {
-		// MCP manager not loaded
-	}
-
-	// 5. Flush OpenTelemetry (process.exit bypasses beforeExit)
-	try {
-		const {shutdownTelemetry} = await import('../telemetry/otel.js');
-		await Promise.race([
-			shutdownTelemetry(),
-			new Promise<void>(resolve => setTimeout(resolve, 2000)),
-		]);
-	} catch {
-		// OTEL not started
-	}
-
-	// 6. Clear sub-agent stream state maps
+	// 4. Clear sub-agent stream state maps
 	try {
 		const {clearAllTeammateStreamEntries, clearAllSubAgentStreamEntries} =
 			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
@@ -68,7 +44,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Not loaded
 	}
 
-	// 7. Clear runningSubAgentTracker
+	// 5. Clear runningSubAgentTracker
 	try {
 		const {runningSubAgentTracker} = await import(
 			'../execution/runningSubAgentTracker.js'
@@ -78,7 +54,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Not loaded
 	}
 
-	// 8. Clear conversation context
+	// 6. Clear conversation context
 	try {
 		const {clearConversationContext} = await import(
 			'../codebase/conversationContext.js'
@@ -88,7 +64,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Not loaded
 	}
 
-	// 9. Clear Ink fullStaticOutput buffer
+	// 7. Clear Ink fullStaticOutput buffer
 	try {
 		const ink = (await import('ink')) as any;
 		if (typeof ink.clearInkStaticOutput === 'function') {
@@ -98,7 +74,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// Ink module not loaded
 	}
 
-	// 10. Force GC if available
+	// 8. Force GC if available
 	if (global.gc) {
 		global.gc();
 	}

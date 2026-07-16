@@ -46,9 +46,10 @@ export function useChatScreenLocalState() {
 	const hadBashSensitiveCommandRef = useRef(false);
 	const [hookError, setHookError] = useState<HookErrorDetails | null>(null);
 	const [hookStatus, setHookStatus] = useState<HookStatusEvent | null>(null);
-	const hookStatusClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-		null,
-	);
+	const hookStatusRunsRef = useRef<Map<string, HookStatusEvent>>(new Map());
+	const hookStatusClearTimersRef = useRef<
+		Map<string, ReturnType<typeof setTimeout>>
+	>(new Map());
 	const [pendingUserQuestion, setPendingUserQuestion] =
 		useState<PendingUserQuestionState>(null);
 	const [compressionStatus, setCompressionStatus] =
@@ -69,37 +70,55 @@ export function useChatScreenLocalState() {
 
 	// Live Hook execution status (Unicode icons + spinner in HookStatusDisplay)
 	useEffect(() => {
-		const unsubscribe = onHookStatus(event => {
-			if (hookStatusClearTimerRef.current) {
-				clearTimeout(hookStatusClearTimerRef.current);
-				hookStatusClearTimerRef.current = null;
-			}
+		const refreshVisibleStatus = () => {
+			const events = Array.from(hookStatusRunsRef.current.values());
+			const running = events
+				.toReversed()
+				.find(event => event.phase === 'start' || event.phase === 'action');
+			setHookStatus(running ?? events.at(-1) ?? null);
+		};
 
+		const unsubscribe = onHookStatus(event => {
 			if (!event || event.phase === 'idle') {
+				for (const timer of hookStatusClearTimersRef.current.values()) {
+					clearTimeout(timer);
+				}
+				hookStatusClearTimersRef.current.clear();
+				hookStatusRunsRef.current.clear();
 				setHookStatus(null);
 				return;
 			}
 
-			setHookStatus(event);
+			const existingTimer = hookStatusClearTimersRef.current.get(
+				event.executionId,
+			);
+			if (existingTimer) {
+				clearTimeout(existingTimer);
+				hookStatusClearTimersRef.current.delete(event.executionId);
+			}
+			hookStatusRunsRef.current.delete(event.executionId);
+			hookStatusRunsRef.current.set(event.executionId, event);
+			refreshVisibleStatus();
 
 			// Auto-clear terminal success/failed banner so it does not stick
 			if (event.phase === 'success' || event.phase === 'failed') {
 				const delayMs = event.phase === 'success' ? 1600 : 3200;
-				hookStatusClearTimerRef.current = setTimeout(() => {
-					setHookStatus(current =>
-						current && current.phase === event.phase ? null : current,
-					);
-					hookStatusClearTimerRef.current = null;
+				const timer = setTimeout(() => {
+					hookStatusRunsRef.current.delete(event.executionId);
+					hookStatusClearTimersRef.current.delete(event.executionId);
+					refreshVisibleStatus();
 				}, delayMs);
+				hookStatusClearTimersRef.current.set(event.executionId, timer);
 			}
 		});
 
 		return () => {
 			unsubscribe();
-			if (hookStatusClearTimerRef.current) {
-				clearTimeout(hookStatusClearTimerRef.current);
-				hookStatusClearTimerRef.current = null;
+			for (const timer of hookStatusClearTimersRef.current.values()) {
+				clearTimeout(timer);
 			}
+			hookStatusClearTimersRef.current.clear();
+			hookStatusRunsRef.current.clear();
 		};
 	}, []);
 

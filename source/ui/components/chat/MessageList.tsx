@@ -33,6 +33,8 @@ export interface Message {
 		name: string;
 		arguments: any;
 	};
+	/** Stable technical tool id; display text may be localized/decorated. */
+	toolName?: string;
 	toolDisplay?: {
 		toolName: string;
 		args: Array<{key: string; value: string; isLast: boolean}>;

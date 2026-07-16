@@ -19,6 +19,8 @@ import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 import {emitHookStatus, summarizeHookAction} from './hookStatusEvents.js';
 
+let hookExecutionSequence = 0;
+
 /**
  * Prompt Hook 执行结果（小模型返回的 JSON）
  *
@@ -50,6 +52,7 @@ export interface CommandHookResult {
 	success: boolean;
 	command: string; // 执行的命令
 	exitCode: number; // 进程退出码
+	signal?: NodeJS.Signals | string;
 	output?: string;
 	error?: string;
 }
@@ -205,8 +208,10 @@ export class UnifiedHooksExecutor {
 				skippedActions: rules.reduce((n, r) => n + r.hooks.length, 0),
 			};
 		}
+		const executionId = `${Date.now()}-${++hookExecutionSequence}`;
 
 		emitHookStatus({
+			executionId,
 			phase: 'start',
 			hookType,
 			totalActions: plannedActions.length,
@@ -254,6 +259,7 @@ export class UnifiedHooksExecutor {
 					actionType = 'command';
 					actionLabel = summarizeHookAction(action.command);
 					emitHookStatus({
+						executionId,
 						phase: 'action',
 						hookType,
 						actionType,
@@ -266,6 +272,7 @@ export class UnifiedHooksExecutor {
 					actionType = 'prompt';
 					actionLabel = summarizeHookAction(action.prompt);
 					emitHookStatus({
+						executionId,
 						phase: 'action',
 						hookType,
 						actionType,
@@ -294,7 +301,10 @@ export class UnifiedHooksExecutor {
 						failedActions++;
 
 						// 如果是 Command 类型且 exitCode >= 2,停止后续 Action 执行
-						if (result.type === 'command' && result.exitCode >= 2) {
+						if (
+							result.type === 'command' &&
+							(result.exitCode >= 2 || result.exitCode < 0)
+						) {
 							abortedHard = true;
 							break;
 						}
@@ -307,6 +317,7 @@ export class UnifiedHooksExecutor {
 		}
 
 		emitHookStatus({
+			executionId,
 			phase: hasHardError ? 'failed' : 'success',
 			hookType,
 			executedActions: totalExecuted,
@@ -315,7 +326,7 @@ export class UnifiedHooksExecutor {
 			totalActions: plannedActions.length,
 			message: hasHardError
 				? abortedHard
-					? 'stopped (exit ≥ 2)'
+					? 'stopped (hard failure)'
 					: `${failedActions} action(s) failed`
 				: softActions > 0
 				? `${softActions} applied (exit 1)`
@@ -575,7 +586,7 @@ export class UnifiedHooksExecutor {
 				childProcess.on('close', (code, signal) => {
 					if (signal) {
 						const error: any = new Error(`Process killed by signal ${signal}`);
-						error.code = code || 1;
+						error.code = code;
 						error.stdout = stdoutData;
 						error.stderr = stderrData;
 						error.signal = signal;
@@ -613,13 +624,18 @@ export class UnifiedHooksExecutor {
 
 			// 命令本身执行失败（如命令不存在、语法错误等）
 			// error.code 可能是字符串（如 'ENOENT'），此时应返回 exitCode 2
-			const exitCode = typeof error.code === 'number' ? error.code : 2;
+			const exitCode = error.signal
+				? -1
+				: typeof error.code === 'number'
+				? error.code
+				: 2;
 
 			return {
 				type: 'command',
 				success: false,
 				command,
 				exitCode,
+				signal: error.signal,
 				output: error.stdout ? this.truncateOutput(error.stdout) : undefined,
 				error:
 					error.stderr || error.message

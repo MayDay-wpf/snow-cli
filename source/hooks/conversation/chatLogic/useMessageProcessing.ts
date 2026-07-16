@@ -23,7 +23,6 @@ import {
 	notifyAgentTurnComplete,
 	shouldNotifyAgentTurnCompletion,
 } from '../../../utils/platform/notification.js';
-import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
 
 interface MessageTarget {
 	instanceId: string;
@@ -272,23 +271,37 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		);
 		// AI path: may include onUserMessage inject tags (snow-mode / workflow-state).
 		const aiSource = message;
-		const aiCleanContent =
+		const aiParsed =
 			aiSource === uiSource
-				? cleanContent
-				: (await parseAndValidateFileReferences(aiSource)).cleanContent;
+				? {cleanContent, validFiles}
+				: await parseAndValidateFileReferences(aiSource);
+		const aiCleanContent =
+			aiSource === uiSource ? cleanContent : aiParsed.cleanContent;
 
-		const imageFiles = validFiles.filter(
+		const uiImageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
 		);
-		const regularFiles = validFiles.filter(f => !f.isImage);
+		const aiImageFiles = aiParsed.validFiles.filter(
+			f => f.isImage && f.imageData && f.mimeType,
+		);
+		const regularFiles = aiParsed.validFiles.filter(f => !f.isImage);
 
-		const imageContents = [
-			...(images || []).map(img => ({
+		const explicitImages = (images || []).map(img => ({
+			type: 'image' as const,
+			data: img.data,
+			mimeType: img.mimeType,
+		}));
+		const uiImageContents = [
+			...explicitImages,
+			...uiImageFiles.map(f => ({
 				type: 'image' as const,
-				data: img.data,
-				mimeType: img.mimeType,
+				data: f.imageData!,
+				mimeType: f.mimeType!,
 			})),
-			...imageFiles.map(f => ({
+		];
+		const imageContents = [
+			...explicitImages,
+			...aiImageFiles.map(f => ({
 				type: 'image' as const,
 				data: f.imageData!,
 				mimeType: f.mimeType!,
@@ -300,7 +313,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				role: 'user',
 				content: cleanContent,
 				files: validFiles.length > 0 ? validFiles : undefined,
-				images: imageContents.length > 0 ? imageContents : undefined,
+				images: uiImageContents.length > 0 ? uiImageContents : undefined,
 			};
 			setMessages(prev => [...prev, userMessage]);
 		}
@@ -579,7 +592,6 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 							wasUserInterrupted,
 							willAutoContinue,
 							pendingMessageCount: pendingMessagesRef.current.length,
-							hasOnStopHook: hasEnabledHookActions('onStop'),
 						})
 					) {
 						notifyAgentTurnWaitingForInput();
@@ -864,28 +876,45 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 			typedPending,
 		);
-		const aiCleanPending =
+		const aiParsed =
 			messageToSend === typedPending
-				? cleanContent
-				: (await parseAndValidateFileReferences(messageToSend)).cleanContent;
+				? {cleanContent, validFiles}
+				: await parseAndValidateFileReferences(messageToSend);
+		const aiCleanPending = aiParsed.cleanContent;
 
-		const imageFiles = validFiles.filter(
+		const uiImageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
 		);
-		const regularFiles = validFiles.filter(f => !f.isImage);
+		const aiImageFiles = aiParsed.validFiles.filter(
+			f => f.isImage && f.imageData && f.mimeType,
+		);
+		const regularFiles = aiParsed.validFiles.filter(f => !f.isImage);
 
-		const allImages = messagesToProcess
-			.flatMap(m => m.images || [])
-			.concat(
-				imageFiles.map(f => ({
-					data: f.imageData!,
-					mimeType: f.mimeType!,
-				})),
-			);
+		const explicitImages = messagesToProcess.flatMap(m => m.images || []);
+		const uiImages = explicitImages.concat(
+			uiImageFiles.map(f => ({
+				data: f.imageData!,
+				mimeType: f.mimeType!,
+			})),
+		);
+		const aiImages = explicitImages.concat(
+			aiImageFiles.map(f => ({
+				data: f.imageData!,
+				mimeType: f.mimeType!,
+			})),
+		);
 
 		const imageContents =
-			allImages.length > 0
-				? allImages.map(img => ({
+			aiImages.length > 0
+				? aiImages.map(img => ({
+						type: 'image' as const,
+						data: img.data,
+						mimeType: img.mimeType,
+				  }))
+				: undefined;
+		const uiImageContents =
+			uiImages.length > 0
+				? uiImages.map(img => ({
 						type: 'image' as const,
 						data: img.data,
 						mimeType: img.mimeType,
@@ -896,7 +925,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			role: 'user',
 			content: cleanContent,
 			files: validFiles.length > 0 ? validFiles : undefined,
-			images: imageContents,
+			images: uiImageContents,
 		};
 		setMessages(prev => [...prev, userMessage]);
 
@@ -911,6 +940,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				regularFiles,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
+			const saveMessageWithOriginal = async (msg: any) => {
+				await saveMessage({
+					...msg,
+					...(msg.role === 'user' && messageToSend !== typedPending
+						? {originalContent: typedPending}
+						: {}),
+					editorContext:
+						msg.role === 'user' ? messageForAI.editorContext : undefined,
+				});
+			};
 
 			try {
 				await handleConversationWithTools({
@@ -919,7 +958,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					imageContents,
 					controller,
 					messages,
-					saveMessage,
+					saveMessage: saveMessageWithOriginal,
 					setMessages,
 					setStreamTokenCount: streamingState.setStreamTokenCount,
 					requestToolConfirmation,

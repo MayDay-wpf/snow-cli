@@ -115,6 +115,7 @@ export async function processToolCallsAfterStream(
 			);
 			pendingDisplayMessages.push({
 				role: 'assistant',
+				toolName: toolCall.function.name,
 				content: formatToolTitleLine(toolCall.function.name, 'pending'),
 				streaming: false,
 				toolCall: {
