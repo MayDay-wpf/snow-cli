@@ -1015,8 +1015,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				return;
 			}
 			if (result.success && result.action === 'clear') {
-				// Execute onSessionStart hook BEFORE clearing session
+				// Reserve the next session identity before its onSessionStart hook runs.
 				(async () => {
+					const nextSessionId = sessionManager.createSessionId();
 					try {
 						const {unifiedHooksExecutor} = await import(
 							'../../utils/execution/unifiedHooksExecutor.js'
@@ -1024,13 +1025,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const {interpretHookResult} = await import(
 							'../../utils/execution/hookResultInterpreter.js'
 						);
-						const currentSession = sessionManager.getCurrentSession();
 						const hookResult = await unifiedHooksExecutor.executeHooks(
 							'onSessionStart',
 							{
 								messages: [],
 								messageCount: 0,
-								sessionId: currentSession?.id,
+								sessionId: nextSessionId,
 								cwd: process.cwd(),
 								isResume: false,
 							},
@@ -1053,10 +1053,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const warningMessage =
 							interpreted.action === 'warn' ? interpreted.warningMessage : null;
 
-						// Hook passed, now clear session
+						// Hook passed, now clear session and retain the reserved identity.
 						resetTerminal(stdout);
 						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
+						sessionManager.setPendingNewSessionId(nextSessionId);
 						// After clear, queue session-start inject for the next user turn
 						if (interpreted.additionalContext || interpreted.displayMessage) {
 							sessionManager.setPendingAdditionalContext(
@@ -1095,10 +1096,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						}
 					} catch (error) {
 						console.error('Failed to execute onSessionStart hook:', error);
-						// On exception, still clear session
+						// On exception, still clear session with the reserved identity.
 						resetTerminal(stdout);
 						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
+						sessionManager.setPendingNewSessionId(nextSessionId);
 						options.clearSavedMessages();
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);

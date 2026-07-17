@@ -33,3 +33,26 @@ export function mergeInjectedContexts(
 	}
 	return `${blocks.join('\n\n')}\n\n${message}`;
 }
+
+/**
+ * Apply one onUserMessage result after the session-start context has been
+ * consumed. Exit-1 replacement intentionally discards both prepend contexts.
+ */
+export function applyOnUserMessageHookResult(
+	message: string,
+	result: {
+		action: 'continue' | 'block' | 'replace' | 'warn';
+		replacedContent?: string;
+		additionalContext?: string;
+	},
+	pendingContext?: string,
+): string {
+	if (result.action === 'replace' && result.replacedContent) {
+		return result.replacedContent;
+	}
+
+	return mergeInjectedContexts(message, [
+		pendingContext,
+		result.additionalContext,
+	]);
+}

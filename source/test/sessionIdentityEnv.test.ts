@@ -4,6 +4,11 @@ import {
 	buildSessionIdentityEnv,
 	enrichHookContext,
 } from '../utils/execution/sessionIdentityEnv.js';
+import {
+	buildSessionStartHookContext,
+	sessionManager,
+	type ChatMessage,
+} from '../utils/session/sessionManager.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -168,8 +173,46 @@ test('enrichHookContext ignores blank session keys', t => {
 	t.is(out['platform'], 'snow');
 	t.truthy(out['cwd']);
 });
-
 test('enrichHookContext passes through nullish', t => {
 	t.is(enrichHookContext(undefined), undefined);
 	t.is(enrichHookContext(null), null);
 });
+
+test('session start hook context uses the explicit target session id', t => {
+	const messages = [
+		{role: 'user', content: 'resume', timestamp: 1},
+	] as ChatMessage[];
+	const context = buildSessionStartHookContext(messages, 'target-session');
+
+	t.is(context.sessionId, 'target-session');
+	t.is(context.messageCount, 1);
+	t.true(context.isResume);
+});
+
+test.serial(
+	'reserved new session id is stable and used by lazy creation',
+	async t => {
+		sessionManager.clearCurrentSession();
+		const reserved = sessionManager.reserveNewSessionId();
+
+		t.is(sessionManager.reserveNewSessionId(), reserved);
+		const session = await sessionManager.createNewSession(true, true);
+		t.is(session.id, reserved);
+
+		sessionManager.clearCurrentSession();
+	},
+);
+
+test.serial(
+	'clear flow can reserve the exact id used by the next session',
+	async t => {
+		sessionManager.clearCurrentSession();
+		const nextSessionId = sessionManager.createSessionId();
+		sessionManager.setPendingNewSessionId(nextSessionId);
+
+		const session = await sessionManager.createNewSession(true, true);
+		t.is(session.id, nextSessionId);
+
+		sessionManager.clearCurrentSession();
+	},
+);

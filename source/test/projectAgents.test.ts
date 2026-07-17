@@ -7,6 +7,7 @@ import {
 	loadAgentsFromDir,
 	parseAgentMarkdownFile,
 } from '../utils/config/projectAgents.js';
+import {resolveAgent} from '../utils/execution/subAgentResolver.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -70,17 +71,25 @@ Role body
 
 test('loadAgentsFromDir skips bad files without throwing', async t => {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-agents-'));
-	await fs.writeFile(path.join(dir, 'good.md'), `---
+	await fs.writeFile(
+		path.join(dir, 'good.md'),
+		`---
 id: good
 tools:
   - ace-search
 ---
 ok
-`, 'utf8');
-	await fs.writeFile(path.join(dir, 'bad.md'), `---
+`,
+		'utf8',
+	);
+	await fs.writeFile(
+		path.join(dir, 'bad.md'),
+		`---
 : not yaml
 ---
-`, 'utf8');
+`,
+		'utf8',
+	);
 
 	try {
 		const agents = loadAgentsFromDir(dir);
@@ -113,3 +122,37 @@ nested
 		await fs.rm(dir, {recursive: true, force: true});
 	}
 });
+
+test.serial(
+	'resolveAgent honors project markdown override for builtin id',
+	async t => {
+		const root = await fs.mkdtemp(
+			path.join(os.tmpdir(), 'snow-agent-resolve-'),
+		);
+		const agentsDir = path.join(root, '.snow', 'agents');
+		await fs.mkdir(agentsDir, {recursive: true});
+		await fs.writeFile(
+			path.join(agentsDir, 'agent_explore.md'),
+			`---
+id: agent_explore
+name: project-explore
+description: Project override
+tools:
+  - filesystem-read
+---
+Project override role
+`,
+			'utf8',
+		);
+
+		try {
+			const resolved = await resolveAgent('agent_explore', root);
+			t.falsy(resolved.error);
+			t.is(resolved.agent?.name, 'project-explore');
+			t.is(resolved.agent?.description, 'Project override');
+			t.true(resolved.agent?.role?.includes('Project override role'));
+		} finally {
+			await fs.rm(root, {recursive: true, force: true});
+		}
+	},
+);

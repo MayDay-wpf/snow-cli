@@ -30,6 +30,19 @@ export function buildInitialUserPromptBlock(initialUserPrompt: string): string {
 	].join('\n');
 }
 
+export function buildSessionStartHookContext(
+	messages: ChatMessage[],
+	sessionId: string,
+) {
+	return {
+		messages,
+		messageCount: messages.length,
+		sessionId,
+		cwd: process.cwd(),
+		isResume: messages.length > 0,
+	};
+}
+
 export interface Session {
 	id: string;
 	title: string;
@@ -173,16 +186,20 @@ class SessionManager {
 			.trim(); // Remove leading/trailing spaces
 	}
 
+	createSessionId(): string {
+		return randomUUID();
+	}
+
 	async createNewSession(
 		isTemporary = false,
 		skipEmptyTodo = false,
 	): Promise<Session> {
 		await this.ensureSessionsDir(new Date());
 
-		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
-		const sessionId = randomUUID();
+		const effectiveSessionId =
+			this.consumePendingNewSessionId() || this.createSessionId();
 		const session: Session = {
-			id: sessionId,
+			id: effectiveSessionId,
 			title: 'New Chat',
 			summary: '',
 			createdAt: Date.now(),
@@ -203,7 +220,7 @@ class SessionManager {
 
 		// 自动创建空TODO（压缩流程会跳过，因为需要继承原会话的TODO）
 		if (!skipEmptyTodo) {
-			await this.createEmptyTodoForSession(sessionId);
+			await this.createEmptyTodoForSession(effectiveSessionId);
 		}
 
 		return session;
@@ -334,6 +351,24 @@ class SessionManager {
 	 */
 	private pendingAdditionalContext?: string;
 	private pendingDisplayMessage?: string;
+	private pendingNewSessionId?: string;
+
+	setPendingNewSessionId(sessionId: string): void {
+		this.pendingNewSessionId = sessionId;
+	}
+
+	reserveNewSessionId(): string {
+		if (!this.pendingNewSessionId) {
+			this.pendingNewSessionId = this.createSessionId();
+		}
+		return this.pendingNewSessionId;
+	}
+
+	private consumePendingNewSessionId(): string | undefined {
+		const sessionId = this.pendingNewSessionId;
+		this.pendingNewSessionId = undefined;
+		return sessionId;
+	}
 
 	setPendingAdditionalContext(context?: string, displayMessage?: string): void {
 		this.pendingAdditionalContext =
@@ -424,8 +459,11 @@ class SessionManager {
 		// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
 		this.cleanIncompleteToolCalls(session);
 
-		// Execute onSessionStart hook before setting current session
-		const hookResult = await this.executeSessionStartHook(session.messages);
+		// Execute onSessionStart with the identity of the session being resumed.
+		const hookResult = await this.executeSessionStartHook(
+			session.messages,
+			session.id,
+		);
 		if (!hookResult.shouldContinue) {
 			// Hook failed, store error details and abort loading
 			this.lastLoadHookError = hookResult.errorDetails;
@@ -1014,11 +1052,13 @@ class SessionManager {
 
 	setCurrentSession(session: Session): void {
 		this.currentSession = session;
+		this.pendingNewSessionId = undefined;
 		this.notifyMessagesChanged();
 	}
 
 	clearCurrentSession(): void {
 		this.currentSession = null;
+		this.pendingNewSessionId = undefined;
 		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
 	}
@@ -1336,7 +1376,10 @@ class SessionManager {
 	 * @param messages - Chat messages from the session (empty array for new sessions)
 	 * @returns {shouldContinue: boolean, errorDetails?: HookErrorDetails}
 	 */
-	private async executeSessionStartHook(messages: ChatMessage[]): Promise<{
+	private async executeSessionStartHook(
+		messages: ChatMessage[],
+		sessionId: string,
+	): Promise<{
 		shouldContinue: boolean;
 		errorDetails?: {
 			type: 'warning' | 'error';
@@ -1359,13 +1402,7 @@ class SessionManager {
 
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onSessionStart',
-				{
-					messages,
-					messageCount: messages.length,
-					sessionId: this.currentSession?.id,
-					cwd: process.cwd(),
-					isResume: messages.length > 0,
-				},
+				buildSessionStartHookContext(messages, sessionId),
 			);
 			const interpreted = interpretHookResult('onSessionStart', hookResult);
 			if (interpreted.action === 'warn') {

@@ -302,7 +302,6 @@ export class UnifiedHooksExecutor {
 					actionType = 'context';
 					actionLabel = summarizeHookAction(action.content) || 'context inject';
 					emitHookStatus({
-						executionId,
 						phase: 'action',
 						hookType,
 						actionType,

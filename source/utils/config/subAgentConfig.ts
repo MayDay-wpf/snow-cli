@@ -74,7 +74,7 @@ export function getUserSubAgents(): SubAgent[] {
  * Merge priority (highest wins):
  *   project .snow/agents > global ~/.snow/agents > user sub-agents.json > builtin
  */
-export function getSubAgents(): SubAgent[] {
+export function getSubAgents(cwd: string = process.cwd()): SubAgent[] {
 	const byId = new Map<string, SubAgent>();
 
 	// 1. Builtin (lowest)
@@ -93,7 +93,7 @@ export function getSubAgents(): SubAgent[] {
 	}
 
 	// 4. Project agents dir (highest)
-	for (const agent of loadProjectAgents(process.cwd())) {
+	for (const agent of loadProjectAgents(cwd)) {
 		byId.set(agent.id, agent);
 	}
 
@@ -101,11 +101,13 @@ export function getSubAgents(): SubAgent[] {
 }
 
 /**
- * Get a sub-agent by ID (checks both built-in and user-configured)
- * getSubAgents已经处理了优先级（用户副本优先）
+ * Get a sub-agent by ID using the same effective merge priority as the list.
  */
-export function getSubAgent(id: string): SubAgent | null {
-	const agents = getSubAgents();
+export function getSubAgent(
+	id: string,
+	cwd: string = process.cwd(),
+): SubAgent | null {
+	const agents = getSubAgents(cwd);
 	return agents.find(agent => agent.id === id) || null;
 }
 

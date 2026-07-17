@@ -1,8 +1,4 @@
 import {getSubAgent} from '../config/subAgentConfig.js';
-import {
-	BUILTIN_AGENT_IDS,
-	getBuiltinAgentDefinition,
-} from './subagents/index.js';
 import type {MCPTool} from './mcpToolsManager.js';
 
 export interface ResolveAgentResult {
@@ -12,18 +8,11 @@ export interface ResolveAgentResult {
 
 export async function resolveAgent(
 	agentId: string,
+	cwd: string = process.cwd(),
 ): Promise<ResolveAgentResult> {
-	if (BUILTIN_AGENT_IDS.includes(agentId)) {
-		const {getUserSubAgents} = await import('../config/subAgentConfig.js');
-		const userAgents = getUserSubAgents();
-		const userAgent = userAgents.find(a => a.id === agentId);
-		if (userAgent) {
-			return {agent: userAgent};
-		}
-		return {agent: getBuiltinAgentDefinition(agentId)};
-	}
-
-	const agent = getSubAgent(agentId);
+	// getSubAgent applies the single effective priority chain for every ID,
+	// including built-ins: project > global > user JSON > builtin.
+	const agent = getSubAgent(agentId, cwd);
 	if (!agent) {
 		return {
 			agent: null,

@@ -670,6 +670,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			return;
 		}
 
+		// Reserve a stable identity before the first message hook. The session is
+		// still created lazily after the hook succeeds.
+		const current = sessionManager.getCurrentSession();
+		const sessionId = current?.id ?? sessionManager.reserveNewSessionId();
+
 		// Keep user-typed text for the bubble; hook replace only rewrites AI input.
 		const typedMessage = message;
 		try {
@@ -679,14 +684,13 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {interpretHookResult} = await import(
 				'../../../utils/execution/hookResultInterpreter.js'
 			);
-			const current = sessionManager.getCurrentSession();
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
 				{
 					message,
 					imageCount: images?.length || 0,
 					source: 'normal',
-					sessionId: current?.id,
+					sessionId,
 					cwd: process.cwd(),
 					messageCount: current?.messages?.length ?? 0,
 				},
@@ -709,27 +713,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				]);
 				return;
 			}
-			if (interpreted.action === 'replace' && interpreted.replacedContent) {
-				// exit 1: replace model-bound content; do not prepend additionalContext
-				message = interpreted.replacedContent;
-			} else if (interpreted.additionalContext) {
-				const {mergeInjectedContexts} = await import(
-					'../../../utils/execution/hookContextInject.js'
-				);
-				const pending = sessionManager.consumePendingAdditionalContext();
-				message = mergeInjectedContexts(message, [
-					pending.context,
-					interpreted.additionalContext,
-				]);
-			} else {
-				const pending = sessionManager.consumePendingAdditionalContext();
-				if (pending.context) {
-					const {prependAdditionalContext} = await import(
-						'../../../utils/execution/hookContextInject.js'
-					);
-					message = prependAdditionalContext(message, pending.context);
-				}
-			}
+
+			const pending = sessionManager.consumePendingAdditionalContext();
+			const {applyOnUserMessageHookResult} = await import(
+				'../../../utils/execution/hookContextInject.js'
+			);
+			message = applyOnUserMessageHookResult(
+				message,
+				interpreted,
+				pending.context,
+			);
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
@@ -822,11 +815,6 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			console.error('Failed to process bash commands:', error);
 		}
 
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) {
-			await sessionManager.createNewSession();
-		}
-
 		// typedMessage = bubble text; message may be hook-enriched for the model.
 		await processMessage(message, images, undefined, undefined, typedMessage);
 	};
@@ -884,29 +872,15 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				]);
 				return;
 			}
-			if (interpreted.action === 'replace' && interpreted.replacedContent) {
-				messageToSend = interpreted.replacedContent;
-			} else if (interpreted.additionalContext) {
-				const {mergeInjectedContexts} = await import(
-					'../../../utils/execution/hookContextInject.js'
-				);
-				const pending = sessionManager.consumePendingAdditionalContext();
-				messageToSend = mergeInjectedContexts(messageToSend, [
-					pending.context,
-					interpreted.additionalContext,
-				]);
-			} else {
-				const pending = sessionManager.consumePendingAdditionalContext();
-				if (pending.context) {
-					const {prependAdditionalContext} = await import(
-						'../../../utils/execution/hookContextInject.js'
-					);
-					messageToSend = prependAdditionalContext(
-						messageToSend,
-						pending.context,
-					);
-				}
-			}
+			const pending = sessionManager.consumePendingAdditionalContext();
+			const {applyOnUserMessageHookResult} = await import(
+				'../../../utils/execution/hookContextInject.js'
+			);
+			messageToSend = applyOnUserMessageHookResult(
+				messageToSend,
+				interpreted,
+				pending.context,
+			);
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}

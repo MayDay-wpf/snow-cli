@@ -10,15 +10,15 @@ import {
 } from '../utils/execution/hookResultInterpreter.js';
 import {hookStrategies} from '../utils/execution/hookStrategies.js';
 import {
+	applyOnUserMessageHookResult,
 	mergeInjectedContexts,
 	prependAdditionalContext,
 } from '../utils/execution/hookContextInject.js';
+import {sessionManager} from '../utils/session/sessionManager.js';
 
 const test = anyTest as unknown as TestFn;
 
-function successCommand(
-	output: string,
-): UnifiedHookExecutionResult {
+function successCommand(output: string): UnifiedHookExecutionResult {
 	return {
 		success: true,
 		results: [
@@ -93,9 +93,7 @@ test('truncateAdditionalContext truncates over max', t => {
 
 test('extractAdditionalContext truncates joined context', t => {
 	const long = 'y'.repeat(100);
-	const result = successCommand(
-		JSON.stringify({additionalContext: long}),
-	);
+	const result = successCommand(JSON.stringify({additionalContext: long}));
 	const extracted = extractAdditionalContext(result, 20);
 	t.is(extracted.context?.length, 20);
 	t.true(extracted.truncated);
@@ -162,4 +160,32 @@ test('prepend/merge helpers', t => {
 	t.is(prependAdditionalContext('hi', 'CTX'), 'CTX\n\nhi');
 	t.is(prependAdditionalContext('hi', '  '), 'hi');
 	t.is(mergeInjectedContexts('hi', ['A', undefined, 'B']), 'A\n\nB\n\nhi');
+});
+
+test.serial(
+	'exit1 replacement consumes and discards pending session context',
+	t => {
+		sessionManager.clearCurrentSession();
+		sessionManager.setPendingAdditionalContext('SESSION_CONTEXT');
+
+		const pending = sessionManager.consumePendingAdditionalContext();
+		const output = applyOnUserMessageHookResult(
+			'original',
+			{action: 'replace', replacedContent: 'rewritten'},
+			pending.context,
+		);
+
+		t.is(output, 'rewritten');
+		t.is(sessionManager.peekPendingAdditionalContext(), undefined);
+	},
+);
+
+test('continue result merges pending and message hook contexts', t => {
+	const output = applyOnUserMessageHookResult(
+		'original',
+		{action: 'continue', additionalContext: 'MESSAGE_CONTEXT'},
+		'SESSION_CONTEXT',
+	);
+
+	t.is(output, 'SESSION_CONTEXT\n\nMESSAGE_CONTEXT\n\noriginal');
 });
