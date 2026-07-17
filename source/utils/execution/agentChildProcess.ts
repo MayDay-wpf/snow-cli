@@ -4,6 +4,7 @@ import {basename, dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {getConversationContext} from '../codebase/conversationContext.js';
+import {buildSessionIdentityEnv} from './sessionIdentityEnv.js';
 
 import {
 	runningSubAgentTracker,
@@ -336,8 +337,17 @@ async function handleChildRequest(
 async function runAgentChildProcess<T>(
 	options: RunAgentChildProcessOptions<T>,
 ): Promise<T> {
+	const conversation = getConversationContext();
+	const identityEnv = buildSessionIdentityEnv({
+		sessionId: conversation?.sessionId,
+		cwd: process.cwd(),
+		baseEnv: process.env,
+	});
 	const child = fork(getCliEntryPath(), ['--snow-agent-child-worker'], {
-		env: {...process.env, SNOW_AGENT_CHILD_PROCESS: '1'},
+		env: {
+			...identityEnv,
+			SNOW_AGENT_CHILD_PROCESS: '1',
+		},
 		stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
 		execArgv: process.execArgv.filter(arg => !arg.startsWith('--inspect')),
 	});

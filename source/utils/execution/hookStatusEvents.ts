@@ -13,8 +13,8 @@ export type HookStatusEvent = {
 	hookType: HookType;
 	/** Current action label (command / prompt snippet) */
 	actionLabel?: string;
-	/** command | prompt */
-	actionType?: 'command' | 'prompt';
+	/** command | prompt | context */
+	actionType?: 'command' | 'prompt' | 'context';
 	/** 1-based index of the current action */
 	actionIndex?: number;
 	totalActions?: number;

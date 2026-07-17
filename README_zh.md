@@ -107,9 +107,9 @@ snow
 
 - [代理和浏览器设置](docs/usage/zh/03.代理和浏览器设置.md) - 网络代理配置、浏览器使用设置
 - [代码库设置](docs/usage/zh/04.代码库设置.md) - 代码库集成、搜索配置
-- [子代理设置](docs/usage/zh/05.子代理设置.md) - 子代理管理、自定义子代理配置
+- [子代理设置](docs/usage/zh/05.子代理设置.md) - 子代理管理、自定义子代理、**项目级 Markdown agents（#194）**
 - [敏感命令配置](docs/usage/zh/06.敏感命令配置.md) - 敏感命令保护、自定义命令规则
-- [Hooks 配置](docs/usage/zh/07.Hooks配置.md) - 工作流程自动化、Hook 类型说明、实用配置示例
+- [Hooks 配置](docs/usage/zh/07.Hooks配置.md) - 工作流程自动化、**additionalContext 注入 / beforeSubAgentStart / type:context（#194）**
 - [主题设置](docs/usage/zh/08.主题设置.md) - 界面主题配置、自定义配色、简洁模式
 - [第三方中转配置](docs/usage/zh/16.第三方中转配置.md) - Claude Code 中转、Codex 中转、自定义请求头配置
 

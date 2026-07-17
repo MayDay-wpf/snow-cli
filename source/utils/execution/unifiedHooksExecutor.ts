@@ -18,6 +18,10 @@ import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 import {emitHookStatus, summarizeHookAction} from './hookStatusEvents.js';
+import {
+	buildSessionIdentityEnv,
+	enrichHookContext,
+} from './sessionIdentityEnv.js';
 
 /**
  * Prompt Hook 执行结果（小模型返回的 JSON）
@@ -65,9 +69,24 @@ export interface PromptHookResult {
 }
 
 /**
+ * Context Hook 执行结果（静态注入，无 shell 副作用）
+ * output is JSON-shaped so extractAdditionalContext can reuse command path.
+ */
+export interface ContextHookResult {
+	type: 'context';
+	success: boolean;
+	/** JSON string: { additionalContext, display? } */
+	output?: string;
+	error?: string;
+}
+
+/**
  * Hook 执行结果（单个 Action）
  */
-export type HookActionResult = CommandHookResult | PromptHookResult;
+export type HookActionResult =
+	| CommandHookResult
+	| PromptHookResult
+	| ContextHookResult;
 
 /**
  * Hooks 执行器执行结果（整体）
@@ -172,7 +191,7 @@ export class UnifiedHooksExecutor {
 
 		// Pre-count enabled actions that will run (for progress UI)
 		const plannedActions: Array<{
-			type: 'command' | 'prompt';
+			type: 'command' | 'prompt' | 'context';
 			label: string;
 		}> = [];
 		for (const rule of rules) {
@@ -192,6 +211,11 @@ export class UnifiedHooksExecutor {
 					plannedActions.push({
 						type: 'prompt',
 						label: summarizeHookAction(action.prompt) || 'prompt',
+					});
+				} else if (action.type === 'context' && action.content) {
+					plannedActions.push({
+						type: 'context',
+						label: summarizeHookAction(action.content) || 'context inject',
 					});
 				}
 			}
@@ -247,7 +271,7 @@ export class UnifiedHooksExecutor {
 
 				// 根据类型执行相应的 action
 				let result: HookActionResult | null = null;
-				let actionType: 'command' | 'prompt' | undefined;
+				let actionType: 'command' | 'prompt' | 'context' | undefined;
 				let actionLabel: string | undefined;
 
 				if (action.type === 'command' && action.command) {
@@ -274,6 +298,19 @@ export class UnifiedHooksExecutor {
 						totalActions: plannedActions.length,
 					});
 					result = await this.executePrompt(action, context);
+				} else if (action.type === 'context' && action.content) {
+					actionType = 'context';
+					actionLabel = summarizeHookAction(action.content) || 'context inject';
+					emitHookStatus({
+						executionId,
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
+					result = this.executeContext(action);
 				} else {
 					// 类型不匹配或缺少必要参数
 					totalSkipped++;
@@ -483,6 +520,51 @@ export class UnifiedHooksExecutor {
 		return regex.test(value);
 	}
 
+	// ==================== Context 执行器逻辑 ====================
+
+	/**
+	 * Execute a static context inject action (no shell side effects).
+	 * Emits command-compatible JSON output for extractAdditionalContext.
+	 */
+	private executeContext(action: HookAction): ContextHookResult {
+		const content = (action.content || '').trim();
+		if (!content) {
+			return {
+				type: 'context',
+				success: false,
+				error: 'Empty context content',
+			};
+		}
+
+		// If already JSON with additionalContext, pass through; else wrap as text context.
+		let output: string;
+		try {
+			const parsed = JSON.parse(content);
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				!Array.isArray(parsed) &&
+				(typeof (parsed as any).additionalContext === 'string' ||
+					typeof (parsed as any).prompt === 'string' ||
+					typeof (parsed as any).display === 'string' ||
+					((parsed as any).hookSpecificOutput &&
+						typeof (parsed as any).hookSpecificOutput === 'object'))
+			) {
+				output = content;
+			} else {
+				output = JSON.stringify({additionalContext: content});
+			}
+		} catch {
+			output = JSON.stringify({additionalContext: content});
+		}
+
+		return {
+			type: 'context',
+			success: true,
+			output: this.truncateOutput(output),
+		};
+	}
+
 	// ==================== Command 执行器逻辑 ====================
 
 	/**
@@ -499,16 +581,35 @@ export class UnifiedHooksExecutor {
 		const command = this.replacePlaceholders(action.command!, context);
 		const timeout = action.timeout || this.defaultTimeout;
 
-		// 准备通过 stdin 传递的 context JSON
-		const stdinData = context ? JSON.stringify(context) : '';
+		// Enrich stdin with dual session keys + platform (Trellis / multi-session harnesses)
+		const stdinContext = context
+			? enrichHookContext(context as Record<string, any>)
+			: undefined;
+		const stdinData = stdinContext ? JSON.stringify(stdinContext) : '';
+
+		const sessionId =
+			(typeof stdinContext?.['sessionId'] === 'string' &&
+				stdinContext['sessionId']) ||
+			(typeof stdinContext?.['session_id'] === 'string' &&
+				stdinContext['session_id']) ||
+			undefined;
+		const cwd =
+			(typeof stdinContext?.['cwd'] === 'string' &&
+				String(stdinContext['cwd']).trim()) ||
+			process.cwd();
+		const identityEnv = buildSessionIdentityEnv({
+			sessionId,
+			cwd,
+			baseEnv: process.env,
+		});
 
 		try {
 			const childProcess = exec(command, {
-				cwd: process.cwd(),
+				cwd,
 				timeout,
 				maxBuffer: this.maxOutputLength,
 				env: {
-					...process.env,
+					...identityEnv,
 					// Windows 下设置 UTF-8 编码
 					...(process.platform === 'win32' && {
 						PYTHONIOENCODING: 'utf-8',

@@ -19,6 +19,7 @@ export const HOOK_TYPE_ICONS: Record<HookType, string> = {
 	beforeCompress: '≋',
 	onSessionStart: '▷',
 	onStop: '×',
+	beforeSubAgentStart: '⇢',
 };
 
 /** Phase symbols shown beside the type symbol. */
@@ -37,6 +38,7 @@ export const HOOK_PHASE_ICONS: Record<
 export const HOOK_ACTION_ICONS = {
 	command: '⌘',
 	prompt: '◌',
+	context: '▤',
 	default: '·',
 } as const;
 
@@ -64,12 +66,17 @@ export function getHookTypeIcon(hookType: HookType | string): string {
 	return HOOK_TYPE_ICONS[hookType as HookType] ?? HOOK_FALLBACK_ICON;
 }
 
-export function getHookActionIcon(actionType?: 'command' | 'prompt'): string {
+export function getHookActionIcon(
+	actionType?: 'command' | 'prompt' | 'context',
+): string {
 	if (actionType === 'prompt') {
 		return HOOK_ACTION_ICONS.prompt;
 	}
 	if (actionType === 'command') {
 		return HOOK_ACTION_ICONS.command;
+	}
+	if (actionType === 'context') {
+		return HOOK_ACTION_ICONS.context;
 	}
 	return HOOK_ACTION_ICONS.default;
 }
