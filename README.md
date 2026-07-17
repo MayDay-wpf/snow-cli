@@ -107,9 +107,9 @@ snow
 
 - [Proxy and Browser Settings](docs/usage/en/03.Proxy%20and%20Browser%20Settings.md) - Network proxy configuration, browser usage settings
 - [Codebase Setup](docs/usage/en/04.Codebase%20Setup.md) - Codebase integration, search configuration
-- [Sub-Agent Configuration](docs/usage/en/05.Sub-Agent%20Configuration.md) - Sub-agent management, custom sub-agent configuration
+- [Sub-Agent Configuration](docs/usage/en/05.Sub-Agent%20Configuration.md) - Sub-agent management, custom agents, **project Markdown agents (#194)**
 - [Sensitive Commands Configuration](docs/usage/en/06.Sensitive%20Commands%20Configuration.md) - Sensitive command protection, custom command rules
-- [Hooks Configuration](docs/usage/en/07.Hooks%20Configuration.md) - Workflow automation, hook types explanation, practical configuration examples
+- [Hooks Configuration](docs/usage/en/07.Hooks%20Configuration.md) - Workflow automation, **additionalContext inject / beforeSubAgentStart / type:context (#194)**
 - [Theme Settings](docs/usage/en/08.Theme%20Settings.md) - Interface theme configuration, custom color schemes, simplified mode
 - [Third-Party Relay Configuration](docs/usage/en/16.Third-Party%20Relay%20Configuration.md) - Claude Code relay, Codex relay, custom headers configuration
 

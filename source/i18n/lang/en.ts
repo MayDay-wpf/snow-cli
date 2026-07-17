@@ -1470,6 +1470,8 @@ export const en: TranslationKeys = {
 			onSessionStart:
 				'Run when starting new session or resuming existing session',
 			onStop: 'Run before Stop AI process ends',
+			beforeSubAgentStart:
+				'Run before a sub-agent starts (can inject or replace prompt)',
 		},
 		hookList: {
 			title: 'Hooks Configuration',

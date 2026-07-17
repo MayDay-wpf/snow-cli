@@ -679,9 +679,17 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {interpretHookResult} = await import(
 				'../../../utils/execution/hookResultInterpreter.js'
 			);
+			const current = sessionManager.getCurrentSession();
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
-				{message, imageCount: images?.length || 0, source: 'normal'},
+				{
+					message,
+					imageCount: images?.length || 0,
+					source: 'normal',
+					sessionId: current?.id,
+					cwd: process.cwd(),
+					messageCount: current?.messages?.length ?? 0,
+				},
 			);
 			const interpreted = interpretHookResult(
 				'onUserMessage',
@@ -702,7 +710,25 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				return;
 			}
 			if (interpreted.action === 'replace' && interpreted.replacedContent) {
+				// exit 1: replace model-bound content; do not prepend additionalContext
 				message = interpreted.replacedContent;
+			} else if (interpreted.additionalContext) {
+				const {mergeInjectedContexts} = await import(
+					'../../../utils/execution/hookContextInject.js'
+				);
+				const pending = sessionManager.consumePendingAdditionalContext();
+				message = mergeInjectedContexts(message, [
+					pending.context,
+					interpreted.additionalContext,
+				]);
+			} else {
+				const pending = sessionManager.consumePendingAdditionalContext();
+				if (pending.context) {
+					const {prependAdditionalContext} = await import(
+						'../../../utils/execution/hookContextInject.js'
+					);
+					message = prependAdditionalContext(message, pending.context);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
@@ -828,12 +854,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				'../../../utils/execution/hookResultInterpreter.js'
 			);
 			const allImages = messagesToProcess.flatMap(m => m.images || []);
+			const current = sessionManager.getCurrentSession();
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
 				{
 					message: combinedMessage,
 					imageCount: allImages.length,
 					source: 'pending',
+					sessionId: current?.id,
+					cwd: process.cwd(),
+					messageCount: current?.messages?.length ?? 0,
 				},
 			);
 			const interpreted = interpretHookResult(
@@ -856,6 +886,26 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			}
 			if (interpreted.action === 'replace' && interpreted.replacedContent) {
 				messageToSend = interpreted.replacedContent;
+			} else if (interpreted.additionalContext) {
+				const {mergeInjectedContexts} = await import(
+					'../../../utils/execution/hookContextInject.js'
+				);
+				const pending = sessionManager.consumePendingAdditionalContext();
+				messageToSend = mergeInjectedContexts(messageToSend, [
+					pending.context,
+					interpreted.additionalContext,
+				]);
+			} else {
+				const pending = sessionManager.consumePendingAdditionalContext();
+				if (pending.context) {
+					const {prependAdditionalContext} = await import(
+						'../../../utils/execution/hookContextInject.js'
+					);
+					messageToSend = prependAdditionalContext(
+						messageToSend,
+						pending.context,
+					);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);

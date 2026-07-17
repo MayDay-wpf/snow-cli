@@ -1050,6 +1050,13 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						resetTerminal(stdout);
 						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
+						// After clear, queue session-start inject for the next user turn
+						if (interpreted.additionalContext || interpreted.displayMessage) {
+							sessionManager.setPendingAdditionalContext(
+								interpreted.additionalContext,
+								interpreted.displayMessage,
+							);
+						}
 						options.clearSavedMessages();
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);
@@ -1075,6 +1082,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// Display warning AFTER clearing screen
 						if (warningMessage) {
 							console.log(warningMessage);
+						}
+						if (interpreted.displayMessage) {
+							console.log(interpreted.displayMessage);
 						}
 					} catch (error) {
 						console.error('Failed to execute onSessionStart hook:', error);

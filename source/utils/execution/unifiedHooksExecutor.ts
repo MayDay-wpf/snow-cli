@@ -65,9 +65,24 @@ export interface PromptHookResult {
 }
 
 /**
+ * Context Hook 执行结果（静态注入，无 shell 副作用）
+ * output is JSON-shaped so extractAdditionalContext can reuse command path.
+ */
+export interface ContextHookResult {
+	type: 'context';
+	success: boolean;
+	/** JSON string: { additionalContext, display? } */
+	output?: string;
+	error?: string;
+}
+
+/**
  * Hook 执行结果（单个 Action）
  */
-export type HookActionResult = CommandHookResult | PromptHookResult;
+export type HookActionResult =
+	| CommandHookResult
+	| PromptHookResult
+	| ContextHookResult;
 
 /**
  * Hooks 执行器执行结果（整体）
@@ -172,7 +187,7 @@ export class UnifiedHooksExecutor {
 
 		// Pre-count enabled actions that will run (for progress UI)
 		const plannedActions: Array<{
-			type: 'command' | 'prompt';
+			type: 'command' | 'prompt' | 'context';
 			label: string;
 		}> = [];
 		for (const rule of rules) {
@@ -192,6 +207,11 @@ export class UnifiedHooksExecutor {
 					plannedActions.push({
 						type: 'prompt',
 						label: summarizeHookAction(action.prompt) || 'prompt',
+					});
+				} else if (action.type === 'context' && action.content) {
+					plannedActions.push({
+						type: 'context',
+						label: summarizeHookAction(action.content) || 'context inject',
 					});
 				}
 			}
@@ -247,7 +267,7 @@ export class UnifiedHooksExecutor {
 
 				// 根据类型执行相应的 action
 				let result: HookActionResult | null = null;
-				let actionType: 'command' | 'prompt' | undefined;
+				let actionType: 'command' | 'prompt' | 'context' | undefined;
 				let actionLabel: string | undefined;
 
 				if (action.type === 'command' && action.command) {
@@ -274,6 +294,19 @@ export class UnifiedHooksExecutor {
 						totalActions: plannedActions.length,
 					});
 					result = await this.executePrompt(action, context);
+				} else if (action.type === 'context' && action.content) {
+					actionType = 'context';
+					actionLabel = summarizeHookAction(action.content) || 'context inject';
+					emitHookStatus({
+						executionId,
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
+					result = this.executeContext(action);
 				} else {
 					// 类型不匹配或缺少必要参数
 					totalSkipped++;
@@ -481,6 +514,51 @@ export class UnifiedHooksExecutor {
 
 		const regex = new RegExp(`^${regexPattern}$`, 'i');
 		return regex.test(value);
+	}
+
+	// ==================== Context 执行器逻辑 ====================
+
+	/**
+	 * Execute a static context inject action (no shell side effects).
+	 * Emits command-compatible JSON output for extractAdditionalContext.
+	 */
+	private executeContext(action: HookAction): ContextHookResult {
+		const content = (action.content || '').trim();
+		if (!content) {
+			return {
+				type: 'context',
+				success: false,
+				error: 'Empty context content',
+			};
+		}
+
+		// If already JSON with additionalContext, pass through; else wrap as text context.
+		let output: string;
+		try {
+			const parsed = JSON.parse(content);
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				!Array.isArray(parsed) &&
+				(typeof (parsed as any).additionalContext === 'string' ||
+					typeof (parsed as any).prompt === 'string' ||
+					typeof (parsed as any).display === 'string' ||
+					((parsed as any).hookSpecificOutput &&
+						typeof (parsed as any).hookSpecificOutput === 'object'))
+			) {
+				output = content;
+			} else {
+				output = JSON.stringify({additionalContext: content});
+			}
+		} catch {
+			output = JSON.stringify({additionalContext: content});
+		}
+
+		return {
+			type: 'context',
+			success: true,
+			output: this.truncateOutput(output),
+		};
 	}
 
 	// ==================== Command 执行器逻辑 ====================

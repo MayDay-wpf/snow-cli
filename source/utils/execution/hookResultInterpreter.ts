@@ -35,6 +35,210 @@ export interface InterpretedHookResult {
 	warningMessage?: string;
 	shouldContinueConversation?: boolean;
 	injectedMessages?: Array<{role: 'user' | 'assistant'; content: string}>;
+	/** Model-visible prepend context from successful command JSON stdout */
+	additionalContext?: string;
+	/** Optional UI-only hint from JSON.display; never sent to the model */
+	displayMessage?: string;
+	/** beforeSubAgentStart: full prompt replacement (preferred over prepend) */
+	promptOverride?: string;
+}
+
+/** Default max size for additionalContext (bytes / UTF-16 code units). */
+export const DEFAULT_ADDITIONAL_CONTEXT_MAX_BYTES = 8192;
+
+export type ExtractedAdditionalContext = {
+	context?: string;
+	display?: string;
+	truncated: boolean;
+};
+
+/**
+ * Truncate additionalContext to maxBytes. Uses string length as a simple bound.
+ */
+export function truncateAdditionalContext(
+	text: string,
+	maxBytes: number = DEFAULT_ADDITIONAL_CONTEXT_MAX_BYTES,
+): {text: string; truncated: boolean} {
+	if (text.length <= maxBytes) {
+		return {text, truncated: false};
+	}
+	return {text: text.slice(0, maxBytes), truncated: true};
+}
+
+/**
+ * Parse a single command stdout for additionalContext protocol.
+ * Supports:
+ *   { "additionalContext": "..." }
+ *   { "hookSpecificOutput": { "additionalContext": "..." } }
+ * Optional: display (UI only), prompt (full override for beforeSubAgentStart)
+ * Non-JSON → null (do not inject logs as context).
+ */
+export function parseAdditionalContextOutput(rawOutput: string): {
+	context?: string;
+	display?: string;
+	prompt?: string;
+} | null {
+	const trimmed = rawOutput.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			return null;
+		}
+
+		const record = parsed as Record<string, unknown>;
+		let context: string | undefined;
+		let display: string | undefined;
+		let prompt: string | undefined;
+
+		if (typeof record['additionalContext'] === 'string') {
+			context = record['additionalContext'];
+		} else if (
+			record['hookSpecificOutput'] &&
+			typeof record['hookSpecificOutput'] === 'object' &&
+			!Array.isArray(record['hookSpecificOutput'])
+		) {
+			const nested = record['hookSpecificOutput'] as Record<string, unknown>;
+			if (typeof nested['additionalContext'] === 'string') {
+				context = nested['additionalContext'];
+			}
+		}
+
+		if (typeof record['display'] === 'string') {
+			display = record['display'];
+		}
+		if (typeof record['prompt'] === 'string') {
+			prompt = record['prompt'];
+		}
+
+		if (
+			context === undefined &&
+			display === undefined &&
+			prompt === undefined
+		) {
+			return null;
+		}
+
+		return {context, display, prompt};
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Collect additionalContext from successful command hook results.
+ * Multiple actions are joined with "\n\n", then truncated once.
+ */
+export function extractAdditionalContext(
+	hookResult: UnifiedHookExecutionResult,
+	maxBytes: number = DEFAULT_ADDITIONAL_CONTEXT_MAX_BYTES,
+): ExtractedAdditionalContext {
+	const contexts: string[] = [];
+	const displays: string[] = [];
+
+	for (const result of hookResult.results) {
+		// command (JSON stdout) or context (static inject) both contribute
+		if (
+			(result.type !== 'command' && result.type !== 'context') ||
+			!result.success ||
+			!result.output
+		) {
+			continue;
+		}
+
+		const parsed = parseAdditionalContextOutput(result.output);
+		if (!parsed) {
+			continue;
+		}
+		if (parsed.context) {
+			contexts.push(parsed.context);
+		}
+		if (parsed.display) {
+			displays.push(parsed.display);
+		}
+	}
+
+	if (contexts.length === 0 && displays.length === 0) {
+		return {truncated: false};
+	}
+
+	let truncated = false;
+	let context: string | undefined;
+	if (contexts.length > 0) {
+		const joined = contexts.join('\n\n');
+		const trunc = truncateAdditionalContext(joined, maxBytes);
+		context = trunc.text;
+		truncated = trunc.truncated;
+	}
+
+	const display = displays.length > 0 ? displays.join('\n\n') : undefined;
+
+	return {
+		...(context ? {context} : {}),
+		...(display ? {display} : {}),
+		truncated,
+	};
+}
+
+/**
+ * Extract full prompt override from successful command JSON (beforeSubAgentStart).
+ * First successful action with `prompt` wins; also returns additionalContext for prepend.
+ */
+export function extractPromptOverride(
+	hookResult: UnifiedHookExecutionResult,
+	maxBytes: number = DEFAULT_ADDITIONAL_CONTEXT_MAX_BYTES,
+): {
+	promptOverride?: string;
+	additionalContext?: string;
+	display?: string;
+	truncated: boolean;
+} {
+	let promptOverride: string | undefined;
+	const contexts: string[] = [];
+	const displays: string[] = [];
+	let truncated = false;
+
+	for (const result of hookResult.results) {
+		if (
+			(result.type !== 'command' && result.type !== 'context') ||
+			!result.success ||
+			!result.output
+		) {
+			continue;
+		}
+		const parsed = parseAdditionalContextOutput(result.output);
+		if (!parsed) {
+			continue;
+		}
+		if (parsed.prompt && promptOverride === undefined) {
+			const trunc = truncateAdditionalContext(parsed.prompt, maxBytes);
+			promptOverride = trunc.text;
+			if (trunc.truncated) truncated = true;
+		}
+		if (parsed.context) {
+			contexts.push(parsed.context);
+		}
+		if (parsed.display) {
+			displays.push(parsed.display);
+		}
+	}
+
+	let additionalContext: string | undefined;
+	if (contexts.length > 0) {
+		const trunc = truncateAdditionalContext(contexts.join('\n\n'), maxBytes);
+		additionalContext = trunc.text;
+		if (trunc.truncated) truncated = true;
+	}
+
+	return {
+		...(promptOverride ? {promptOverride} : {}),
+		...(additionalContext ? {additionalContext} : {}),
+		...(displays.length > 0 ? {display: displays.join('\n\n')} : {}),
+		truncated,
+	};
 }
 
 /**
@@ -79,7 +283,27 @@ export function interpretHookResult(
 	}
 
 	const strategy = hookStrategies[hookType];
-	return strategy.interpret(hookResult, originalContent);
+	const interpreted = strategy.interpret(hookResult, originalContent);
+
+	// P2 observability: record inject summaries when present
+	if (
+		interpreted.additionalContext ||
+		interpreted.displayMessage ||
+		interpreted.promptOverride
+	) {
+		void import('./hookInjectDebug.js')
+			.then(({recordHookInjectDebug}) => {
+				recordHookInjectDebug({
+					hookType,
+					additionalContext: interpreted.additionalContext,
+					displayMessage: interpreted.displayMessage,
+					promptOverride: interpreted.promptOverride,
+				});
+			})
+			.catch(() => {});
+	}
+
+	return interpreted;
 }
 
 /**

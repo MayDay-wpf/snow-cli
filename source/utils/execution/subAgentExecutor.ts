@@ -99,10 +99,37 @@ export async function executeSubAgent(
 				}
 				injectBuiltinTools(allowedTools, spawnDepth);
 
+				// 2.5 beforeSubAgentStart: optional prompt prepend/replace
+				let effectivePrompt = prompt;
+				try {
+					const hookResult = await unifiedHooksExecutor.executeHooks(
+						'beforeSubAgentStart',
+						{
+							agentId: agent.id ?? agentId,
+							agentName: agent.name ?? agentId,
+							prompt,
+							cwd: process.cwd(),
+							sessionId: sessionManager.getCurrentSession()?.id,
+						},
+					);
+					const interpreted = interpretHookResult(
+						'beforeSubAgentStart',
+						hookResult,
+					);
+					if (interpreted.promptOverride) {
+						effectivePrompt = interpreted.promptOverride;
+					} else if (interpreted.additionalContext) {
+						effectivePrompt = `${interpreted.additionalContext}\n\n${prompt}`;
+					}
+				} catch (error) {
+					// fail-open: keep original prompt
+					console.warn('beforeSubAgentStart hook failed:', error);
+				}
+
 				// 3. Build initial messages
 				const messages = await buildInitialMessages(
 					agent,
-					prompt,
+					effectivePrompt,
 					instanceId,
 					spawnDepth,
 				);

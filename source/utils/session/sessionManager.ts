@@ -328,6 +328,46 @@ class SessionManager {
 	};
 	lastLoadHookWarning?: string;
 
+	/**
+	 * Pending model-visible context from onSessionStart additionalContext.
+	 * Consumed once on the next user message sent to the API.
+	 */
+	private pendingAdditionalContext?: string;
+	private pendingDisplayMessage?: string;
+
+	setPendingAdditionalContext(context?: string, displayMessage?: string): void {
+		this.pendingAdditionalContext =
+			context && context.trim() ? context : undefined;
+		this.pendingDisplayMessage =
+			displayMessage && displayMessage.trim() ? displayMessage : undefined;
+	}
+
+	/**
+	 * Read and clear pending session-start additionalContext (one-shot).
+	 */
+	consumePendingAdditionalContext(): {
+		context?: string;
+		displayMessage?: string;
+	} {
+		const context = this.pendingAdditionalContext;
+		const displayMessage = this.pendingDisplayMessage;
+		this.pendingAdditionalContext = undefined;
+		this.pendingDisplayMessage = undefined;
+		return {
+			...(context ? {context} : {}),
+			...(displayMessage ? {displayMessage} : {}),
+		};
+	}
+
+	peekPendingAdditionalContext(): string | undefined {
+		return this.pendingAdditionalContext;
+	}
+
+	clearPendingAdditionalContext(): void {
+		this.pendingAdditionalContext = undefined;
+		this.pendingDisplayMessage = undefined;
+	}
+
 	private async loadSessionFromDisk(
 		sessionId: string,
 	): Promise<Session | null> {
@@ -396,6 +436,12 @@ class SessionManager {
 		if (hookResult.warningMessage) {
 			this.lastLoadHookWarning = hookResult.warningMessage;
 		}
+
+		// Queue additionalContext for the next API user turn (one-shot)
+		this.setPendingAdditionalContext(
+			hookResult.additionalContext,
+			hookResult.displayMessage,
+		);
 
 		this.setCurrentSession(session);
 		return session;
@@ -973,6 +1019,7 @@ class SessionManager {
 
 	clearCurrentSession(): void {
 		this.currentSession = null;
+		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
 	}
 
@@ -1299,6 +1346,8 @@ class SessionManager {
 			error?: string;
 		};
 		warningMessage?: string;
+		additionalContext?: string;
+		displayMessage?: string;
 	}> {
 		try {
 			const {unifiedHooksExecutor} = await import(
@@ -1310,15 +1359,22 @@ class SessionManager {
 
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onSessionStart',
-				{messages, messageCount: messages.length},
+				{
+					messages,
+					messageCount: messages.length,
+					sessionId: this.currentSession?.id,
+					cwd: process.cwd(),
+					isResume: messages.length > 0,
+				},
 			);
 			const interpreted = interpretHookResult('onSessionStart', hookResult);
-
 			if (interpreted.action === 'warn') {
 				logger.warn(interpreted.warningMessage || '');
 				return {
 					shouldContinue: true,
 					warningMessage: interpreted.warningMessage,
+					additionalContext: interpreted.additionalContext,
+					displayMessage: interpreted.displayMessage,
 				};
 			}
 			if (interpreted.action === 'block') {
@@ -1329,7 +1385,11 @@ class SessionManager {
 				);
 				return {shouldContinue: false, errorDetails: interpreted.errorDetails};
 			}
-			return {shouldContinue: true};
+			return {
+				shouldContinue: true,
+				additionalContext: interpreted.additionalContext,
+				displayMessage: interpreted.displayMessage,
+			};
 		} catch (error) {
 			logger.error('Failed to execute onSessionStart hook:', error);
 			return {shouldContinue: true};

@@ -2,6 +2,7 @@ import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'fs';
 import {join} from 'path';
 import {homedir} from 'os';
 import {getAllBuiltinAgentDefinitions} from '../execution/subagents/index.js';
+import {loadGlobalAgents, loadProjectAgents} from './projectAgents.js';
 
 export interface SubAgent {
 	id: string;
@@ -69,21 +70,34 @@ export function getUserSubAgents(): SubAgent[] {
 }
 
 /**
- * Get all sub-agents (built-in + user-configured)
- * 优先使用用户副本，避免重复
+ * Get all sub-agents (built-in + user-configured + project/global md agents)
+ * Merge priority (highest wins):
+ *   project .snow/agents > global ~/.snow/agents > user sub-agents.json > builtin
  */
 export function getSubAgents(): SubAgent[] {
-	const userAgents = getUserSubAgents();
-	const userAgentIds = new Set(userAgents.map(a => a.id));
-	const builtinAgents = getBuiltinAgents();
+	const byId = new Map<string, SubAgent>();
 
-	// 过滤掉已被用户覆盖的内置代理
-	const effectiveBuiltinAgents = builtinAgents.filter(
-		agent => !userAgentIds.has(agent.id),
-	);
+	// 1. Builtin (lowest)
+	for (const agent of getBuiltinAgents()) {
+		byId.set(agent.id, agent);
+	}
 
-	// 先返回内置代理（未被覆盖的），再返回用户代理
-	return [...effectiveBuiltinAgents, ...userAgents];
+	// 2. User JSON overrides
+	for (const agent of getUserSubAgents()) {
+		byId.set(agent.id, agent);
+	}
+
+	// 3. Global agents dir
+	for (const agent of loadGlobalAgents()) {
+		byId.set(agent.id, agent);
+	}
+
+	// 4. Project agents dir (highest)
+	for (const agent of loadProjectAgents(process.cwd())) {
+		byId.set(agent.id, agent);
+	}
+
+	return [...byId.values()];
 }
 
 /**

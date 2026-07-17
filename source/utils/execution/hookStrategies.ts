@@ -4,13 +4,33 @@ import {
 	type InterpretedHookResult,
 	findFirstFailedCommand,
 	buildErrorDetails,
+	extractAdditionalContext,
+	extractPromptOverride,
 } from './hookResultInterpreter.js';
+import {logger} from '../core/logger.js';
 
 export interface HookStrategy {
 	interpret(
 		hookResult: UnifiedHookExecutionResult,
 		originalContent?: string,
 	): InterpretedHookResult;
+}
+
+function attachAdditionalContext(
+	base: InterpretedHookResult,
+	hookResult: UnifiedHookExecutionResult,
+): InterpretedHookResult {
+	const extracted = extractAdditionalContext(hookResult);
+	if (extracted.truncated) {
+		logger.warn(
+			'Hook additionalContext exceeded max length and was truncated',
+		);
+	}
+	return {
+		...base,
+		...(extracted.context ? {additionalContext: extracted.context} : {}),
+		...(extracted.display ? {displayMessage: extracted.display} : {}),
+	};
 }
 
 // ── onUserMessage ──
@@ -20,7 +40,9 @@ export interface HookStrategy {
 const onUserMessageStrategy: HookStrategy = {
 	interpret(hookResult, _originalContent) {
 		const error = findFirstFailedCommand(hookResult);
-		if (!error) return {action: 'continue'};
+		if (!error) {
+			return attachAdditionalContext({action: 'continue'}, hookResult);
+		}
 
 		if (error.exitCode === 1) {
 			return {
@@ -37,7 +59,7 @@ const onUserMessageStrategy: HookStrategy = {
 				errorDetails: buildErrorDetails(error),
 			};
 		}
-		return {action: 'continue'};
+		return attachAdditionalContext({action: 'continue'}, hookResult);
 	},
 };
 
@@ -159,23 +181,29 @@ const beforeCompressStrategy: HookStrategy = {
 };
 
 // ── onSessionStart ──
+// exitCode 0 + JSON additionalContext: pending inject for first user turn
 // exitCode 1: 打印警告，继续加载会话
 // exitCode >=2: 阻止会话加载
 
 const onSessionStartStrategy: HookStrategy = {
 	interpret(hookResult) {
 		const error = findFirstFailedCommand(hookResult);
-		if (!error) return {action: 'continue'};
+		if (!error) {
+			return attachAdditionalContext({action: 'continue'}, hookResult);
+		}
 
 		const combinedOutput =
-			[error.output, error.error].filter(Boolean).join('\n\n') ||
-			'(no output)';
+			[error.output, error.error].filter(Boolean).join('\n\n') || '(no output)';
 
 		if (error.exitCode === 1) {
-			return {
-				action: 'warn',
-				warningMessage: `[WARN] onSessionStart hook warning:\nCommand: ${error.command}\nOutput: ${combinedOutput}`,
-			};
+			// Soft warn still continues; allow successful sibling actions' context.
+			return attachAdditionalContext(
+				{
+					action: 'warn',
+					warningMessage: `[WARN] onSessionStart hook warning:\nCommand: ${error.command}\nOutput: ${combinedOutput}`,
+				},
+				hookResult,
+			);
 		}
 		if (error.exitCode >= 2 || error.exitCode < 0) {
 			return {
@@ -183,7 +211,42 @@ const onSessionStartStrategy: HookStrategy = {
 				errorDetails: buildErrorDetails(error),
 			};
 		}
-		return {action: 'continue'};
+		return attachAdditionalContext({action: 'continue'}, hookResult);
+	},
+};
+
+// ── beforeSubAgentStart ──
+// exit 0 + JSON: prompt override or additionalContext prepend
+// failure/timeout: fail-open (continue with original prompt)
+
+const beforeSubAgentStartStrategy: HookStrategy = {
+	interpret(hookResult) {
+		const error = findFirstFailedCommand(hookResult);
+		if (error && (error.exitCode >= 2 || error.exitCode < 0)) {
+			// Hard failure: still fail-open for sub-agent start (do not block spawn)
+			logger.warn(
+				`beforeSubAgentStart hook hard failure (fail-open): ${error.command} exit ${error.exitCode}`,
+			);
+			return {action: 'continue'};
+		}
+
+		const extracted = extractPromptOverride(hookResult);
+		if (extracted.truncated) {
+			logger.warn(
+				'beforeSubAgentStart context/prompt exceeded max length and was truncated',
+			);
+		}
+
+		return {
+			action: 'continue',
+			...(extracted.promptOverride
+				? {promptOverride: extracted.promptOverride}
+				: {}),
+			...(extracted.additionalContext
+				? {additionalContext: extracted.additionalContext}
+				: {}),
+			...(extracted.display ? {displayMessage: extracted.display} : {}),
+		};
 	},
 };
 
@@ -307,4 +370,5 @@ export const hookStrategies: Record<HookType, HookStrategy> = {
 	beforeCompress: beforeCompressStrategy,
 	onSessionStart: onSessionStartStrategy,
 	onStop: onStopStrategy,
+	beforeSubAgentStart: beforeSubAgentStartStrategy,
 };

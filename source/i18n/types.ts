@@ -1295,6 +1295,7 @@ export type TranslationKeys = {
 			beforeCompress: string;
 			onSessionStart: string;
 			onStop: string;
+			beforeSubAgentStart: string;
 		};
 		hookList: {
 			title: string;

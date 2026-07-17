@@ -1385,6 +1385,7 @@ export const zhTW: TranslationKeys = {
 			beforeCompress: '在即將執行壓縮操作之前執行',
 			onSessionStart: '當啟動新會話或恢復現有會話時執行',
 			onStop: 'Stop AI流程結束前執行',
+			beforeSubAgentStart: '子代理啟動前執行（可注入或替換 prompt）',
 		},
 		hookList: {
 			title: 'Hooks 配置',
