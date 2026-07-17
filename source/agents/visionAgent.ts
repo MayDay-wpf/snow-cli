@@ -184,11 +184,7 @@ export class VisionAgent {
 				throw new Error('Request aborted');
 			}
 
-			if (requestMethod === 'chat') {
-				if (chunk.choices && chunk.choices[0]?.delta?.content) {
-					completeContent += chunk.choices[0].delta.content;
-				}
-			} else if (chunk.type === 'content' && chunk.content) {
+			if (chunk.type === 'content' && chunk.content) {
 				completeContent += chunk.content;
 			}
 		}

@@ -153,17 +153,9 @@ export class SummaryAgent {
 					throw new Error('Request aborted');
 				}
 
-				// Handle different chunk formats based on request method
-				if (this.requestMethod === 'chat') {
-					// Chat API uses standard OpenAI format
-					if (chunk.choices && chunk.choices[0]?.delta?.content) {
-						completeContent += chunk.choices[0].delta.content;
-					}
-				} else {
-					// Responses, Gemini, and Anthropic APIs use unified format
-					if (chunk.type === 'content' && chunk.content) {
-						completeContent += chunk.content;
-					}
+				// All streaming APIs yield the unified StreamChunk format
+				if (chunk.type === 'content' && chunk.content) {
+					completeContent += chunk.content;
 				}
 			}
 		} catch (streamError) {

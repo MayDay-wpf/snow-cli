@@ -854,15 +854,9 @@ Rules:
 					throw new Error('Request aborted');
 				}
 
-				// 处理不同格式的 chunk
-				if (this.requestMethod === 'chat') {
-					if (chunk.choices && chunk.choices[0]?.delta?.content) {
-						completeContent += chunk.choices[0].delta.content;
-					}
-				} else {
-					if (chunk.type === 'content' && chunk.content) {
-						completeContent += chunk.content;
-					}
+				// All streaming APIs yield the unified StreamChunk format
+				if (chunk.type === 'content' && chunk.content) {
+					completeContent += chunk.content;
 				}
 			}
 		} catch (streamError) {
