@@ -1024,9 +1024,16 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const {interpretHookResult} = await import(
 							'../../utils/execution/hookResultInterpreter.js'
 						);
+						const currentSession = sessionManager.getCurrentSession();
 						const hookResult = await unifiedHooksExecutor.executeHooks(
 							'onSessionStart',
-							{messages: [], messageCount: 0},
+							{
+								messages: [],
+								messageCount: 0,
+								sessionId: currentSession?.id,
+								cwd: process.cwd(),
+								isResume: false,
+							},
 						);
 						const interpreted = interpretHookResult(
 							'onSessionStart',

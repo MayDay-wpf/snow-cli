@@ -24,6 +24,8 @@ import {
 import {detectWindowsPowerShell} from '../prompt/shared/promptHelpers.js';
 import {bashOutputSummaryAgent} from '../agents/bashOutputSummaryAgent.js';
 import {getDisableBashAiSummary} from '../utils/config/projectSettings.js';
+import {getConversationContext} from '../utils/codebase/conversationContext.js';
+import {buildSessionIdentityEnv} from '../utils/execution/sessionIdentityEnv.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -340,12 +342,20 @@ export class TerminalCommandService {
 				shellArgs = ['-c', command];
 			}
 
+			// Prefer conversation context to avoid sessionManager <-> bash circular imports.
+			const sessionId = getConversationContext()?.sessionId;
+			const identityEnv = buildSessionIdentityEnv({
+				sessionId,
+				cwd: this.workingDirectory,
+				baseEnv: process.env,
+			});
+
 			const childProcess = spawn(shell, shellArgs, {
 				cwd: this.workingDirectory,
 				stdio: ['pipe', 'pipe', 'pipe'], // Enable stdin for interactive input
 				windowsHide: true,
 				env: {
-					...process.env,
+					...identityEnv,
 					...(process.platform !== 'win32' && {
 						LANG: 'en_US.UTF-8',
 						LC_ALL: 'en_US.UTF-8',

@@ -93,3 +93,91 @@ test('recordHookInjectDebug writes summary when SNOW_DEBUG_HOOKS=1', t => {
 		clearLastHookInjectSummary();
 	}
 });
+
+test('recordHookInjectDebug includes session identity debug fields', t => {
+	const prevDebug = process.env['SNOW_DEBUG_HOOKS'];
+	const prevSession = process.env['SNOW_SESSION_ID'];
+	const prevTrellis = process.env['TRELLIS_CONTEXT_ID'];
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snow-hooks-sid-'));
+
+	try {
+		process.env['SNOW_DEBUG_HOOKS'] = '1';
+		process.env['SNOW_SESSION_ID'] = 'env-session-id';
+		process.env['TRELLIS_CONTEXT_ID'] = 'snow-env-session-id';
+		clearLastHookInjectSummary();
+
+		recordHookInjectDebug({
+			hookType: 'onSessionStart',
+			additionalContext: 'SID_DEBUG',
+			sessionId: 'explicit-session-id',
+			projectRoot: dir,
+			source: 'session-identity-test',
+		});
+
+		const summary = getLastHookInjectSummary();
+		t.truthy(summary);
+		t.is(summary!.sessionId, 'explicit-session-id');
+		t.true(summary!.envHasSnowSessionId);
+		t.true(summary!.envHasTrellisContextId);
+		t.is(summary!.source, 'session-identity-test');
+
+		const logPath = path.join(dir, '.snow', 'log', 'hooks-inject.txt');
+		const body = fs.readFileSync(logPath, 'utf8');
+		t.true(body.includes('explicit-session-id'));
+		t.true(body.includes('"envHasSnowSessionId":true'));
+		t.true(body.includes('"envHasTrellisContextId":true'));
+	} finally {
+		if (prevDebug === undefined) {
+			delete process.env['SNOW_DEBUG_HOOKS'];
+		} else {
+			process.env['SNOW_DEBUG_HOOKS'] = prevDebug;
+		}
+		if (prevSession === undefined) {
+			delete process.env['SNOW_SESSION_ID'];
+		} else {
+			process.env['SNOW_SESSION_ID'] = prevSession;
+		}
+		if (prevTrellis === undefined) {
+			delete process.env['TRELLIS_CONTEXT_ID'];
+		} else {
+			process.env['TRELLIS_CONTEXT_ID'] = prevTrellis;
+		}
+		fs.rmSync(dir, {recursive: true, force: true});
+		clearLastHookInjectSummary();
+	}
+});
+
+test('recordHookInjectDebug falls back to SNOW_SESSION_ID env when entry omits sessionId', t => {
+	const prevSession = process.env['SNOW_SESSION_ID'];
+	const prevTrellis = process.env['TRELLIS_CONTEXT_ID'];
+
+	try {
+		process.env['SNOW_SESSION_ID'] = 'fallback-from-env';
+		delete process.env['TRELLIS_CONTEXT_ID'];
+		clearLastHookInjectSummary();
+
+		// Debug file write is optional; in-memory summary is always recorded.
+		recordHookInjectDebug({
+			hookType: 'onUserMessage',
+			additionalContext: 'FALLBACK',
+		});
+
+		const summary = getLastHookInjectSummary();
+		t.truthy(summary);
+		t.is(summary!.sessionId, 'fallback-from-env');
+		t.true(summary!.envHasSnowSessionId);
+		t.false(summary!.envHasTrellisContextId);
+	} finally {
+		if (prevSession === undefined) {
+			delete process.env['SNOW_SESSION_ID'];
+		} else {
+			process.env['SNOW_SESSION_ID'] = prevSession;
+		}
+		if (prevTrellis === undefined) {
+			delete process.env['TRELLIS_CONTEXT_ID'];
+		} else {
+			process.env['TRELLIS_CONTEXT_ID'] = prevTrellis;
+		}
+		clearLastHookInjectSummary();
+	}
+});

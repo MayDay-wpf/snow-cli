@@ -1,6 +1,8 @@
 import {useState, useCallback} from 'react';
 import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
 import {isSelfDestructiveCommand} from '../../mcp/utils/bash/security.utils.js';
+import {getConversationContext} from '../../utils/codebase/conversationContext.js';
+import {buildSessionIdentityEnv} from '../../utils/execution/sessionIdentityEnv.js';
 
 export interface BashCommand {
 	id: string;
@@ -235,10 +237,15 @@ export function useBashMode() {
 						return;
 					}
 
+					const identityEnv = buildSessionIdentityEnv({
+						sessionId: getConversationContext()?.sessionId,
+						cwd: process.cwd(),
+						baseEnv: process.env,
+					});
 					const child = spawn(selected.shell, selected.args, {
 						cwd: process.cwd(),
 						env: {
-							...process.env,
+							...identityEnv,
 							SNOW_CLI_BASH_COMMAND: command,
 						},
 						windowsHide: true,

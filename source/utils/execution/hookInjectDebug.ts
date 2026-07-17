@@ -11,6 +11,8 @@ export type HookInjectDebugEntry = {
 	source?: string;
 	/** Optional project root for log path (defaults to process.cwd()) */
 	projectRoot?: string;
+	/** Optional session id for multi-session / Trellis debugging */
+	sessionId?: string;
 };
 
 export type HookInjectSummary = {
@@ -21,6 +23,9 @@ export type HookInjectSummary = {
 	hasDisplay: boolean;
 	hasPromptOverride: boolean;
 	source?: string;
+	sessionId?: string;
+	envHasTrellisContextId?: boolean;
+	envHasSnowSessionId?: boolean;
 };
 
 let lastInjectSummary: HookInjectSummary | null = null;
@@ -56,6 +61,8 @@ export function recordHookInjectDebug(entry: HookInjectDebugEntry): void {
 	}
 
 	const text = entry.promptOverride || entry.additionalContext || '';
+	const sessionId =
+		entry.sessionId || process.env['SNOW_SESSION_ID'] || undefined;
 	const summary: HookInjectSummary = {
 		timestamp: new Date().toISOString(),
 		hookType: String(entry.hookType),
@@ -63,7 +70,10 @@ export function recordHookInjectDebug(entry: HookInjectDebugEntry): void {
 		hash: text ? shortHash(text) : shortHash(entry.displayMessage || ''),
 		hasDisplay: Boolean(entry.displayMessage),
 		hasPromptOverride: Boolean(entry.promptOverride),
+		envHasTrellisContextId: Boolean(process.env['TRELLIS_CONTEXT_ID']?.trim()),
+		envHasSnowSessionId: Boolean(process.env['SNOW_SESSION_ID']?.trim()),
 		...(entry.source ? {source: entry.source} : {}),
+		...(sessionId ? {sessionId} : {}),
 	};
 	lastInjectSummary = summary;
 
@@ -78,8 +88,12 @@ export function recordHookInjectDebug(entry: HookInjectDebugEntry): void {
 			mkdirSync(logDir, {recursive: true});
 		}
 		const line = JSON.stringify(summary);
-		appendFileSync(join(logDir, 'hooks-inject.txt'), `${line}
-`, 'utf8');
+		appendFileSync(
+			join(logDir, 'hooks-inject.txt'),
+			`${line}
+`,
+			'utf8',
+		);
 	} catch {
 		// fail-open: never block hook flow for debug logging
 	}

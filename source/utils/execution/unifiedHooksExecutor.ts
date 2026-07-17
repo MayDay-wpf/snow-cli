@@ -18,6 +18,10 @@ import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 import {emitHookStatus, summarizeHookAction} from './hookStatusEvents.js';
+import {
+	buildSessionIdentityEnv,
+	enrichHookContext,
+} from './sessionIdentityEnv.js';
 
 /**
  * Prompt Hook 执行结果（小模型返回的 JSON）
@@ -577,16 +581,35 @@ export class UnifiedHooksExecutor {
 		const command = this.replacePlaceholders(action.command!, context);
 		const timeout = action.timeout || this.defaultTimeout;
 
-		// 准备通过 stdin 传递的 context JSON
-		const stdinData = context ? JSON.stringify(context) : '';
+		// Enrich stdin with dual session keys + platform (Trellis / multi-session harnesses)
+		const stdinContext = context
+			? enrichHookContext(context as Record<string, any>)
+			: undefined;
+		const stdinData = stdinContext ? JSON.stringify(stdinContext) : '';
+
+		const sessionId =
+			(typeof stdinContext?.['sessionId'] === 'string' &&
+				stdinContext['sessionId']) ||
+			(typeof stdinContext?.['session_id'] === 'string' &&
+				stdinContext['session_id']) ||
+			undefined;
+		const cwd =
+			(typeof stdinContext?.['cwd'] === 'string' &&
+				String(stdinContext['cwd']).trim()) ||
+			process.cwd();
+		const identityEnv = buildSessionIdentityEnv({
+			sessionId,
+			cwd,
+			baseEnv: process.env,
+		});
 
 		try {
 			const childProcess = exec(command, {
-				cwd: process.cwd(),
+				cwd,
 				timeout,
 				maxBuffer: this.maxOutputLength,
 				env: {
-					...process.env,
+					...identityEnv,
 					// Windows 下设置 UTF-8 编码
 					...(process.platform === 'win32' && {
 						PYTHONIOENCODING: 'utf-8',
