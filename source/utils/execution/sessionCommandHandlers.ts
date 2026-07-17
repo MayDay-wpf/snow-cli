@@ -1640,7 +1640,9 @@ async function handleCompact(
 	args?: string,
 ): Promise<SessionCommandResult> {
 	try {
-		const {sessionManager} = await import('../session/sessionManager.js');
+		const {buildInitialUserPromptBlock, sessionManager} = await import(
+			'../session/sessionManager.js'
+		);
 		const {compressContext} = await import('../core/contextCompressor.js');
 
 		const tokens = parseTokens(args);
@@ -1707,7 +1709,13 @@ async function handleCompact(
 
 		// Apply compression by creating a new session (mirrors TUI /compact path).
 		const preservedMessages = result.preservedMessages ?? [];
-		let finalContent = `[Context Summary from Previous Conversation]\n\n${result.summary}`;
+		const initialUserPrompt = await sessionManager.getInitialUserPrompt(
+			session,
+		);
+		const initialUserPromptHeader = initialUserPrompt
+			? `${buildInitialUserPromptBlock(initialUserPrompt)}\n\n`
+			: '';
+		let finalContent = `${initialUserPromptHeader}[Context Summary from Previous Conversation]\n\n${result.summary}`;
 		if (preservedMessages.length > 0) {
 			finalContent +=
 				'\n\n---\n\n[Last Interaction - Preserved Below for Continuity]';
@@ -1740,6 +1748,7 @@ async function handleCompact(
 		compressedSession.summary = session.summary;
 		compressedSession.compressedFrom = session.id;
 		compressedSession.compressedAt = Date.now();
+		compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
 		compressedSession.originalMessageIndex = result.preservedMessageStartIndex;
 		if (session.hasGoal) {
 			compressedSession.hasGoal = true;

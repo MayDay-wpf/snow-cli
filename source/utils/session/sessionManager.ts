@@ -20,6 +20,16 @@ export interface ChatMessage extends APIChatMessage {
 	originalContent?: string;
 }
 
+export function buildInitialUserPromptBlock(initialUserPrompt: string): string {
+	return [
+		'[INITIAL USER REQUEST - VERBATIM, MUST NOT BE PARAPHRASED]',
+		'',
+		initialUserPrompt,
+		'',
+		"The exact text above is the user's initial request and remains authoritative throughout this conversation. Do NOT rephrase it. If later summaries conflict with it, the verbatim request wins.",
+	].join('\n');
+}
+
 export interface Session {
 	id: string;
 	title: string;
@@ -34,6 +44,8 @@ export interface Session {
 	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
 	compressedAt?: number; // 压缩时间戳
 	originalMessageIndex?: number; // 压缩点在原会话中的消息索引
+	// 用户启动提示词原文。压缩会话继承该字段，防止摘要反复压缩后遗漏初始需求。
+	initialUserPrompt?: string;
 	// 图片压缩的本地文本归档：后续压缩从此文本重新渲染，不嵌套历史图片。
 	imageContextArchive?: string;
 	branchedFrom?: string; // 如果是 fork 产生的会话，记录来源会话ID
@@ -387,6 +399,42 @@ class SessionManager {
 
 		this.setCurrentSession(session);
 		return session;
+	}
+
+	async getInitialUserPrompt(session: Session): Promise<string | null> {
+		const sessionChain: Session[] = [];
+		const seenSessionIds = new Set<string>();
+		let currentSession: Session | null = session;
+
+		while (currentSession && !seenSessionIds.has(currentSession.id)) {
+			sessionChain.push(currentSession);
+			seenSessionIds.add(currentSession.id);
+
+			if (!currentSession.compressedFrom) {
+				break;
+			}
+
+			currentSession = await this.loadSessionFromDisk(
+				currentSession.compressedFrom,
+			);
+		}
+
+		for (const historicalSession of sessionChain.reverse()) {
+			const storedPrompt = historicalSession.initialUserPrompt?.trim();
+			if (storedPrompt) {
+				return storedPrompt;
+			}
+
+			const firstUserMessage = historicalSession.messages.find(
+				message => message.role === 'user' && Boolean(message.content?.trim()),
+			);
+			const prompt = firstUserMessage?.content?.trim();
+			if (prompt) {
+				return prompt;
+			}
+		}
+
+		return null;
 	}
 	/**
 	 * 获取可用于当前项目读取的项目目录。
@@ -778,6 +826,11 @@ class SessionManager {
 
 		// Generate simple title and summary from first user message
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
+			const initialUserPrompt = message.content.trim();
+			if (initialUserPrompt) {
+				this.currentSession.initialUserPrompt = initialUserPrompt;
+			}
+
 			// Use first 50 chars as title, first 100 chars as summary
 			const title =
 				message.content.slice(0, 50) +

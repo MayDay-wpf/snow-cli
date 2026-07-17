@@ -2,7 +2,10 @@ import {useStdout} from 'ink';
 import {useCallback} from 'react';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
-import {sessionManager} from '../../utils/session/sessionManager.js';
+import {
+	buildInitialUserPromptBlock,
+	sessionManager,
+} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
 import {performImageCompression} from '../../utils/core/imageContextCompressor.js';
@@ -65,6 +68,32 @@ function buildGoalObjectiveBlock(goal: GoalRecord): string {
 		'authoritative source of truth. Do NOT rephrase it. If subsequent summary content',
 		'appears to contradict this objective, the verbatim text wins.',
 	].join('\n');
+}
+
+function prependInitialUserPromptBlock(
+	messages: Array<{role?: string; content?: string}>,
+	initialUserPrompt: string | null,
+): void {
+	if (!initialUserPrompt) {
+		return;
+	}
+
+	const initialUserPromptBlock = buildInitialUserPromptBlock(initialUserPrompt);
+	const firstUserIndex = messages.findIndex(
+		message => message?.role === 'user',
+	);
+	const firstUserMessage = messages[firstUserIndex];
+	if (firstUserMessage) {
+		firstUserMessage.content = `${initialUserPromptBlock}\n\n${
+			firstUserMessage.content ?? ''
+		}`;
+		return;
+	}
+
+	messages.unshift({
+		role: 'user',
+		content: initialUserPromptBlock,
+	});
 }
 
 /**
@@ -149,6 +178,9 @@ export async function executeContextCompression(
 
 		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
 		const sessionMessages = currentSession.messages;
+		const initialUserPrompt = await sessionManager.getInitialUserPrompt(
+			currentSession,
+		);
 
 		// 转换为 ChatMessage 格式（保留所有关键字段）
 		const chatMessages: Array<any> = sessionMessages.map(msg => ({
@@ -345,6 +377,7 @@ export async function executeContextCompression(
 					});
 				}
 			}
+			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
 			compressedSession.messages = newSessionMessages;
 			compressedSession.messageCount = newSessionMessages.length;
 			compressedSession.updatedAt = Date.now();
@@ -352,6 +385,7 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
+			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
 			compressedSession.originalMessageIndex = currentSession.messages.length;
 			// ── /goal: 把 hasGoal 标记带过来，新会话 saveSession 后即可让
 			// mcpToolsManager 在切换后重新暴露 goal-update_goal 工具。
@@ -469,6 +503,7 @@ export async function executeContextCompression(
 					});
 				}
 			}
+			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
 
 			// Create new session
 			const compressedSession = await sessionManager.createNewSession(
@@ -482,6 +517,7 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
+			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
 			compressedSession.originalMessageIndex = currentSession.messages.length;
 			compressedSession.imageContextArchive = imageResult.archiveText;
 
@@ -603,6 +639,7 @@ export async function executeContextCompression(
 			content: finalContent,
 			timestamp: Date.now(),
 		});
+		prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
 
 		if (preservedMessages.length > 0) {
 			newSessionMessages.push(
@@ -633,6 +670,7 @@ export async function executeContextCompression(
 		// 记录压缩关系
 		compressedSession.compressedFrom = currentSession.id;
 		compressedSession.compressedAt = Date.now();
+		compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
 		compressedSession.originalMessageIndex =
 			compressionResult.preservedMessageStartIndex;
 
