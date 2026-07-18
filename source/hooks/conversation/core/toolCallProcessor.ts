@@ -124,6 +124,7 @@ export async function processToolCallsAfterStream(
 				toolDisplay,
 				toolCallId: toolCall.id,
 				toolPending: true,
+				toolStartedAt: Date.now(),
 				messageStatus: 'pending',
 				parallelGroup: parallelGroupId,
 			});

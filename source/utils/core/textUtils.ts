@@ -119,3 +119,27 @@ export function formatElapsedTime(seconds: number): string {
 		return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
 	}
 }
+
+/** Minimum tool duration to show in UI (avoid noise for sub-second tools). */
+export const MIN_TOOL_DURATION_DISPLAY_MS = 1000;
+
+/**
+ * Format duration in milliseconds using formatElapsedTime style.
+ * Returns empty string for invalid / sub-second values.
+ */
+export function formatDurationMs(ms: number): string {
+	if (!Number.isFinite(ms) || ms < 0) {
+		return '';
+	}
+
+	let totalSeconds = Math.floor(ms / 1000);
+	// 1000ms+ but floor to 0s still shows at least 1s
+	if (totalSeconds === 0) {
+		if (ms >= MIN_TOOL_DURATION_DISPLAY_MS) {
+			totalSeconds = 1;
+		} else {
+			return '';
+		}
+	}
+	return formatElapsedTime(totalSeconds);
+}
