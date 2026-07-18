@@ -815,7 +815,18 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			console.error('Failed to process bash commands:', error);
 		}
 
-		// typedMessage = bubble text; message may be hook-enriched for the model.
+		// AGENTS.md (global + project) — after hooks/bash, before model send.
+		// UI keeps typedMessage clean; separate from hook additionalContext.
+		try {
+			const {prependAgentsContext} = await import(
+				'../../../prompt/contextInject/index.js'
+			);
+			message = prependAgentsContext(message, {profile: 'full'});
+		} catch (error) {
+			console.error('Failed to prepend AGENTS.md context:', error);
+		}
+
+		// typedMessage = bubble text; message may include AGENTS + hook context for model.
 		await processMessage(message, images, undefined, undefined, typedMessage);
 	};
 
@@ -883,6 +894,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			);
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
+		}
+
+		// AGENTS.md (global + project) — separate from hooks; bubble uses typedPending.
+		try {
+			const {prependAgentsContext} = await import(
+				'../../../prompt/contextInject/index.js'
+			);
+			messageToSend = prependAgentsContext(messageToSend, {profile: 'full'});
+		} catch (error) {
+			console.error('Failed to prepend AGENTS.md context:', error);
 		}
 
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
