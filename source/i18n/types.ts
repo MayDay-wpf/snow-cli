@@ -784,6 +784,7 @@ export type TranslationKeys = {
 			role: string;
 			roleSubagent: string;
 			usage: string;
+			context: string;
 			backend: string;
 			loop: string;
 			profiles: string;
@@ -1950,6 +1951,27 @@ export type TranslationKeys = {
 		error: string;
 		tabToSwitch: string;
 		noDataForPeriod: string;
+	};
+	contextPanel: {
+		title: string;
+		subtitle: string;
+		loading: string;
+		error: string;
+		hint: string;
+		apiLast: string;
+		displayOnly: string;
+		truncated: string;
+		dropped: string;
+		moreAbove: string;
+		moreBelow: string;
+		buckets: {
+			system: string;
+			role: string;
+			agents: string;
+			hooks: string;
+			tools: string;
+			messages: string;
+		};
 	};
 	// Working Directory Panel
 	workingDirectoryPanel: {

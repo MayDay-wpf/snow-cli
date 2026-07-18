@@ -859,6 +859,8 @@ export const en: TranslationKeys = {
 			roleSubagent:
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
+			context:
+				'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
 			export: 'Export chat conversation to text file with save dialog',
 			config:
 				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
@@ -2199,6 +2201,27 @@ export const en: TranslationKeys = {
 		emptyHint: 'No files to rollback',
 		noFilesConfirm: 'No file changes detected. Confirm rollback?',
 		noFilesConfirmHint: 'Enter confirm · ESC cancel',
+	},
+	contextPanel: {
+		title: 'Context Breakdown',
+		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
+		loading: 'Loading context breakdown…',
+		error: 'Failed: {error}',
+		hint: 'Tab/Space toggle files · R ROLE · A AGENTS · ↑↓ scroll · ESC close',
+		apiLast: 'Last API prompt',
+		displayOnly: '(in system)',
+		truncated: '[trunc]',
+		dropped: '[dropped]',
+		moreAbove: 'more above',
+		moreBelow: 'more below',
+		buckets: {
+			system: 'System prompt',
+			role: 'ROLE.md',
+			agents: 'AGENTS.md inject',
+			hooks: 'Hooks context',
+			tools: 'Tool definitions',
+			messages: 'Conversation',
+		},
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',

@@ -48,6 +48,7 @@ import './commands/toolsearch.js';
 import './commands/ultraTodo.js';
 import './commands/hybridCompress.js';
 import './commands/usage.js';
+import './commands/context.js';
 import './commands/vulnerability-hunting.js';
 import './commands/autoformat.js';
 import './commands/team.js';

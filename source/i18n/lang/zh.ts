@@ -813,6 +813,8 @@ export const zh: TranslationKeys = {
 			roleSubagent:
 				'为子代理自定义前置提示词 (ROLE-名字.md)。使用 -l 列出，-d 删除',
 			usage: '查看带有交互式图表的令牌使用统计',
+			context:
+				'拆解上下文占用：system / ROLE / AGENTS / hooks / tools / messages',
 			export: '将聊天对话导出到带保存对话框的文本文件',
 			config: '导出或导入 Snow CLI YAML 配置。用法: /config <export|import>',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
@@ -2078,6 +2080,27 @@ export const zh: TranslationKeys = {
 		emptyHint: '无文件可回滚',
 		noFilesConfirm: '未检测到文件变更。确认回滚？',
 		noFilesConfirmHint: 'Enter 确认 · ESC 取消',
+	},
+	contextPanel: {
+		title: '上下文拆解',
+		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
+		loading: '正在加载上下文拆解…',
+		error: '失败: {error}',
+		hint: 'Tab/Space 展开文件 · R ROLE · A AGENTS · ↑↓ 滚动 · ESC 关闭',
+		apiLast: '上次 API prompt',
+		displayOnly: '(计入 system)',
+		truncated: '[截断]',
+		dropped: '[丢弃]',
+		moreAbove: '上方还有',
+		moreBelow: '下方还有',
+		buckets: {
+			system: 'System prompt',
+			role: 'ROLE.md',
+			agents: 'AGENTS.md 注入',
+			hooks: 'Hooks 上下文',
+			tools: '工具定义',
+			messages: '对话历史',
+		},
 	},
 	usagePanel: {
 		title: 'Token 使用统计',

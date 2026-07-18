@@ -30,6 +30,7 @@ import type {RoleSubagentLocation} from '../../../utils/commands/roleSubagent.js
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
 const SessionListPanel = lazy(() => import('./SessionListPanel.js'));
 const UsagePanel = lazy(() => import('./UsagePanel.js'));
+const ContextPanel = lazy(() => import('./ContextPanel.js'));
 
 type PanelsManagerProps = {
 	terminalWidth: number;
@@ -39,6 +40,7 @@ type PanelsManagerProps = {
 	showGoalSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
+	showContextPanel: boolean;
 	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
@@ -112,6 +114,7 @@ export default function PanelsManager({
 	showGoalSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
+	showContextPanel,
 	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
@@ -212,6 +215,20 @@ export default function PanelsManager({
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<Suspense fallback={loadingFallback}>
 						<UsagePanel />
+					</Suspense>
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.pressEscToClose}
+						</Text>
+					</Box>
+				</Box>
+			)}
+
+			{/* Context breakdown: system / ROLE / AGENTS / hooks / tools / messages */}
+			{showContextPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense fallback={loadingFallback}>
+						<ContextPanel />
 					</Suspense>
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>

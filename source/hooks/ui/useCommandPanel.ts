@@ -245,6 +245,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description: t.commandPanel.commands.usage,
 			},
 			{
+				name: 'context',
+				description:
+					t.commandPanel.commands.context ||
+					'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
+			},
+			{
 				name: 'backend',
 				description:
 					t.commandPanel.commands.backend || 'Show background processes',
