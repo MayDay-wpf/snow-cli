@@ -110,6 +110,7 @@ snow
 - [子代理设置](docs/usage/zh/05.子代理设置.md) - 子代理管理、自定义子代理、**项目级 Markdown agents（#194）**
 - [敏感命令配置](docs/usage/zh/06.敏感命令配置.md) - 敏感命令保护、自定义命令规则
 - [Hooks 配置](docs/usage/zh/07.Hooks配置.md) - 工作流程自动化、**additionalContext 注入 / beforeSubAgentStart / type:context（#194）**
+- [AGENTS.md 上下文注入](docs/usage/zh/30.AGENTS上下文注入.md) - 自动把全局/项目 `AGENTS.md` 链 prepend 到发给模型的 user message；ROLE 仍走 system 路径
 - [主题设置](docs/usage/zh/08.主题设置.md) - 界面主题配置、自定义配色、简洁模式
 - [第三方中转配置](docs/usage/zh/16.第三方中转配置.md) - Claude Code 中转、Codex 中转、自定义请求头配置
 
@@ -194,7 +195,9 @@ source/                     # 源代码
 ├── hooks/                  # 对话 React Hooks
 ├── i18n/                   # 国际化
 ├── mcp/                    # Model Context Protocol
-├── prompt/                 # 系统提示词模板
+├── prompt/                 # 系统提示词 + 上下文注入
+│   ├── contextInject/      # AGENTS.md 发现 / 预算 / prepend
+│   └── shared/             # ROLE helpers、内容去重
 ├── types/                  # TypeScript 类型定义
 ├── ui/                     # UI 组件 (Ink)
 └── utils/                  # 工具函数
@@ -218,8 +221,10 @@ VSIX/                       # VSCode 扩展源码
 ├── sessions/               # 对话记录
 ├── tasks/                  # 异步任务
 ├── hooks/                  # 工作流钩子
+├── AGENTS.md               # 可选的全局项目指令注入
+├── ROLE.md                 # 可选的全局人设（system 路径）
 ├── config.json             # API 配置
-├── settings.json           # 统一设置（含 mcpServers）
+├── settings.json           # 统一设置（含 mcpServers、contextInject）
 └── ...                     # 其他配置文件
 ```
 
