@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {configEvents} from '../../../utils/config/configEvents.js';
 import {getSnowConfig} from '../../../utils/config/apiConfig.js';
 import {
@@ -79,8 +79,28 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		persistYoloMode(yoloMode);
 	}, [yoloMode]);
 
+	// Track previous planMode so we only reset the gate on real toggles,
+	// not on mount/remount (which would wipe an already-approved session).
+	const previousPlanModeRef = useRef<boolean | null>(null);
 	useEffect(() => {
 		persistPlanMode(planMode);
+		const previous = previousPlanModeRef.current;
+		previousPlanModeRef.current = planMode;
+		if (previous === null || previous === planMode) {
+			return;
+		}
+		// Entering or leaving Plan Mode always requires a fresh approval.
+		try {
+			const {
+				onPlanModeChange,
+			} = require('../../../utils/execution/planModeGate.js');
+			const {
+				sessionManager,
+			} = require('../../../utils/session/sessionManager.js');
+			onPlanModeChange(planMode, sessionManager.getCurrentSession()?.id);
+		} catch {
+			// ignore if modules unavailable during early boot
+		}
 	}, [planMode]);
 
 	useEffect(() => {

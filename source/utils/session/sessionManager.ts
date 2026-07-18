@@ -1057,10 +1057,23 @@ class SessionManager {
 	}
 
 	clearCurrentSession(): void {
+		const previousId = this.currentSession?.id;
 		this.currentSession = null;
 		this.pendingNewSessionId = undefined;
 		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
+
+		// Drop plan approval for the cleared session.
+		if (previousId) {
+			try {
+				// Sync require to avoid making clearCurrentSession async.
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const {resetPlanGate} = require('../execution/planModeGate.js');
+				resetPlanGate(previousId);
+			} catch {
+				// ignore
+			}
+		}
 	}
 
 	/**

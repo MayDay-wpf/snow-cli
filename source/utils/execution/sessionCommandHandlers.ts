@@ -737,6 +737,15 @@ function handleBooleanSetting(
 			meta.risk,
 		);
 	}
+	// Skip no-op toggles so side effects (e.g. plan gate reset) only run on real changes.
+	if (parsed.value === current) {
+		return okResult(
+			meta.id,
+			{enabled: current, previous: current, unchanged: true},
+			`${label}: already ${current ? 'on' : 'off'}`,
+			meta.risk,
+		);
+	}
 	setter(parsed.value);
 	onChange?.(parsed.value);
 	return okResult(
@@ -2028,6 +2037,13 @@ export async function executeSessionCommandHandler(
 				'Plan',
 				value => {
 					configEvents.emitConfigChange({type: 'planMode', value});
+					try {
+						const {onPlanModeChange} = require('./planModeGate.js');
+						const {sessionManager} = require('../session/sessionManager.js');
+						onPlanModeChange(value, sessionManager.getCurrentSession()?.id);
+					} catch {
+						// ignore
+					}
 				},
 			);
 		case 'tool-search':

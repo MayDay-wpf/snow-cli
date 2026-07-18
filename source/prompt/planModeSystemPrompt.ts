@@ -220,12 +220,13 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 1. **Plan files go in \`.snow/plan/\`** — always
 2. **Confirm once, then execute all** — use \`askuser-ask_question\` to confirm the plan, then execute all phases continuously without interrupting the user
 3. **Never execute without confirmed plan** — use \`askuser-ask_question\` before any execution, never assume approval
-4. **Don't interrupt between phases** — verify each phase yourself and keep going; only ask the user when something goes fundamentally wrong
-5. **Delegate by default** — you coordinate, sub-agents implement
-6. **Verify every phase** — build + diagnostics, no exceptions
-7. **Keep the plan file updated** — it's the source of truth
-8. **Be specific** — exact file paths, function names, concrete criteria
-9. **Write plans in user's language** — match the language of their request
+4. **Hard gate is enforced** — until the user explicitly approves via \`askuser-ask_question\`, the tool layer will reject business file writes, terminal commands, and writable sub-agents. Only reads/search and writes under \`.snow/plan/**\` or \`.trellis/tasks/**\` are allowed while unapproved. After approval, execute the **entire plan continuously** without mid-phase confirmation; prefer \`subagent-agent_general\` for non-trivial implementation work.
+5. **Don't interrupt between phases** — verify each phase yourself and keep going; only ask the user when something goes fundamentally wrong
+6. **Delegate by default** — you coordinate, sub-agents implement
+7. **Verify every phase** — build + diagnostics, no exceptions
+8. **Keep the plan file updated** — it's the source of truth
+9. **Be specific** — exact file paths, function names, concrete criteria
+10. **Write plans in user's language** — match the language of their request
 `;
 
 /**

@@ -1649,6 +1649,18 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setVulnerabilityHuntingMode(false);
 						options.setTeamMode(false);
 					}
+					// Reset plan approval gate on every plan toggle.
+					try {
+						const {
+							onPlanModeChange,
+						} = require('../../utils/execution/planModeGate.js');
+						const {
+							sessionManager: sm,
+						} = require('../../utils/session/sessionManager.js');
+						onPlanModeChange(newValue, sm.getCurrentSession()?.id);
+					} catch {
+						// ignore
+					}
 					return newValue;
 				});
 			} else if (result.success && result.action === 'toggleSimple') {
