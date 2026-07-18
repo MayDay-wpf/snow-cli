@@ -80,6 +80,29 @@ function findToolNameForToolCall(
 }
 
 /**
+ * Whether a tool_call already has a matching tool result after the assistant message.
+ * Used so resume does not rebuild live "pending" rows for completed tools.
+ */
+function hasMatchingToolResult(
+	sessionMessages: ChatMessage[],
+	startIndex: number,
+	toolCallId: string,
+): boolean {
+	for (let j = startIndex + 1; j < sessionMessages.length; j++) {
+		const nextMsg = sessionMessages[j];
+		if (!nextMsg) break;
+		if (nextMsg.role === 'tool' && nextMsg.tool_call_id === toolCallId) {
+			return true;
+		}
+		// Stop at the next top-level assistant turn
+		if (nextMsg.role === 'assistant' && !nextMsg.subAgentInternal) {
+			break;
+		}
+	}
+	return false;
+}
+
+/**
  * Clean thinking content by removing XML-like tags
  * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
  */
@@ -479,9 +502,17 @@ export function convertSessionMessagesToUI(
 					toolArgs = {};
 				}
 
-				// Only add "in progress" message for tools that need two-step display
+				// Only rebuild a pending row for two-step tools that never finished.
+				// Completed tools already have a tool result message; live UI removes
+				// the pending row after success, so resume must not recreate it as
+				// toolPending (PendingToolCalls would treat history as still running).
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
-				if (needTwoSteps) {
+				const toolCompleted = hasMatchingToolResult(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
+				if (needTwoSteps && !toolCompleted) {
 					// When resuming a session, the file on disk has already been
 					// edited, so enrichPendingEditArgs (which reads the current
 					// file) cannot compute a correct diff. Instead, prefer the
@@ -496,8 +527,8 @@ export function convertSessionMessagesToUI(
 					const enrichedArgs = savedDiffData
 						? {...toolArgs, ...savedDiffData}
 						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
-					// Rebuild the historical pending step with the current marker config;
-					// the following persisted tool result restores success or error.
+					// Incomplete historical tool: show as pending in Static, not as a
+					// live spinner row (toolPending is reserved for active execution).
 					uiMessages.push({
 						role: 'assistant',
 						content: formatToolTitleLine(toolCall.function.name, 'pending'),
@@ -508,7 +539,7 @@ export function convertSessionMessagesToUI(
 						},
 						toolDisplay,
 						toolCallId: toolCall.id,
-						toolPending: true,
+						toolPending: false,
 						messageStatus: 'pending',
 					});
 				}
