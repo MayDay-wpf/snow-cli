@@ -166,6 +166,9 @@ export interface UnifiedSettings {
 		/** 默认 token 预算，单位 M（百万）。例如 2 表示 2,000,000 tokens。 */
 		defaultTokenBudgetM?: number;
 	};
+
+	// === Built-in context inject (project/global rules + AGENTS summary) ===
+	contextInject?: import('../../prompt/contextInject/types.js').ContextInjectSettings;
 }
 
 export type SettingsScope = 'project' | 'global';

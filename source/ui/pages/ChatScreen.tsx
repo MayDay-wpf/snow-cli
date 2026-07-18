@@ -391,6 +391,7 @@ export default function ChatScreen({
 		setShowMcpPanel: panelState.setShowMcpPanel,
 		setShowHelpPanel: panelState.setShowHelpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
+		setShowContextPanel: panelState.setShowContextPanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
 		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
@@ -513,6 +514,7 @@ export default function ChatScreen({
 		panelState.showGoalSessionPanel ||
 		panelState.showMcpPanel ||
 		panelState.showUsagePanel ||
+		panelState.showContextPanel ||
 		panelState.showHelpPanel ||
 		panelState.showProfileEditPanel ||
 		panelState.showModelsPanel ||

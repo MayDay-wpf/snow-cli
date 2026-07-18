@@ -14,6 +14,7 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 	const {
 		showCommands,
 		getFilteredCommands,
+		cycleCommandCategory,
 		commandSelectedIndex,
 		setCommandSelectedIndex,
 		setShowCommands,
@@ -50,6 +51,16 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 	if (key.downArrow) {
 		const maxIndex = Math.max(0, filteredCommands.length - 1);
 		setCommandSelectedIndex(prev => (prev < maxIndex ? prev + 1 : 0));
+		return true;
+	}
+
+	// Left/Right - cycle category tabs (Tab is reserved for autocomplete)
+	if (key.leftArrow) {
+		cycleCommandCategory?.(-1);
+		return true;
+	}
+	if (key.rightArrow) {
+		cycleCommandCategory?.(1);
 		return true;
 	}
 

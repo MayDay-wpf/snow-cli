@@ -792,7 +792,15 @@ export const zh: TranslationKeys = {
 		moreHidden: '隐藏 {count} 个',
 		moreAbove: '上方还有 {count} 项',
 		moreBelow: '下方还有 {count} 项',
-		interactionHint: 'Tab: 补全 • Enter: 执行',
+		interactionHint: 'Tab: 补全 • ←/→: 分类 • Enter: 执行',
+		categories: {
+			all: '全部',
+			frequent: '常用',
+			settings: '设置',
+			advanced: '高级',
+			fun: '趣味',
+			custom: '自定义',
+		},
 		commands: {
 			help: '显示快捷键和帮助信息',
 			clear: '清空聊天上下文和对话历史',
@@ -813,6 +821,10 @@ export const zh: TranslationKeys = {
 			roleSubagent:
 				'为子代理自定义前置提示词 (ROLE-名字.md)。使用 -l 列出，-d 删除',
 			usage: '查看带有交互式图表的令牌使用统计',
+			context:
+				'拆解上下文占用：system / ROLE / AGENTS / hooks / tools / messages',
+			agentsInject:
+				'开关 AGENTS.md 注入到发给模型的用户消息。用法: /agents-inject [on|off|status]',
 			export: '将聊天对话导出到带保存对话框的文本文件',
 			config: '导出或导入 Snow CLI YAML 配置。用法: /config <export|import>',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
@@ -895,6 +907,19 @@ export const zh: TranslationKeys = {
 				disabled: '简易模式: 已禁用',
 				statusEnabled: '简易模式: 已启用',
 				statusDisabled: '简易模式: 已禁用',
+			},
+			agentsInject: {
+				enabled:
+					'AGENTS 注入: 已开启 — 项目 AGENTS.md 会 prepend 到发给模型的消息（已写入 .snow/settings.json）',
+				disabled:
+					'AGENTS 注入: 已关闭 — 不再自动 prepend AGENTS.md（已写入 .snow/settings.json）',
+				statusEnabled: 'AGENTS 注入: 开启',
+				statusDisabled: 'AGENTS 注入: 关闭',
+				sourceProject: '来源: 项目设置',
+				sourceGlobal: '来源: 全局设置',
+				sourceDefault: '来源: 默认（opt-in）',
+				invalid:
+					'参数无效。用法: /agents-inject [on|off|status]',
 			},
 			// 工具显示模式命令消息
 			toolDisplay: {
@@ -2078,6 +2103,32 @@ export const zh: TranslationKeys = {
 		emptyHint: '无文件可回滚',
 		noFilesConfirm: '未检测到文件变更。确认回滚？',
 		noFilesConfirmHint: 'Enter 确认 · ESC 取消',
+	},
+	contextPanel: {
+		title: '上下文拆解',
+		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
+		loading: '正在加载上下文拆解…',
+		error: '失败: {error}',
+		hint: '默认已展开可直接看 · ↑↓ 选择 · Enter 展开 · A/C 全开/收起 · ESC 关闭',
+		apiLast: '上次 API prompt',
+		displayOnly: '计入sys',
+		truncated: '[截断]',
+		dropped: '[丢弃]',
+		moreAbove: '上方还有',
+		moreBelow: '下方还有',
+		estimate: '估算',
+		precise: '精确',
+		colBucket: '分桶',
+		colTokens: 'Tokens',
+		colShare: '占比',
+		buckets: {
+			system: 'System prompt',
+			role: 'ROLE.md',
+			agents: 'AGENTS.md 注入',
+			hooks: 'Hooks 上下文',
+			tools: '工具定义',
+			messages: '对话历史',
+		},
 	},
 	usagePanel: {
 		title: 'Token 使用统计',

@@ -75,6 +75,10 @@ import {
 	setTelemetryEnabled,
 	getTelemetryConfig,
 } from '../config/projectSettings.js';
+import {
+	getContextInjectEnabled,
+	setContextInjectEnabled,
+} from '../config/contextInjectSettings.js';
 import {tpsTracker} from '../../hooks/conversation/core/tpsTracker.js';
 import {
 	getActiveProfileName,
@@ -1998,6 +2002,14 @@ export async function executeSessionCommandHandler(
 					// Best-effort notify TUI subscribers (same as /simple slash path).
 					configEvents.emitConfigChange({type: 'simpleMode', value});
 				},
+			);
+		case 'agents-inject':
+			return handleBooleanSetting(
+				meta,
+				normalizedArgs,
+				getContextInjectEnabled,
+				value => setContextInjectEnabled(value, 'project'),
+				'AGENTS inject',
 			);
 		case 'tool-display':
 			return handleToolDisplay(meta, normalizedArgs);

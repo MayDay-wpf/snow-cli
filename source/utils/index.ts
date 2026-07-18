@@ -2,6 +2,7 @@ import {Command} from '../types/index.js';
 
 // Import commands to register them
 import './commands/addDir.js';
+import './commands/agentsInject.js';
 import './commands/agent.js';
 import './commands/backend.js';
 import './commands/branch.js';
@@ -48,6 +49,7 @@ import './commands/toolsearch.js';
 import './commands/ultraTodo.js';
 import './commands/hybridCompress.js';
 import './commands/usage.js';
+import './commands/context.js';
 import './commands/vulnerability-hunting.js';
 import './commands/autoformat.js';
 import './commands/team.js';

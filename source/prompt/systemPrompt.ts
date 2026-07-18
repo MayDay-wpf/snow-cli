@@ -283,10 +283,11 @@ PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION
 
 ## Project Context (AGENTS.md)
 
-- Contains: project overview, architecture, tech stack.
-- Generally located in the project root directory.
-- You can read this file at any time to understand the project and recommend reading.
-- This file may not exist. If you can't find it, please ignore it.
+- When \`contextInject.enabled\` is true, auto-prepended to model-bound user messages (not system): global \`~/.snow/AGENTS.md\` and project \`AGENTS.md\` chain (root → cwd). Default is off (opt-in). Toggle with \`/agents-inject\` (or session-command \`agents-inject\`).
+
+- Optional fallback filename: \`CLAUDE.md\` if AGENTS.md is missing in a directory.
+- Separate from hook additionalContext (Trellis/session hooks).
+- ROLE.md remains system-side persona/hard rules.
 
 Remember: **ACTION > ANALYSIS**. Write code first, investigate only when blocked.
 You are running as a Node.js process (PID: PLACEHOLDER_FOR_CLI_PID). If a user requests killing Node.js processes, you MUST warn them that this would also terminate the CLI, list processes with their PIDs first, and help them selectively kill only the intended targets while excluding PID PLACEHOLDER_FOR_CLI_PID.`;
@@ -411,6 +412,7 @@ Tools are loaded on-demand to save context. At the start of each conversation, o
 export function getSystemPrompt(toolSearchDisabled = false): string {
 	// If the active role is marked as "override", its content REPLACES the
 	// default system prompt entirely. Only system environment + date are appended.
+	// AGENTS.md is injected on the user-message path (not system).
 	const overrideContent = getOverrideRoleContent();
 	if (overrideContent) {
 		const systemEnvOverride = getSystemEnvironmentInfoHelper(true);

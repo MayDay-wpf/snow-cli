@@ -9,6 +9,8 @@ import {logger} from '../core/logger.js';
 export interface CommandUsageData {
 	/** 命令使用次数映射 {commandName: count} */
 	usage: Record<string, number>;
+	/** 最近使用时间映射 {commandName: timestamp ms} */
+	lastUsed?: Record<string, number>;
 	/** 最后更新时间 */
 	lastUpdated: number;
 }
@@ -18,9 +20,9 @@ export interface CommandUsageData {
  * 全局存储，路径: ~/.snow/command-usage.json
  *
  * 设计原则：
- * - 简单数据结构：只记录使用次数，不搞复杂的时间衰减
+ * - 简单数据结构：使用次数 + 最近使用时间
  * - 内存缓存 + 延迟写入：避免频繁 IO
- * - 向后兼容：没有记录时返回 0
+ * - 向后兼容：没有记录时返回 0 / 空列表
  */
 class CommandUsageManager {
 	private readonly usageFile: string;
@@ -55,11 +57,17 @@ class CommandUsageManager {
 		try {
 			await this.ensureSnowDir();
 			const data = await fs.readFile(this.usageFile, 'utf-8');
-			this.usageData = JSON.parse(data) as CommandUsageData;
+			const parsed = JSON.parse(data) as CommandUsageData;
+			this.usageData = {
+				usage: parsed.usage ?? {},
+				lastUsed: parsed.lastUsed ?? {},
+				lastUpdated: parsed.lastUpdated ?? Date.now(),
+			};
 		} catch {
 			// 文件不存在或解析错误，初始化空数据
 			this.usageData = {
 				usage: {},
+				lastUsed: {},
 				lastUpdated: Date.now(),
 			};
 		}
@@ -107,9 +115,13 @@ class CommandUsageManager {
 
 		if (!this.usageData) return;
 
-		// 增加使用次数
+		// 增加使用次数 + 最近使用时间
 		this.usageData.usage[commandName] =
 			(this.usageData.usage[commandName] || 0) + 1;
+		if (!this.usageData.lastUsed) {
+			this.usageData.lastUsed = {};
+		}
+		this.usageData.lastUsed[commandName] = Date.now();
 
 		this.isDirty = true;
 		this.scheduleSave();
@@ -134,6 +146,27 @@ class CommandUsageManager {
 	}
 
 	/**
+	 * 获取命令最近使用时间（同步版本）
+	 * 注意：必须先调用 loadUsage() / ensureLoaded()
+	 */
+	getLastUsedSync(commandName: string): number {
+		return this.usageData?.lastUsed?.[commandName] || 0;
+	}
+
+	/**
+	 * 获取最近使用的命令名（按 lastUsed 降序，同步版本）
+	 * 注意：必须先调用 loadUsage() / ensureLoaded()
+	 */
+	getRecentSync(limit = 5): string[] {
+		const lastUsed = this.usageData?.lastUsed ?? {};
+		return Object.entries(lastUsed)
+			.filter(([, ts]) => typeof ts === 'number' && ts > 0)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, Math.max(0, limit))
+			.map(([name]) => name);
+	}
+
+	/**
 	 * 确保数据已加载（供 hook 初始化时调用）
 	 */
 	async ensureLoaded(): Promise<void> {
@@ -154,6 +187,7 @@ class CommandUsageManager {
 	async clearUsage(): Promise<void> {
 		this.usageData = {
 			usage: {},
+			lastUsed: {},
 			lastUpdated: Date.now(),
 		};
 		this.isDirty = true;

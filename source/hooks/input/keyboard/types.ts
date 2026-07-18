@@ -33,6 +33,8 @@ export type KeyboardInputOptions = {
 		insertionText?: string;
 	}>;
 	updateCommandPanelState: (text: string, cursorPosition?: number) => void;
+	cycleCommandCategory?: (direction: 1 | -1) => void;
+	commandCategoryFilter?: string;
 	onCommand?: (commandName: string, result: any) => void;
 	getAllCommands?: () => Array<{
 		name: string;

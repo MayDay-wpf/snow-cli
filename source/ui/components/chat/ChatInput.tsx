@@ -354,6 +354,8 @@ export default function ChatInput({
 		getFilteredCommands,
 		updateCommandPanelState,
 		getAllCommands,
+		commandCategoryFilter,
+		cycleCommandCategory,
 	} = useCommandPanel(buffer, isProcessing);
 
 	// Command args picker state
@@ -526,6 +528,8 @@ export default function ChatInput({
 		setCommandSelectedIndex,
 		getFilteredCommands,
 		updateCommandPanelState,
+		cycleCommandCategory,
+		commandCategoryFilter,
 		onCommand,
 		getAllCommands,
 		showFilePicker,
@@ -1214,6 +1218,7 @@ export default function ChatInput({
 							commands={getFilteredCommands()}
 							selectedIndex={commandSelectedIndex}
 							query={buffer.getFullText().slice(1)}
+							categoryFilter={commandCategoryFilter}
 							visible={showCommands}
 						/>
 					</Suspense>

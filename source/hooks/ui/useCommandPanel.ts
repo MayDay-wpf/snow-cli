@@ -16,6 +16,14 @@ import {
 	findInlineCommandTrigger,
 	isInlineCommand,
 } from '../input/keyboard/utils/inlineCommandTrigger.js';
+import {
+	filterAndRankCommands,
+	findExactMatchIndex,
+	resolveCommandMeta,
+	cycleCategoryFilter,
+	type CommandCategory,
+	type CommandCategoryFilter,
+} from '../../utils/commands/commandMatch.js';
 
 const subscribeToSubAgentTracker = (cb: () => void) =>
 	runningSubAgentTracker.subscribe(cb);
@@ -27,6 +35,8 @@ export type CommandPanelCommand = {
 	name: string;
 	description: string;
 	type: 'builtin' | 'execute' | 'prompt' | 'panel';
+	category?: CommandCategory;
+	rankBoost?: number;
 	mainFlowOnly?: boolean;
 	isCustom?: boolean;
 	insertionText?: string;
@@ -57,6 +67,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	'auto-format': '[on|off|status]',
 	buddy: '[status|hatch|pet|rename|set|say|profile|mute|unmute|reset]',
 	simple: '[on|off|status]',
+	'agents-inject': '[on|off|status]',
 	'add-dir': '[path]',
 	loop: '[daemon] <interval> <prompt> | daily HH:mm <prompt> | at HH:mm <prompt> | list | tasks | cancel <id>',
 	goal: '<objective> [--budget=N] | pause | resume | clear | status',
@@ -98,6 +109,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 		'reset',
 	],
 	simple: ['on', 'off', 'status'],
+	'agents-inject': ['on', 'off', 'status'],
 	reindex: ['-force'],
 	role: ['-l', '-d'],
 	skills: ['-l', 'install'],
@@ -243,6 +255,18 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			{
 				name: 'usage',
 				description: t.commandPanel.commands.usage,
+			},
+			{
+				name: 'context',
+				description:
+					t.commandPanel.commands.context ||
+					'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
+			},
+			{
+				name: 'agents-inject',
+				description:
+					t.commandPanel.commands.agentsInject ||
+					'Toggle AGENTS.md inject into model-bound messages. Usage: /agents-inject [on|off|status]',
 			},
 			{
 				name: 'backend',
@@ -496,30 +520,42 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 
 	const normalizedBuiltInCommands = useMemo<CommandPanelCommand[]>(
 		() =>
-			builtInCommands.map(command => ({
-				name: command.name,
-				description: command.description,
-				type: (command as any).allowDuringProcessing ? 'prompt' : 'builtin',
-				mainFlowOnly: (command as any).mainFlowOnly || false,
-			})),
+			builtInCommands.map(command => {
+				const meta = resolveCommandMeta(command.name);
+				return {
+					name: command.name,
+					description: command.description,
+					type: (command as any).allowDuringProcessing ? 'prompt' : 'builtin',
+					category: meta.category,
+					rankBoost: meta.rankBoost,
+					mainFlowOnly: (command as any).mainFlowOnly || false,
+				};
+			}),
 		[builtInCommands],
 	);
 
 	// Get all commands (built-in + custom) - dynamically fetch custom commands
 	const getAllCommands = useCallback((): CommandPanelCommand[] => {
-		const customCommands = getCustomCommands().map(cmd => ({
-			name: cmd.name,
-			description: cmd.description || cmd.command,
-			type: cmd.type,
-			isCustom: true,
-			insertionText: cmd.type === 'prompt' ? cmd.command : undefined,
-		}));
+		const customCommands = getCustomCommands().map(cmd => {
+			const meta = resolveCommandMeta(cmd.name, true);
+			return {
+				name: cmd.name,
+				description: cmd.description || cmd.command,
+				type: cmd.type,
+				category: meta.category,
+				rankBoost: meta.rankBoost,
+				isCustom: true,
+				insertionText: cmd.type === 'prompt' ? cmd.command : undefined,
+			};
+		});
 		return [...normalizedBuiltInCommands, ...customCommands];
 	}, [normalizedBuiltInCommands]);
 
 	const [showCommands, setShowCommands] = useState(false);
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
 	const [usageLoaded, setUsageLoaded] = useState(false);
+	const [commandCategoryFilter, setCommandCategoryFilter] =
+		useState<CommandCategoryFilter>('frequent');
 
 	// Load command usage data on mount
 	// Use isMounted flag to prevent state update on unmounted component
@@ -537,10 +573,18 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		};
 	}, []);
 
+	const buildRankOptions = useCallback(
+		() => ({
+			recentNames: commandUsageManager.getRecentSync(5),
+			getLastUsed: (name: string) => commandUsageManager.getLastUsedSync(name),
+			categoryFilter: commandCategoryFilter,
+		}),
+		[commandCategoryFilter, usageLoaded],
+	);
+
 	// Get filtered commands based on current input
-	// Sorting strategy:
-	// - Empty query: Sort by usage frequency (most used first)
-	// - With query: Sort by match priority, then by usage frequency within same priority
+	// - Empty query: recent ∪ frequent (or category tab)
+	// - With query: full-set search (exact > prefix > boundary > substring > abbr > desc)
 	const getFilteredCommands = useCallback((): CommandPanelCommand[] => {
 		const text = buffer.text;
 		const cursorPosition = buffer.getCursorPosition();
@@ -561,65 +605,19 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			? allCommands
 			: allCommands.filter(isInlineCommand);
 
-		// Filter and sort commands by priority and usage frequency
-		// Priority order:
-		// 1. Command starts with query (highest)
-		// 2. Command contains query
-		// 3. Description starts with query
-		// 4. Description contains query (lowest)
-		const filtered = availableCommands
-			.filter(
-				command =>
-					command.name.toLowerCase().includes(query) ||
-					command.description.toLowerCase().includes(query),
-			)
-			.map(command => {
-				const nameLower = command.name.toLowerCase();
-				const descLower = command.description.toLowerCase();
-				const usageCount = commandUsageManager.getUsageCountSync(command.name);
-
-				let priority = 4; // Default: description contains query
-
-				if (nameLower.startsWith(query)) {
-					priority = 1; // Command starts with query
-				} else if (nameLower.includes(query)) {
-					priority = 2; // Command contains query
-				} else if (descLower.startsWith(query)) {
-					priority = 3; // Description starts with query
-				}
-
-				return {command, priority, usageCount};
-			})
-			.sort((a, b) => {
-				// When query is empty, sort primarily by usage frequency
-				if (query === '') {
-					// Sort by usage count (descending), then alphabetically
-					if (a.usageCount !== b.usageCount) {
-						return b.usageCount - a.usageCount;
-					}
-					return a.command.name.localeCompare(b.command.name);
-				}
-
-				// With query: sort by priority first, then by usage frequency
-				if (a.priority !== b.priority) {
-					return a.priority - b.priority;
-				}
-				// Same priority: sort by usage count (descending)
-				if (a.usageCount !== b.usageCount) {
-					return b.usageCount - a.usageCount;
-				}
-				// Same usage count: sort alphabetically
-				return a.command.name.localeCompare(b.command.name);
-			})
-			.map(item => item.command);
-
-		return filtered;
+		return filterAndRankCommands(
+			availableCommands,
+			query,
+			name => commandUsageManager.getUsageCountSync(name),
+			buildRankOptions(),
+		);
 	}, [
 		buffer,
 		getAllCommands,
 		isProcessing,
 		hasRunningAgentsOrTeam,
 		usageLoaded,
+		buildRankOptions,
 	]);
 
 	// Update command panel state
@@ -632,6 +630,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			if (!trigger) {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
+				setCommandCategoryFilter('all');
 				return;
 			}
 
@@ -640,17 +639,34 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				? allCommands
 				: allCommands.filter(isInlineCommand);
 			const query = trigger.query.toLowerCase();
-			const hasMatch = availableCommands.some(
-				command =>
-					command.name.toLowerCase().includes(query) ||
-					command.description.toLowerCase().includes(query),
+			// Typing a query resets category tab to all (search is global)
+			if (query) {
+				setCommandCategoryFilter(prev => (prev === 'all' ? prev : 'all'));
+			}
+			const ranked = filterAndRankCommands(
+				availableCommands,
+				query,
+				name => commandUsageManager.getUsageCountSync(name),
+				{
+					...buildRankOptions(),
+					// When query is non-empty, categoryFilter is ignored by ranker
+					categoryFilter: query ? 'all' : commandCategoryFilter,
+				},
 			);
+			const hasMatch = ranked.length > 0;
 
 			setShowCommands(hasMatch);
-			setCommandSelectedIndex(0);
+			// Prefer exact name match as the default selection when typing a query.
+			const exactIndex = findExactMatchIndex(ranked, query);
+			setCommandSelectedIndex(exactIndex >= 0 ? exactIndex : 0);
 		},
-		[buffer, getAllCommands],
+		[buffer, getAllCommands, buildRankOptions, commandCategoryFilter],
 	);
+
+	const cycleCommandCategory = useCallback((direction: 1 | -1) => {
+		setCommandCategoryFilter(prev => cycleCategoryFilter(prev, direction));
+		setCommandSelectedIndex(0);
+	}, []);
 
 	return {
 		showCommands,
@@ -660,5 +676,8 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		getFilteredCommands,
 		updateCommandPanelState,
 		getAllCommands,
+		commandCategoryFilter,
+		setCommandCategoryFilter,
+		cycleCommandCategory,
 	};
 }

@@ -765,6 +765,14 @@ export type TranslationKeys = {
 		moreAbove: string;
 		moreBelow: string;
 		interactionHint: string;
+		categories: {
+			all: string;
+			frequent: string;
+			settings: string;
+			advanced: string;
+			fun: string;
+			custom: string;
+		};
 		commands: {
 			help: string;
 			clear: string;
@@ -784,6 +792,8 @@ export type TranslationKeys = {
 			role: string;
 			roleSubagent: string;
 			usage: string;
+			context: string;
+			agentsInject: string;
 			backend: string;
 			loop: string;
 			profiles: string;
@@ -856,6 +866,16 @@ export type TranslationKeys = {
 				disabled: string;
 				statusEnabled: string;
 				statusDisabled: string;
+			};
+			agentsInject: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+				sourceProject: string;
+				sourceGlobal: string;
+				sourceDefault: string;
+				invalid: string;
 			};
 			// Tool display mode command messages
 			toolDisplay: {
@@ -1950,6 +1970,32 @@ export type TranslationKeys = {
 		error: string;
 		tabToSwitch: string;
 		noDataForPeriod: string;
+	};
+	contextPanel: {
+		title: string;
+		subtitle: string;
+		loading: string;
+		error: string;
+		hint: string;
+		apiLast: string;
+		displayOnly: string;
+		truncated: string;
+		dropped: string;
+		moreAbove: string;
+		moreBelow: string;
+		estimate: string;
+		precise: string;
+		colBucket: string;
+		colTokens: string;
+		colShare: string;
+		buckets: {
+			system: string;
+			role: string;
+			agents: string;
+			hooks: string;
+			tools: string;
+			messages: string;
+		};
 	};
 	// Working Directory Panel
 	workingDirectoryPanel: {

@@ -38,6 +38,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/reindex.js'),
 			import('../../../utils/commands/codebase.js'),
 			import('../../../utils/commands/addDir.js'),
+			import('../../../utils/commands/agentsInject.js'),
 			import('../../../utils/commands/permissions.js'),
 			import('../../../utils/commands/branch.js'),
 			import('../../../utils/commands/backend.js'),

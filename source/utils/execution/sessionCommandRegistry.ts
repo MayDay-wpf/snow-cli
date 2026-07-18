@@ -115,6 +115,12 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 	),
 	meta('simple', 'simple', 'low_write', 'Toggle or set simple mode'),
 	meta(
+		'agents-inject',
+		'agents-inject',
+		'low_write',
+		'Toggle or set AGENTS.md context inject (contextInject.enabled)',
+	),
+	meta(
 		'tool-display',
 		'tool-display',
 		'low_write',
