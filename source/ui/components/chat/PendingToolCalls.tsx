@@ -43,7 +43,9 @@ export default function PendingToolCalls({messages}: Props) {
 		<Box flexDirection="column">
 			{pendingTools.map((tool, index) => {
 				const startedAt =
-					typeof tool.toolStartedAt === 'number' ? tool.toolStartedAt : undefined;
+					typeof tool.toolStartedAt === 'number'
+						? tool.toolStartedAt
+						: undefined;
 				const elapsedMs =
 					startedAt !== undefined ? Math.max(0, now - startedAt) : 0;
 				const elapsedSeconds = Math.floor(elapsedMs / 1000);
@@ -53,6 +55,17 @@ export default function PendingToolCalls({messages}: Props) {
 					? formatElapsedTime(Math.max(elapsedSeconds, 1)) ||
 					  formatDurationMs(elapsedMs)
 					: '';
+				const tokens =
+					typeof tool.toolProgressTokens === 'number' &&
+					tool.toolProgressTokens > 0
+						? tool.toolProgressTokens
+						: undefined;
+				const progressParts = [
+					elapsedLabel || undefined,
+					tokens !== undefined ? `${tokens} tokens` : undefined,
+				].filter(Boolean);
+				const progressLabel =
+					progressParts.length > 0 ? progressParts.join(' · ') : '';
 
 				return (
 					<Box key={tool.toolCallId || `pending-tool-${index}`}>
@@ -60,10 +73,10 @@ export default function PendingToolCalls({messages}: Props) {
 							<Spinner type="dots" />{' '}
 						</Text>
 						<Text color="yellow">{tool.content || 'Running tool'}</Text>
-						{elapsedLabel ? (
+						{progressLabel ? (
 							<Text color="cyan" dimColor>
 								{' '}
-								({elapsedLabel})
+								({progressLabel})
 							</Text>
 						) : null}
 					</Box>

@@ -42,6 +42,8 @@ export interface Message {
 	toolPending?: boolean; // Whether the tool is still executing
 	toolStartedAt?: number; // Date.now() ms when tool pending/execution started
 	toolDurationMs?: number; // completed duration in ms
+	toolProgressTokens?: number; // streaming token count for pending tool AI work
+	toolStage?: string; // e.g. 'fetching' | 'summarizing'
 	isExecuting?: boolean; // Whether a custom command is executing in terminal
 	terminalResult?: {
 		stdout?: string;
