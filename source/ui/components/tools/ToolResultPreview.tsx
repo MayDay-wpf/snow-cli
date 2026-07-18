@@ -661,10 +661,19 @@ function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 
 function renderWebFetchPreview(data: any, theme: Theme) {
 	const contentLength = data.textLength || data.content?.length || 0;
+	const summaryNote =
+		data.summaryStatus === 'fallback_timeout'
+			? ' · AI summary timed out; returned full cleaned content'
+			: data.summaryStatus === 'fallback_error'
+			? ' · AI summary failed; returned full cleaned content'
+			: data.summaryStatus === 'summarized'
+			? ' · AI summarized'
+			: '';
 	return (
 		<Box marginLeft={2}>
 			<Text color={theme.colors.menuSecondary} dimColor>
 				└─ Fetched {contentLength} characters from {data.title || 'page'}
+				{summaryNote}
 			</Text>
 		</Box>
 	);
