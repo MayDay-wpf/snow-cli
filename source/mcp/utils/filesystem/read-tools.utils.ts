@@ -22,14 +22,11 @@ type GetFileContentContext = {
 	isSSHPath: (filePath: string) => boolean;
 	readRemoteFile: (sshUrl: string) => Promise<string>;
 	isImageFile: (filePath: string) => boolean;
-	readImageAsBase64: (fullPath: string) => Promise<
-		| {
-				type: 'image';
-				data: string;
-				mimeType: string;
-		  }
-		| null
-	>;
+	readImageAsBase64: (fullPath: string) => Promise<{
+		type: 'image';
+		data: string;
+		mimeType: string;
+	} | null>;
 	isOfficeFile: (filePath: string) => boolean;
 	getNotebookEntries: (filePath: string) => string;
 	extractRelevantSymbols: (
@@ -97,7 +94,7 @@ export async function executeGetFileContentCore(
 					const fileList = dirFiles.join('\n');
 					multimodalContent.push({
 						type: 'text',
-						text: `📁 Directory: ${file}\n${fileList}`,
+						text: `Directory: ${file}\n${fileList}`,
 					});
 					filesData.push({
 						path: file,
@@ -113,7 +110,7 @@ export async function executeGetFileContentCore(
 					if (imageContent) {
 						multimodalContent.push({
 							type: 'text',
-							text: `🖼️  Image: ${file} (${imageContent.mimeType})`,
+							text: `Image: ${file} (${imageContent.mimeType})`,
 						});
 						multimodalContent.push(imageContent);
 						filesData.push({
@@ -194,11 +191,17 @@ export async function executeGetFileContentCore(
 					fileSizeBytes > FILE_SIZE_LIMIT
 						? ` [Large file: ${Math.round(fileSizeBytes / 1024 / 1024)}MB]`
 						: '';
-				let fileContent = `${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join('\n')}`;
+				let fileContent = `${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join(
+					'\n',
+				)}`;
 
 				if (content) {
 					try {
-						const symbols = await parseFileSymbols(fullPath, content, ctx.basePath);
+						const symbols = await parseFileSymbols(
+							fullPath,
+							content,
+							ctx.basePath,
+						);
 						const symbolInfo = ctx.extractRelevantSymbols(
 							symbols,
 							start,
@@ -219,10 +222,17 @@ export async function executeGetFileContentCore(
 				}
 
 				multimodalContent.push({type: 'text', text: fileContent});
-				filesData.push({path: file, startLine: start, endLine: end, totalLines});
+				filesData.push({
+					path: file,
+					startLine: start,
+					endLine: end,
+					totalLines,
+				});
 			} catch (error) {
-				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				const inputPath = typeof fileItem === 'string' ? fileItem : fileItem.path;
+				const errorMsg =
+					error instanceof Error ? error.message : 'Unknown error';
+				const inputPath =
+					typeof fileItem === 'string' ? fileItem : fileItem.path;
 				let resolvedPathInfo = '';
 				try {
 					const attemptedResolve = ctx.resolvePath(inputPath, lastAbsolutePath);
@@ -234,7 +244,7 @@ export async function executeGetFileContentCore(
 				}
 				multimodalContent.push({
 					type: 'text',
-					text: `❌ ${inputPath}${resolvedPathInfo}\n   Error: ${errorMsg}`,
+					text: `✗ ${inputPath}${resolvedPathInfo}\n   Error: ${errorMsg}`,
 				});
 			}
 		}
@@ -297,7 +307,7 @@ export async function executeGetFileContentCore(
 				content: [
 					{
 						type: 'text',
-						text: `🖼️  Image: ${filePath} (${imageContent.mimeType})`,
+						text: `Image: ${filePath} (${imageContent.mimeType})`,
 					},
 					imageContent,
 				],
@@ -344,11 +354,16 @@ export async function executeGetFileContentCore(
 		lines = streamed.lines;
 		totalLines = streamed.totalLines;
 		const start = Math.min(actualStartLine, totalLines);
-		const end = Math.min(totalLines, Math.min(actualEndLine, start + lines.length - 1));
+		const end = Math.min(
+			totalLines,
+			Math.min(actualEndLine, start + lines.length - 1),
+		);
 		const numberedLines = lines.map((line, index) =>
 			formatLineWithHash(start + index, line),
 		);
-		const sizeInfo = `[File: ${Math.round(fileSizeBytes / 1024 / 1024)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
+		const sizeInfo = `[File: ${Math.round(
+			fileSizeBytes / 1024 / 1024,
+		)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
 		return {
 			content: `${sizeInfo}\n${numberedLines.join('\n')}`,
 			startLine: start,
@@ -378,7 +393,12 @@ export async function executeGetFileContentCore(
 	let partialContent = numberedLines.join('\n');
 	try {
 		const symbols = await parseFileSymbols(fullPath, content, ctx.basePath);
-		const symbolInfo = ctx.extractRelevantSymbols(symbols, start, end, totalLines);
+		const symbolInfo = ctx.extractRelevantSymbols(
+			symbols,
+			start,
+			end,
+			totalLines,
+		);
 		if (symbolInfo) {
 			partialContent += symbolInfo;
 		}
