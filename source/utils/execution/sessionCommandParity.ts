@@ -12,6 +12,7 @@ import {listSessionCommands} from './sessionCommandRegistry.js';
 export const PLANE_TUI_OVERLAP_COMMANDS: readonly string[] = [
 	'buddy',
 	'simple',
+	'agents-inject',
 	'tool-display',
 	'think-display',
 	'yolo',
@@ -50,6 +51,7 @@ export const CRITICAL_TUI_COMMAND_MODULES: readonly string[] = [
 	'yolo.ts',
 	'mcp.ts',
 	'simple.ts',
+	'agentsInject.ts',
 	'toolDisplay.ts',
 	'compact.ts',
 	'export.ts',

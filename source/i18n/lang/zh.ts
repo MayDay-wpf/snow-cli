@@ -823,6 +823,8 @@ export const zh: TranslationKeys = {
 			usage: '查看带有交互式图表的令牌使用统计',
 			context:
 				'拆解上下文占用：system / ROLE / AGENTS / hooks / tools / messages',
+			agentsInject:
+				'开关 AGENTS.md 注入到发给模型的用户消息。用法: /agents-inject [on|off|status]',
 			export: '将聊天对话导出到带保存对话框的文本文件',
 			config: '导出或导入 Snow CLI YAML 配置。用法: /config <export|import>',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
@@ -905,6 +907,19 @@ export const zh: TranslationKeys = {
 				disabled: '简易模式: 已禁用',
 				statusEnabled: '简易模式: 已启用',
 				statusDisabled: '简易模式: 已禁用',
+			},
+			agentsInject: {
+				enabled:
+					'AGENTS 注入: 已开启 — 项目 AGENTS.md 会 prepend 到发给模型的消息（已写入 .snow/settings.json）',
+				disabled:
+					'AGENTS 注入: 已关闭 — 不再自动 prepend AGENTS.md（已写入 .snow/settings.json）',
+				statusEnabled: 'AGENTS 注入: 开启',
+				statusDisabled: 'AGENTS 注入: 关闭',
+				sourceProject: '来源: 项目设置',
+				sourceGlobal: '来源: 全局设置',
+				sourceDefault: '来源: 默认（opt-in）',
+				invalid:
+					'参数无效。用法: /agents-inject [on|off|status]',
 			},
 			// 工具显示模式命令消息
 			toolDisplay: {

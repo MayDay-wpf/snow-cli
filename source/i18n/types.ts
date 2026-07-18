@@ -793,6 +793,7 @@ export type TranslationKeys = {
 			roleSubagent: string;
 			usage: string;
 			context: string;
+			agentsInject: string;
 			backend: string;
 			loop: string;
 			profiles: string;
@@ -865,6 +866,16 @@ export type TranslationKeys = {
 				disabled: string;
 				statusEnabled: string;
 				statusDisabled: string;
+			};
+			agentsInject: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+				sourceProject: string;
+				sourceGlobal: string;
+				sourceDefault: string;
+				invalid: string;
 			};
 			// Tool display mode command messages
 			toolDisplay: {

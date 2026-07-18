@@ -869,6 +869,8 @@ export const en: TranslationKeys = {
 			usage: 'View token usage statistics with interactive charts',
 			context:
 				'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
+			agentsInject:
+				'Toggle AGENTS.md inject into model-bound messages. Usage: /agents-inject [on|off|status]',
 			export: 'Export chat conversation to text file with save dialog',
 			config:
 				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
@@ -961,6 +963,19 @@ export const en: TranslationKeys = {
 				disabled: 'Simple mode: Disabled',
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
+			},
+			agentsInject: {
+				enabled:
+					'AGENTS inject: ON — project AGENTS.md will prepend to model-bound messages (saved to .snow/settings.json)',
+				disabled:
+					'AGENTS inject: OFF — no automatic AGENTS.md prepend (saved to .snow/settings.json)',
+				statusEnabled: 'AGENTS inject: ON',
+				statusDisabled: 'AGENTS inject: OFF',
+				sourceProject: 'source: project settings',
+				sourceGlobal: 'source: global settings',
+				sourceDefault: 'source: default (opt-in)',
+				invalid:
+					'Invalid args. Usage: /agents-inject [on|off|status]',
 			},
 			// Tool display mode command messages
 			toolDisplay: {

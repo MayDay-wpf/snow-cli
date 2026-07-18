@@ -67,6 +67,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	'auto-format': '[on|off|status]',
 	buddy: '[status|hatch|pet|rename|set|say|profile|mute|unmute|reset]',
 	simple: '[on|off|status]',
+	'agents-inject': '[on|off|status]',
 	'add-dir': '[path]',
 	loop: '[daemon] <interval> <prompt> | daily HH:mm <prompt> | at HH:mm <prompt> | list | tasks | cancel <id>',
 	goal: '<objective> [--budget=N] | pause | resume | clear | status',
@@ -108,6 +109,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 		'reset',
 	],
 	simple: ['on', 'off', 'status'],
+	'agents-inject': ['on', 'off', 'status'],
 	reindex: ['-force'],
 	role: ['-l', '-d'],
 	skills: ['-l', 'install'],
@@ -259,6 +261,12 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				description:
 					t.commandPanel.commands.context ||
 					'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
+			},
+			{
+				name: 'agents-inject',
+				description:
+					t.commandPanel.commands.agentsInject ||
+					'Toggle AGENTS.md inject into model-bound messages. Usage: /agents-inject [on|off|status]',
 			},
 			{
 				name: 'backend',

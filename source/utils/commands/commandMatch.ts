@@ -18,12 +18,12 @@ export type CommandCategory =
 export type CommandCategoryFilter = 'all' | CommandCategory;
 
 export const COMMAND_CATEGORY_TABS: CommandCategoryFilter[] = [
-	'all',
 	'frequent',
 	'settings',
 	'advanced',
 	'fun',
 	'custom',
+	'all', // 全部放最后：真正列出全部命令
 ];
 
 export type MatchableCommand = {
@@ -73,6 +73,7 @@ export const BUILTIN_COMMAND_META: Record<
 	plan: {category: 'frequent', rankBoost: 100},
 	yolo: {category: 'frequent', rankBoost: 100},
 	context: {category: 'frequent', rankBoost: 60},
+	'agents-inject': {category: 'settings', rankBoost: 40},
 	export: {category: 'frequent', rankBoost: 60},
 	todolist: {category: 'frequent', rankBoost: 60},
 	diff: {category: 'frequent', rankBoost: 60},
@@ -141,9 +142,7 @@ export function resolveCommandMeta(
 	return BUILTIN_COMMAND_META[name] ?? {category: 'advanced', rankBoost: 0};
 }
 
-export function getCommandCategory(
-	command: MatchableCommand,
-): CommandCategory {
+export function getCommandCategory(command: MatchableCommand): CommandCategory {
 	return (
 		command.category ??
 		resolveCommandMeta(command.name, (command as {isCustom?: boolean}).isCustom)
@@ -174,10 +173,7 @@ export function matchesAbbreviation(name: string, query: string): boolean {
 	const q = query.trim().toLowerCase();
 	if (!q) return false;
 
-	const segments = name
-		.toLowerCase()
-		.split(/[-_]+/)
-		.filter(Boolean);
+	const segments = name.toLowerCase().split(/[-_]+/).filter(Boolean);
 	if (segments.length === 0) return false;
 
 	// Initials: first letter of each segment in order (allow skipping trailing segs)
@@ -255,9 +251,11 @@ export type RankedCommand<T extends MatchableCommand> = {
 	isRecent?: boolean;
 };
 
-export function compareRankedCommands<
-	T extends MatchableCommand,
->(a: RankedCommand<T>, b: RankedCommand<T>, query: string): number {
+export function compareRankedCommands<T extends MatchableCommand>(
+	a: RankedCommand<T>,
+	b: RankedCommand<T>,
+	query: string,
+): number {
 	const q = query.trim();
 	if (!q) {
 		// Empty query with recent flags: recent first (by lastUsed), then frequent sort
@@ -294,9 +292,7 @@ export type FilterAndRankOptions = {
 	categoryFilter?: CommandCategoryFilter;
 };
 
-export function filterAndRankCommands<
-	T extends MatchableCommand,
->(
+export function filterAndRankCommands<T extends MatchableCommand>(
 	commands: T[],
 	queryRaw: string,
 	getUsageCount: (name: string) => number = () => 0,
@@ -333,7 +329,9 @@ export function filterAndRankCommands<
 
 			const frequent = commands.filter(cmd => {
 				const category = getCommandCategory(cmd);
-				return category === 'frequent' && !recentSet.has(cmd.name.toLowerCase());
+				return (
+					category === 'frequent' && !recentSet.has(cmd.name.toLowerCase())
+				);
 			});
 			pool = [...recentCmds, ...frequent];
 		}
@@ -373,9 +371,10 @@ export function filterAndRankCommands<
 }
 
 /** Index of exact name match in a ranked list (case-insensitive). */
-export function findExactMatchIndex<
-	T extends {name: string},
->(commands: T[], queryRaw: string): number {
+export function findExactMatchIndex<T extends {name: string}>(
+	commands: T[],
+	queryRaw: string,
+): number {
 	const query = queryRaw.trim().toLowerCase();
 	if (!query) return -1;
 	return commands.findIndex(c => c.name.toLowerCase() === query);
