@@ -313,7 +313,7 @@ export class FilesystemMCPService {
 				.slice(0, 10) // Limit to avoid excessive tokens
 				.map(s => `  • ${s.name} (line ${s.line})`)
 				.join('\n');
-			parts.push(`📦 Imports:\n${importList}`);
+			parts.push(`Imports:\n${importList}`);
 		}
 
 		// Symbols defined in the current range
@@ -327,7 +327,7 @@ export class FilesystemMCPService {
 						}`,
 				)
 				.join('\n');
-			parts.push(`🎯 Symbols in this range:\n${rangeSymbols}`);
+			parts.push(`Symbols in this range:\n${rangeSymbols}`);
 		}
 
 		// Key definitions before this range (that might be referenced)
@@ -338,7 +338,7 @@ export class FilesystemMCPService {
 				.map(s => `  • ${s.type}: ${s.name} (line ${s.line})`)
 				.join('\n');
 			if (relevantBefore) {
-				parts.push(`⬆️ Key definitions above:\n${relevantBefore}`);
+				parts.push(`Key definitions above:\n${relevantBefore}`);
 			}
 		}
 
@@ -348,7 +348,7 @@ export class FilesystemMCPService {
 				.slice(0, 10)
 				.map(s => `  • ${s.name} (line ${s.line})`)
 				.join('\n');
-			parts.push(`📤 Exports:\n${exportList}`);
+			parts.push(`Exports:\n${exportList}`);
 		}
 
 		if (parts.length === 0) {
@@ -358,7 +358,7 @@ export class FilesystemMCPService {
 		return (
 			'\n\n' +
 			'='.repeat(60) +
-			'\n📚 SYMBOL INDEX & DEFINITIONS:\n' +
+			'\nSYMBOL INDEX & DEFINITIONS:\n' +
 			'='.repeat(60) +
 			'\n' +
 			parts.join('\n\n')
@@ -389,7 +389,7 @@ export class FilesystemMCPService {
 			return (
 				'\n\n' +
 				'='.repeat(60) +
-				'\n📝 CODE NOTEBOOKS (Latest 10):\n' +
+				'\nCODE NOTEBOOKS (Latest 10):\n' +
 				'='.repeat(60) +
 				'\n' +
 				notesText
@@ -471,7 +471,7 @@ export class FilesystemMCPService {
 						throw new Error(
 							`Failed to read file ${filePath}: ${
 								error instanceof Error ? error.message : 'Unknown error'
-							}\n💡 Tip: File not found. Did you mean "${fixedPath}"? Please use the correct path.`,
+							}\nTIP: File not found. Did you mean "${fixedPath}"? Please use the correct path.`,
 						);
 					} catch {
 						// Fixed path also doesn't work, just throw original error

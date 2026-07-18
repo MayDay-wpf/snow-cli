@@ -129,6 +129,9 @@ function MessageRendererImpl({
 		if (structuredName) {
 			return structuredName;
 		}
+		if (message.toolDisplay?.toolName) {
+			return message.toolDisplay.toolName;
+		}
 
 		const statusIcon = message.messageStatus
 			? getToolStatusIcon(message.messageStatus)
@@ -137,14 +140,22 @@ function MessageRendererImpl({
 			statusIcon && titleLine.startsWith(statusIcon)
 				? titleLine.slice(statusIcon.length).trimStart()
 				: titleLine;
-		const separatorIndex = withoutStatus.indexOf(' ');
-		const possibleIcon =
-			separatorIndex === -1 ? '' : withoutStatus.slice(0, separatorIndex);
-		const withoutToolIcon =
-			possibleIcon && /^\[[\x21-\x7E]+\]$/.test(possibleIcon)
-				? withoutStatus.slice(separatorIndex + 1).trimStart()
-				: withoutStatus;
-		return withoutToolIcon.trim();
+
+		// 去掉 category icon（如 ⌘ / 单字符符号），保留工具标签
+		const parts = withoutStatus.split(/\s+/);
+		if (
+			parts.length >= 2 &&
+			parts[0] &&
+			!parts[0].includes('-') &&
+			parts[0].length <= 2
+		) {
+			return parts
+				.slice(1)
+				.join(' ')
+				.replace(/\s*\(\d.*\)$/, '')
+				.trim();
+		}
+		return withoutStatus.replace(/\s*\(\d.*\)$/, '').trim();
 	};
 
 	type CommandResultSegment = {

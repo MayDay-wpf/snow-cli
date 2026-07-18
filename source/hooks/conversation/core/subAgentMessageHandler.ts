@@ -6,6 +6,11 @@ import {
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
+import {
+	formatDurationMs,
+	MIN_TOOL_DURATION_DISPLAY_MS,
+} from '../../../utils/core/textUtils.js';
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -1028,11 +1033,15 @@ export class SubAgentUIHandler {
 
 			newMessages.push({
 				role: 'subagent' as const,
-				content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
+				content: `\x1b[38;2;184;122;206m⚇ ${formatToolTitleLine(
+					toolCall.function.name,
+					'pending',
+				)}${paramDisplay}\x1b[0m`,
 				streaming: false,
 				toolCall: {name: toolCall.function.name, arguments: enrichedArgs},
 				toolCallId: toolCall.id,
 				toolPending: true,
+				toolStartedAt: Date.now(),
 				messageStatus: 'pending',
 				subAgent: {
 					agentId: subAgentMessage.agentId,
@@ -1199,7 +1208,6 @@ export class SubAgentUIHandler {
 		msg: any,
 		isError: boolean,
 	): Message[] {
-		const statusIcon = isError ? '✗' : '✓';
 		const rejectionReason = isError
 			? extractRejectionReason(msg.content)
 			: undefined;
@@ -1299,26 +1307,58 @@ export class SubAgentUIHandler {
 			? `\n  └─ Rejection reason: ${rejectionReason}`
 			: '';
 
-		return [
-			...prev,
-			{
-				role: 'subagent' as const,
-				content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${msg.tool_name}\x1b[0m${statusText}`,
-				streaming: false,
-				messageStatus: isError ? 'error' : 'success',
-				toolResult: !isError ? msg.content : undefined,
-				terminalResult: terminalResultData,
-				toolCall: terminalResultData
-					? {name: msg.tool_name, arguments: terminalResultData}
-					: fileToolData || undefined,
-				subAgent: {
-					agentId: subAgentMessage.agentId,
-					agentName: subAgentMessage.agentName,
-					isComplete: false,
-				},
-				subAgentInternal: true,
+		const statusKey = isError ? 'error' : 'success';
+		const titleBase = formatToolTitleLine(msg.tool_name, statusKey);
+		const pendingIndex = prev.findIndex(
+			m =>
+				m.toolPending &&
+				m.toolCallId === msg.tool_call_id &&
+				m.subAgent?.agentId === subAgentMessage.agentId,
+		);
+		const startedAt =
+			pendingIndex >= 0 && typeof prev[pendingIndex]?.toolStartedAt === 'number'
+				? prev[pendingIndex]!.toolStartedAt!
+				: undefined;
+		const durationMs =
+			typeof startedAt === 'number' ? Date.now() - startedAt : undefined;
+		const durationLabel =
+			typeof durationMs === 'number' &&
+			durationMs >= MIN_TOOL_DURATION_DISPLAY_MS
+				? formatDurationMs(durationMs)
+				: '';
+		const titleContent = durationLabel
+			? `${titleBase} (${durationLabel})`
+			: titleBase;
+
+		const resultMessage: Message = {
+			role: 'subagent' as const,
+			content: `\x1b[38;2;0;186;255m⚇ ${titleContent}\x1b[0m${statusText}`,
+			streaming: false,
+			messageStatus: isError ? 'error' : 'success',
+			toolCallId: msg.tool_call_id,
+			toolResult: !isError ? msg.content : undefined,
+			terminalResult: terminalResultData,
+			toolCall: terminalResultData
+				? {name: msg.tool_name, arguments: terminalResultData}
+				: fileToolData || undefined,
+			toolPending: false,
+			...(typeof durationMs === 'number' ? {toolDurationMs: durationMs} : {}),
+			subAgent: {
+				agentId: subAgentMessage.agentId,
+				agentName: subAgentMessage.agentName,
+				isComplete: false,
 			},
-		];
+			subAgentInternal: true,
+		};
+
+		// 替换对应 pending 消息，而不是只 append（避免残留进行中）
+		if (pendingIndex >= 0) {
+			const updated = [...prev];
+			updated[pendingIndex] = resultMessage;
+			return updated;
+		}
+
+		return [...prev, resultMessage];
 	}
 
 	private handleContent(

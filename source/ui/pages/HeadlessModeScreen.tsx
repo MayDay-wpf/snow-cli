@@ -380,16 +380,17 @@ export default function HeadlessModeScreen({
 		if (!lastMessage || currentIndex <= lastDisplayedIndex) return;
 
 		if (lastMessage.role === 'assistant') {
-			if (lastMessage.toolPending) {
-				// Tool is being executed - use same icon as ChatScreen with colors
-				if (lastMessage.content.startsWith('⚡')) {
-					console.log(`\n\x1b[93m⚡ ${lastMessage.content}\x1b[0m`);
-				} else if (lastMessage.content.startsWith('✓')) {
-					console.log(`\n\x1b[32m✓ ${lastMessage.content}\x1b[0m`);
-				} else if (lastMessage.content.startsWith('✗')) {
-					console.log(`\n\x1b[31m✗ ${lastMessage.content}\x1b[0m`);
+			if (lastMessage.toolPending || lastMessage.messageStatus) {
+				// 基于 messageStatus 着色，不再依赖 ⚡ emoji
+				const status = lastMessage.messageStatus;
+				if (status === 'pending' || lastMessage.toolPending) {
+					console.log(`\n\x1b[93m${lastMessage.content}\x1b[0m`);
+				} else if (status === 'success') {
+					console.log(`\n\x1b[32m${lastMessage.content}\x1b[0m`);
+				} else if (status === 'error') {
+					console.log(`\n\x1b[31m${lastMessage.content}\x1b[0m`);
 				} else {
-					console.log(`\n\x1b[96m❆ ${lastMessage.content}\x1b[0m`);
+					console.log(`\n\x1b[96m${lastMessage.content}\x1b[0m`);
 				}
 				setLastDisplayedIndex(currentIndex);
 			} else if (lastMessage.content && !lastMessage.streaming) {

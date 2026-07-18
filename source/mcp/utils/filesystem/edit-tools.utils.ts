@@ -232,14 +232,14 @@ export async function executeEditBySearchSingle(
 					normalizedContent.split('\n'),
 					3,
 				);
-				let errorMessage = `❌ Search content not found in file: ${filePath}\n\n`;
-				errorMessage += `🔍 Using smart fuzzy matching (threshold: ${threshold})\n`;
+				let errorMessage = `✗ Search content not found in file: ${filePath}\n\n`;
+				errorMessage += `Using smart fuzzy matching (threshold: ${threshold})\n`;
 				if (isOverEscaped(searchContent)) {
-					errorMessage += `⚠️  Detected over-escaped content, automatic fix attempted but failed\n`;
+					errorMessage += `∆ Detected over-escaped content, automatic fix attempted but failed\n`;
 				}
 				errorMessage += `\n`;
 				if (closestMatches.length > 0) {
-					errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
+					errorMessage += `Found ${closestMatches.length} similar location(s):\n\n`;
 					closestMatches.forEach((candidate, idx) => {
 						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
 							candidate.endLine
@@ -258,22 +258,22 @@ export async function executeEditBySearchSingle(
 							5,
 						);
 						if (diffMsg) {
-							errorMessage += `📊 Difference with closest match:\n${diffMsg}\n\n`;
+							errorMessage += `Difference with closest match:\n${diffMsg}\n\n`;
 						}
 					}
-					errorMessage += `💡 Suggestions:\n`;
+					errorMessage += `Suggestions:\n`;
 					errorMessage += `  • Make sure you copied raw code from the file (strip any "lineNum:hash→" prefixes from filesystem-read if you pasted read output)\n`;
 					errorMessage += `  • Whitespace differences are automatically handled\n`;
 					errorMessage += `  • Try copying a larger or smaller code block\n`;
 					errorMessage += `  • If multiple filesystem-replaceedit attempts fail, use terminal-execute to edit via command line (e.g. sed, printf)\n`;
-					errorMessage += `⚠️  No similar content found in the file.\n\n`;
-					errorMessage += `📝 What you searched for (first 5 lines, formatted):\n`;
+					errorMessage += `∆ No similar content found in the file.\n\n`;
+					errorMessage += `What you searched for (first 5 lines, formatted):\n`;
 					searchLines.slice(0, 5).forEach((line, idx) => {
 						errorMessage += `${idx + 1}. ${JSON.stringify(
 							normalizeForDisplay(line),
 						)}\n`;
 					});
-					errorMessage += `\n💡 Copy exact source text (not hashline-prefixed read lines)\n`;
+					errorMessage += `\nTIP: Copy exact source text (not hashline-prefixed read lines)\n`;
 				}
 				throw new Error(errorMessage);
 			}
@@ -400,11 +400,11 @@ export async function executeEditBySearchSingle(
 
 		const result = {
 			message:
-				`✅ File edited successfully using search-replace (safer boundary detection): ${filePath}\n` +
+				`✓ File edited successfully using search-replace (safer boundary detection): ${filePath}\n` +
 				`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})\n` +
 				`   Result: ${replaceLines.length} new lines` +
 				(smartBoundaries.extended
-					? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${diffContextEnd})`
+					? `\n   Context: auto-extended to show complete code block (lines ${contextStart}-${diffContextEnd})`
 					: ''),
 			filePath,
 			oldContent,
@@ -435,7 +435,7 @@ export async function executeEditBySearchSingle(
 		result.message = appendStructureWarnings(
 			result.message,
 			structureAnalysis,
-			'💡 TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.',
+			'TIP: These warnings help identify potential issues. If intentional (e.g., opening a block), you can ignore them.',
 		);
 
 		return result;
@@ -555,9 +555,9 @@ export async function executeHashlineEditSingle(
 
 		if (anchorErrors.length > 0) {
 			throw new Error(
-				`❌ Hashline anchor validation failed for ${filePath}:\n` +
+				`✗ Hashline anchor validation failed for ${filePath}:\n` +
 					anchorErrors.map(e => `  • ${e}`).join('\n') +
-					`\n\n💡 The file may have changed since your last read. Re-read the file to get fresh anchors.`,
+					`\n\nTIP: The file may have changed since your last read. Re-read the file to get fresh anchors.`,
 			);
 		}
 
@@ -802,11 +802,11 @@ export async function executeHashlineEditSingle(
 
 		const result: EditByHashlineSingleResult = {
 			message:
-				`✅ File edited via hashline anchors: ${filePath}\n` +
+				`✓ File edited via hashline anchors: ${filePath}\n` +
 				`   Operations: ${opSummaries.join('; ')}\n` +
 				`   Result: ${finalTotalLines} total lines` +
 				(smartBoundaries.extended
-					? `\n   📍 Context auto-extended (lines ${contextStart}-${finalContextEnd})`
+					? `\n   Context: auto-extended (lines ${contextStart}-${finalContextEnd})`
 					: ''),
 			filePath,
 			oldContent,
