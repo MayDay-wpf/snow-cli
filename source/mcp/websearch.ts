@@ -5,6 +5,7 @@ import {extname, join} from 'node:path';
 import {spawn, type ChildProcess} from 'node:child_process';
 import {getProxyConfig} from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {logger} from '../utils/core/logger.js';
 // Type definitions
 import type {SearchResponse, WebPageContent} from './types/websearch.types.js';
 import {IMAGE_MIME_TYPES} from './types/filesystem.types.js';
@@ -17,11 +18,18 @@ import {
 	launchWindowsBrowserFromWSL,
 	getRunningBrowserWSEndpoint,
 } from './utils/websearch/browser.utils.js';
-import {cleanText} from './utils/websearch/text.utils.js';
+import {
+	cleanText,
+	normalizeLightweightMarkdown,
+	truncateLightweightMarkdown,
+} from './utils/websearch/text.utils.js';
 import {
 	getSearchEngine,
 	ensureSearchEnginesLoaded,
 } from './engines/websearch/index.js';
+
+/** AI summary max wait before falling back to cleaned page content. */
+const WEB_FETCH_AI_SUMMARY_TIMEOUT_MS = 60_000;
 
 /**
  * Web Search Service using a pluggable search engine (DuckDuckGo / Bing / ...)
@@ -654,7 +662,8 @@ export class WebSearchService {
 				timeout: 30000,
 			});
 
-			// Extract content using browser context
+			// Extract structured lightweight markdown-ish content in the browser.
+			// page.evaluate cannot close over Node modules, so serialization stays inline.
 			const pageData = await page.evaluate(() => {
 				// Remove unwanted elements
 				const selectorsToRemove = [
@@ -683,10 +692,8 @@ export class WebSearchService {
 					document.querySelectorAll(selector).forEach(el => el.remove());
 				});
 
-				// Get title
 				const title = document.title || '';
 
-				// Try to find main content area
 				let mainContent: Element | null = null;
 				const mainSelectors = [
 					'article',
@@ -704,28 +711,211 @@ export class WebSearchService {
 					if (mainContent) break;
 				}
 
-				// Fallback to body if no main content found
 				const contentElement = mainContent || document.body;
 
-				// Extract text content
-				const textContent = contentElement.textContent || '';
+				const collapseInline = (value: string) =>
+					value.replace(/\s+/g, ' ').trim();
+
+				// Keep edge spaces for text nodes so adjacent inline nodes do not glue together.
+				const normalizeTextNode = (value: string) =>
+					value.replace(/\s+/g, ' ');
+
+				const isHidden = (el: Element) => {
+					const style = window.getComputedStyle(el);
+					return (
+						style.display === 'none' ||
+						style.visibility === 'hidden' ||
+						(el as HTMLElement).hidden === true
+					);
+				};
+
+				const serialize = (node: Node, listDepth = 0): string => {
+					if (node.nodeType === Node.TEXT_NODE) {
+						return normalizeTextNode(node.textContent || '');
+					}
+					if (node.nodeType !== Node.ELEMENT_NODE) {
+						return '';
+					}
+
+					const el = node as HTMLElement;
+					const tag = el.tagName.toLowerCase();
+
+					if (
+						tag === 'script' ||
+						tag === 'style' ||
+						tag === 'noscript' ||
+						tag === 'svg' ||
+						tag === 'iframe' ||
+						tag === 'button' ||
+						tag === 'input' ||
+						tag === 'select' ||
+						tag === 'textarea' ||
+						tag === 'form'
+					) {
+						return '';
+					}
+					if (isHidden(el)) {
+						return '';
+					}
+
+					if (tag === 'br') {
+						return '\n';
+					}
+
+					if (/^h[1-6]$/.test(tag)) {
+						const level = Number(tag[1]);
+						const text = collapseInline(el.textContent || '');
+						return text ? `${'#'.repeat(level)} ${text}\n\n` : '';
+					}
+
+					if (tag === 'p') {
+						const text = collapseInline(
+							Array.from(el.childNodes)
+								.map(child => serialize(child, listDepth))
+								.join(''),
+						);
+						return text ? `${text}\n\n` : '';
+					}
+
+					if (tag === 'blockquote') {
+						const inner = Array.from(el.childNodes)
+							.map(child => serialize(child, listDepth))
+							.join('')
+							.trim();
+						if (!inner) return '';
+						return (
+							inner
+								.split('\n')
+								.map(line => (line.trim() ? `> ${line.trim()}` : '>'))
+								.join('\n') + '\n\n'
+						);
+					}
+
+					if (tag === 'pre') {
+						const codeEl = el.querySelector('code');
+						const codeText = (codeEl || el).textContent || '';
+						const lang =
+							(codeEl?.className || '')
+								.split(/\s+/)
+								.find(c => c.startsWith('language-'))
+								?.replace('language-', '') || '';
+						const fence = '```';
+						return `${fence}${lang}\n${codeText.replace(/\n$/, '')}\n${fence}\n\n`;
+					}
+
+					if (tag === 'code') {
+						// Inline code (block handled by pre)
+						if (el.parentElement?.tagName.toLowerCase() === 'pre') {
+							return el.textContent || '';
+						}
+						const code = (el.textContent || '').replace(/\n+/g, ' ').trim();
+						return code ? `\`${code}\`` : '';
+					}
+
+					if (tag === 'a') {
+						const href = el.getAttribute('href') || '';
+						const label = collapseInline(
+							Array.from(el.childNodes)
+								.map(child => serialize(child, listDepth))
+								.join(''),
+						);
+						if (!label) return '';
+						if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
+							return label;
+						}
+						return `[${label}](${href})`;
+					}
+
+					if (tag === 'ul' || tag === 'ol') {
+						const items = Array.from(el.children).filter(
+							child => child.tagName.toLowerCase() === 'li',
+						);
+						const lines: string[] = [];
+						items.forEach((item, index) => {
+							const body = Array.from(item.childNodes)
+								.map(child => serialize(child, listDepth + 1))
+								.join('')
+								.trim()
+								.replace(/\n{3,}/g, '\n\n');
+							if (!body) return;
+							const indent = '  '.repeat(Math.min(listDepth, 2));
+							const bullet =
+								tag === 'ol' ? `${index + 1}.` : '-';
+							const [first, ...rest] = body.split('\n');
+							lines.push(`${indent}${bullet} ${first}`);
+							for (const line of rest) {
+								if (line.trim()) {
+									lines.push(`${indent}  ${line}`);
+								}
+							}
+						});
+						return lines.length ? `${lines.join('\n')}\n\n` : '';
+					}
+
+					if (tag === 'li') {
+						return Array.from(el.childNodes)
+							.map(child => serialize(child, listDepth))
+							.join('');
+					}
+
+					if (tag === 'hr') {
+						return '---\n\n';
+					}
+
+					if (tag === 'table') {
+						// Keep tables readable without attempting full MD tables.
+						const rows = Array.from(el.querySelectorAll('tr'))
+							.map(row =>
+								Array.from(row.querySelectorAll('th,td'))
+									.map(cell => collapseInline(cell.textContent || ''))
+									.filter(Boolean)
+									.join(' | '),
+							)
+							.filter(Boolean);
+						return rows.length ? `${rows.join('\n')}\n\n` : '';
+					}
+
+					// Generic element: join children; block-ish tags get trailing blank line.
+					const childText = Array.from(el.childNodes)
+						.map(child => serialize(child, listDepth))
+						.join('');
+					const blockTags = new Set([
+						'div',
+						'section',
+						'article',
+						'main',
+						'header',
+						'footer',
+						'aside',
+						'figure',
+						'figcaption',
+						'dl',
+						'dt',
+						'dd',
+					]);
+					if (blockTags.has(tag)) {
+						const trimmed = childText.trim();
+						return trimmed ? `${trimmed}\n\n` : '';
+					}
+					return childText;
+				};
+
+				const markdown = serialize(contentElement)
+					.replace(/\n{3,}/g, '\n\n')
+					.trim();
 
 				return {
 					title,
-					textContent,
+					textContent: markdown,
 				};
 			});
 
-			// Clean and process the text
-			let cleanedContent = pageData.textContent
-				.replace(/\s+/g, ' ') // Replace multiple spaces with single space
-				.replace(/\n\s*\n/g, '\n') // Remove empty lines
-				.trim();
+			// Normalize markdown-ish text while preserving structure.
+			let cleanedContent = normalizeLightweightMarkdown(pageData.textContent || '');
 
-			// Limit content length
+			// Limit content length near paragraph boundaries when possible.
 			if (cleanedContent.length > maxLength) {
-				cleanedContent =
-					cleanedContent.slice(0, maxLength) + '\n\n[Content truncated...]';
+				cleanedContent = truncateLightweightMarkdown(cleanedContent, maxLength);
 			}
 
 			// Create preview (first 500 characters)
@@ -741,25 +931,82 @@ export class WebSearchService {
 			// Use compact agent to extract key information if userQuery is provided
 			// Skip compression for user-provided URLs OR when AI summary is not requested
 			let finalContent = cleanedContent;
+			let summaryStatus: WebPageContent['summaryStatus'] = 'raw';
+
 			if (userQuery && !isUserProvided && enableAiSummary) {
+				onTokenUpdate?.(0);
+
+				const timeoutController = new AbortController();
+				const onParentAbort = () => timeoutController.abort();
+				if (abortSignal) {
+					if (abortSignal.aborted) {
+						timeoutController.abort();
+					} else {
+						abortSignal.addEventListener('abort', onParentAbort, {
+							once: true,
+						});
+					}
+				}
+
+				let timer: NodeJS.Timeout | undefined;
 				try {
 					const {compactAgent} = await import('../agents/compactAgent.js');
 					const isAvailable = await compactAgent.isAvailable();
 
-					if (isAvailable) {
-						// Use compact model to extract relevant information
-						// No timeout - let it run as long as needed
-						finalContent = await compactAgent.extractWebPageContent(
-							cleanedContent,
-							userQuery,
-							url,
-							abortSignal,
-							onTokenUpdate,
-						);
+					if (!isAvailable) {
+						summaryStatus = 'unavailable';
+					} else {
+						const timeoutPromise = new Promise<never>((_, reject) => {
+							timer = setTimeout(() => {
+								timeoutController.abort();
+								reject(
+									new Error(
+										`AI summary timed out after ${WEB_FETCH_AI_SUMMARY_TIMEOUT_MS}ms`,
+									),
+								);
+							}, WEB_FETCH_AI_SUMMARY_TIMEOUT_MS);
+							timer.unref?.();
+						});
+
+						finalContent = await Promise.race([
+							compactAgent.extractWebPageContent(
+								cleanedContent,
+								userQuery,
+								url,
+								timeoutController.signal,
+								onTokenUpdate,
+							),
+							timeoutPromise,
+						]);
+
+						if (!finalContent || !finalContent.trim()) {
+							finalContent = cleanedContent;
+							summaryStatus = 'fallback_error';
+						} else {
+							summaryStatus = 'summarized';
+						}
 					}
 				} catch (error: any) {
-					// If compact agent fails, fallback to original content
-					// Error is already logged in compactAgent
+					// User cancel should fail the tool, not silently fall back
+					if (abortSignal?.aborted) {
+						throw error;
+					}
+
+					logger.warn(
+						'websearch-fetch AI summary failed, falling back to cleaned content',
+						error,
+					);
+					finalContent = cleanedContent;
+					const message =
+						typeof error?.message === 'string' ? error.message : '';
+					summaryStatus = message.includes('timed out')
+						? 'fallback_timeout'
+						: 'fallback_error';
+				} finally {
+					if (timer) {
+						clearTimeout(timer);
+					}
+					abortSignal?.removeEventListener('abort', onParentAbort);
 				}
 			}
 
@@ -769,6 +1016,8 @@ export class WebSearchService {
 				content: finalContent,
 				textLength: finalContent.length,
 				contentPreview,
+				summaryStatus,
+				contentFormat: 'markdown',
 			};
 		} catch (error: any) {
 			throw new Error(`Failed to fetch page: ${error.message}`);
