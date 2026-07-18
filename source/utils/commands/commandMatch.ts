@@ -303,7 +303,7 @@ export function filterAndRankCommands<T extends MatchableCommand>(
 	const recentMax = options?.recentMax ?? DEFAULT_RECENT_MAX;
 	const recentNames = options?.recentNames ?? [];
 	const getLastUsed = options?.getLastUsed ?? (() => 0);
-	const categoryFilter = options?.categoryFilter ?? 'all';
+	const categoryFilter = options?.categoryFilter ?? 'frequent';
 
 	const byName = new Map(commands.map(c => [c.name.toLowerCase(), c]));
 
@@ -311,11 +311,8 @@ export function filterAndRankCommands<T extends MatchableCommand>(
 	const recentSet = new Set<string>();
 
 	if (!query) {
-		if (categoryFilter !== 'all') {
-			// Category tab: show that category (no frequent-only restriction)
-			pool = commands.filter(cmd => getCommandCategory(cmd) === categoryFilter);
-		} else {
-			// Default empty: recent ∪ frequent
+		if (categoryFilter === 'frequent') {
+			// 常用：最近使用 ∪ 常用分类
 			const recentCmds: T[] = [];
 			for (const name of recentNames) {
 				if (recentCmds.length >= recentMax) break;
@@ -334,6 +331,12 @@ export function filterAndRankCommands<T extends MatchableCommand>(
 				);
 			});
 			pool = [...recentCmds, ...frequent];
+		} else if (categoryFilter === 'all') {
+			// 全部：真正列出全部命令
+			pool = commands;
+		} else {
+			// 其他分类 tab：只显示该分类
+			pool = commands.filter(cmd => getCommandCategory(cmd) === categoryFilter);
 		}
 	} else {
 		// Query search always uses full set (category tab does not hide matches)
@@ -364,7 +367,8 @@ export function filterAndRankCommands<T extends MatchableCommand>(
 	ranked.sort((a, b) => compareRankedCommands(a, b, query));
 
 	const sorted = ranked.map(r => r.command);
-	if (!query && sorted.length > maxVisible) {
+	// 全部分类不截断；常用等默认列表仍限制可见数量
+	if (!query && categoryFilter !== 'all' && sorted.length > maxVisible) {
 		return sorted.slice(0, maxVisible);
 	}
 	return sorted;

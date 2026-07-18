@@ -124,6 +124,7 @@ test('abbreviation hc matches hybrid-compress', t => {
 
 test('empty query merges recent ahead of frequent', t => {
 	const ranked = filterAndRankCommands(samplePool, '', () => 0, {
+		categoryFilter: 'frequent',
 		recentNames: ['deepresearch', 'games'],
 		getLastUsed: name =>
 			name === 'deepresearch' ? 200 : name === 'games' ? 100 : 0,
@@ -143,8 +144,26 @@ test('category filter shows settings on empty query', t => {
 	t.false(ranked.some(c => c.name === 'models'));
 });
 
-test('cycleCategoryFilter wraps around', t => {
-	t.is(cycleCategoryFilter('all', 1), 'frequent');
+test('all category shows every command on empty query', t => {
+	const ranked = filterAndRankCommands(samplePool, '', () => 0, {
+		categoryFilter: 'all',
+	});
+	t.is(ranked.length, samplePool.length);
+	t.true(ranked.some(c => c.name === 'hybrid-compress'));
+	t.true(ranked.some(c => c.name === 'deepresearch'));
+	t.true(ranked.some(c => c.name === 'games'));
+	t.true(ranked.some(c => c.name === 'my-custom'));
+});
+
+test('default empty query uses frequent (not all)', t => {
+	const ranked = filterAndRankCommands(samplePool, '');
+	t.true(ranked.every(c => c.category === 'frequent'));
+	t.false(ranked.some(c => c.name === 'hybrid-compress'));
+});
+
+test('cycleCategoryFilter wraps around with all last', t => {
+	t.is(cycleCategoryFilter('frequent', 1), 'settings');
 	t.is(cycleCategoryFilter('custom', 1), 'all');
-	t.is(cycleCategoryFilter('all', -1), 'custom');
+	t.is(cycleCategoryFilter('all', 1), 'frequent');
+	t.is(cycleCategoryFilter('frequent', -1), 'all');
 });

@@ -555,7 +555,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 	const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
 	const [usageLoaded, setUsageLoaded] = useState(false);
 	const [commandCategoryFilter, setCommandCategoryFilter] =
-		useState<CommandCategoryFilter>('all');
+		useState<CommandCategoryFilter>('frequent');
 
 	// Load command usage data on mount
 	// Use isMounted flag to prevent state update on unmounted component
