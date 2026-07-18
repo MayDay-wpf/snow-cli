@@ -7,7 +7,7 @@ import type {
 
 /** Codex-like defaults: one AGENTS chain + hard size cap. */
 export const DEFAULT_CONTEXT_INJECT = {
-	enabled: true,
+	enabled: false,
 	budgetChars: 32_000,
 	profile: 'full' as ContextInjectProfile,
 	primaryFilename: 'AGENTS.md',
@@ -65,10 +65,9 @@ export function resolveContextInjectConfig(
 			DEFAULT_CONTEXT_INJECT.budgetChars,
 		),
 		profile,
-		fallbackFilenames: mergeStringArray(
-			user.fallbackFilenames,
-			[...DEFAULT_CONTEXT_INJECT.fallbackFilenames],
-		),
+		fallbackFilenames: mergeStringArray(user.fallbackFilenames, [
+			...DEFAULT_CONTEXT_INJECT.fallbackFilenames,
+		]),
 		writeBreadcrumb: mergeBool(
 			user.writeBreadcrumb,
 			DEFAULT_CONTEXT_INJECT.writeBreadcrumb,
@@ -90,10 +89,7 @@ export function applyProfile(
 		return {
 			...config,
 			profile: 'compact',
-			budgetChars: Math.min(
-				config.budgetChars,
-				config.compactBudgetChars,
-			),
+			budgetChars: Math.min(config.budgetChars, config.compactBudgetChars),
 		};
 	}
 	return {...config, profile: 'full'};

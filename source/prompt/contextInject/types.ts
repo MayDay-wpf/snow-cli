@@ -6,7 +6,7 @@
 export type ContextInjectProfile = 'full' | 'compact' | 'off';
 
 export interface ContextInjectSettings {
-	/** Master switch. Default true. */
+	/** Master switch. Default false (opt-in). */
 	enabled?: boolean;
 	/** Total injected body budget (chars). Default 32000 (~Codex 32KiB). */
 	budgetChars?: number;

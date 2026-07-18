@@ -38,6 +38,17 @@ async function makeTempDir(prefix: string): Promise<string> {
 	return fs.promises.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
+/** Opt-in AGENTS inject for a temp project (default is off). */
+async function enableContextInject(dir: string): Promise<void> {
+	const snowDir = path.join(dir, '.snow');
+	await fs.promises.mkdir(snowDir, {recursive: true});
+	await fs.promises.writeFile(
+		path.join(snowDir, 'settings.json'),
+		JSON.stringify({contextInject: {enabled: true}}, null, 2),
+		'utf-8',
+	);
+}
+
 function baseConfig(
 	overrides: Partial<ResolvedContextInjectConfig> = {},
 ): ResolvedContextInjectConfig {
@@ -195,12 +206,13 @@ test('discoverContextSources falls back to CLAUDE.md', async t => {
 	t.true(discovered.some(s => s.absPath.endsWith('CLAUDE.md')));
 });
 
-test('getInjectedRulesSection injects AGENTS.md body', async t => {
+test('getInjectedRulesSection injects AGENTS.md body when enabled', async t => {
 	const dir = await makeTempDir('snow-ctx-inject-');
 	t.teardown(async () => {
 		await fs.promises.rm(dir, {recursive: true, force: true});
 	});
 	await fs.promises.mkdir(path.join(dir, '.git'));
+	await enableContextInject(dir);
 	await fs.promises.writeFile(
 		path.join(dir, 'AGENTS.md'),
 		'- never commit secrets\n- run tests before done\n',
@@ -219,8 +231,8 @@ test('getInjectedRulesSection injects AGENTS.md body', async t => {
 	t.true(section.includes('ROLE.md persona rules are separate'));
 });
 
-test('getInjectedRulesSection off returns empty', async t => {
-	const dir = await makeTempDir('snow-ctx-off-');
+test('getInjectedRulesSection is empty by default even with AGENTS.md', async t => {
+	const dir = await makeTempDir('snow-ctx-default-off-');
 	t.teardown(async () => {
 		await fs.promises.rm(dir, {recursive: true, force: true});
 	});
@@ -228,13 +240,37 @@ test('getInjectedRulesSection off returns empty', async t => {
 	await fs.promises.writeFile(path.join(dir, 'AGENTS.md'), '- a\n', 'utf-8');
 
 	clearContextInjectCache();
+	const section = getInjectedRulesSection({
+		cwd: dir,
+		profile: 'full',
+		writeBreadcrumb: false,
+	});
+	t.is(section, '');
+});
+
+test('getInjectedRulesSection off returns empty', async t => {
+	const dir = await makeTempDir('snow-ctx-off-');
+	t.teardown(async () => {
+		await fs.promises.rm(dir, {recursive: true, force: true});
+	});
+	await fs.promises.mkdir(path.join(dir, '.git'));
+	await enableContextInject(dir);
+	await fs.promises.writeFile(path.join(dir, 'AGENTS.md'), '- a\n', 'utf-8');
+
+	clearContextInjectCache();
 	const off = getInjectedRulesSection({cwd: dir, profile: 'off'});
 	t.is(off, '');
 });
 
-test('resolveContextInjectConfig returns AGENTS-first defaults', t => {
-	const cfg = resolveContextInjectConfig(process.cwd());
-	t.true(cfg.enabled);
+test('resolveContextInjectConfig returns AGENTS-first defaults (enabled off)', async t => {
+	const dir = await makeTempDir('snow-ctx-defaults-');
+	t.teardown(async () => {
+		await fs.promises.rm(dir, {recursive: true, force: true});
+	});
+	// No project settings → pure defaults (global may exist but no contextInject here).
+	const cfg = resolveContextInjectConfig(dir);
+	t.false(cfg.enabled);
+	t.false(DEFAULT_CONTEXT_INJECT.enabled);
 	t.is(cfg.budgetChars, 32_000);
 	t.is(cfg.primaryFilename, 'AGENTS.md');
 	t.true(cfg.fallbackFilenames.includes('CLAUDE.md'));
@@ -274,6 +310,7 @@ test('compact profile still injects AGENTS but with smaller budget', async t => 
 		await fs.promises.rm(dir, {recursive: true, force: true});
 	});
 	await fs.promises.mkdir(path.join(dir, '.git'));
+	await enableContextInject(dir);
 	await fs.promises.writeFile(
 		path.join(dir, 'AGENTS.md'),
 		'- compact still sees this\n',
@@ -290,12 +327,13 @@ test('compact profile still injects AGENTS but with smaller budget', async t => 
 	t.true(details.sources.some(s => s.kind === 'project-agents' && s.included));
 });
 
-test('prependAgentsContext puts AGENTS before typed user text', async t => {
+test('prependAgentsContext puts AGENTS before typed user text when enabled', async t => {
 	const dir = await makeTempDir('snow-ctx-user-path-');
 	t.teardown(async () => {
 		await fs.promises.rm(dir, {recursive: true, force: true});
 	});
 	await fs.promises.mkdir(path.join(dir, '.git'));
+	await enableContextInject(dir);
 	await fs.promises.writeFile(
 		path.join(dir, 'AGENTS.md'),
 		'- prefer small diffs\n',
@@ -314,6 +352,28 @@ test('prependAgentsContext puts AGENTS before typed user text', async t => {
 	t.true(modelBound.includes('prefer small diffs'));
 	t.true(modelBound.endsWith(typed));
 	t.true(modelBound.indexOf('prefer small diffs') < modelBound.indexOf(typed));
+});
+
+test('prependAgentsContext is a no-op when inject is disabled', async t => {
+	const dir = await makeTempDir('snow-ctx-user-noop-');
+	t.teardown(async () => {
+		await fs.promises.rm(dir, {recursive: true, force: true});
+	});
+	await fs.promises.mkdir(path.join(dir, '.git'));
+	await fs.promises.writeFile(
+		path.join(dir, 'AGENTS.md'),
+		'- should not inject\n',
+		'utf-8',
+	);
+
+	clearContextInjectCache();
+	const typed = 'please fix the flaky test';
+	const modelBound = prependAgentsContext(typed, {
+		cwd: dir,
+		profile: 'full',
+		writeBreadcrumb: false,
+	});
+	t.is(modelBound, typed);
 });
 
 test('dedupeByContentOrder keeps first of identical bodies', t => {

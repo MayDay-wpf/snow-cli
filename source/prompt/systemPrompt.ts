@@ -283,7 +283,7 @@ PLACEHOLDER_FOR_PLATFORM_COMMANDS_SECTION
 
 ## Project Context (AGENTS.md)
 
-- Auto-prepended to model-bound user messages (not system): global \`~/.snow/AGENTS.md\` and project \`AGENTS.md\` chain (root → cwd).
+- When \`contextInject.enabled\` is true, auto-prepended to model-bound user messages (not system): global \`~/.snow/AGENTS.md\` and project \`AGENTS.md\` chain (root → cwd). Default is off (opt-in).
 - Optional fallback filename: \`CLAUDE.md\` if AGENTS.md is missing in a directory.
 - Separate from hook additionalContext (Trellis/session hooks).
 - ROLE.md remains system-side persona/hard rules.

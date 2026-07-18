@@ -110,7 +110,7 @@ snow
 - [Sub-Agent Configuration](docs/usage/en/05.Sub-Agent%20Configuration.md) - Sub-agent management, custom agents, **project Markdown agents (#194)**
 - [Sensitive Commands Configuration](docs/usage/en/06.Sensitive%20Commands%20Configuration.md) - Sensitive command protection, custom command rules
 - [Hooks Configuration](docs/usage/en/07.Hooks%20Configuration.md) - Workflow automation, **additionalContext inject / beforeSubAgentStart / type:context (#194)**
-- [AGENTS.md Context Inject](docs/usage/en/30.AGENTS%20Context%20Inject.md) - Auto-prepend global/project `AGENTS.md` chain to model-bound user messages; ROLE stays on system path
+- [AGENTS.md Context Inject](docs/usage/en/30.AGENTS%20Context%20Inject.md) - Optional opt-in prepend of global/project `AGENTS.md` chain to model-bound user messages (default off); ROLE stays on system path
 - [Theme Settings](docs/usage/en/08.Theme%20Settings.md) - Interface theme configuration, custom color schemes, simplified mode
 - [Third-Party Relay Configuration](docs/usage/en/16.Third-Party%20Relay%20Configuration.md) - Claude Code relay, Codex relay, custom headers configuration
 
