@@ -765,6 +765,14 @@ export type TranslationKeys = {
 		moreAbove: string;
 		moreBelow: string;
 		interactionHint: string;
+		categories: {
+			all: string;
+			frequent: string;
+			settings: string;
+			advanced: string;
+			fun: string;
+			custom: string;
+		};
 		commands: {
 			help: string;
 			clear: string;
@@ -1964,6 +1972,11 @@ export type TranslationKeys = {
 		dropped: string;
 		moreAbove: string;
 		moreBelow: string;
+		estimate: string;
+		precise: string;
+		colBucket: string;
+		colTokens: string;
+		colShare: string;
 		buckets: {
 			system: string;
 			role: string;
