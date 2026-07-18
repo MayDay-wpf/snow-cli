@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert} from '@inkjs/ui';
@@ -11,6 +11,7 @@ import {
 } from '../../utils/config/codebaseConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -21,17 +22,26 @@ type Props = {
 type ConfigField =
 	| 'enabled'
 	| 'enableAgentReview'
+	| 'enableReranking'
+	| 'embeddingSettings'
 	| 'embeddingType'
 	| 'embeddingModelName'
 	| 'embeddingBaseUrl'
 	| 'embeddingApiKey'
 	| 'embeddingDimensions'
+	| 'batchSettings'
 	| 'batchMaxLines'
 	| 'batchConcurrency'
 	| 'chunkingMaxLinesPerChunk'
 	| 'chunkingMinLinesPerChunk'
 	| 'chunkingMinCharsPerChunk'
-	| 'chunkingOverlapLines';
+	| 'chunkingOverlapLines'
+	| 'rerankingSettings'
+	| 'rerankingModelName'
+	| 'rerankingBaseUrl'
+	| 'rerankingApiKey'
+	| 'rerankingContextLength'
+	| 'rerankingTopN';
 
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
 
@@ -81,12 +91,14 @@ export default function CodeBaseConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.codebaseConfig.title}`);
 	const {theme} = useTheme();
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
+	const [enableReranking, setEnableReranking] = useState(false);
 	const [embeddingType, setEmbeddingType] = useState<
-		'jina' | 'ollama' | 'gemini'
+		'jina' | 'ollama' | 'gemini' | 'mistral'
 	>('jina');
 	const [embeddingModelName, setEmbeddingModelName] = useState('');
 	const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState('');
@@ -98,23 +110,33 @@ export default function CodeBaseConfigScreen({
 	const [chunkingMinLinesPerChunk, setChunkingMinLinesPerChunk] = useState(10);
 	const [chunkingMinCharsPerChunk, setChunkingMinCharsPerChunk] = useState(20);
 	const [chunkingOverlapLines, setChunkingOverlapLines] = useState(20);
+	const [rerankingModelName, setRerankingModelName] = useState('');
+	const [rerankingBaseUrl, setRerankingBaseUrl] = useState('');
+	const [rerankingApiKey, setRerankingApiKey] = useState('');
+	const [rerankingContextLength, setRerankingContextLength] = useState(4096);
+	const [rerankingTopN, setRerankingTopN] = useState(5);
 
 	// UI state
 	const [currentField, setCurrentField] = useState<ConfigField>('enabled');
 	const [isEditing, setIsEditing] = useState(false);
+	const [embeddingExpanded, setEmbeddingExpanded] = useState(false);
+	const [batchExpanded, setBatchExpanded] = useState(false);
+	const [rerankingExpanded, setRerankingExpanded] = useState(false);
+	const [toastMessage, setToastMessage] = useState('');
 	const [errors, setErrors] = useState<string[]>([]);
 
 	// Scrolling configuration
 	const MAX_VISIBLE_FIELDS = 8;
 
-	const allFields: ConfigField[] = [
-		'enabled',
-		'enableAgentReview',
+	const embeddingSubFields: ConfigField[] = [
 		'embeddingType',
 		'embeddingModelName',
 		'embeddingBaseUrl',
 		'embeddingApiKey',
 		'embeddingDimensions',
+	];
+
+	const batchSubFields: ConfigField[] = [
 		'batchMaxLines',
 		'batchConcurrency',
 		'chunkingMaxLinesPerChunk',
@@ -123,24 +145,67 @@ export default function CodeBaseConfigScreen({
 		'chunkingOverlapLines',
 	];
 
+	const rerankingSubFields: ConfigField[] = [
+		'rerankingModelName',
+		'rerankingBaseUrl',
+		'rerankingApiKey',
+		'rerankingContextLength',
+		'rerankingTopN',
+	];
+
+	const allFields: ConfigField[] = [
+		'enabled',
+		'enableAgentReview',
+		'enableReranking',
+		'embeddingSettings',
+		...(embeddingExpanded ? embeddingSubFields : []),
+		'rerankingSettings',
+		...(rerankingExpanded ? rerankingSubFields : []),
+		'batchSettings',
+		...(batchExpanded ? batchSubFields : []),
+	];
+
 	// Embedding type options
 	const embeddingTypeOptions = [
 		{label: 'Jina & OpenAI', value: 'jina' as const},
 		{label: 'Ollama', value: 'ollama' as const},
 		{label: 'Gemini', value: 'gemini' as const},
+		{label: 'Mistral', value: 'mistral' as const},
 	];
 
 	const currentFieldIndex = allFields.indexOf(currentField);
 	const totalFields = allFields.length;
 
+	const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const showToast = useCallback((msg: string) => {
+		if (toastTimerRef.current) {
+			clearTimeout(toastTimerRef.current);
+		}
+		setToastMessage(msg);
+		toastTimerRef.current = setTimeout(() => {
+			setToastMessage('');
+			toastTimerRef.current = null;
+		}, 2000);
+	}, []);
+
 	useEffect(() => {
 		loadConfiguration();
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			if (toastTimerRef.current) {
+				clearTimeout(toastTimerRef.current);
+			}
+		};
 	}, []);
 
 	const loadConfiguration = () => {
 		const config = loadCodebaseConfig();
 		setEnabled(config.enabled);
 		setEnableAgentReview(config.enableAgentReview);
+		setEnableReranking(config.enableReranking);
 		setEmbeddingType(config.embedding.type || 'jina');
 		setEmbeddingModelName(config.embedding.modelName);
 		setEmbeddingBaseUrl(config.embedding.baseUrl);
@@ -152,6 +217,11 @@ export default function CodeBaseConfigScreen({
 		setChunkingMinLinesPerChunk(config.chunking.minLinesPerChunk);
 		setChunkingMinCharsPerChunk(config.chunking.minCharsPerChunk);
 		setChunkingOverlapLines(config.chunking.overlapLines);
+		setRerankingModelName(config.reranking.modelName);
+		setRerankingBaseUrl(config.reranking.baseUrl);
+		setRerankingApiKey(config.reranking.apiKey);
+		setRerankingContextLength(config.reranking.contextLength);
+		setRerankingTopN(config.reranking.topN);
 	};
 
 	const saveConfiguration = () => {
@@ -209,7 +279,29 @@ export default function CodeBaseConfigScreen({
 				);
 			}
 
-			// LLM is optional - no validation needed
+			// Reranking configuration validation
+			if (enableReranking) {
+				if (!rerankingModelName.trim()) {
+					validationErrors.push(
+						t.codebaseConfig.validationRerankingModelNameRequired,
+					);
+				}
+				if (!rerankingBaseUrl.trim()) {
+					validationErrors.push(
+						t.codebaseConfig.validationRerankingBaseUrlRequired,
+					);
+				}
+				if (rerankingContextLength <= 0) {
+					validationErrors.push(
+						t.codebaseConfig.validationRerankingContextLengthPositive,
+					);
+				}
+				if (rerankingTopN <= 0) {
+					validationErrors.push(
+						t.codebaseConfig.validationRerankingTopNPositive,
+					);
+				}
+			}
 		}
 
 		if (validationErrors.length > 0) {
@@ -221,6 +313,7 @@ export default function CodeBaseConfigScreen({
 			const config: CodebaseConfig = {
 				enabled,
 				enableAgentReview,
+				enableReranking,
 				embedding: {
 					type: embeddingType,
 					modelName: embeddingModelName,
@@ -237,6 +330,13 @@ export default function CodeBaseConfigScreen({
 					minLinesPerChunk: chunkingMinLinesPerChunk,
 					minCharsPerChunk: chunkingMinCharsPerChunk,
 					overlapLines: chunkingOverlapLines,
+				},
+				reranking: {
+					modelName: rerankingModelName,
+					baseUrl: rerankingBaseUrl,
+					apiKey: rerankingApiKey,
+					contextLength: rerankingContextLength,
+					topN: rerankingTopN,
 				},
 			};
 
@@ -303,9 +403,51 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-			case 'embeddingType':
+			case 'enableReranking':
 				return (
 					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingToggle}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{enableReranking
+									? t.codebaseConfig.enabled
+									: t.codebaseConfig.disabled}{' '}
+								{t.codebaseConfig.toggleHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'embeddingSettings':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{embeddingExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.embeddingSettingsGroup}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{t.codebaseConfig.embeddingSettingsExpandHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'embeddingType':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -324,7 +466,7 @@ export default function CodeBaseConfigScreen({
 									isFocused={true}
 									onSelect={item => {
 										setEmbeddingType(
-											item.value as 'jina' | 'ollama' | 'gemini',
+											item.value as 'jina' | 'ollama' | 'gemini' | 'mistral',
 										);
 										setIsEditing(false);
 									}}
@@ -344,7 +486,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'embeddingModelName':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -378,7 +520,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'embeddingBaseUrl':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -412,7 +554,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'embeddingApiKey':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -449,7 +591,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'embeddingDimensions':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -475,9 +617,29 @@ export default function CodeBaseConfigScreen({
 					</Box>
 				);
 
-			case 'batchMaxLines':
+			case 'batchSettings':
 				return (
 					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{batchExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.batchSettingsGroup}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{t.codebaseConfig.batchSettingsExpandHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'batchMaxLines':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -503,7 +665,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'batchConcurrency':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -530,7 +692,7 @@ export default function CodeBaseConfigScreen({
 				);
 			case 'chunkingMaxLinesPerChunk':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -558,7 +720,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'chunkingMinLinesPerChunk':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -586,7 +748,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'chunkingMinCharsPerChunk':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -614,7 +776,7 @@ export default function CodeBaseConfigScreen({
 
 			case 'chunkingOverlapLines':
 				return (
-					<Box key={field} flexDirection="column">
+					<Box key={field} flexDirection="column" marginLeft={2}>
 						<Text
 							color={
 								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
@@ -639,6 +801,185 @@ export default function CodeBaseConfigScreen({
 						)}
 					</Box>
 				);
+			case 'rerankingSettings':
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{rerankingExpanded ? '▼ ' : '▶ '}
+							{t.codebaseConfig.rerankingSettingsGroup}
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{t.codebaseConfig.rerankingSettingsExpandHint}
+							</Text>
+						</Box>
+					</Box>
+				);
+
+			case 'rerankingModelName':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingModelName}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingModelName}
+										onChange={value =>
+											setRerankingModelName(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingModelName || t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'rerankingBaseUrl':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingBaseUrl}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingBaseUrl}
+										onChange={value =>
+											setRerankingBaseUrl(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingBaseUrl || t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'rerankingApiKey':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingApiKey}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									<TextInput
+										value={rerankingApiKey}
+										onChange={value =>
+											setRerankingApiKey(stripFocusArtifacts(value))
+										}
+										onSubmit={() => setIsEditing(false)}
+										mask="*"
+									/>
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingApiKey
+										? t.codebaseConfig.masked
+										: t.codebaseConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'rerankingContextLength':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingContextLength}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {rerankingContextLength}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{rerankingContextLength}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
+			case 'rerankingTopN':
+				return (
+					<Box key={field} flexDirection="column" marginLeft={2}>
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.rerankingTopN}
+						</Text>
+						{isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuInfo}>
+									{t.codebaseConfig.enterValue} {rerankingTopN}
+								</Text>
+							</Box>
+						)}
+						{!isCurrentlyEditing && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>{rerankingTopN}</Text>
+							</Box>
+						)}
+					</Box>
+				);
+
 			default:
 				return null;
 		}
@@ -653,6 +994,8 @@ export default function CodeBaseConfigScreen({
 		'chunkingMinLinesPerChunk',
 		'chunkingMinCharsPerChunk',
 		'chunkingOverlapLines',
+		'rerankingContextLength',
+		'rerankingTopN',
 	];
 
 	const isNumericField = (field: ConfigField) => numericFields.includes(field);
@@ -673,6 +1016,10 @@ export default function CodeBaseConfigScreen({
 				return chunkingMinCharsPerChunk;
 			case 'chunkingOverlapLines':
 				return chunkingOverlapLines;
+			case 'rerankingContextLength':
+				return rerankingContextLength;
+			case 'rerankingTopN':
+				return rerankingTopN;
 			default:
 				return 0;
 		}
@@ -700,6 +1047,12 @@ export default function CodeBaseConfigScreen({
 				break;
 			case 'chunkingOverlapLines':
 				setChunkingOverlapLines(value);
+				break;
+			case 'rerankingContextLength':
+				setRerankingContextLength(value);
+				break;
+			case 'rerankingTopN':
+				setRerankingTopN(value);
 				break;
 		}
 	};
@@ -774,9 +1127,47 @@ export default function CodeBaseConfigScreen({
 			return;
 		}
 
-		// Toggle enableAgentReview field
+		// Toggle enableAgentReview field (mutually exclusive with reranking)
 		if (key.return && currentField === 'enableAgentReview') {
-			setEnableAgentReview(!enableAgentReview);
+			const newValue = !enableAgentReview;
+			setEnableAgentReview(newValue);
+			if (newValue) {
+				setEnableReranking(false);
+			}
+			return;
+		}
+
+		// Toggle enableReranking field (mutually exclusive with agent review)
+		if (key.return && currentField === 'enableReranking') {
+			if (!enableReranking) {
+				if (!rerankingModelName.trim() || !rerankingBaseUrl.trim()) {
+					showToast(t.codebaseConfig.rerankingNotConfigured);
+					return;
+				}
+			}
+			const newValue = !enableReranking;
+			setEnableReranking(newValue);
+			if (newValue) {
+				setEnableAgentReview(false);
+			}
+			return;
+		}
+
+		// Toggle embedding settings expand/collapse
+		if (key.return && currentField === 'embeddingSettings') {
+			setEmbeddingExpanded(!embeddingExpanded);
+			return;
+		}
+
+		// Toggle batch settings expand/collapse
+		if (key.return && currentField === 'batchSettings') {
+			setBatchExpanded(!batchExpanded);
+			return;
+		}
+
+		// Toggle reranking settings expand/collapse
+		if (key.return && currentField === 'rerankingSettings') {
+			setRerankingExpanded(!rerankingExpanded);
 			return;
 		}
 
@@ -790,7 +1181,11 @@ export default function CodeBaseConfigScreen({
 		if (
 			key.return &&
 			currentField !== 'enabled' &&
-			currentField !== 'enableAgentReview'
+			currentField !== 'enableAgentReview' &&
+			currentField !== 'enableReranking' &&
+			currentField !== 'embeddingSettings' &&
+			currentField !== 'batchSettings' &&
+			currentField !== 'rerankingSettings'
 		) {
 			setIsEditing(true);
 			return;
@@ -875,6 +1270,12 @@ export default function CodeBaseConfigScreen({
 							• {error}
 						</Text>
 					))}
+				</Box>
+			)}
+
+			{toastMessage && (
+				<Box marginTop={1}>
+					<Alert variant="warning">{toastMessage}</Alert>
 				</Box>
 			)}
 

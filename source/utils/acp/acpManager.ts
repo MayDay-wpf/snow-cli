@@ -38,6 +38,8 @@ import {
 } from '../config/permissionsConfig.js';
 import {isSensitiveCommand} from '../execution/sensitiveCommandManager.js';
 import {randomUUID} from 'crypto';
+import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
+import {extractHookProvidedConfirmation} from '../execution/hookResultInterpreter.js';
 import {
 	createStreamingChatCompletion,
 	type ChatMessage,
@@ -46,7 +48,7 @@ import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {collectAllMCPTools} from '../execution/mcpToolsManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import type {ResponseStreamChunk} from '../../api/responses.js';
 import type {AnthropicStreamChunk} from '../../api/anthropic.js';
 import type {GeminiStreamChunk} from '../../api/gemini.js';
@@ -320,7 +322,7 @@ class AcpManager {
 		}
 
 		// 获取配置
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		const model = config.advancedModel || 'claude-sonnet-4-20250514';
 
 		// 收集 MCP 工具
@@ -605,6 +607,8 @@ class AcpManager {
 						false,
 						addToAlwaysApproved,
 						undefined,
+						undefined,
+						workingDirectory,
 					);
 					if (result) {
 						// 添加工具结果到消息
@@ -718,6 +722,35 @@ class AcpManager {
 			name: 'Reject',
 			kind: 'reject_once' as PermissionOptionKind,
 		});
+
+		// 执行 toolConfirmation Hook，若返回 exit code 0 + stdout
+		// 则自动确认/拒绝，跳过权限请求
+		try {
+			const hookContext = {
+				toolName: toolCall.function.name,
+				args: toolCall.function.arguments,
+				isSensitive,
+				allTools: undefined,
+			};
+
+			const hookResult = await unifiedHooksExecutor.executeHooks(
+				'toolConfirmation',
+				hookContext,
+			);
+			const autoResult = extractHookProvidedConfirmation(hookResult);
+			if (autoResult) {
+				if (autoResult === 'approve' || autoResult === 'approve_always') {
+					if (autoResult === 'approve_always') {
+						addToolToPermissions(workingDirectory, toolCall.function.name);
+					}
+					return true;
+				}
+				// reject 或 reject_with_reply 均拒绝
+				return false;
+			}
+		} catch {
+			// Hook 执行失败时回退到权限请求
+		}
 
 		// 构建工具调用更新 - 使用 title 字段显示工具名（ACP 协议要求）
 		const toolCallUpdate: ToolCallUpdate = {

@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
+import {readSettings} from '../../utils/config/unifiedSettings.js';
 
 /**
  * Get the system prompt with ROLE.md content if it exists
@@ -39,25 +40,15 @@ export function getSystemPromptWithRole(
 
 	const getActiveRolePath = (location: 'project' | 'global'): string | null => {
 		try {
+			// ROLE.md / ROLE-<id>.md live in: project root (project scope) or ~/.snow (global scope).
+			// activeRoleId is now stored in the unified settings.json (.snow/settings.json).
 			const baseDir =
 				location === 'project'
 					? process.cwd()
 					: path.join(os.homedir(), '.snow');
-			const configPath =
-				location === 'project'
-					? path.join(baseDir, '.snow', 'role.json')
-					: path.join(baseDir, 'role.json');
 
-			let activeRoleId: string | undefined;
-			if (fs.existsSync(configPath)) {
-				try {
-					const raw = fs.readFileSync(configPath, 'utf-8');
-					const parsed = JSON.parse(raw) as {activeRoleId?: string};
-					activeRoleId = parsed.activeRoleId;
-				} catch {
-					// ignore
-				}
-			}
+			const settings = readSettings(location);
+			const activeRoleId = settings.role?.activeRoleId;
 
 			if (!activeRoleId || activeRoleId === 'active') {
 				return path.join(baseDir, 'ROLE.md');
@@ -220,6 +211,69 @@ System Environment:
 ${systemEnv}
 
 Current Date: ${timeInfo.date}`;
+}
+
+/**
+ * Read raw content of the active ROLE file IF it is marked as "override system prompt".
+ * Priority: project > global. Returns null if no active role is marked as override
+ * or if the role file is missing/empty.
+ */
+export function getOverrideRoleContent(): string | null {
+	const tryReadRole = (rolePath: string): string | null => {
+		try {
+			if (!fs.existsSync(rolePath)) return null;
+			const content = fs.readFileSync(rolePath, 'utf-8').trim();
+			return content || null;
+		} catch {
+			return null;
+		}
+	};
+
+	const resolveActiveOverride = (
+		location: 'project' | 'global',
+	): {path: string; isOverride: boolean} | null => {
+		try {
+			// Role metadata moved to unified settings.json (.snow/settings.json).
+			const baseDir =
+				location === 'project'
+					? process.cwd()
+					: path.join(os.homedir(), '.snow');
+
+			const settings = readSettings(location);
+			const roleSettings = settings.role ?? {};
+			const activeRoleId = roleSettings.activeRoleId;
+			const overrideRoleIds = roleSettings.overrideRoleIds || [];
+
+			const resolvedActiveId =
+				!activeRoleId || activeRoleId === 'active' ? 'active' : activeRoleId;
+			const isOverride = overrideRoleIds.includes(resolvedActiveId);
+			const filePath =
+				resolvedActiveId === 'active'
+					? path.join(baseDir, 'ROLE.md')
+					: path.join(baseDir, `ROLE-${resolvedActiveId}.md`);
+			return {path: filePath, isOverride};
+		} catch {
+			return null;
+		}
+	};
+
+	try {
+		const projectInfo = resolveActiveOverride('project');
+		if (projectInfo && projectInfo.isOverride) {
+			const content = tryReadRole(projectInfo.path);
+			if (content) return content;
+		}
+
+		const globalInfo = resolveActiveOverride('global');
+		if (globalInfo && globalInfo.isOverride) {
+			const content = tryReadRole(globalInfo.path);
+			if (content) return content;
+		}
+	} catch (error) {
+		console.error('Failed to read override ROLE configuration:', error);
+	}
+
+	return null;
 }
 
 /**

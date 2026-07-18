@@ -17,6 +17,7 @@ import {
 
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 // Focus event handling - prevent terminal focus events from appearing as input
 const focusEventTokenRegex = /(?:\x1b)?\[[0-9;]*[IO]/g;
@@ -83,6 +84,7 @@ export default function SubAgentConfigScreen({
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.subAgentConfig.title}`);
 	const [agentName, setAgentName] = useState('');
 	const [description, setDescription] = useState('');
 	const [role, setRole] = useState('');
@@ -114,18 +116,13 @@ export default function SubAgentConfigScreen({
 			tools: [
 				'filesystem-read',
 				'filesystem-create',
+				'filesystem-replaceedit',
 				'filesystem-edit',
-							],
+			],
 		},
 		{
 			name: t.subAgentConfig.aceTools,
-			tools: [
-				'ace-find_definition',
-				'ace-find_references',
-				'ace-semantic_search',
-				'ace-text_search',
-				'ace-file_outline',
-			],
+			tools: ['ace-search'],
 		},
 		{
 			name: t.subAgentConfig.codebaseTools,
@@ -137,11 +134,15 @@ export default function SubAgentConfigScreen({
 		},
 		{
 			name: t.subAgentConfig.todoTools,
-			tools: ['todo-get', 'todo-update', 'todo-add', 'todo-delete'],
+			tools: ['todo-manage'],
 		},
 		{
 			name: t.subAgentConfig.webSearchTools,
 			tools: ['websearch-search', 'websearch-fetch'],
+		},
+		{
+			name: t.subAgentConfig.snowDocsTools || 'Snow Docs',
+			tools: ['snow-docs-list', 'snow-docs-search', 'snow-docs-get'],
 		},
 		{
 			name: t.subAgentConfig.ideTools,
@@ -193,9 +194,13 @@ export default function SubAgentConfigScreen({
 			return;
 		}
 
-		const isBuiltin = ['agent_explore', 'agent_plan', 'agent_general', 'agent_analyze', 'agent_debug'].includes(
-			agentId,
-		);
+		const isBuiltin = [
+			'agent_explore',
+			'agent_plan',
+			'agent_general',
+			'agent_analyze',
+			'agent_debug',
+		].includes(agentId);
 		setIsBuiltinAgent(isBuiltin);
 
 		setAgentName(agent.name);
@@ -418,10 +423,7 @@ export default function SubAgentConfigScreen({
 		if (key.upArrow) {
 			// 配置列表字段：在列表内导航，到达顶部时跳到上一个主字段
 			if (currentField === 'configProfile') {
-				if (
-					profileOptions.length === 0 ||
-					selectedConfigProfileIndex === 0
-				) {
+				if (profileOptions.length === 0 || selectedConfigProfileIndex === 0) {
 					// 跳到上一个主字段
 					setCurrentField('role');
 				} else {

@@ -22,6 +22,10 @@ import {
 	type SSHConfig,
 } from '../utils/config/workingDirConfig.js';
 import {detectWindowsPowerShell} from '../prompt/shared/promptHelpers.js';
+import {bashOutputSummaryAgent} from '../agents/bashOutputSummaryAgent.js';
+import {getDisableBashAiSummary} from '../utils/config/projectSettings.js';
+import {getConversationContext} from '../utils/codebase/conversationContext.js';
+import {buildSessionIdentityEnv} from '../utils/execution/sessionIdentityEnv.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -55,6 +59,42 @@ export class TerminalCommandService {
 	) {
 		this.workingDirectory = workingDirectory;
 		this.maxOutputLength = maxOutputLength;
+	}
+
+	private async maybeSummarizeCommandResult(
+		commandResult: CommandExecutionResult,
+		enableAiSummary: boolean,
+		abortSignal?: AbortSignal,
+	): Promise<CommandExecutionResult> {
+		try {
+			if (!enableAiSummary || getDisableBashAiSummary()) {
+				return commandResult;
+			}
+
+			const summarizedResult =
+				await bashOutputSummaryAgent.summarizeCommandResult(
+					commandResult,
+					abortSignal,
+				);
+
+			if (summarizedResult.stdout !== commandResult.stdout) {
+				appendTerminalOutput('[AI Summary] Output was compressed by AI.');
+				const summaryLines = summarizedResult.stdout
+					.split('\n')
+					.filter(line => line.trim());
+				for (const line of summaryLines) {
+					appendTerminalOutput(`[AI Summary] ${line}`);
+				}
+			}
+
+			return summarizedResult;
+		} catch (error) {
+			logger.warn(
+				'terminal-execute: summarize in bash service failed, fallback to original',
+				error,
+			);
+			return commandResult;
+		}
 	}
 
 	/**
@@ -217,6 +257,7 @@ export class TerminalCommandService {
 		timeout: number = 30000,
 		abortSignal?: AbortSignal,
 		isInteractive: boolean = false,
+		enableAiSummary: boolean = false,
 	): Promise<CommandExecutionResult> {
 		const executedAt = new Date().toISOString();
 
@@ -260,13 +301,18 @@ export class TerminalCommandService {
 					abortSignal,
 				);
 
-				return {
+				const commandResult: CommandExecutionResult = {
 					stdout: truncateOutput(result.stdout, this.maxOutputLength),
 					stderr: truncateOutput(result.stderr, this.maxOutputLength),
 					exitCode: result.exitCode,
 					command,
 					executedAt,
 				};
+				return this.maybeSummarizeCommandResult(
+					commandResult,
+					enableAiSummary,
+					abortSignal,
+				);
 			}
 
 			// Local execution: Execute command using system default shell and register the process.
@@ -285,7 +331,7 @@ export class TerminalCommandService {
 				shell = selectedShell.shell;
 
 				if (selectedShell.isPowerShell) {
-					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command} }`;
+					const utf8WrappedCommand = `& { $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); ${command}; $commandSucceeded = $?; $commandExitCode = $LASTEXITCODE; if ($commandExitCode -ne $null) { exit $commandExitCode }; if (-not $commandSucceeded) { exit 1 } }`;
 					shellArgs = ['-NoProfile', '-Command', utf8WrappedCommand];
 				} else {
 					const utf8Command = `chcp 65001>nul && ${command}`;
@@ -296,12 +342,20 @@ export class TerminalCommandService {
 				shellArgs = ['-c', command];
 			}
 
+			// Prefer conversation context to avoid sessionManager <-> bash circular imports.
+			const sessionId = getConversationContext()?.sessionId;
+			const identityEnv = buildSessionIdentityEnv({
+				sessionId,
+				cwd: this.workingDirectory,
+				baseEnv: process.env,
+			});
+
 			const childProcess = spawn(shell, shellArgs, {
 				cwd: this.workingDirectory,
 				stdio: ['pipe', 'pipe', 'pipe'], // Enable stdin for interactive input
 				windowsHide: true,
 				env: {
-					...process.env,
+					...identityEnv,
 					...(process.platform !== 'win32' && {
 						LANG: 'en_US.UTF-8',
 						LC_ALL: 'en_US.UTF-8',
@@ -423,10 +477,13 @@ export class TerminalCommandService {
 				if (typeof timeout === 'number' && timeout > 0) {
 					timeoutTimer = setTimeout(triggerTimeout, timeout);
 				}
-				if (abortSignal) {
-					abortSignal.addEventListener('abort', () => {
-						safeClearTimeout();
-					});
+				const abortTimeoutHandler = abortSignal
+					? () => {
+							safeClearTimeout();
+					  }
+					: null;
+				if (abortSignal && abortTimeoutHandler) {
+					abortSignal.addEventListener('abort', abortTimeoutHandler);
 				}
 				let stdoutData = '';
 				let stderrData = '';
@@ -616,9 +673,12 @@ export class TerminalCommandService {
 							.catch(() => {});
 					}
 
-					// Clean up abort handler
+					// Clean up abort handlers
 					if (abortHandler && abortSignal) {
 						abortSignal.removeEventListener('abort', abortHandler);
+					}
+					if (abortTimeoutHandler && abortSignal) {
+						abortSignal.removeEventListener('abort', abortTimeoutHandler);
 					}
 
 					if (signal) {
@@ -647,13 +707,18 @@ export class TerminalCommandService {
 			});
 
 			// Truncate output if too long
-			return {
+			const commandResult: CommandExecutionResult = {
 				stdout: truncateOutput(stdout, this.maxOutputLength),
 				stderr: truncateOutput(stderr, this.maxOutputLength),
 				exitCode: 0,
 				command,
 				executedAt,
 			};
+			return this.maybeSummarizeCommandResult(
+				commandResult,
+				enableAiSummary,
+				abortSignal,
+			);
 		} catch (error: any) {
 			// Handle execution errors (non-zero exit codes)
 			if (error.code === 'ETIMEDOUT') {
@@ -662,7 +727,7 @@ export class TerminalCommandService {
 
 			// Check if aborted by user (ESC key)
 			if (abortSignal?.aborted) {
-				return {
+				const commandResult: CommandExecutionResult = {
 					stdout: truncateOutput(error.stdout || '', this.maxOutputLength),
 					stderr: truncateOutput(
 						error.stderr ||
@@ -673,10 +738,15 @@ export class TerminalCommandService {
 					command,
 					executedAt,
 				};
+				return this.maybeSummarizeCommandResult(
+					commandResult,
+					enableAiSummary,
+					abortSignal,
+				);
 			}
 
 			// For non-zero exit codes, still return the output
-			return {
+			const commandResult: CommandExecutionResult = {
 				stdout: truncateOutput(error.stdout || '', this.maxOutputLength),
 				stderr: truncateOutput(
 					error.stderr || error.message || '',
@@ -686,6 +756,11 @@ export class TerminalCommandService {
 				command,
 				executedAt,
 			};
+			return this.maybeSummarizeCommandResult(
+				commandResult,
+				enableAiSummary,
+				abortSignal,
+			);
 		}
 	}
 
@@ -733,7 +808,6 @@ export const mcpTools = [
 					type: 'number',
 					description: 'Timeout in milliseconds (default: 30000)',
 					default: 30000,
-					maximum: 300000,
 				},
 				isInteractive: {
 					type: 'boolean',
@@ -741,8 +815,14 @@ export const mcpTools = [
 						'Set to true if the command requires user input (e.g., Read-Host, password prompts, y/n confirmations, interactive installers). When true, an input prompt will be shown to allow user to provide input. Default: false.',
 					default: false,
 				},
+				enableAiSummary: {
+					type: 'boolean',
+					description:
+						'REQUIRED: Whether to summarize and clean command output with AI before returning tool result. Set true when output may contain noisy or low-value information. Default: false.',
+					default: false,
+				},
 			},
-			required: ['command', 'workingDirectory'],
+			required: ['command', 'workingDirectory', 'enableAiSummary'],
 		},
 	},
 ];

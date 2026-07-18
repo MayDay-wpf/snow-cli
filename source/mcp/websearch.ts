@@ -1,29 +1,39 @@
 import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {extname, join} from 'node:path';
+import {spawn, type ChildProcess} from 'node:child_process';
 import {getProxyConfig} from '../utils/config/proxyConfig.js';
+import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 // Type definitions
-import type {
-	SearchResult,
-	SearchResponse,
-	WebPageContent,
-} from './types/websearch.types.js';
+import type {SearchResponse, WebPageContent} from './types/websearch.types.js';
+import {IMAGE_MIME_TYPES} from './types/filesystem.types.js';
 // Utility functions
 import {
 	findBrowserExecutable,
 	isWSL,
+	isExecutableForPlatform,
 	findWindowsBrowserInWSL,
 	launchWindowsBrowserFromWSL,
 	getRunningBrowserWSEndpoint,
 } from './utils/websearch/browser.utils.js';
 import {cleanText} from './utils/websearch/text.utils.js';
+import {
+	getSearchEngine,
+	ensureSearchEnginesLoaded,
+} from './engines/websearch/index.js';
 
 /**
- * Web Search Service using DuckDuckGo Lite with Puppeteer Core
- * Provides web search functionality with real browser support and proxy
- * Uses system-installed Chrome/Edge to reduce package size
- * Supports WSL environment by connecting to Windows browser via WebSocket
+ * Web Search Service using a pluggable search engine (DuckDuckGo / Bing / ...)
+ * driven by Puppeteer Core.
+ *
+ * The browser lifecycle (launch / connect / close) is owned by this service;
+ * the actual per-engine search/extraction logic lives under
+ * `./engines/websearch/*`. To add a new engine, implement `SearchEngine` and
+ * register it in `./engines/websearch/index.ts`.
+ *
+ * Uses system-installed Chrome/Edge to reduce package size and supports WSL
+ * by connecting to a Windows browser via WebSocket.
  */
 export class WebSearchService {
 	private maxResults: number;
@@ -31,6 +41,20 @@ export class WebSearchService {
 	private executablePath: string | null = null;
 	private isWSLMode: boolean = false;
 	private userDataDir: string | undefined;
+	private browserLaunchPromise: Promise<Browser> | null = null;
+	private browserClosePromise: Promise<void> | null = null;
+	// Tracks how the current `this.browser` was obtained so we close it
+	// correctly: `puppeteer.launch()` processes must be `browser.close()`-d
+	// (otherwise they leak as zombies), while `puppeteer.connect()` sessions
+	// to a Windows browser under WSL should only be `browser.disconnect()`-ed.
+	// In WSL mode we may fall back to `launchBrowserDirect()` (Issue #176),
+	// so `isWSLMode` alone is NOT sufficient to decide the close strategy.
+	private browserIsLocallyLaunched: boolean = false;
+	// On Windows we manually spawn the browser process (puppeteer.launch()
+	// is unreliable — see launchBrowserManual). We keep a reference so
+	// closeBrowserInternal() can kill it as a fallback if browser.close()
+	// fails or the CDP connection was already lost.
+	private browserProcess: ChildProcess | null = null;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
@@ -51,12 +75,51 @@ export class WebSearchService {
 	 * In WSL mode, connects to Windows browser via WebSocket
 	 */
 	private async launchBrowser(): Promise<Browser> {
+		if (this.browserClosePromise) {
+			await this.browserClosePromise;
+		}
+
 		if (this.browser && this.browser.connected) {
 			return this.browser;
 		}
 
+		if (this.browserLaunchPromise) {
+			return this.browserLaunchPromise;
+		}
+
+		this.browserLaunchPromise = this.createBrowser().finally(() => {
+			this.browserLaunchPromise = null;
+		});
+
+		return this.browserLaunchPromise;
+	}
+
+	private async createBrowser(): Promise<Browser> {
 		const proxyConfig = getProxyConfig();
 		const debugPort = proxyConfig.browserDebugPort || 9222;
+
+		// WSL Mode normally connects to a Windows browser via WebSocket. But a
+		// WSL user may have configured a *native Linux* browser path (e.g. a
+		// Playwright-installed Chrome at
+		// ~/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome) in
+		// proxyConfig.browserPath. In that case we must launch it directly on
+		// Linux instead of forcing the Windows-browser-via-PowerShell path:
+		// that path would fail (the configured path isn't a /mnt/c/... Windows
+		// .exe), and the fallback inside launchBrowserWSL() strips browserPath,
+		// losing the user's explicit configuration and ultimately yielding
+		// "No system browser found" (Issue #183).
+		//
+		// isExecutableForPlatform() rejects /mnt/<drive>/ Windows mount paths
+		// and .exe/.bat files on Linux, so a true result here guarantees a
+		// usable native Linux binary.
+		if (
+			this.isWSLMode &&
+			proxyConfig.browserPath &&
+			existsSync(proxyConfig.browserPath) &&
+			isExecutableForPlatform(proxyConfig.browserPath)
+		) {
+			return this.launchBrowserDirect(proxyConfig);
+		}
 
 		// WSL Mode: Connect to Windows browser via WebSocket
 		if (this.isWSLMode) {
@@ -98,11 +161,25 @@ export class WebSearchService {
 			wsEndpoint = await launchWindowsBrowserFromWSL(browserPath, debugPort);
 
 			if (!wsEndpoint) {
-				throw new Error(
-					`Failed to launch Windows browser from WSL. Browser path: ${browserPath}. ` +
-						`Debug port: ${debugPort}. Make sure the browser is not already running ` +
-						`or try a different port in ~/.snow/proxy-config.json (browserDebugPort).`,
-				);
+				// Windows browser launch failed (e.g. PowerShell not on PATH under
+				// WSL `appendWindowsPath=false`, or spawn ENOENT, or NAT-mode WSL2
+				// cannot reach Windows 127.0.0.1). Fall back to a native Linux
+				// browser (google-chrome / chromium) so web search still works
+				// instead of hard-failing. This is the permanent fix for Issue
+				// #176.
+				//
+				// CRITICAL: strip the Windows browser path before delegating.
+				// `proxyConfig.browserPath` (or the auto-detected `browserPath`
+				// from findWindowsBrowserInWSL) points to a Windows .exe under
+				// /mnt/c/... . Passing it to launchBrowserDirect() would make
+				// puppeteer.launch({executablePath}) attempt to execute a Windows
+				// PE binary on Linux, which crashes. We must clear browserPath so
+				// launchBrowserDirect() falls through to findBrowserExecutable()
+				// which discovers a native Linux browser instead.
+				return this.launchBrowserDirect({
+					...proxyConfig,
+					browserPath: undefined,
+				});
 			}
 		}
 
@@ -110,6 +187,11 @@ export class WebSearchService {
 			this.browser = await puppeteer.connect({
 				browserWSEndpoint: wsEndpoint,
 			});
+			// Connected to a remote Windows browser via WebSocket — it is NOT
+			// a locally launched process, so we must only disconnect (not close)
+			// it during shutdown to avoid killing a browser the user may still
+			// want running on the Windows side.
+			this.browserIsLocallyLaunched = false;
 			return this.browser;
 		} catch (error: unknown) {
 			const errorMessage =
@@ -130,11 +212,13 @@ export class WebSearchService {
 		// Find browser executable path (cache it)
 		// Priority: 1. User-configured path, 2. Auto-detect
 		if (!this.executablePath) {
-			// First try user-configured browser path
-			if (proxyConfig.browserPath && existsSync(proxyConfig.browserPath)) {
+			if (
+				proxyConfig.browserPath &&
+				isExecutableForPlatform(proxyConfig.browserPath) &&
+				existsSync(proxyConfig.browserPath)
+			) {
 				this.executablePath = proxyConfig.browserPath;
 			} else {
-				// Fallback to auto-detection
 				this.executablePath = findBrowserExecutable();
 				if (!this.executablePath) {
 					throw new Error(
@@ -157,6 +241,21 @@ export class WebSearchService {
 			launchArgs.unshift(`--proxy-server=http://127.0.0.1:${proxyConfig.port}`);
 		}
 
+		// On Windows, puppeteer.launch() is unreliable with Edge/Chrome: the
+		// browser's launcher process exits immediately with Code: 0 before the
+		// DevTools endpoint is ready, causing puppeteer to throw "Failed to
+		// launch the browser process: Code: 0". The actual browser process
+		// keeps running fine — we just need to poll the HTTP endpoint instead
+		// of relying on puppeteer's stdout-parsing.
+		//
+		// So on Windows we skip puppeteer.launch() entirely and use a manual
+		// spawn + HTTP-poll + puppeteer.connect() approach. This also lets us
+		// add --headless=new to keep the browser invisible.
+		if (process.platform === 'win32') {
+			return this.launchBrowserManual(this.executablePath, launchArgs);
+		}
+
+		// Non-Windows (Linux/macOS): use puppeteer.launch() directly.
 		try {
 			this.browser = await puppeteer.launch({
 				executablePath: this.executablePath,
@@ -164,6 +263,7 @@ export class WebSearchService {
 				args: launchArgs,
 				userDataDir: this.userDataDir,
 			});
+			this.browserIsLocallyLaunched = true;
 		} catch (error: unknown) {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -179,30 +279,191 @@ export class WebSearchService {
 	}
 
 	/**
+	 * Manually launch the browser as a headless child process and connect to
+	 * it via the DevTools WebSocket protocol.
+	 *
+	 * This is used on Windows where puppeteer.launch() fails because the
+	 * Edge/Chrome launcher process exits immediately (Code: 0) before the
+	 * DevTools endpoint is ready. The real browser process survives, so we
+	 * poll the HTTP /json/version endpoint until it responds, then connect.
+	 *
+	 * The browser is launched with --headless=new so no window is shown.
+	 *
+	 * @internal
+	 */
+	private async launchBrowserManual(
+		executablePath: string,
+		args: string[],
+	): Promise<Browser> {
+		// Pick a random debug port to avoid conflicts with other instances.
+		const debugPort = 9300 + Math.floor(Math.random() * 100);
+
+		const allArgs = [
+			...args,
+			'--headless=new',
+			'--no-first-run',
+			'--no-default-browser-check',
+			`--remote-debugging-port=${debugPort}`,
+			'--remote-debugging-address=127.0.0.1',
+		];
+
+		// Use a per-process user-data-dir to avoid profile lock conflicts.
+		if (this.userDataDir) {
+			allArgs.push(`--user-data-dir=${this.userDataDir}`);
+		}
+
+		// Spawn the browser process. windowsHide prevents a console window
+		// from flashing. The launcher process will exit quickly (Code: 0)
+		// but the real browser process keeps running in the background.
+		this.browserProcess = spawn(executablePath, allArgs, {
+			stdio: 'ignore',
+			windowsHide: true,
+			detached: false,
+		});
+
+		// Capture spawn errors (ENOENT, EACCES, etc.)
+		// Use a wrapper object so TypeScript control-flow analysis doesn't
+		// narrow `spawnError` back to `null` after the async callback.
+		const spawnErrorRef: {error: Error | null} = {error: null};
+		this.browserProcess.on('error', (err: Error) => {
+			spawnErrorRef.error = err;
+		});
+
+		// Poll for the DevTools WebSocket endpoint. The browser may need a
+		// few hundred ms to start up and begin listening on the debug port.
+		const maxRetries = 30;
+		const retryDelay = 500;
+		let wsEndpoint: string | null = null;
+
+		for (let i = 0; i < maxRetries; i++) {
+			await new Promise(resolve => setTimeout(resolve, retryDelay));
+			wsEndpoint = await getRunningBrowserWSEndpoint(debugPort);
+			if (wsEndpoint) {
+				break;
+			}
+			// If the spawn itself failed, stop early.
+			if (spawnErrorRef.error) {
+				break;
+			}
+		}
+
+		if (spawnErrorRef.error) {
+			throw new Error(
+				`Failed to spawn browser process: ${spawnErrorRef.error.message}. Path: ${executablePath}`,
+			);
+		}
+
+		if (!wsEndpoint) {
+			// Kill the process if it's still running but didn't open the
+			// debug port in time.
+			this.killBrowserProcess();
+			throw new Error(
+				`Browser launched but DevTools endpoint was not reachable on port ${debugPort} after ${maxRetries} retries. Path: ${executablePath}`,
+			);
+		}
+
+		// Connect via WebSocket. browserIsLocallyLaunched = true so that
+		// closeBrowserInternal() calls browser.close() (which sends a CDP
+		// Browser.close command) instead of just disconnecting.
+		this.browser = await puppeteer.connect({browserWSEndpoint: wsEndpoint});
+		this.browserIsLocallyLaunched = true;
+		return this.browser;
+	}
+
+	/**
+	 * Kill the manually spawned browser process if it is still running.
+	 * Called as a fallback when browser.close() fails or the process
+	 * was never connected.
+	 *
+	 * @internal
+	 */
+	private killBrowserProcess(): void {
+		if (!this.browserProcess) {
+			return;
+		}
+		try {
+			if (!this.browserProcess.killed) {
+				this.browserProcess.kill();
+			}
+		} catch {
+			// Ignore — process may have already exited
+		}
+		this.browserProcess = null;
+	}
+
+	/**
 	 * Close browser instance
 	 */
 	async closeBrowser(): Promise<void> {
-		if (this.browser) {
-			if (this.isWSLMode) {
-				// In WSL mode, just disconnect (don't close the Windows browser)
-				try {
-					this.browser.disconnect();
-				} catch {
-					// Ignore disconnect errors
+		if (this.browserClosePromise) {
+			return this.browserClosePromise;
+		}
+
+		this.browserClosePromise = this.closeBrowserInternal().finally(() => {
+			this.browserClosePromise = null;
+		});
+
+		return this.browserClosePromise;
+	}
+
+	private async closeBrowserInternal(): Promise<void> {
+		const browser = this.browserLaunchPromise
+			? await this.browserLaunchPromise.catch(() => null)
+			: this.browser;
+
+		if (!browser) {
+			this.browser = null;
+			this.killBrowserProcess();
+			return;
+		}
+
+		if (this.browserIsLocallyLaunched) {
+			// We spawned this browser process (either via puppeteer.launch()
+			// on Linux/macOS, or via manual spawn + connect on Windows).
+			// Call browser.close() which sends a CDP Browser.close command to
+			// terminate the browser gracefully.
+			try {
+				if (browser.connected) {
+					await browser.close();
 				}
-			} else {
-				try {
-					await this.browser.close();
-				} catch {
-					// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
-				}
+			} catch {
+				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
 			}
+			// If browser.close() didn't fully terminate the process (e.g.,
+			// CDP connection was already lost), kill it as a fallback.
+			this.killBrowserProcess();
+		} else {
+			// Remote session obtained via puppeteer.connect() (WSL connecting
+			// to a Windows browser). Only disconnect — don't close the browser
+			// the user may still want running on the Windows side.
+			try {
+				if (browser.connected) {
+					browser.disconnect();
+				}
+			} catch {
+				// Ignore disconnect errors
+			}
+		}
+
+		if (this.browser === browser) {
 			this.browser = null;
 		}
 	}
 
+	private async closePage(page: Page | null): Promise<void> {
+		if (!page || page.isClosed()) {
+			return;
+		}
+
+		try {
+			await page.close();
+		} catch {
+			// Ignore close errors. Page cleanup must not mask the real tool result.
+		}
+	}
+
 	/**
-	 * Perform a web search using DuckDuckGo
+	 * Perform a web search using the engine selected in proxy config.
 	 * @param query - Search query string
 	 * @param maxResults - Maximum number of results to return (default: 10)
 	 * @returns Search results with title, URL, and snippet
@@ -212,6 +473,14 @@ export class WebSearchService {
 		let page: Page | null = null;
 
 		try {
+			// Resolve search engine from current proxy/search config. Ensure
+			// user-supplied plugins under ~/.snow/plugin/search_engines/ are
+			// loaded into the registry before resolving — this is a no-op after
+			// the first call.
+			await ensureSearchEnginesLoaded();
+			const proxyConfig = getProxyConfig();
+			const engine = getSearchEngine(proxyConfig.searchEngine);
+
 			// Launch browser with proxy
 			const browser = await this.launchBrowser();
 			page = await browser.newPage();
@@ -221,96 +490,8 @@ export class WebSearchService {
 				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 			);
 
-			// Encode query for URL
-			const encodedQuery = encodeURIComponent(query);
-			const searchUrl = `https://lite.duckduckgo.com/lite?q=${encodedQuery}`;
-
-			// Navigate to search page with timeout
-			await page.goto(searchUrl, {
-				waitUntil: 'networkidle2',
-				timeout: 30000,
-			});
-
-			// Extract search results from the page
-			const results = await page.evaluate((maxLimit: number) => {
-				const searchResults: SearchResult[] = [];
-				const rows = document.querySelectorAll('table tr');
-
-				let currentResult: Partial<SearchResult> = {};
-				let resultCount = 0;
-
-				for (const row of rows) {
-					if (resultCount >= maxLimit) break;
-
-					// Check if this row contains a link (title row)
-					const linkElement = row.querySelector('a.result-link');
-					if (linkElement) {
-						// Save previous result if exists
-						if (currentResult.title && currentResult.url) {
-							searchResults.push(currentResult as SearchResult);
-							resultCount++;
-							if (resultCount >= maxLimit) break;
-						}
-
-						// Start new result
-						const title = linkElement.textContent?.trim() || '';
-						const href = linkElement.getAttribute('href') || '';
-
-						// Extract actual URL from DuckDuckGo redirect
-						let actualUrl = href;
-						if (href.includes('uddg=')) {
-							const match = href.match(/uddg=([^&]+)/);
-							if (match && match[1]) {
-								actualUrl = decodeURIComponent(match[1]);
-							}
-						}
-
-						currentResult = {
-							title: title,
-							url: actualUrl,
-							snippet: '',
-							displayUrl: '',
-						};
-						continue;
-					}
-
-					// Check if this row contains snippet
-					const snippetElement = row.querySelector('td.result-snippet');
-					if (snippetElement && currentResult.title) {
-						currentResult.snippet = snippetElement.textContent?.trim() || '';
-						continue;
-					}
-
-					// Check if this row contains display URL
-					const displayUrlElement = row.querySelector('span.link-text');
-					if (displayUrlElement && currentResult.title) {
-						currentResult.displayUrl =
-							displayUrlElement.textContent?.trim() || '';
-					}
-				}
-
-				// Add last result if exists
-				if (
-					currentResult.title &&
-					currentResult.url &&
-					resultCount < maxLimit
-				) {
-					searchResults.push(currentResult as SearchResult);
-				}
-
-				return searchResults;
-			}, limit);
-
-			// Clean text in results
-			const cleanedResults = results.map(result => ({
-				title: cleanText(result.title),
-				url: result.url,
-				snippet: cleanText(result.snippet),
-				displayUrl: cleanText(result.displayUrl),
-			}));
-
-			// Close the page
-			await page.close();
+			// Delegate the actual search/extraction to the engine.
+			const cleanedResults = await engine.search(page, query, limit);
 
 			return {
 				query,
@@ -318,28 +499,107 @@ export class WebSearchService {
 				totalResults: cleanedResults.length,
 			};
 		} catch (error: any) {
-			// Clean up page on error
-			if (page) {
-				try {
-					await page.close();
-				} catch {
-					// Ignore close errors
-				}
+			throw new Error(`Web search failed: ${error.message}`);
+		} finally {
+			await this.closePage(page);
+		}
+	}
+
+	private getImageMimeTypeFromUrl(url: string): string | undefined {
+		try {
+			const pathname = new URL(url).pathname;
+			const ext = extname(pathname).toLowerCase();
+			return IMAGE_MIME_TYPES[ext as keyof typeof IMAGE_MIME_TYPES];
+		} catch {
+			return undefined;
+		}
+	}
+
+	private normalizeImageMimeType(
+		contentType: string | null,
+	): string | undefined {
+		if (!contentType) {
+			return undefined;
+		}
+
+		const mimeType = contentType.split(';')[0]?.trim().toLowerCase();
+		return mimeType && mimeType.startsWith('image/') ? mimeType : undefined;
+	}
+
+	private async convertImageBufferToBase64(
+		buffer: Buffer,
+		mimeType: string,
+	): Promise<{data: string; mimeType: string}> {
+		if (mimeType === 'image/svg+xml') {
+			try {
+				const sharp = (await import('sharp')).default;
+				const pngBuffer = await sharp(buffer).png().toBuffer();
+
+				return {
+					data: pngBuffer.toString('base64'),
+					mimeType: 'image/png',
+				};
+			} catch {
+				return {
+					data: buffer.toString('base64'),
+					mimeType,
+				};
+			}
+		}
+
+		return {
+			data: buffer.toString('base64'),
+			mimeType,
+		};
+	}
+
+	private async fetchRemoteImageAsBase64(
+		url: string,
+		abortSignal?: AbortSignal,
+	): Promise<{data: string; mimeType: string} | null> {
+		const mimeTypeFromUrl = this.getImageMimeTypeFromUrl(url);
+		const response = await fetch(
+			url,
+			addProxyToFetchOptions(url, {
+				signal: abortSignal,
+				headers: {
+					Accept:
+						'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+				},
+			}),
+		);
+
+		if (!response.ok) {
+			if (mimeTypeFromUrl) {
+				throw new Error(
+					`Failed to fetch image: ${response.status} ${response.statusText}`,
+				);
 			}
 
-			throw new Error(`Web search failed: ${error.message}`);
+			return null;
 		}
+
+		const mimeType =
+			this.normalizeImageMimeType(response.headers.get('content-type')) ||
+			mimeTypeFromUrl;
+		if (!mimeType) {
+			return null;
+		}
+
+		const arrayBuffer = await response.arrayBuffer();
+		return this.convertImageBufferToBase64(Buffer.from(arrayBuffer), mimeType);
 	}
 
 	/**
 	 * Fetch and extract content from a web page
 	 * @param url - URL of the web page to fetch
 	 * @param maxLength - Maximum content length (default: 50000 characters)
-	 * @param isUserProvided - Whether the URL is user-provided (true) or from search results (false)
+	 * @param isUserProvided - Whether the URL is user-provided (true) or from search results (false). User-provided URLs ALWAYS skip AI summarization.
 	 * @param userQuery - Optional user query for content extraction using compact model agent
 	 * @param abortSignal - Optional abort signal from main flow
 	 * @param onTokenUpdate - Optional callback to update token count during compression
-	 * @returns Cleaned page content
+	 * @param enableAiSummary - Whether to enable AI summarization for non-user-provided URLs (default: false). Ignored when isUserProvided=true.
+	 * @returns Cleaned page content, or multimodal text + image content for direct image URLs
 	 */
 	async fetchPage(
 		url: string,
@@ -348,10 +608,37 @@ export class WebSearchService {
 		userQuery?: string,
 		abortSignal?: AbortSignal,
 		onTokenUpdate?: (tokenCount: number) => void,
+		enableAiSummary: boolean = false,
 	): Promise<WebPageContent> {
 		let page: Page | null = null;
 
 		try {
+			if (isUserProvided || this.getImageMimeTypeFromUrl(url)) {
+				const imageContent = await this.fetchRemoteImageAsBase64(
+					url,
+					abortSignal,
+				);
+
+				if (imageContent) {
+					const text = `Image URL fetched successfully: ${url} (${imageContent.mimeType})`;
+
+					return {
+						url,
+						title: 'Image',
+						content: [
+							{type: 'text', text},
+							{
+								type: 'image',
+								data: imageContent.data,
+								mimeType: imageContent.mimeType,
+							},
+						],
+						textLength: text.length,
+						contentPreview: text,
+					};
+				}
+			}
+
 			// Launch browser with proxy
 			const browser = await this.launchBrowser();
 			page = await browser.newPage();
@@ -446,13 +733,15 @@ export class WebSearchService {
 				cleanedContent.slice(0, 500) +
 				(cleanedContent.length > 500 ? '...' : '');
 
-			// Close the page
-			await page.close();
+			// Release the Puppeteer page before optional AI compression. Compression can
+			// take much longer than DOM extraction and must not keep browser resources busy.
+			await this.closePage(page);
+			page = null;
 
 			// Use compact agent to extract key information if userQuery is provided
-			// Skip compression for user-provided URLs - return full cleaned content
+			// Skip compression for user-provided URLs OR when AI summary is not requested
 			let finalContent = cleanedContent;
-			if (userQuery && !isUserProvided) {
+			if (userQuery && !isUserProvided && enableAiSummary) {
 				try {
 					const {compactAgent} = await import('../agents/compactAgent.js');
 					const isAvailable = await compactAgent.isAvailable();
@@ -482,16 +771,9 @@ export class WebSearchService {
 				contentPreview,
 			};
 		} catch (error: any) {
-			// Clean up page on error
-			if (page) {
-				try {
-					await page.close();
-				} catch {
-					// Ignore close errors
-				}
-			}
-
 			throw new Error(`Failed to fetch page: ${error.message}`);
+		} finally {
+			await this.closePage(page);
 		}
 	}
 }
@@ -504,7 +786,7 @@ export const mcpTools = [
 	{
 		name: 'websearch-search',
 		description:
-			'Search the web using DuckDuckGo. Returns a list of search results with titles, URLs, and snippets. Best for finding current information, documentation, news, or general web content. **IMPORTANT WORKFLOW**: After getting search results, analyze them and choose ONLY ONE most credible and relevant page to fetch. Do NOT fetch multiple pages - reading one high-quality source is sufficient and more efficient.',
+			'Search the web using the configured search engine (DuckDuckGo or Bing). Returns a list of search results with titles, URLs, and snippets. Best for finding current information, documentation, news, or general web content. **IMPORTANT WORKFLOW**: After getting search results, analyze them and choose ONLY ONE most credible and relevant page to fetch. Do NOT fetch multiple pages - reading one high-quality source is sufficient and more efficient.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -528,19 +810,19 @@ export const mcpTools = [
 	{
 		name: 'websearch-fetch',
 		description:
-			'Fetch and read the full content of a web page. Automatically cleans HTML and extracts the main text content, removing ads, navigation, and other noise. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **IMPORTANT**: The isUserProvided parameter determines whether content is compressed - user-provided URLs return full cleaned content, while search result URLs use AI compression.',
+			'Fetch and read the full content of a web page or a direct image URL. For HTML pages, automatically cleans and extracts main text content. For direct image URLs (detected by image content-type or image file extension), downloads the image, converts it to base64, and returns multimodal content with an image block so the model can inspect the image. **USAGE RULE**: Only fetch ONE page per search - choose the most credible and relevant result (prefer official documentation, reputable tech sites, or well-known sources). **COMPRESSION CONTROL**: User-provided URLs (isUserProvided=true) ALWAYS return full cleaned content without AI summarization. For AI-discovered URLs (isUserProvided=false), use enableAiSummary to choose: true = compact AI model extracts query-relevant info (80-95% smaller), false = return full cleaned content. Set enableAiSummary=true when you only need targeted facts; set false when you need the original full text.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				url: {
 					type: 'string',
 					description:
-						'Full URL of the web page to fetch (e.g., "https://example.com/article")',
+						'Full URL of the web page or direct image to fetch (e.g., "https://example.com/article" or "https://example.com/image.png")',
 				},
 				maxLength: {
 					type: 'number',
 					description:
-						'Maximum content length in characters (default: 50000, max: 100000)',
+						'Maximum content length in characters for HTML pages (default: 50000, max: 100000). Ignored for direct image URLs.',
 					default: 50000,
 					minimum: 1000,
 					maximum: 100000,
@@ -548,12 +830,18 @@ export const mcpTools = [
 				isUserProvided: {
 					type: 'boolean',
 					description:
-						'REQUIRED: Whether the URL is directly provided by the user (true) or from search results (false). If true, returns full cleaned content without AI compression. If false, uses compact AI model to extract relevant information based on userQuery.',
+						'REQUIRED: Whether the URL is directly provided by the user (true) or from search results / AI-discovered (false). User-provided URLs ALWAYS skip AI summarization regardless of enableAiSummary.',
+				},
+				enableAiSummary: {
+					type: 'boolean',
+					description:
+						'Whether to apply AI summarization for non-user-provided HTML pages. Only effective when isUserProvided=false AND userQuery is provided. Default: false (return full cleaned content). Ignored for direct image URLs.',
+					default: false,
 				},
 				userQuery: {
 					type: 'string',
 					description:
-						"Optional: User's original question or query. Only used when isUserProvided=false for intelligent content extraction - the compact AI model will extract only information relevant to this query, reducing content size by 80-95%.",
+						"Optional: User's original question or query. Only used for non-user-provided HTML pages when enableAiSummary=true. Direct image URLs are returned as image content instead of summarized text.",
 				},
 			},
 			required: ['url', 'isUserProvided'],

@@ -1,7 +1,14 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
-import type {ToolCall, ToolResult} from '../../../utils/execution/toolExecutor.js';
+import type {
+	ToolCall,
+	ToolResult,
+} from '../../../utils/execution/toolExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
+import {
+	extractFilesystemEditDiffFromRawResult,
+	isToolNeedTwoStepDisplay,
+} from '../../../utils/config/toolDisplayConfig.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 
 /**
  * Build UI messages for tool execution results.
@@ -20,7 +27,7 @@ export function buildToolResultMessages(
 		if (!toolCall) continue;
 
 		const isError = result.content.startsWith('Error:');
-		const statusIcon = isError ? '✗' : '✓';
+		const statusKey = isError ? 'error' : 'success';
 
 		// Sub-agent tools
 		if (toolCall.function.name.startsWith('subagent-')) {
@@ -36,7 +43,7 @@ export function buildToolResultMessages(
 
 			resultMessages.push({
 				role: 'assistant',
-				content: `${statusIcon} ${toolCall.function.name}`,
+				content: formatToolTitleLine(toolCall.function.name, statusKey),
 				streaming: false,
 				messageStatus: isError ? 'error' : 'success',
 				toolResult: !isError ? result.content : undefined,
@@ -55,7 +62,7 @@ export function buildToolResultMessages(
 
 		resultMessages.push({
 			role: 'assistant',
-			content: `${statusIcon} ${toolCall.function.name}`,
+			content: formatToolTitleLine(toolCall.function.name, statusKey),
 			streaming: false,
 			messageStatus: isError ? 'error' : 'success',
 			toolCall: editDiffData
@@ -75,7 +82,9 @@ function extractEditDiffData(
 	result: ToolResult,
 ): Record<string, any> | undefined {
 	if (
-		toolCall.function.name !== 'filesystem-edit'
+		toolCall.function.name !== 'filesystem-edit' &&
+		toolCall.function.name !== 'filesystem-replaceedit' &&
+		toolCall.function.name !== 'filesystem-create'
 	) {
 		return undefined;
 	}
@@ -91,24 +100,45 @@ function extractEditDiffData(
 	// Fallback: parse from content string
 	try {
 		const resultData = JSON.parse(result.content);
-		if (resultData.oldContent && resultData.newContent) {
-			return {
-				oldContent: resultData.oldContent,
-				newContent: resultData.newContent,
-				filename: JSON.parse(toolCall.function.arguments).filePath,
-				completeOldContent: resultData.completeOldContent,
-				completeNewContent: resultData.completeNewContent,
-				contextStartLine: resultData.contextStartLine,
-			};
-		}
-		if (resultData.results && Array.isArray(resultData.results)) {
-			return {
-				batchResults: resultData.results,
-				isBatch: true,
-			};
+		const fromParsed = extractFilesystemEditDiffFromRawResult(
+			toolCall.function.name,
+			resultData,
+		);
+		if (fromParsed) {
+			if (!fromParsed['filename']) {
+				try {
+					const callArgs = JSON.parse(toolCall.function.arguments);
+					if (typeof callArgs.filePath === 'string') {
+						fromParsed['filename'] = callArgs.filePath;
+					}
+				} catch {
+					// ignore
+				}
+			}
+			return fromParsed;
 		}
 	} catch {
 		// If parsing fails, show regular result
 	}
+
+	// For filesystem-create single file: the result is a plain string message,
+	// not a JSON object. Extract content/path from the tool call arguments.
+	if (toolCall.function.name === 'filesystem-create') {
+		try {
+			const callArgs = JSON.parse(toolCall.function.arguments);
+			if (
+				typeof callArgs.filePath === 'string' &&
+				typeof callArgs.content === 'string'
+			) {
+				return {
+					content: callArgs.content,
+					path: callArgs.filePath,
+				};
+			}
+		} catch {
+			// ignore
+		}
+	}
+
 	return undefined;
 }

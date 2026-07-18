@@ -78,6 +78,24 @@ PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION
 [How to safely undo if something goes wrong]
 \`\`\`
 
+**After creating the plan file, help the user open it instantly**:
+
+Users should not have to manually hunt for the plan file. After \`filesystem-create\` succeeds:
+
+1. **Always print the absolute path on its own line.** Modern terminals (VSCode, Cursor, JetBrains, iTerm2, Warp, etc.) auto-detect absolute file paths and let the user open them with Cmd/Ctrl+Click — no extra work needed.
+
+2. **Detect the active IDE from system context** before invoking any CLI. The editor-context prefix uses the pattern \`└─ <IdeName> Workspace: <path>\` where \`<IdeName>\` is the real connected editor (e.g. \`VSCode\`, \`Cursor\`, \`IntelliJ IDEA\`, \`WebStorm\`, \`PyCharm\`, \`GoLand\`, etc.). Read that name verbatim — do NOT assume VSCode just because a workspace hint exists. When the name is known, invoke the matching CLI via \`terminal-execute\`:
+   - VSCode: \`code -g <absolute-path>\` (\`-g\` also accepts \`<path>:<line>\`)
+   - Cursor: \`cursor <absolute-path>\`
+   - JetBrains family: \`idea <path>\` / \`webstorm <path>\` / \`pycharm <path>\` / \`goland <path>\` / \`rubymine <path>\` / \`clion <path>\` / \`phpstorm <path>\` / \`rider <path>\` — pick the binary matching the detected IDE name.
+
+3. **Handle missing CLI on PATH gracefully.** Non-interactive shells often miss user PATH entries, so \`code\` / \`cursor\` may return exit code 127 even when installed. On macOS, fall back to \`open -a "Visual Studio Code" <path>\` / \`open -a Cursor <path>\` / \`open -a "IntelliJ IDEA" <path>\` etc. If both attempts fail, stop trying and rely on the printed absolute path.
+
+4. **Be conservative**: only run an IDE CLI when you can clearly read the IDE name from the context. If unsure (no IDE hint, SSH session, headless terminal), just print the absolute path — the terminal click target is enough.
+
+5. **Do not block on this step.** Opening the plan file is a convenience. If every CLI attempt fails (command not found, non-zero exit), silently continue — never let it interrupt the planning workflow or the user-confirmation step that follows.
+
+
 **Planning Guidelines**:
 - 2-5 phases, ordered by dependency
 - Each phase independently verifiable
@@ -188,7 +206,8 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 - \`askuser-ask_question\` - **Your most important coordination tool**. Pauses workflow to get user decisions. MUST be used before starting execution. Also use when: requirements are ambiguous, a phase fails and cannot be resolved, or the plan scope needs fundamental changes
 
 **Task Tracking**:
-- \`todo-add/update/get/delete\` - Track phase execution progress (for your own coordination, not sub-agents)
+- \`todo-manage\` (action: get / add / update / delete) - Track phase execution progress (for your own coordination, not sub-agents)
+- **Execution discipline**: Update TODO status immediately after each completed step; never wait until the end of a phase (or all phases) to do one bulk status update.
 
 **File & Verification**:
 - \`filesystem-read\` - Understand codebase and verify changes
@@ -218,17 +237,12 @@ function getAnalysisToolsSection(hasCodebase: boolean): string {
 
 - \`codebase-search\` - PRIMARY tool for code exploration (semantic search across entire codebase)
 - \`filesystem-read\` - Read current code to understand implementation
-- \`ace-find_definition\` - Locate exact symbol definitions (when you know the symbol name)
-- \`ace-find_references\` - See where code is used throughout the project
-- \`ace-file_outline\` - Get structure overview of specific files
+- \`ace-search\` - Unified ACE code search; choose \`action\`: find_definition (exact symbol), find_references (impact), file_outline (file structure), semantic_search (fuzzy), text_search (literal/regex)
 - \`ide-get_diagnostics\` - Check for existing errors/warnings that might affect the plan`;
 	} else {
 		return `**CRITICAL: Use code search tools to find code. Only use terminal-execute to run build/test commands, NEVER for searching code.**
 
-- \`ace-semantic_search\` - Find relevant code by semantic meaning
-- \`ace-find_definition\` - Locate where symbols are defined
-- \`ace-find_references\` - See where code is used throughout the project
-- \`ace-file_outline\` - Get structure overview of specific files
+- \`ace-search\` - Unified ACE code search; choose \`action\`: semantic_search (find by meaning), find_definition (locate symbol), find_references (impact), file_outline (file structure), text_search (literal/regex)
 - \`filesystem-read\` - Read current code to understand implementation
 - \`ide-get_diagnostics\` - Check for existing errors/warnings that might affect the plan`;
 	}
@@ -241,10 +255,7 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 	if (hasCodebase) {
 		return `**Code Analysis (Read-Only)**:
 - \`codebase-search\` - PRIMARY tool for semantic search (query by meaning/intent)
-- \`ace-find_definition\` - Find where symbols are defined (exact symbol lookup)
-- \`ace-find_references\` - Find all usages of a symbol (impact analysis)
-- \`ace-file_outline\` - Get file structure overview
-- \`ace-text_search\` - Search for literal strings/patterns (TODOs, comments, error messages)
+- \`ace-search\` - Unified ACE code search; pick \`action\`: find_definition / find_references / file_outline / text_search / semantic_search
 
 **File Operations (Read-Only)**:
 - \`filesystem-read\` - Read file contents to understand current state
@@ -253,11 +264,7 @@ function getAvailableToolsSection(hasCodebase: boolean): string {
 - \`ide-get_diagnostics\` - Check for existing errors/warnings`;
 	} else {
 		return `**Code Analysis (Read-Only)**:
-- \`ace-semantic_search\` - Search code by meaning/intent
-- \`ace-find_definition\` - Find where symbols are defined
-- \`ace-find_references\` - Find all usages of a symbol
-- \`ace-file_outline\` - Get file structure overview
-- \`ace-text_search\` - Search for literal strings/patterns
+- \`ace-search\` - Unified ACE code search; pick \`action\`: semantic_search (by meaning), find_definition, find_references, file_outline, text_search (literal/regex)
 
 **File Operations (Read-Only)**:
 - \`filesystem-read\` - Read file contents to understand current state

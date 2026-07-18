@@ -4,6 +4,7 @@ import Menu from '../components/common/Menu.js';
 import {useI18n} from '../../i18n/index.js';
 import type {Language} from '../../utils/config/languageConfig.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -14,7 +15,8 @@ export default function LanguageSettingsScreen({
 	onBack,
 	inlineMode = false,
 }: Props) {
-	const {language, setLanguage} = useI18n();
+	const {language, setLanguage, t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.welcome.languageSettings}`);
 	const {theme} = useTheme();
 	const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
 

@@ -122,7 +122,10 @@ class TeamTracker {
 	 * If a parent abort signal is provided, it will be linked so the teammate
 	 * aborts when either the parent fires or abortAllTeammates() is called.
 	 */
-	createAbortController(instanceId: string, parentSignal?: AbortSignal): AbortController {
+	createAbortController(
+		instanceId: string,
+		parentSignal?: AbortSignal,
+	): AbortController {
 		const controller = new AbortController();
 		this.teammateAbortControllers.set(instanceId, controller);
 		if (parentSignal) {
@@ -144,7 +147,11 @@ class TeamTracker {
 	 */
 	abortAllTeammates(): void {
 		for (const controller of this.teammateAbortControllers.values()) {
-			try { controller.abort(); } catch { /* noop */ }
+			try {
+				controller.abort();
+			} catch {
+				/* noop */
+			}
 		}
 		this.teammateAbortControllers.clear();
 	}
@@ -212,10 +219,7 @@ class TeamTracker {
 
 	// ── Messaging: teammate → lead ──
 
-	sendMessageToLead(
-		fromInstanceId: string,
-		content: string,
-	): boolean {
+	sendMessageToLead(fromInstanceId: string, content: string): boolean {
 		const from = this.teammates.get(fromInstanceId);
 		if (!from) return false;
 
@@ -254,9 +258,8 @@ class TeamTracker {
 		const queue = this.teammateMessageQueues.get(targetInstanceId);
 		if (!queue) return false;
 
-		const from = fromInstanceId === 'lead'
-			? null
-			: this.teammates.get(fromInstanceId);
+		const from =
+			fromInstanceId === 'lead' ? null : this.teammates.get(fromInstanceId);
 
 		const message: TeammateMessage = {
 			fromInstanceId: fromInstanceId === 'lead' ? 'lead' : fromInstanceId,
@@ -270,7 +273,13 @@ class TeamTracker {
 		const target = this.teammates.get(targetInstanceId);
 		if (target) {
 			this.notifyMessageListeners({
-				from: from || ({instanceId: 'lead', memberId: 'lead', memberName: 'Team Lead'} as RunningTeammate),
+				from:
+					from ||
+					({
+						instanceId: 'lead',
+						memberId: 'lead',
+						memberName: 'Team Lead',
+					} as RunningTeammate),
 				to: target,
 				message,
 				isBroadcast: false,
@@ -285,6 +294,38 @@ class TeamTracker {
 		const messages = [...queue];
 		queue.length = 0;
 		return messages;
+	}
+
+	enqueueExternalTeammateMessage(
+		targetInstanceId: string,
+		message: TeammateMessage,
+	): boolean {
+		const queue = this.teammateMessageQueues.get(targetInstanceId);
+		if (!queue) return false;
+
+		queue.push(message);
+		const target = this.teammates.get(targetInstanceId);
+		if (target) {
+			const from =
+				this.teammates.get(message.fromInstanceId) ||
+				({
+					instanceId: message.fromInstanceId,
+					memberId: message.fromMemberId,
+					memberName: message.fromMemberName,
+					worktreePath: '',
+					teamName: target.teamName,
+					prompt: '',
+					startedAt: message.sentAt,
+				} as RunningTeammate);
+			this.notifyMessageListeners({
+				from,
+				to: target,
+				message,
+				isBroadcast: false,
+			});
+		}
+
+		return true;
 	}
 
 	// ── Broadcast: lead → all teammates ──
@@ -323,10 +364,7 @@ class TeamTracker {
 
 	// ── Plan approval ──
 
-	requestPlanApproval(
-		fromInstanceId: string,
-		plan: string,
-	): boolean {
+	requestPlanApproval(fromInstanceId: string, plan: string): boolean {
 		const from = this.teammates.get(fromInstanceId);
 		if (!from) return false;
 
@@ -361,8 +399,12 @@ class TeamTracker {
 		approval.feedback = feedback;
 
 		const content = approved
-			? `Your plan has been approved.${feedback ? ` Feedback: ${feedback}` : ''}`
-			: `Your plan has been rejected.${feedback ? ` Feedback: ${feedback}` : ' Please revise and resubmit.'}`;
+			? `Your plan has been approved.${
+					feedback ? ` Feedback: ${feedback}` : ''
+			  }`
+			: `Your plan has been rejected.${
+					feedback ? ` Feedback: ${feedback}` : ' Please revise and resubmit.'
+			  }`;
 
 		this.sendMessageToTeammate('lead', fromInstanceId, content);
 		return true;
@@ -417,10 +459,14 @@ class TeamTracker {
 			});
 
 			if (abortSignal) {
-				abortSignal.addEventListener('abort', () => {
-					cleanup();
-					resolve(false);
-				}, {once: true});
+				abortSignal.addEventListener(
+					'abort',
+					() => {
+						cleanup();
+						resolve(false);
+					},
+					{once: true},
+				);
 			}
 
 			checkDone();

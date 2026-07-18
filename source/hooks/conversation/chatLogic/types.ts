@@ -36,10 +36,12 @@ export interface UseChatLogicProps {
 			images?: Array<{type: 'image'; data: string; mimeType: string}>;
 		} | null>
 	>;
+	isCompressing: boolean;
 	setIsCompressing: React.Dispatch<React.SetStateAction<boolean>>;
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
 	userInterruptedRef: React.MutableRefObject<boolean>;
+	cutInterruptRef: React.MutableRefObject<boolean>;
 	pendingMessagesRef: React.MutableRefObject<
 		Array<{text: string; images?: Array<{data: string; mimeType: string}>}>
 	>;
@@ -140,5 +142,11 @@ export interface UseChatLogicProps {
 			| import('../../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	onThinkingStatus?: (
+		status:
+			| import('../../../ui/components/chat/ThinkingStatus.js').ThinkingStatus
+			| null,
+	) => void;
 	setIsResumingSession?: React.Dispatch<React.SetStateAction<boolean>>;
+	onResetTerminalTitle?: () => void;
 }

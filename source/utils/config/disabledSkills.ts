@@ -1,28 +1,21 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import {readSettings, updateSettings} from './unifiedSettings.js';
 
 /**
  * 管理技能的禁用状态
- * 持久化到项目根目录 .snow/disabled-skills.json
+ * 现已统一持久化到 `<cwd>/.snow/settings.json` 的 `disabledSkills` 字段
+ * （历史上单独存放于 `disabled-skills.json`，已自动迁移）。
  */
-
-const CONFIG_FILE = 'disabled-skills.json';
-
-function getConfigPath(): string {
-	return path.join(process.cwd(), '.snow', CONFIG_FILE);
-}
 
 /**
  * 读取被禁用的技能列表
  */
 export function getDisabledSkills(): string[] {
 	try {
-		const configPath = getConfigPath();
-		if (!fs.existsSync(configPath)) {
-			return [];
+		const settings = readSettings('project');
+		if (Array.isArray(settings.disabledSkills)) {
+			return settings.disabledSkills;
 		}
-		const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-		return Array.isArray(data.disabledSkills) ? data.disabledSkills : [];
+		return [];
 	} catch {
 		return [];
 	}
@@ -51,16 +44,9 @@ export function toggleSkill(skillId: string): boolean {
 		newEnabled = false;
 	}
 
-	const configPath = getConfigPath();
-	const dir = path.dirname(configPath);
-	if (!fs.existsSync(dir)) {
-		fs.mkdirSync(dir, {recursive: true});
-	}
-	fs.writeFileSync(
-		configPath,
-		JSON.stringify({disabledSkills: disabled}, null, 2),
-		'utf-8',
-	);
+	updateSettings('project', settings => {
+		settings.disabledSkills = disabled;
+	});
 
 	return newEnabled;
 }

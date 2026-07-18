@@ -1,11 +1,17 @@
+import type {Context} from '@opentelemetry/api';
+
 import {collectAllMCPTools} from './mcpToolsManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
+import {getConversationContext} from '../codebase/conversationContext.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
 import {resolveAgent, filterAllowedTools} from './subAgentResolver.js';
-import {injectBuiltinTools, buildInitialMessages} from './subAgentBuiltinTools.js';
+import {
+	injectBuiltinTools,
+	buildInitialMessages,
+} from './subAgentBuiltinTools.js';
 import {
 	createApiStream,
 	processStreamEvents,
@@ -20,6 +26,7 @@ import {
 import {checkAndApproveTools, executeMcpTools} from './subAgentToolApproval.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
+import {withAgentSpan} from '../telemetry/otel.js';
 import type {
 	SubAgentExecutionContext,
 	SubAgentMessage,
@@ -56,7 +63,9 @@ export async function executeSubAgent(
 	requestUserQuestion?: UserQuestionCallback,
 	instanceId?: string,
 	spawnDepth: number = 0,
+	parentContext?: Context,
 ): Promise<SubAgentResult> {
+	let ctx: SubAgentExecutionContext | undefined;
 	try {
 		// 1. Resolve agent
 		const {agent, error: resolveError} = await resolveAgent(agentId);
@@ -64,163 +73,218 @@ export async function executeSubAgent(
 			return {success: false, result: '', error: resolveError};
 		}
 
-		// 2. Filter tools + inject builtin tools
-		const allTools = await collectAllMCPTools();
-		const allowedTools = filterAllowedTools(agent, allTools);
-		if (allowedTools.length === 0) {
-			return {
-				success: false,
-				result: '',
-				error: `Sub-agent "${agent.name}" has no valid tools configured`,
-			};
-		}
-		injectBuiltinTools(allowedTools, spawnDepth);
-
-		// 3. Build initial messages
-		const messages = await buildInitialMessages(
-			agent,
-			prompt,
-			instanceId,
-			spawnDepth,
-		);
-
-		// 4. Build execution context
-		const ctx: SubAgentExecutionContext = {
-			agent,
-			instanceId,
-			messages,
-			onMessage,
-			abortSignal,
-			requestToolConfirmation,
-			isToolAutoApproved,
-			yoloMode: yoloMode ?? false,
-			addToAlwaysApproved,
-			requestUserQuestion,
-			spawnDepth,
-			sessionApprovedTools: new Set<string>(),
-			spawnedChildInstanceIds: new Set<string>(),
-			collectedInjectedMessages: [],
-			collectedTerminationInstructions: [],
-			latestTotalTokens: 0,
-			totalUsage: undefined,
-			finalResponse: '',
-		};
-
-		// 5. Main loop
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			if (abortSignal?.aborted) {
-				emitSubAgentMessage(ctx, {type: 'done'});
-				return {
-					success: false,
-					result: ctx.finalResponse,
-					error: 'Sub-agent execution aborted',
-				};
-			}
-
-			// Wait if the main flow (or another participant) is compressing.
-			await compressionCoordinator.waitUntilFree(ctx.instanceId);
-
-			// Inject pending user / inter-agent messages
-			injectPendingMessages(ctx);
-
-			// Resolve config + create API stream
-			const {config, model} = await resolveConfig(agent);
-			const currentSession = sessionManager.getCurrentSession();
-			const stream = createApiStream(
-				config,
-				model,
-				ctx.messages,
-				allowedTools,
-				currentSession?.id,
-				agent.configProfile,
-				abortSignal,
-			);
-
-			// Process stream events
-			ctx.latestTotalTokens = 0;
-			const {toolCalls, hasError, errorMessage} =
-				await processStreamEvents(ctx, stream, config);
-
-			if (hasError) {
-				return {
-					success: false,
-					result: ctx.finalResponse,
-					error: errorMessage,
-				};
-			}
-
-			// Context compression
-			const compressed = await handleContextCompression(ctx, config, model);
-			if (compressed && toolCalls.length === 0) {
-				// Remove premature exit response, inject continuation
-				while (
-					ctx.messages.length > 0 &&
-					ctx.messages[ctx.messages.length - 1]?.role === 'assistant'
-				) {
-					ctx.messages.pop();
+		const sessionId =
+			sessionManager.getCurrentSession()?.id ??
+			getConversationContext()?.sessionId;
+		return await withAgentSpan(
+			{
+				agentId: agent.id ?? agentId,
+				agentName: agent.name ?? agentId,
+				instanceId,
+				sessionId,
+				conversationId: sessionId,
+				spawnDepth,
+				parentContext,
+			},
+			async () => {
+				// 2. Filter tools + inject builtin tools
+				const allTools = await collectAllMCPTools();
+				const allowedTools = filterAllowedTools(agent, allTools);
+				if (allowedTools.length === 0) {
+					return {
+						success: false,
+						result: '',
+						error: `Sub-agent "${agent.name}" has no valid tools configured`,
+					};
 				}
-				ctx.messages.push({
-					role: 'user',
-					content:
-						'[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
-				});
-				continue;
-			}
+				injectBuiltinTools(allowedTools, spawnDepth);
 
-			// No tool calls → check spawned children / completion hooks → break
-			if (toolCalls.length === 0) {
-				if (await handleSpawnedChildren(ctx)) continue;
-				if (await handleCompletionHooks(ctx)) continue;
-				break;
-			}
+				// 2.5 beforeSubAgentStart: optional prompt prepend/replace
+				let effectivePrompt = prompt;
+				try {
+					const hookResult = await unifiedHooksExecutor.executeHooks(
+						'beforeSubAgentStart',
+						{
+							agentId: agent.id ?? agentId,
+							agentName: agent.name ?? agentId,
+							prompt,
+							cwd: process.cwd(),
+							sessionId: sessionManager.getCurrentSession()?.id,
+						},
+					);
+					const interpreted = interpretHookResult(
+						'beforeSubAgentStart',
+						hookResult,
+					);
+					if (interpreted.promptOverride) {
+						effectivePrompt = interpreted.promptOverride;
+					} else if (interpreted.additionalContext) {
+						effectivePrompt = `${interpreted.additionalContext}\n\n${prompt}`;
+					}
+				} catch (error) {
+					// fail-open: keep original prompt
+					console.warn('beforeSubAgentStart hook failed:', error);
+				}
 
-			// Intercept builtin tools
-			let remaining = toolCalls;
-			remaining = interceptSendMessage(ctx, remaining).remainingToolCalls;
-			remaining = interceptQueryStatus(ctx, remaining).remainingToolCalls;
-			remaining = interceptSpawnSubAgent(
-				ctx,
-				remaining,
-				executeSubAgent,
-			).remainingToolCalls;
-			remaining = (
-				await interceptAskUser(ctx, remaining)
-			).remainingToolCalls;
-			if (remaining.length === 0) continue;
+				// 3. Build initial messages
+				const messages = await buildInitialMessages(
+					agent,
+					effectivePrompt,
+					instanceId,
+					spawnDepth,
+				);
 
-			// Approve + execute MCP tools
-			const approval = await checkAndApproveTools(ctx, remaining);
-			if (approval.shouldContinue) continue;
+				// 4. Build execution context
+				ctx = {
+					agent,
+					instanceId,
+					messages,
+					onMessage,
+					abortSignal,
+					requestToolConfirmation,
+					isToolAutoApproved,
+					yoloMode: yoloMode ?? false,
+					addToAlwaysApproved,
+					requestUserQuestion,
+					spawnDepth,
+					sessionApprovedTools: new Set<string>(),
+					spawnedChildInstanceIds: new Set<string>(),
+					collectedInjectedMessages: [],
+					collectedTerminationInstructions: [],
+					latestTotalTokens: 0,
+					totalUsage: undefined,
+					finalResponse: '',
+				};
 
-			const execResult = await executeMcpTools(
-				ctx,
-				approval.approvedToolCalls,
-			);
-			if (execResult.aborted && execResult.abortResult) {
-				return execResult.abortResult;
-			}
-		}
+				// 5. Main loop
+				// eslint-disable-next-line no-constant-condition
+				while (true) {
+					if (abortSignal?.aborted) {
+						emitSubAgentMessage(ctx, {type: 'done'});
+						return {
+							success: false,
+							result: ctx.finalResponse,
+							error: 'Sub-agent execution aborted',
+						};
+					}
 
-		return {
-			success: true,
-			result: ctx.finalResponse,
-			usage: ctx.totalUsage,
-			injectedUserMessages:
-				ctx.collectedInjectedMessages.length > 0
-					? ctx.collectedInjectedMessages
-					: undefined,
-			terminationInstructions:
-				ctx.collectedTerminationInstructions.length > 0
-					? ctx.collectedTerminationInstructions
-					: undefined,
-		};
+					// Wait if the main flow (or another participant) is compressing.
+					await compressionCoordinator.waitUntilFree(ctx.instanceId);
+
+					// Inject pending user / inter-agent messages
+					injectPendingMessages(ctx);
+
+					// Resolve config + create API stream
+					const {config, model} = await resolveConfig(agent);
+					const stream = createApiStream(
+						config,
+						model,
+						ctx.messages,
+						allowedTools,
+						sessionId,
+						agent.configProfile,
+						abortSignal,
+					);
+
+					// Process stream events
+					ctx.latestTotalTokens = 0;
+					const {toolCalls, hasError, errorMessage} = await processStreamEvents(
+						ctx,
+						stream,
+						config,
+					);
+
+					if (hasError) {
+						return {
+							success: false,
+							result: ctx.finalResponse,
+							error: errorMessage,
+						};
+					}
+
+					// Context compression
+					const compressed = await handleContextCompression(ctx, config, model);
+					if (compressed && toolCalls.length === 0) {
+						// Remove premature exit response, inject continuation
+						while (
+							ctx.messages.length > 0 &&
+							ctx.messages[ctx.messages.length - 1]?.role === 'assistant'
+						) {
+							ctx.messages.pop();
+						}
+						ctx.messages.push({
+							role: 'user',
+							content:
+								'[System] Your context has been auto-compressed to free up space. Your task is NOT finished. Continue working based on the compressed context above. Pick up where you left off.',
+						});
+						continue;
+					}
+
+					// No tool calls → check spawned children / completion hooks → break
+					if (toolCalls.length === 0) {
+						if (await handleSpawnedChildren(ctx)) continue;
+						if (await handleCompletionHooks(ctx)) continue;
+						break;
+					}
+
+					// Intercept builtin tools
+					let remaining = toolCalls;
+					remaining = (await interceptSendMessage(ctx, remaining))
+						.remainingToolCalls;
+					remaining = (await interceptQueryStatus(ctx, remaining))
+						.remainingToolCalls;
+					remaining = (
+						await interceptSpawnSubAgent(ctx, remaining, executeSubAgent)
+					).remainingToolCalls;
+					remaining = (await interceptAskUser(ctx, remaining))
+						.remainingToolCalls;
+					if (remaining.length === 0) continue;
+
+					// Approve + execute MCP tools
+					const approval = await checkAndApproveTools(ctx, remaining);
+					if (approval.shouldContinue) continue;
+
+					const execResult = await executeMcpTools(
+						ctx,
+						approval.approvedToolCalls,
+					);
+					if (execResult.aborted && execResult.abortResult) {
+						return execResult.abortResult;
+					}
+				}
+
+				return {
+					success: true,
+					result: ctx.finalResponse,
+					usage: ctx.totalUsage,
+					injectedUserMessages:
+						ctx.collectedInjectedMessages.length > 0
+							? ctx.collectedInjectedMessages
+							: undefined,
+					terminationInstructions:
+						ctx.collectedTerminationInstructions.length > 0
+							? ctx.collectedTerminationInstructions
+							: undefined,
+				};
+			},
+		);
 	} catch (error) {
 		return {
 			success: false,
 			result: '',
 			error: error instanceof Error ? error.message : 'Unknown error',
 		};
+	} finally {
+		// Always emit a final 'done' so the UI handler can clear stream entries.
+		// handleDone is idempotent (clearStreamState only removes existing entries),
+		// so emitting an extra 'done' on already-cleaned-up paths is safe.
+		if (ctx) {
+			try {
+				emitSubAgentMessage(ctx, {type: 'done'});
+			} catch {
+				/* noop */
+			}
+		}
 	}
 }
 
@@ -244,8 +308,9 @@ function injectPendingMessages(ctx: SubAgentExecutionContext): void {
 		});
 	}
 
-	const interAgentMessages =
-		runningSubAgentTracker.dequeueInterAgentMessages(ctx.instanceId);
+	const interAgentMessages = runningSubAgentTracker.dequeueInterAgentMessages(
+		ctx.instanceId,
+	);
 	for (const iaMsg of interAgentMessages) {
 		ctx.messages.push({
 			role: 'user',
@@ -281,7 +346,7 @@ async function resolveConfig(
 		}
 	}
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	return {config, model: config.advancedModel || 'gpt-5'};
 }
 
@@ -303,7 +368,7 @@ async function handleSpawnedChildren(
 
 	if (runningChildren.length > 0) {
 		await runningSubAgentTracker.waitForSpawnedAgents(
-			300_000,
+			1_200_000,
 			ctx.abortSignal,
 		);
 	}
@@ -354,7 +419,10 @@ async function handleCompletionHooks(
 		);
 		const interpreted = interpretHookResult('onSubAgentComplete', hookResult);
 
-		if (interpreted.injectedMessages && interpreted.injectedMessages.length > 0) {
+		if (
+			interpreted.injectedMessages &&
+			interpreted.injectedMessages.length > 0
+		) {
 			for (const injected of interpreted.injectedMessages) {
 				ctx.messages.push({role: injected.role, content: injected.content});
 			}

@@ -1,5 +1,9 @@
 import type {TranslationKeys} from '../types.js';
 
+const inputNewlineShortcut =
+	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+const pasteImageShortcut = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+
 export const zh: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
@@ -28,6 +32,8 @@ export const zh: TranslationKeys = {
 		languageSettingsInfo: '切换应用语言',
 		themeSettings: '主题设置',
 		themeSettingsInfo: '配置主题并预览差异查看器',
+		privacySettings: '隐私设置',
+		privacySettingsInfo: '配置隐私相关选项',
 		hooksSettings: 'Hooks 设置',
 		hooksSettingsInfo: '配置 Hooks 以自定义 AI 工作流',
 		updateNoticeTitle: '发现新版本',
@@ -35,8 +41,116 @@ export const zh: TranslationKeys = {
 		updateNoticeLatest: '最新版本',
 		updateNoticeRun: '更新命令',
 		updateNoticeGithub: '项目地址',
+		updateNow: '立即更新',
+		updateNowInfo: '退出 CLI 并执行 "npm i -g snow-ai" 升级到最新版本',
 		exit: '退出',
 		exitInfo: '退出应用程序',
+	},
+	notification: {
+		taskCompletedTitle: 'Snow 任务已完成',
+		taskFailedTitle: 'Snow 任务失败',
+		agentWaitingForInputTitle: 'Snow 智能体正在等待输入',
+		unknownError: '未知错误',
+	},
+	doctor: {
+		available: '可用',
+		unavailableOrFailed: '不可用或执行失败',
+		exitCodeColon: '退出码: {code}',
+		exitCode: '退出码 {code}',
+		bundledRipgrepMissingPath: '@vscode/ripgrep 未提供 rgPath',
+		bundledRipgrep: 'bundled @vscode/ripgrep: {version}',
+		systemRg: 'system rg: {version}',
+		bundledRipgrepFailed: 'bundled @vscode/ripgrep 执行失败: {reason}',
+		bothRipgrepUnavailable: 'bundled @vscode/ripgrep 与 system rg 都不可用',
+		bundledPath: 'bundled path: {path}',
+		bundledError: 'bundled error: {reason}',
+		systemError: 'system error: {reason}',
+		bundledRipgrepUnavailable: 'bundled @vscode/ripgrep 不可用: {reason}',
+		privacyNotConfigured: '未配置',
+		privacyEnabled: '已启用',
+		privacyDisabled: '未启用',
+		version: 'version {version}',
+		unknown: 'unknown',
+		required: ', required {version}',
+		readFailed: '无法读取',
+		npmRegistry: 'npm registry',
+		workingDirectory: '工作目录',
+		projectPackageJson: '项目 package.json',
+		parseFailed: '解析失败',
+		found: '已找到',
+		notFoundInCurrentDirectory: '当前目录未找到',
+		userConfigDirectory: '用户配置目录',
+		notReadableWritable: '不可读写',
+		userConfigDirectoryMissing: '不存在，首次完成配置后会创建',
+		globalSettingsJson: '全局 settings.json',
+		readable: '可读取',
+		notCreated: '未创建',
+		projectSettingsJson: '项目 settings.json',
+		projectSettingsNotConfigured: '未配置项目级设置',
+		activeProfile: '活动 Profile',
+		profileMissing: '{profile} 不存在',
+		apiKeyConfigured: '已配置',
+		apiKeyMissing: '未在活动 Profile 中配置',
+		profileCount: '{count} 个 profile',
+		mcpServices: 'MCP 服务',
+		mcpServerCount: '全局 {global} 个，项目 {project} 个',
+		privacyFilter: '隐私过滤',
+		asyncTasks: '异步任务',
+		taskFileCount: '{count} 个任务文件',
+		sseDaemonRecordCount: '记录 {total} 个，运行中 {alive} 个，陈旧 {stale} 个',
+		nodeOptionsMayAffect: '已设置，可能影响 Node.js 启动行为',
+		notSet: '未设置',
+		proxyEnvironmentVariables: '代理环境变量',
+		setItemCount: '已设置 {count} 项',
+		title: '[i] Snow Doctor 环境诊断',
+		summary: '摘要',
+		summaryOk: '{count} OK',
+		summaryWarning: '{count} 个警告',
+		summaryFailed: '{count} 个失败',
+		summaryInfo: '{count} 条信息',
+		blockingIssues: '\n[x] Doctor 发现阻塞性环境问题。',
+		completedWithWarnings: '\n[!] Doctor 已完成，但存在警告。',
+		completedSuccessfully: '\n[OK] Doctor 已成功完成。',
+	},
+	updateCheck: {
+		checking: '正在检查 snow-ai 是否可以安全更新...',
+		failed: '- {label}: 失败',
+		error: '  错误: {error}',
+		stderr: '  stderr: {stderr}',
+		exitCode: '  退出码: {code}',
+		notFoundInPath: '- {label}: 未在 PATH 中找到',
+		allFoundInPath: '  PATH 中找到的所有 {label}:',
+		npmPath: 'npm 路径',
+		npmPathLookup: 'npm 路径查找',
+		warningMultipleNpm:
+			'  警告: PATH 中发现多个 npm 可执行文件。更新时可能会使用与你的 shell 当前使用的 npm 不同的 npm 来安装 snow-ai。',
+		npm: 'npm',
+		cannotUpdateNpmUnavailable: '无法更新，因为 npm 不可用。',
+		npmGlobalPrefix: 'npm 全局 prefix',
+		npmGlobalRoot: 'npm 全局 root',
+		snowPath: 'snow 路径',
+		snowPathLookup: 'snow 路径查找',
+		warningMultipleSnow:
+			'  警告: PATH 中发现多个 snow 可执行文件。更新后，你的 shell 可能仍会优先运行旧的 snow。',
+		warningSnowOutsidePrefix:
+			'  警告: 至少有一个 snow 可执行文件不在当前 npm 全局 prefix 下。更新可能不会影响你的 shell 实际优先运行的 snow 命令。',
+		globalSnowAiPackage: '全局 snow-ai 包',
+		globalSnowAiPackageLabel: '- 全局 snow-ai 包:',
+		npmRegistry: 'npm registry',
+		warningNonOfficialRegistry:
+			'  警告: 当前不是官方 npm registry。镜像 registry 可能滞后于官方最新版本。',
+		officialLatestVersion: '官方 registry 最新版本',
+		latestOfficialRegistry: '- 官方 registry 最新版本: {version}',
+		configuredLatestVersion: '当前配置 registry 最新版本',
+		latestConfiguredRegistry: '- 当前配置 registry 最新版本: {version}',
+		warningRegistryLatestDiffers:
+			'  警告: 当前配置 registry 的最新版本与官方 registry 不一致。现在更新可能会安装到镜像延迟版本。',
+		currentSnowAi: '- 当前 snow-ai: {version}',
+		updateCheckFailed: '更新检查失败。请先修复上面的阻塞问题再更新。',
+		alreadyUpToDate: 'snow-ai 已是最新版本。',
+		updatePossibleWithWarnings:
+			'可以更新，但请先确认上面的警告，再运行 snow --update。',
+		environmentSuitable: '当前环境适合更新。运行 snow --update 即可更新。',
 	},
 	menu: {
 		navigate: '使用 ↑↓ 键导航,按 Enter 选择:',
@@ -52,6 +166,7 @@ export const zh: TranslationKeys = {
 		notSet: '未设置',
 		browserPath: '浏览器路径(可选):',
 		autoDetect: '自动检测',
+		searchEngine: '搜索引擎:',
 		errors: '错误:',
 		editingHint: '编辑模式: 按 Enter 保存并退出编辑(完成更改后按 Enter)',
 		navigationHint:
@@ -83,7 +198,11 @@ export const zh: TranslationKeys = {
 		embeddingApiKey: '嵌入 API 密钥:',
 		embeddingApiKeyOptional: '嵌入 API 密钥(本地部署可选):',
 		embeddingDimensions: '嵌入维度:',
-		batchMaxLines: '批处理最大行数:',
+		embeddingSettingsGroup: '嵌入模型配置',
+		embeddingSettingsExpandHint: '(按 Enter 展开/收起)',
+		batchSettingsGroup: '批处理设置',
+		batchSettingsExpandHint: '(按 Enter 展开/收起)',
+		batchMaxLines: '批处理最大条数:',
 		batchConcurrency: '批处理并发数:',
 		notSet: '未设置',
 		masked: '••••••••',
@@ -93,7 +212,7 @@ export const zh: TranslationKeys = {
 		validationModelNameRequired: '启用时需要嵌入模型名称',
 		validationBaseUrlRequired: '启用时需要嵌入 Base URL',
 		validationDimensionsPositive: '嵌入维度必须大于 0',
-		validationMaxLinesPositive: '批处理最大行数必须大于 0',
+		validationMaxLinesPositive: '批处理最大条数必须大于 0',
 		validationConcurrencyPositive: '批处理并发数必须大于 0',
 		validationMaxLinesPerChunkPositive: '每块最大行数必须大于 0',
 		validationMinLinesPerChunkPositive: '每块最小行数必须大于 0',
@@ -104,6 +223,19 @@ export const zh: TranslationKeys = {
 		chunkingMinLinesPerChunk: '每块最小行数:',
 		chunkingMinCharsPerChunk: '每块最小字符数:',
 		chunkingOverlapLines: '重叠行数:',
+		rerankingToggle: '结果重排序:',
+		rerankingSettingsGroup: '重排序模型配置',
+		rerankingSettingsExpandHint: '(按 Enter 展开/收起)',
+		rerankingModelName: '模型名:',
+		rerankingBaseUrl: 'Base URL:',
+		rerankingApiKey: 'API 密钥:',
+		rerankingContextLength: '模型上下文长度:',
+		rerankingTopN: 'Top N:',
+		rerankingNotConfigured: '请先在「重排序模型配置」中设置模型名和 Base URL',
+		validationRerankingModelNameRequired: '启用重排序时需要模型名',
+		validationRerankingBaseUrlRequired: '启用重排序时需要 Base URL',
+		validationRerankingContextLengthPositive: '模型上下文长度必须大于 0',
+		validationRerankingTopNPositive: 'Top N 必须大于 0',
 		saveError: '保存配置失败',
 		gitignoreNotFound:
 			'无法创建索引：未找到 .gitignore 文件。请在项目中添加 .gitignore 文件以防止索引不必要的文件。',
@@ -153,6 +285,10 @@ export const zh: TranslationKeys = {
 		moreBelow: '下方还有 {count} 项',
 		profile: '配置文件:',
 		baseUrl: 'Base URL:',
+		baseUrlMode: 'Base URL 模式:',
+		baseUrlModeAuto: '自动',
+		baseUrlModeBase: '基础地址',
+		baseUrlModeEndpoint: '完整端点',
 		apiKey: 'API 密钥:',
 		requestMethod: '请求方式:',
 		requestUrlLabel: '请求 URL: ',
@@ -183,13 +319,34 @@ export const zh: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini 思考级别:',
 		responsesReasoningEnabled: '启用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理强度:',
+		responsesReasoningMode: 'Responses 推理模式:',
+		responsesReasoningModeNone: '无',
 		responsesVerbosity: 'Responses 输出详细度:',
 		responsesFastMode: 'Responses Fast (priority):',
+		chatThinkingEnabled: '启用 Chat 思考 (DeepSeek):',
+		chatReasoningEffort: 'Chat 思考强度:',
 		advancedModel: '高级模型(键入可搜索):',
 		basicModel: '基础模型(键入可搜索):',
+		supportsVision: '当前模型支持视觉:',
+		supportsVisionYes: '是',
+		supportsVisionNo: '否，需要单独配置视觉模型',
+		visionConfig: '视觉模型配置:',
+		visionConfigTitle: '视觉模型配置',
+		visionConfigSubtitle:
+			'为不支持视觉的主模型配置独立视觉模型 URL、APIKey、请求方案和模型',
+		visionConfigOpenHint: '(按 Enter 进入，Esc 返回主配置)',
+		visionConfigNavigationHint:
+			'↑↓ 导航 · Enter 编辑/选择 · Esc 返回主配置 · Ctrl+S 保存',
+		visionBaseUrl: '视觉模型 URL:',
+		visionBaseUrlMode: '视觉模型 URL 模式:',
+		visionApiKey: '视觉模型 APIKey:',
+		visionRequestMethod: '视觉模型请求方案:',
+		visionModel: '视觉模型(键入可搜索):',
 		maxContextTokens: '最大上下文令牌:',
 		maxTokens: '最大回复令牌数:',
 		streamIdleTimeoutSec: '流式空闲超时(秒):',
+		maxRetries: '最大重试次数:',
+		retryDelayMs: '重试间隔(毫秒):',
 		toolResultTokenLimit: '工具返回结果限制(%):',
 		toolResultTokenLimitHint:
 			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',
@@ -254,6 +411,16 @@ export const zh: TranslationKeys = {
 		followGlobalNoneWithParentheses: '跟随全局（无）',
 		notUse: '不使用',
 		systemPromptMultiSelectHint: '空格: 切换选中 | Enter: 确认 | Esc: 取消',
+		modelSelectFilterLabel: '筛选:',
+		modelSelectModelCount: '共 {count} 个模型',
+		modelSelectScrollHint: '↑↓ 滚动浏览更多模型',
+		apiConnectionGroup: 'API 连接',
+		promptHeadersGroup: '提示词与请求头',
+		displayCompressGroup: '显示与压缩',
+		reasoningGroup: '推理设置',
+		modelGroup: '模型设置',
+		tokenTimeoutGroup: '令牌与超时',
+		groupExpandHint: '(按 Enter 展开/收起)',
 	},
 	customHeaders: {
 		title: '自定义请求头管理',
@@ -293,6 +460,8 @@ export const zh: TranslationKeys = {
 		headerKeyPlaceholder: '请求头键 (例如, X-API-Key)',
 		headerValuePlaceholder: '请求头值',
 		headerEditingHint: '↑↓: 导航字段 | Enter: 编辑 | Ctrl+S: 保存 | ESC: 取消',
+		placeholderHint:
+			'值支持 {{占位符}} 语法,由 ~/.snow/plugin/custom_headers/ 中的插件动态解析',
 	},
 	subAgentConfig: {
 		title: '子代理配置',
@@ -326,6 +495,7 @@ export const zh: TranslationKeys = {
 		terminalTools: '终端工具',
 		todoTools: 'TODO 管理工具',
 		webSearchTools: '网络搜索工具',
+		snowDocsTools: 'Snow 官方文档工具',
 		ideTools: 'IDE 诊断工具',
 		userInteractionTools: '用户交互工具',
 		skillTools: '技能工具',
@@ -426,10 +596,57 @@ export const zh: TranslationKeys = {
 		solarizedDarkInfo: '具有精确色彩的 Solarized 深色主题',
 		nord: 'Nord',
 		nordInfo: '北极、北方蓝调色板',
+		tiffany: '蒂芙尼蓝',
+		tiffanyInfo: '清新优雅的蒂芙尼蓝色调',
+		macaronPink: '马卡龙粉',
+		macaronPinkInfo: '甜美柔和的马卡龙粉色调',
+		trumpGold: '川普金',
+		trumpGoldInfo: '高调醒目的金色主题',
+		chinaRed: '中国红',
+		chinaRedInfo: '典雅喜庆的中华红色调',
+		evaPurple: '擎天柱',
+		evaPurpleInfo: '红蓝银经典卡车配色，汽车人出击',
 		custom: '自定义',
 		customInfo: '使用您自定义的颜色',
 		editCustom: '编辑自定义主题...',
 		editCustomInfo: '自定义主题颜色',
+	},
+	privacySettings: {
+		title: '隐私设置',
+		apiConfig: 'API 配置',
+		apiConfigInfo: '管理线上隐私过滤 API 配置',
+		toolResultsConfig: '检测工具结果配置',
+		toolResultsConfigInfo: '管理检测工具结果相关的隐私选项',
+		enablePrivacy: '启用隐私过滤',
+		enablePrivacyInfo: '开启后按所选模式处理相关内容',
+		enabled: '[✓] 已启用',
+		disabled: '[ ] 已禁用',
+		modeLabel: '过滤模式',
+		modeApi: '线上 API',
+		modeApiInfo: '使用配置的线上隐私过滤 API 进行脱敏',
+		modeLocalRules: '本地规则',
+		modeLocalRulesInfo: '使用 @blindfold/sdk 本地规则脱敏，无需配置 API',
+		modeSelectInfo: '选择隐私过滤模式',
+		configLocation: '配置位置',
+		projectLocation: '项目',
+		projectLocationInfo: '保存到当前工作目录根目录的 .snow/settings.json',
+		globalLocation: '全局',
+		globalLocationInfo: '保存到用户目录的 .snow/settings.json',
+		scopeSelectInfo: '先选择隐私配置保存位置',
+		urlLabel: 'URL(全路径)',
+		urlInfo: '填写隐私过滤 API 的完整 URL',
+		apiKeyLabel: 'APIKEY(选填)',
+		apiKeyInfo: '填写 APIKEY；不需要鉴权时可以留空',
+		modelLabel: '模型',
+		modelInfo: '模型名称，默认 openai/privacy-filter',
+		notSet: '未设置',
+		configured: '已配置',
+		optional: '选填',
+		save: '保存',
+		saveInfo: '保存 API 配置到所选位置',
+		savedInfo: '隐私设置已保存',
+		back: '← 返回',
+		backInfo: '返回主菜单',
 	},
 	customTheme: {
 		title: '自定义主题编辑器',
@@ -447,7 +664,8 @@ export const zh: TranslationKeys = {
 		confirm: '确认',
 		preview: '预览',
 		userMessagePreview: '用户消息预览',
-		userMessageSample: '用于检查 userMessageBackground 是否合适。',
+		userMessageSample:
+			'用于检查用户消息左侧强调条（userMessageBackground）是否合适。',
 		colorHint: '按 Enter 编辑此颜色',
 	},
 	helpPanel: {
@@ -528,6 +746,44 @@ export const zh: TranslationKeys = {
 		useCommandPrefix: '使用',
 		useCommandSuffix: '命令断开连接',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry 遥测',
+		description1:
+			'仅在显式启用时采集 trace、metric 和 log。数据以 OpenTelemetry 格式导出到外部采集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+		description2:
+			'设置保存到 Snow JSON 项目配置中，并直接传递给 OpenTelemetry 导出器。不使用环境变量。',
+		enableTelemetry: '启用遥测',
+		serviceName: 'Service 名称',
+		tracesExporter: 'Traces 导出器',
+		metricsExporter: 'Metrics 导出器',
+		logsExporter: 'Logs 导出器',
+		otlpProtocol: 'OTLP 协议',
+		otlpEndpoint: 'OTLP 基础端点',
+		otlpHeaders: 'OTLP 请求头',
+		injectSessionIdHeader: '注入 Session-Id 请求头',
+		captureContent: '采集 prompt/tool 原文',
+		contentMaxLength: '原文最大长度',
+		hintEnabled: '存储在 Snow JSON 项目配置中',
+		hintServiceName:
+			'OpenTelemetry resource.service.name。留空使用默认 snow-cli。修改后需重启 Snow 生效。',
+		hintTracesExporter: '可选: otlp, console, none',
+		hintMetricsExporter: '可选: otlp, prometheus, console, none',
+		hintLogsExporter: '可选: otlp, console, none',
+		hintOtlpProtocol: '可选: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint:
+			'例如: http://localhost:4317 或 /api/public/otel，导出器会自动补全各信号路径',
+		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'启用后若未手动设置 Session-Id，则使用当前链路 Tags 中的 snow.session_id 注入请求头',
+		hintCaptureContent:
+			'默认开启。如果 trace 不应包含 prompt、completion、tool 参数或 tool 结果，请关闭。',
+		hintContentMaxLength: '开启原文采集后，每个 content 事件最多保留的字符数。',
+		empty: '(空)',
+		savedMessage:
+			'OpenTelemetry 遥测设置已保存。重启 Snow 以重新初始化导出器。',
+		navigationHint:
+			'\u2191\u2193 选择 \u00b7 \u2190\u2192/Enter 切换 \u00b7 S 保存 \u00b7 Esc 保存并关闭',
+	},
 	commandPanel: {
 		title: '命令面板',
 		availableCommands: '可用命令',
@@ -541,6 +797,7 @@ export const zh: TranslationKeys = {
 			help: '显示快捷键和帮助信息',
 			clear: '清空聊天上下文和对话历史',
 			copyLast: '复制最后一条AI回复到剪贴板',
+			delSession: '删除当前会话并清屏',
 			resume: '恢复对话',
 			mcp: '显示模型上下文协议服务和工具',
 			yolo: '切换无人值守模式(自动批准所有工具)',
@@ -551,11 +808,13 @@ export const zh: TranslationKeys = {
 			home: '返回欢迎屏幕修改设置',
 			review: '审查工作区变更与选定提交。会打开选择面板，可多选并输入备注。',
 			gitline: '选择 Git 提交记录并将提交内容插入到当前输入框',
+			goal: '设置可持久化目标，驱动 AI 自动续接直到达成或耗尽预算。用法: /goal <目标> | /goal pause | /goal resume | /goal clear | /goal status',
 			role: '打开或创建 ROLE.md 文件以自定义 AI 助手角色。使用 -l 或 --list 参数列出所有角色',
 			roleSubagent:
 				'为子代理自定义前置提示词 (ROLE-名字.md)。使用 -l 列出，-d 删除',
 			usage: '查看带有交互式图表的令牌使用统计',
 			export: '将聊天对话导出到带保存对话框的文本文件',
+			config: '导出或导入 Snow CLI YAML 配置。用法: /config <export|import>',
 			custom: '添加自定义命令并保存到 ~/.snow/commands',
 			skills: '创建包含文档和示例的技能模板',
 			skillsPicker: '选择 Skill 并将其 SKILL.md 内容注入到输入框',
@@ -567,24 +826,47 @@ export const zh: TranslationKeys = {
 			codebase: '切换当前项目的代码库索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理始终批准的工具权限',
 			backend: '显示后台进程面板',
-			loop: '创建会话级循环任务。用法: /loop 5m <提示词>',
+			loop: '按间隔或每日具体时刻创建循环任务。用法: /loop 5m <提示词> 或 /loop daily 09:30 <提示词>',
 			profiles: '打开配置文件切换面板',
 			models: '打开模型切换面板',
 			subAgentDepth: '设置子代理嵌套创建深度上限',
 			vulnerabilityHunting: '切换漏洞检查模式，进行安全性代码分析',
 			autoFormat:
 				'文件编辑后自动格式化开关。用法: /auto-format [on|off|status]',
+			simple: '切换主题简易模式。用法: /simple [on|off|status]',
+			buddy:
+				'管理终端宠物伙伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch: '切换工具搜索（渐进式工具加载）。默认启用以节省上下文',
 			hybridCompress:
 				'切换混合压缩模式（AI 摘要 + 智能截断，用于 /compact 和自动压缩）',
+			imageCompress:
+				'切换图片压缩模式（历史记录生成 PNG 图片，用于 /compact 和自动压缩）',
 			team: '切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
+			ultraTodo: '切换 Ultra TODO 模式 - 按阶段细分任务并在阶段推进前强制校验',
+			telemetry: '配置 OpenTelemetry 遥测导出器和端点',
+			branch: '将当前对话分叉为新分支，可用 /resume 返回原会话',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
 			diff: '在 IDE 中查看对话的文件修改 Diff',
 			connect: '连接到 Snow Instance 进行 AI 处理',
 			disconnect: '断开当前 Snow Instance 连接',
 			connectionStatus: '显示当前 Snow Instance 连接状态',
 			newPrompt: '根据需求使用 AI 生成精炼的提示词',
+			pixel: '打开终端像素编辑器',
+			games: '打开游戏面板 - 玩内置和插件小游戏',
 			btw: '在 AI 运行时快速提问（临时对话，不保存上下文）',
+			deepresearch:
+				'执行自主多步联网深度研究，并将带引用的 Markdown 报告保存到 .snow/deepresearch/',
+			toolDisplay:
+				'控制工具调用显示模式。用法: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'控制工具类型图标。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'自定义工具显示名（官方路径，勿整文件改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
+			thinkDisplay:
+				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
+			speedometer:
+				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
+			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
 			quit: '退出应用程序',
 		},
 		copyLastFeedback: {
@@ -593,6 +875,10 @@ export const zh: TranslationKeys = {
 			copySuccess: '✓ 已复制最后一条 AI 消息到剪贴板',
 			copyFailedPrefix: '✗ 复制到剪贴板失败',
 			unknownError: '未知错误',
+		},
+		delSessionFeedback: {
+			noCurrentSession: '当前没有可删除的会话。',
+			deleteFailed: '删除当前会话失败。',
 		},
 		// 命令输出消息（用于命令执行结果）
 		commandOutput: {
@@ -603,13 +889,352 @@ export const zh: TranslationKeys = {
 				statusEnabled: '自动格式化: 已启用',
 				statusDisabled: '自动格式化: 已禁用',
 			},
+			// 简易模式命令消息
+			simpleMode: {
+				enabled: '简易模式: 已启用',
+				disabled: '简易模式: 已禁用',
+				statusEnabled: '简易模式: 已启用',
+				statusDisabled: '简易模式: 已禁用',
+			},
+			// 工具显示模式命令消息
+			toolDisplay: {
+				status: (mode: string) =>
+					`工具显示模式: ${mode}` +
+					(mode === 'full'
+						? '（显示工具名 + 参数 + 结果）'
+						: mode === 'compact'
+						? '（仅显示工具名 + 简要状态）'
+						: '（隐藏所有工具调用，仅显示 AI 回复）'),
+				set: (mode: string) => `工具显示模式已设置为: ${mode}`,
+				invalid: '无效的模式。用法: /tool-display [full|compact|hidden|status]',
+			},
+			// 工具类型图标 + 状态前缀命令消息
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? '无覆盖'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `工具类型图标: ${
+						enabled ? '开启' : '关闭'
+					} · 覆盖: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`工具类型图标已${enabled ? '开启' : '关闭'}（仅影响新工具标题）`,
+				setOverride: (toolName: string, icon: string) =>
+					`已设置 ${toolName} 图标为 ${icon}`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的图标覆盖`,
+				setStatusEnabled: (enabled: boolean) =>
+					`工具状态前缀已${
+						enabled ? '开启' : '关闭'
+					}（默认 ✓/·/✗，仅影响新标题）`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`已设置状态 ${statusKey} 符号为 ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`已恢复状态 ${statusKey} 为默认符号`,
+				invalid:
+					'无效参数。用法: /tool-icons [on|off|status|status on|off|status:<key>:<符号>|<tool>:<emoji>]',
+			},
+			// 工具显示名（仅用户覆盖，无内置默认译名）
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return '工具显示名: 无覆盖（显示技术 ID）。批量请用 /tool-names a:甲 b:乙（勿整文件改 theme.json）';
+					}
+					return (
+						`工具显示名覆盖 (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`已设置 ${toolName} 显示为「${displayName}」（仅影响新工具标题）`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的显示名覆盖`,
+				batch: (set: number, cleared: number) =>
+					`已批量更新工具显示名：设置 ${set} 项` +
+					(cleared > 0 ? `，清除 ${cleared} 项` : '') +
+					'（仅影响新工具标题）',
+				clearAll: (count: number) =>
+					count === 0
+						? '工具显示名: 本无覆盖'
+						: `已清除全部 ${count} 项工具显示名覆盖`,
+				invalid:
+					'无效参数。用法: /tool-names [status|clear|<tool>:<显示名> …]；可批量空格/逗号分隔；`<tool>:` 清除单项',
+			},
+			// 思考显示模式命令消息
+			thinkDisplay: {
+				status: (mode: string) =>
+					`思考显示模式: ${mode}` +
+					(mode === 'full'
+						? '（全量思考内容移入静态区）'
+						: '（缩减思考内容后移入静态区）'),
+				set: (mode: string) => `思考显示模式已设置为: ${mode}`,
+				invalid: '无效的模式。用法: /think-display [full|compact|status]',
+			},
+			// 测速仪命令消息
+			speedometer: {
+				enabled: '测速仪: 已启用',
+				disabled: '测速仪: 已禁用',
+				statusEnabled: '测速仪: 已启用',
+				statusDisabled: '测速仪: 已禁用',
+			},
+			// 宠物命令消息
+			buddy: {
+				noCompanion: '还没有宠物伙伴孵化。使用 /buddy hatch [名字] 孵化一个。',
+				statusLine: '{name}，{shiny}{rarity} {species}',
+				shinyPrefix: '闪光',
+				personalityLabel: '性格',
+				hatLabel: '帽子',
+				eyeLabel: '眼睛',
+				colorLabel: '颜色',
+				colorDefault: '默认（物种/闪光）',
+				mutedLabel: '已静音',
+				mutedYes: '是',
+				mutedNo: '否',
+				profileLabel: 'AI 配置',
+				currentProfileLabel: '（当前 Snow 配置）',
+				hatchedLabel: '孵化时间',
+				statsLabel: '属性',
+				alreadyExists:
+					'已经有一个宠物伙伴了。\n\n{status}\n\n孵化新伙伴前请先使用 /buddy reset。',
+				availableSpecies: '可孵化宠物类型：{species}',
+				invalidSpecies: '未知宠物类型“{species}”。可选类型：{available}',
+				hatchGreeting:
+					'{name} 孵化成了{shiny}{rarity} {species}{hat}：{flavor}。试试 /buddy say hello。',
+				hatchedSummary: '已孵化 {name}，{rarity} {species}。',
+				hatchKeepChatting: '使用 /buddy pet 或 /buddy say <消息> 继续互动。',
+				noBuddyToPet: '还没有可摸摸的宠物。请先使用 /buddy hatch [名字]。',
+				petReaction: '{name} 看起来很开心。',
+				petSuccess: '你摸了摸 {name}。',
+				noBuddyToRename: '还没有可改名的宠物。请先使用 /buddy hatch [名字]。',
+				renameUsage: '用法: /buddy rename <名字>',
+				renameReaction: '{oldName} 现在叫 {newName} 了。',
+				renameSuccess: '已将宠物从 {oldName} 改名为 {newName}。',
+				noBuddyToSet: '还没有可自定义的宠物。请先使用 /buddy hatch [名字]。',
+				setUsage:
+					'用法: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] 或 /buddy set --list',
+				setSuccess: '已更新 {name}：{changed}。',
+				setReaction: '新造型好看！已更新 {changed}。',
+				setOptionsTitle: '桌宠自定义选项：',
+				setOptionsHats: '帽子: {hats}',
+				setOptionsEyes: '眼睛: {eyes}',
+				setOptionsRarities: '稀有度: {rarities}',
+				setOptionsSpecies: '物种: {species}',
+				setOptionsColors: '颜色: {colors}',
+				setOptionsStats: '属性 (1-10): {stats}',
+				noBuddyToTalk: '还没有可聊天的宠物。请先使用 /buddy hatch [名字]。',
+				sayUsage: '用法: /buddy say <消息>',
+				profileListTitle: '宠物 AI 配置：{profile}',
+				profileListItem: '{marker} {name} {active}',
+				profileUsage:
+					'用法: /buddy profile [list|current|default|reset|<配置名>]',
+				profileSet: '宠物 AI 配置已切换为 {profile}。',
+				profileCleared: '宠物 AI 配置已清除，将跟随当前 Snow 配置：{profile}。',
+				profileNotFound:
+					'未找到配置“{profile}”。请使用 /buddy profile list 查看。',
+				muted:
+					'宠物已静音。UI 宠物和提示词上下文将隐藏，直到使用 /buddy unmute。',
+				unmutedReaction: '我回来啦。',
+				unmuted: '宠物已取消静音。',
+				reset: '宠物已重置。使用 /buddy hatch [名字] 孵化新的伙伴。',
+				usage:
+					'用法: /buddy [status|hatch [名字] [--species=类型] [--list-species] [--personality=文本]|pet|rename <名字>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <消息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
+				teaser: '悄悄说一句……试试 /buddy',
+				noModelConfigured: '没有为宠物回复配置模型',
+				emptyReply: '{name} 正在认真听。',
+				replyError: '{name} 想回应，但出了点小状况：{error}',
+			},
+			// Ultra TODO 命令消息
+			ultraTodo: {
+				toggling: '正在切换 Ultra TODO 模式',
+				enabled: 'Ultra TODO 已启用。todo-manage 已禁用，todo-ultra 可用。',
+				disabled: 'Ultra TODO 已禁用。todo-manage 已重新可用。',
+				failed: '切换 Ultra TODO 失败：{error}',
+				unknownError: '未知错误',
+			},
 			// 导出命令消息
 			export: {
 				exporting: '正在导出对话...',
 				openingDialog: '正在打开文件保存对话框...',
 				cancelledByUser: '导出已被用户取消。',
+				invalidFormat: '不支持的导出格式：{format}。可选：txt、md、html。',
+				noSession: '当前没有可导出的会话，请先进行一轮对话后再试 /export。',
+			},
+			// 配置命令消息
+			config: {
+				exporting: '正在导出配置...',
+				importing: '正在导入配置...',
+				openingDialog: '正在打开配置保存对话框...',
+				saveDialogTitle: '导出 Snow CLI 配置',
+				openDialogTitle: '导入 Snow CLI 配置',
+				cancelledByUser: '配置导出已被用户取消。',
+				importCancelledByUser: '配置导入已被用户取消。',
+				fileDialogUnsupported: '当前平台不支持文件对话框，已取消配置操作。',
+				exportSuccess: '配置已成功导出到:\n{path}',
+				exportFailed: '配置导出失败: {error}',
+				importWarning:
+					'配置导入将覆盖 YAML 中包含的配置项；YAML 中没有的配置项会跳过并保持不变。',
+				importConfirmTitle: '确认导入配置',
+				importConfirmMessage:
+					'这是覆盖式导入：YAML 中包含的配置项会覆盖当前配置，未包含的配置项会跳过。是否继续？',
+				importSuccess:
+					'配置已成功从以下文件导入:\n{path}\n已导入: {imported}\n已跳过: {skipped}',
+				importFailed: '配置导入失败: {error}',
+				none: '无',
+				usage: '用法: /config <export|import>',
+				unknownError: '未知错误',
+			},
+			// IDE 命令消息
+			ide: {
+				disconnected: '已断开 IDE 连接。',
+				noAvailableIDEs:
+					'未检测到可用的 IDE。请确保 IDE 已安装 Snow CLI 扩展/插件并正在运行。',
+				unmatchedIDEs:
+					'发现 {count} 个其他运行中的 IDE，但其工作区/项目目录与当前工作目录不匹配。',
+				connectedTo: '已连接到 {label}',
+				connectFailed: '连接 IDE 失败：{error}',
+			},
+			branchFork: {
+				noActiveSession: '没有可分叉的活跃会话。',
+				success:
+					'对话已分叉为分支 {name}。返回原会话请执行:\n/resume {originalId}',
+				failed: '会话分叉失败',
+			},
+			// Deep Research 命令消息
+			deepResearch: {
+				usage:
+					'用法: /deepresearch <提示词>\n示例: /deepresearch 对比 OpenAI Deep Research 与 Gemini Deep Research 的架构差异',
+			},
+			// Cut (打断) 命令消息
+			cut: {
+				usage: '用法: /cut <消息>',
+			},
+			// BTW 命令消息
+			btw: {
+				usage: '用法: /btw <你的问题>',
+			},
+			loop: {
+				usage:
+					'用法: /loop 5m <提示词> | /loop daemon 5m <提示词> | /loop daily 09:30 <提示词> | /loop at 09:30 <提示词> | /loop every day at 09:30 <提示词> | /loop <提示词> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
+				openingTaskManager: '正在打开任务管理器...',
+				relatedLoopTasks: '相关循环任务:',
+				noActiveLoops:
+					'暂无活跃的循环任务。可使用 /loop 5m <提示词>、/loop daily 09:30 <提示词> 创建，或使用 /loop daemon 5m <提示词> 创建守护循环。',
+				loopNotFound: '未找到循环任务: {id}',
+				cancelled: '已取消循环任务 {id}（{schedule}）',
+				created: '循环任务已创建: {id}',
+				scheduleEvery: '调度: {schedule}',
+				promptLabel: '提示词: {prompt}',
+				nextRun: '下次运行: {time}',
+				sessionScopedNote: '仅限会话作用域: Snow CLI 退出后循环任务将停止。',
+				daemonScopedNote:
+					'守护模式: Snow CLI 退出后循环仍会继续运行，只能通过手动取消停止。',
+				logPath: '日志: {path}',
+				usageHint:
+					'使用 /loop list 查看任务，或使用 /loop cancel <id> 停止某个任务。',
+			},
+			// Goal 命令消息
+			goal: {
+				noActiveGoal: '当前没有活跃目标。',
+				noActiveGoalInSession: '当前会话没有活跃目标。',
+				usageHeader: '用法:',
+				usageObjective:
+					'  /goal <目标>                 创建并启动一个新的可持久化目标',
+				usageBudget:
+					'  /goal <目标> --budget=N      设置 Token 预算，单位 M（默认 2M）',
+				usagePause: '  /goal pause                  暂停当前活跃的目标',
+				usageResume:
+					'  /goal resume                 打开目标会话选择面板（或恢复当前已暂停的目标）',
+				usageResumeSession:
+					'  /goal resume <会话ID>        直接恢复指定会话的目标',
+				usageClear: '  /goal clear                  清除当前活跃目标',
+				usageStatus: '  /goal status                 查看当前目标摘要',
+				tipHeader: '提示: 把目标写成可验证的契约，而不是模糊的愿望。',
+				tipGood:
+					'  推荐: "把 src/auth/login.ts 重构为 async/await；用 npm test 验证"',
+				tipBad: '  避免: "改进一下这个仓库"',
+				currentGoal: '当前目标:',
+				noActiveGoalToPause: '没有可暂停的活跃目标。',
+				pauseSuccess:
+					'目标 {id} 已暂停。循环不会自动续接。使用 /goal resume 重新激活。',
+				resumingSession: '正在恢复目标会话 {sessionId}...',
+				noGoalToResume: '没有可恢复的目标。',
+				cannotResumeStatus:
+					'无法恢复处于状态 "{status}" 的目标。请使用 /goal clear 重新开始。',
+				resumeSuccess: '目标 {id} 已恢复（状态: pursuing）。',
+				resumeHint: '按 ESC 暂停。使用 /goal clear 中止。',
+				openSessionPicker: '打开目标会话选择面板。',
+				noActiveGoalToClear: '没有可清除的活跃目标。',
+				clearSuccess: '目标 {id} 已清除。会话回到单轮聊天模式。',
+				created: '目标 {id} 已创建并开始追逐。',
+				tokenBudget: 'Token 预算: {budget}',
+				createHint: '按 ESC 暂停。使用 /goal resume 继续，/goal clear 中止。',
+				createFailed: '创建目标失败: {error}',
+				unknownError: '未知错误',
+				invalidUsage: '无效的 /goal 用法。直接运行 /goal 可查看用法提示。',
+				budgetUnlimited: '无限制',
+				budgetMillion: '{value}M tokens',
+				budgetThousand: '{value}K tokens',
+				budgetTokens: '{value} tokens',
+			},
+			// Codebase 命令消息
+			codebase: {
+				notConfigured: '代码库: 尚未配置。请先在 /home 中配置嵌入模型设置。',
+				cannotEnable:
+					'无法启用代码库: 嵌入模型设置未配置。请先在 /home 中配置。',
+				enabledLabel: '已启用',
+				disabledLabel: '已禁用',
+				statusWithFiles:
+					'代码库: 当前项目{status}（将索引 {count} {fileWord}）',
+				status: '代码库: 当前项目{status}',
+				fileSingular: '个文件',
+				filePlural: '个文件',
 			},
 		},
+	},
+	fileList: {
+		loadingFiles: '正在加载文件...',
+		noFilesFound: '未找到文件',
+		searchingDeeper: '正在搜索更深目录（深度 {depth}）...',
+		scanning: '正在扫描...（已索引 {count}）',
+		scanningDeeper: '正在搜索更深目录（深度 {depth}，已索引 {count}）...',
+		deeperSearchHint: '尚有更深目录未扫描 · 在末项按 ↓ 继续深入搜索',
+		multiSelectHint: '空格 勾选 · Enter 一次插入 · 支持多选',
+		multiSelectActiveHint: '已勾选 {count} 项 · 空格 切换 · Enter 一次插入',
+		workspaceFilterHint: '工作区: {filter} · 仅搜索所选目录',
+		contentSearchHeader: '≡ 内容搜索',
+		filesHeader: '≡ 文件 [{mode} • Ctrl+T]',
+		treeMode: '树形',
+		listMode: '列表',
+		agentSearching: '✦ AI 搜索中...（第 {round} 轮）',
+		agentSearchError: '✦ AI 搜索失败：{error}',
+		agentNoResults: '✦ AI 未找到相关文件',
+		agentSearchHeader: '✦ AI 搜索',
+		agentPreviewAssistantPrefix: 'AI',
+		agentPreviewRoundRequest: '第 {round}/{maxRounds} 轮：发送搜索请求',
+		agentPreviewRequestedToolCalls: 'AI 请求 {count} 次工具调用',
+		agentPreviewToolCall: '工具：{tool}{args}',
+		agentPreviewToolResultCandidates: '工具结果：{count} 个候选文件',
+		agentPreviewToolResultReceived: '已收到工具结果',
+		agentPreviewToolError: '工具错误：{error}',
+		agentPreviewParsingFinalResults: '正在解析最终结果',
+		agentPreviewFinalizing: '正在整理结果，不再调用工具',
+	},
+	ideSelectPanel: {
+		title: '选择 IDE',
+		subtitle: '连接到 IDE 以使用集成开发功能。',
+		noneOption: '无',
+		connectedMark: ' ✔',
+		hint: '↑↓ 导航 • Enter 选择 • ESC 关闭',
+		connecting: '正在连接...',
+		connectSuccess: '已连接到 {label}',
+		connectError: '连接失败：{error}',
+		unmatchedIDEs:
+			'上述 {count} 个 IDE 的工作区与当前目录不匹配，选择后将自动切换工作目录。',
+		unmatchedHeader: '— 切换工作目录 —',
+		switchWorkdirMark: ' (切换工作目录)',
+		switchWorkdirError: '切换工作目录失败：{error}',
 	},
 	permissionsPanel: {
 		title: '权限',
@@ -642,7 +1267,7 @@ export const zh: TranslationKeys = {
 		loadingModels: '正在加载模型...',
 		hint: 'Enter 选择模型 | m 手动输入 | Esc 关闭',
 		manualInputTitle: '手动输入',
-		manualInputHint: 'Enter保存 | Esc 关闭',
+		manualInputHint: 'Enter 保存 | Esc 关闭',
 		filterLabel: '筛选:',
 		manualInputOption: '手动输入',
 		requestMethod: '请求方式:',
@@ -665,6 +1290,8 @@ export const zh: TranslationKeys = {
 		saveFailed: '保存失败',
 		modelSaveFailed: '模型保存失败',
 		tipLabel: '提示:',
+		modelCount: '共 {count} 个模型',
+		scrollHint: '↑↓ 滚动浏览更多模型',
 	},
 	profilePanel: {
 		title: '选择配置',
@@ -673,6 +1300,7 @@ export const zh: TranslationKeys = {
 		moreAbove: '上方还有 {count} 项',
 		moreBelow: '下方还有 {count} 项',
 		escHint: '按 ESC 关闭',
+		editHint: '按 Tab 编辑',
 		activeLabel: '(当前)',
 		searchLabel: '搜索:',
 		noResults: '未找到匹配的配置',
@@ -756,6 +1384,7 @@ export const zh: TranslationKeys = {
 			beforeCompress: '在即将运行压缩操作之前运行',
 			onSessionStart: '当启动新会话或恢复现有会话时运行',
 			onStop: 'Stop AI流程结束前运行',
+			beforeSubAgentStart: '子代理启动前运行（可注入或替换 prompt）',
 		},
 		hookList: {
 			title: 'Hooks 配置',
@@ -830,6 +1459,12 @@ export const zh: TranslationKeys = {
 		namePlaceholder: '例如: open',
 		commandLabel: '命令内容:',
 		commandPlaceholder: 'npm run build && npm run deploy...',
+		commandLabelExecute: '命令内容:',
+		commandLabelPrompt: '输入发送给 AI 的提示词:',
+		commandLabelPanel: '输入 AnyPanel 插件 id:',
+		commandPlaceholderExecute: 'npm run build && npm run deploy...',
+		commandPlaceholderPrompt: '请帮我重构这段代码...',
+		commandPlaceholderPanel: 'my-panel',
 		descriptionLabel: '描述(可选):',
 		descriptionPlaceholder: '简短描述...',
 		descriptionHint: '可选，建议简短（直接回车跳过）',
@@ -837,6 +1472,9 @@ export const zh: TranslationKeys = {
 		typeLabel: '选择命令类型:',
 		typeExecute: 'Execute (在终端执行)',
 		typePrompt: 'Prompt (发送给 AI)',
+		typePanel: '面板（加载 AnyPanel 插件）',
+		typePanelHint:
+			'面板类型：command 字段填写 AnyPanel 插件 id（~/.snow/plugin/anypanel/）',
 		locationLabel: '选择保存位置:',
 		locationGlobal: '全局',
 		locationProject: '项目',
@@ -848,6 +1486,7 @@ export const zh: TranslationKeys = {
 		escCancel: '按 ESC 取消',
 		resultTypeExecute: '在终端执行',
 		resultTypePrompt: '发送给 AI',
+		resultTypePanel: 'AnyPanel 插件',
 		resultLocationGlobal: '全局 (~/.snow/commands/)',
 		resultLocationProject: '项目 (.snow/commands/)',
 		saveSuccessMessage:
@@ -864,11 +1503,13 @@ export const zh: TranslationKeys = {
 		headerShortcuts:
 			"快捷键: Ctrl+L (删除至开头) • Ctrl+R (删除至末尾) • Ctrl+O (复制输入) • {pasteKey} (粘贴图片) • '@' (文件) • '@@' (搜索内容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切换粘贴文本的展开/折叠显示',
+		headerSimpleHint: '输入 /simple 切换至简易显示',
 		headerWorkingDirectory: '工作目录: {directory}',
 		// Status messages
 		statusThinking: '思考中...',
 		statusDeepThinking: '深度思考中...',
 		statusWriting: '输出中...',
+		statusFinishing: '收尾中...',
 		statusStreaming: '流式传输中',
 		statusWorking: '工作中',
 		statusIndexing: '索引代码库...',
@@ -891,6 +1532,7 @@ export const zh: TranslationKeys = {
 		profileSwitchHint: '切换',
 		gitBranch: 'Git分支',
 		memoryUsageLabel: '内存占用:',
+		speedometerLabel: '测速',
 		// Tool execution
 		toolCall: '工具调用',
 		toolThinking: '思考',
@@ -908,6 +1550,14 @@ export const zh: TranslationKeys = {
 		assistantMessage: '助手',
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 用户中断',
+		aiCompletionTimeMessage: '└─ AI 结束时间：{time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI 结束时间：{time} (耗时 {duration})',
+		compressionSummaryAutoTitle: '自动压缩摘要已折叠',
+		compressionSummaryManualTitle: '手动压缩摘要已折叠',
+		compressionSummaryStats: '{lines} 行 · {chars} 字符',
+		compressionSummaryPreviewPrefix: '摘要预览',
+		compressionSummaryOriginalSaved: '仅优化显示，原文已完整保存',
 		// File operations
 		fileCreated: '已创建',
 		fileModified: '已修改',
@@ -983,7 +1633,7 @@ export const zh: TranslationKeys = {
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已选择 {count} 个字符',
 		// Input
-		inputPlaceholder: '询问我有关编程的任何问题...',
+		inputPlaceholder: `询问我有关编程的任何问题... 换行：${inputNewlineShortcut}`,
 		inputProcessing: '处理中...',
 		inputDisabled: '输入已禁用',
 		// Shortcuts
@@ -1002,6 +1652,7 @@ export const zh: TranslationKeys = {
 		rollbackConversation: '仅回滚对话',
 		rollbackWarning: '将影响 {count} 个文件',
 		// Session
+		chatInitializing: '初始化中...',
 		sessionCreating: '创建第一个对话记录文件...',
 		sessionLoading: '加载会话...',
 		sessionSaving: '保存会话...',
@@ -1025,6 +1676,51 @@ export const zh: TranslationKeys = {
 		pressCtrlC: 'Ctrl+C 取消',
 		pressCtrlR: 'Ctrl+R 重新生成',
 		pressCtrlS: 'Ctrl+S 保存',
+		loadingTips: [
+			'输入 / 查看所有命令',
+			'使用 /help 查看所有快捷键',
+			'输入 @ 引用文件，输入 @@ 搜索文件内容',
+			`按 ${pasteImageShortcut} 可从剪贴板粘贴图片`,
+			`需要多行输入时，按 ${inputNewlineShortcut} 换行`,
+			'按 ESC 可中断当前回复',
+			'用 Shift+Tab 或 Ctrl+Y 切换 YOLO、Plan、Team 模式',
+			'先说目标和约束，结果会更稳定',
+			'需要分步骤时，可以要求先给计划再执行',
+			'使用 # 选择子代理处理专项任务',
+			'输入 /todo 查看或管理任务清单',
+			'复杂项目可用 /add-dir 添加工作目录',
+			'想减少显示干扰，可输入 /simple',
+			'粘贴截图后可以继续补充文字说明，再一起发送',
+			'报告错误时，请同时描述预期行为和实际行为',
+			'调试时提供复现步骤、错误信息和相关日志，会更容易定位',
+			'可以指出你认为相关的文件、函数或模块',
+			'要求重构前，先说明哪些行为或公开接口必须保持不变',
+			'高风险修改可以要求 Snow 分成小步骤并逐步验证',
+			'提供验收标准，最后结果会更容易检查',
+			'如果项目有验证命令，请告诉 Snow 应该用哪个命令确认结果',
+			'关注性能时，补充输入规模和延迟目标会更有帮助',
+			'报告 UI 问题时，可附上终端大小、主题和预期画面',
+			'调整 API 时，请说明兼容性要求和既有调用方',
+			'如果希望最小化修改，请在开始编辑前明确说明',
+			'命令执行失败时，请同时贴出命令和关键输出',
+			'做代码审查时，可以说明你最关心的风险区域',
+			'需求不确定时，可以先要求 Snow 列出假设再动手',
+			'使用 /models 可不离开对话直接切换模型',
+			'使用 /profiles 可快速切换 API 和模型配置档案',
+			'长对话接近上下文上限时，可使用 /compact 压缩上下文',
+			'使用 /review 可让 Snow 审查工作区变更或选定提交',
+			'使用 /diff 可在 IDE 中重新查看当前对话造成的文件变更',
+			'使用 /new-prompt 可将粗略需求整理成更清晰的提示词',
+			'主任务运行时，可用 /btw 提出临时旁支问题',
+			'使用 /loop 可创建会话级周期任务，例如定时检查',
+			'使用 /skills- 可选择 Skill 并把可复用指令注入输入框',
+			'使用 /role 可为当前项目自定义助手行为',
+			'大量修改代码库后，使用 /reindex 重新整理搜索结果',
+			'使用 /permissions 可检查已永久允许的工具',
+			'项目支持格式化时，可启用 /auto-format 在编辑后自动格式化',
+			'使用 /usage 可查看 Token 消耗和缓存统计',
+			'探索另一个方向前，可用 /branch 分叉当前对话',
+		],
 		// Context
 		contextUsage: '上下文使用: {percentage}%',
 		contextPercentage: '{percentage}%',
@@ -1045,8 +1741,12 @@ export const zh: TranslationKeys = {
 			'⍨ Vulnerability Hunting 模式已激活 - 专注漏洞挖掘与安全分析',
 		toolSearchEnabled: '♾︎ 工具搜索已开启 - 按需搜索加载工具',
 		hybridCompressEnabled: '⇌ 混合压缩已开启 - AI 摘要 + 智能截断',
+		imageCompressEnabled: '🖼 图片压缩已开启 - 历史记录渲染为 PNG 图片',
 		teamModeActive: '⚑ Agent Team 模式已激活 - 多代理独立 Worktree 协同工作',
-		tokens: ' 个token',
+		ultraTodoActive: '◈ Ultra TODO 模式已激活 - 阶段任务推进将强制校验',
+		telemetryActive:
+			'OpenTelemetry 遥测已开启 - trace 和 metric 将导出到外部组件',
+		tokens: ' 个词元',
 		cached: '已缓存',
 		newCache: '新缓存',
 	},
@@ -1091,6 +1791,7 @@ export const zh: TranslationKeys = {
 		modeLabel: '选择创建方式:',
 		modeAi: 'AI 生成（输入需求即可）',
 		modeManual: '手动创建（生成模板）',
+		modeInstall: '从 GitHub 安装技能',
 		requirementLabel: '技能需求:',
 		requirementHint: '简要描述你希望该技能完成什么（生成内容将跟随此语言）',
 		requirementPlaceholder: '例如：生成一个用于发布 npm 包的技能…',
@@ -1133,6 +1834,26 @@ export const zh: TranslationKeys = {
 			'技能 "{name}" 创建成功！\n模式: {mode}\n位置: {location}\n路径: {path}\n\n已创建以下文件：\n- SKILL.md（主技能文档）\n- reference.md（详细参考）\n- examples.md（使用示例）\n- templates/template.txt（模板文件）\n- scripts/helper.py（辅助脚本）\n\n你现在可以编辑这些文件来自定义技能。',
 		createErrorMessage: '创建技能失败：{error}',
 		errorUnknown: '未知错误',
+	},
+	skillsInstall: {
+		title: '从 GitHub 安装技能',
+		urlLabel: 'GitHub 地址:',
+		urlPlaceholder: 'https://github.com/owner/repo 或 owner/repo',
+		urlHint: '输入包含 SKILL.md 的 GitHub 仓库地址',
+		urlExamples:
+			'示例:\n  https://github.com/owner/repo\n  https://github.com/owner/repo/tree/main/skills/my-skill\n  owner/repo@main:skills/my-skill',
+		urlActions: '回车: 继续 | ESC: 取消',
+		locationLabel: '选择安装位置:',
+		locationGlobal: '全局 (~/.snow/skills/)',
+		locationProject: '项目 (.snow/skills/ 在项目根目录)',
+		locationActions: '上/下: 选择位置 | 回车: 安装 | ESC: 取消',
+		installing: '正在从 GitHub 安装技能...',
+		installingHint: '正在下载并解压仓库，请稍等',
+		installSuccess: '技能 "{name}" 安装成功！\n路径: {path}',
+		batchInstallSuccess: '已从仓库安装 {count}/{total} 个技能: {names}',
+		installError: '安装失败：{error}',
+		errorUnknown: '未知错误',
+		resultActions: '回车: 继续安装 | ESC: 关闭',
 	},
 	roleCreation: {
 		title: '创建 ROLE.md',
@@ -1179,10 +1900,15 @@ export const zh: TranslationKeys = {
 		createSuccess: '角色创建成功',
 		deleteSuccess: '角色删除成功',
 		loading: '处理中...',
-		hints: 'Tab: 切换作用域 | Enter: 激活 | N: 新建 | D: 删除 | ESC: 关闭',
+		hints:
+			'Tab: 切换作用域 | Enter: 激活 | N: 新建 | D: 删除 | R: 覆盖系统提示词 | ESC: 关闭',
 		cannotDeleteActive: '无法删除激活的角色',
 		confirmDelete: '确认删除该角色？',
 		confirmDeleteHint: '按 Y 确认，按 N 取消',
+		overrideTag: '覆盖',
+		overrideEnabled: '已启用：使用该角色覆盖系统提示词',
+		overrideDisabled: '已关闭：恢复使用默认系统提示词',
+		cannotOverrideInactive: '只有激活的角色才能标记为覆盖',
 	},
 
 	roleSubagentCreation: {
@@ -1325,13 +2051,14 @@ export const zh: TranslationKeys = {
 		emptyHint: '无后台进程',
 	},
 	fileRollback: {
-		title: '文件回滚确认',
+		title: '回滚确认',
 		description: '此检查点包含',
 		filesCount: '{count} 个文件将被回滚',
 		filesCountWithSelection:
 			'{count} 个文件将被回滚 ({selected}/{total} 已选择)',
 		notebookCount: '{count} 条备忘录也将被回滚',
 		teamCount: '{count} 个团队成员将被终止，工作区将被清理',
+		todoCount: '{count} 个 TODO 快照也将被回滚',
 		question: '请选择回滚方式：',
 		conversationOnly: '仅回滚对话',
 		conversationAndFiles: '回滚对话 + 文件',
@@ -1349,7 +2076,7 @@ export const zh: TranslationKeys = {
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 关闭',
 		emptyHint: '无文件可回滚',
-		noFilesConfirm: '未检测到文件变更。仅回滚对话？',
+		noFilesConfirm: '未检测到文件变更。确认回滚？',
 		noFilesConfirmHint: 'Enter 确认 · ESC 取消',
 	},
 	usagePanel: {
@@ -1431,6 +2158,10 @@ export const zh: TranslationKeys = {
 		title: 'Diff 审查',
 		noSnapshots: '该会话没有找到文件变更记录',
 		navigationHint: '↑↓ 导航 • Tab 查看文件 • Enter 打开全部 • ESC 关闭',
+		filesSuffix: '{count} 个文件',
+		filesViewNavigationHint: '↑↓ 导航 • Tab 返回 • Enter 打开全部 • ESC 关闭',
+		moreAbove: '↑ 上方还有 {count} 个',
+		moreBelow: '↓ 下方还有 {count} 个',
 	},
 	sessionListPanel: {
 		title: '恢复会话',
@@ -1453,6 +2184,7 @@ export const zh: TranslationKeys = {
 		renamePrompt: '重命名会话',
 		renaming: '重命名中...',
 		renamePlaceholder: '输入新的标题',
+		confirmDelete: '1 秒内再按一次 D 确认删除（共 {count} 个）',
 	},
 	mcpInfoPanel: {
 		title: 'MCP 服务',
@@ -1484,18 +2216,45 @@ export const zh: TranslationKeys = {
 		mcpSourceProject: ' [项目]',
 		mcpSourceGlobal: ' [全局]',
 	},
+	skillsListPanel: {
+		title: '技能列表',
+		loading: '加载技能中...',
+		error: '错误: {message}',
+		noSkills: '没有可用的技能',
+		locationProject: '(项目)',
+		locationGlobal: '(全局)',
+		statusDisabled: '(已禁用)',
+		navigationHint:
+			'↑↓ 导航 • Tab/空格/Enter 启停 • U 更新选中 • A 更新全部 • ESC 关闭',
+		moreAbove: '↑ 上方还有 {count} 项',
+		moreBelow: '↓ 下方还有 {count} 项',
+		updateInProgress: '正在更新: {name}...',
+		updateSingleSuccess: '{name}: 已更新到最新版本。',
+		updateSingleUpToDate: '{name}: 已是最新版本。',
+		updateNoSkills: '未找到可更新的 GitHub 技能。',
+		updateFailed: '更新失败',
+		updateTimeout: '更新超时',
+		updateAllInProgress: '正在更新全部 GitHub 技能...',
+		updateResult: '已更新 {updated}/{total} 个技能。',
+		updateAllUpToDate: '已检查 {total} 个技能，全部为最新版本。',
+		updatePartial: '已更新 {updated}/{total} 个，{failed} 个失败。',
+	},
 	mcpConfigScreen: {
 		title: 'MCP 配置 - 选择编辑范围',
 		scopeProject: '项目级配置',
 		scopeGlobal: '全局配置',
 		navigationHint: '↑↓ 导航 • Enter 编辑 • ESC 返回',
-		savedSuccess: '{scope} MCP 配置保存成功！请用 `snow` 重启！',
+		savedSuccess: '{scope} MCP 配置保存成功！工具列表已热刷新，无需重启。',
 		configErrors: '配置错误: {errors}',
 		reverted: '修改已回退至上一个有效配置。',
 		invalidJson: 'JSON 格式无效，修改已回退至上一个有效配置。',
 	},
+	commandArgsPanel: {
+		navigationHint:
+			'\u2191\u2193 \u5bfc\u822a  Enter \u9009\u62e9  Tab/ESC \u5173\u95ed',
+	},
 	runningAgentsPanel: {
-		title: '运行中的代理',
+		title: '\u8fd0\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '当前没有运行中的代理或队友',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
 		selected: '已选择: {count}',
@@ -1574,10 +2333,87 @@ export const zh: TranslationKeys = {
 		errorPrefix: '错误：',
 		scrollHint: '↑↓ 滚动浏览',
 	},
+	pixelEditor: {
+		title: '像素编辑器',
+		palette: '调色板',
+		eraser: '橡皮擦',
+		colorNumber: '颜色 {n}',
+		canvasCleared: '画布已清空',
+		clearCancelled: '已取消清空',
+		saveCancelled: '已取消保存',
+		nameCannotBeEmpty: '名称不能为空',
+		savedAs: '已保存为 {name}',
+		controlsHint:
+			'方向键：移动 • 空格：绘制/擦除 • Enter：绘制 • 1-9：选色 • 0：擦除 • C：清空画布',
+		controlsHintPosBrush:
+			'ESC/Q：返回 • Ctrl+S：保存 • 坐标：({x}, {y}) • 画笔： ',
+		saveDrawingLabel: '保存作品：',
+		namePlaceholder: '输入名称...',
+		escCancelHint: '  ESC 取消',
+		confirmClearCanvas: '清空画布？按 Y 确认，按其他键取消。',
+	},
+	pixelEditorScreen: {
+		screenTitle: '像素编辑器',
+		newCanvas: '新建画布',
+		manageDrawings: '管理作品',
+		menuNavigateHint: '↑↓ 选择 • Enter 确认 • Esc 返回',
+		manageTitle: '管理作品',
+		noDrawings: '暂无作品。',
+		managerHint:
+			'↑↓ 移动 • 空格 多选 • D 删除 • S 切换退出画面 • Enter 编辑 • Esc 返回',
+		confirmDeleteMany: '确认删除 {count} 项？Enter/Y/D 确认，N/Esc 取消',
+		moreAbove: '↑ 上方还有 {count} 项',
+		moreBelow: '↓ 下方还有 {count} 项',
+		selectedCount: '已选择 {count} 项',
+		exitImageDisabled: '已关闭退出画面',
+		failedDisableExitImage: '关闭退出画面失败',
+		setAsExitImage: '已将「{name}」设为退出画面',
+	},
+	gamesScreen: {
+		screenTitle: '小游戏',
+		loading: '正在加载游戏列表...',
+		noGames: '暂无游戏。将游戏插件放入 ~/.snow/plugin/games/ 目录即可加载。',
+		menuHint: '↑↓ 选择 • Enter 开始游戏 • Esc 返回',
+		moreAbove: '↑ 上方还有 {count} 项',
+		moreBelow: '↓ 下方还有 {count} 项',
+		pluginDirHint: '插件目录: ~/.snow/plugin/games/ (.js/.mjs/.cjs)',
+	},
+	anyPanel: {
+		loading: '正在加载面板...',
+		errorTitle: '面板错误',
+		pluginNotFound: '未找到 ID 为 {id} 的面板插件',
+		loadError: '加载面板插件失败: {error}',
+		renderError: '面板渲染出错: {error}',
+		pressEscToClose: '按 Esc 关闭',
+	},
+	agentPickerPanel: {
+		title: '子代理选择',
+		noAgentsWarning: '未配置子代理。请先配置子代理。',
+		selectAgent: '选择子代理',
+		escHint: '（按 ESC 关闭）',
+		noDescription: '无描述',
+		scrollHint: '· ↑↓ 滚动',
+		moreAbove: '上方还有 {count} 项',
+		moreBelow: '下方还有 {count} 项',
+	},
+	todoPickerPanel: {
+		title: 'TODO 选择',
+		scanning: '正在扫描项目中的 TODO 注释...',
+		noTodosFound: '项目中未找到 TODO 注释',
+		noMatchSearch: '没有匹配 "{searchQuery}" 的 TODO（总数：{totalCount}）',
+		typeToClearSearch: '输入以筛选 · 退格键清除搜索',
+		selectTodos: '选择 TODO',
+		filteringLabel: '筛选: "{searchQuery}"',
+		typeToFilterHint: '输入筛选 · 退格清除 · 空格: 切换 · 回车: 确认',
+		typeToSearchHint: '输入搜索 · 空格: 切换 · 回车: 确认 · Esc: 取消',
+		selectedCount: '已选择 {count} 个 TODO',
+		noDescription: '无描述',
+	},
 	exitScreen: {
 		title: '再见',
 		goodbye: '感谢使用 Snow CLI',
 		thankYou: '期待下次相见',
+		resumeSession: '恢复会话',
 		version: 'v{version}',
 	},
 };

@@ -20,7 +20,9 @@ import type {
 	PanelActions,
 	PanelState,
 } from '../../../hooks/ui/usePanelState.js';
-
+import PixelEditorScreen from '../PixelEditorScreen.js';
+import GamesScreen from '../GamesScreen.js';
+import AnyPanelScreen from '../AnyPanelScreen.js';
 const PermissionsPanel = lazy(
 	() => import('../../components/panels/PermissionsPanel.js'),
 );
@@ -30,15 +32,26 @@ const NewPromptPanel = lazy(
 const SubAgentDepthPanel = lazy(
 	() => import('../../components/panels/SubAgentDepthPanel.js'),
 );
+const ProfileEditPanel = lazy(
+	() => import('../../components/panels/ProfileEditPanel.js'),
+);
+const TaskManagerScreen = lazy(() => import('../TaskManagerScreen.js'));
+const ModelsPanel = lazy(() =>
+	import('../../components/panels/ModelsPanel.js').then(m => ({
+		default: m.ModelsPanel,
+	})),
+);
 
 type SnapshotState = {
 	snapshotFileCount: Map<number, number>;
 	pendingRollback: {
 		messageIndex: number;
+		previewTargetMessageIndex?: number;
 		fileCount: number;
 		filePaths?: string[];
 		notebookCount?: number;
 		teamCount?: number;
+		todoCount?: number;
 	} | null;
 };
 
@@ -46,47 +59,57 @@ type Props = {
 	terminalWidth: number;
 	workingDirectory: string;
 	panelState: PanelState & PanelActions;
-	messages: Message[];
 	snapshotState: SnapshotState;
-	advancedModel: string;
-	basicModel: string;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
+	handleGoalSessionPanelSelect: (sessionId: string) => Promise<void>;
 	showPermissionsPanel: boolean;
 	setShowPermissionsPanel: Dispatch<SetStateAction<boolean>>;
 	showSubAgentDepthPanel: boolean;
 	setShowSubAgentDepthPanel: Dispatch<SetStateAction<boolean>>;
+	modelsPanelAdvancedModel: string;
+	modelsPanelBasicModel: string;
 	alwaysApprovedTools: Set<string>;
 	removeFromAlwaysApproved: (toolName: string) => void;
 	clearAllAlwaysApproved: () => void;
 	setMessages: Dispatch<SetStateAction<Message[]>>;
 	t: any;
 	onPromptAccept: (prompt: string) => void;
+	onTaskResume: () => void;
 	handleRollbackConfirm: (
 		mode: RollbackMode | null,
 		selectedFiles?: string[],
 	) => void;
+	showAnyPanel: boolean;
+	activeAnyPanelPluginId: string | null;
+	setShowAnyPanel: (show: boolean) => void;
+	setActiveAnyPanelPluginId: (id: string | null) => void;
 };
 
 export default function ChatScreenPanels({
 	terminalWidth,
 	workingDirectory,
 	panelState,
-	messages,
 	snapshotState,
-	advancedModel,
-	basicModel,
 	handleSessionPanelSelect,
+	handleGoalSessionPanelSelect,
 	showPermissionsPanel,
 	setShowPermissionsPanel,
 	showSubAgentDepthPanel,
 	setShowSubAgentDepthPanel,
+	modelsPanelAdvancedModel,
+	modelsPanelBasicModel,
 	alwaysApprovedTools,
 	removeFromAlwaysApproved,
 	clearAllAlwaysApproved,
 	setMessages,
 	t,
 	onPromptAccept,
+	onTaskResume,
 	handleRollbackConfirm,
+	showAnyPanel,
+	activeAnyPanelPluginId,
+	setShowAnyPanel,
+	setActiveAnyPanelPluginId,
 }: Props) {
 	return (
 		<>
@@ -94,11 +117,13 @@ export default function ChatScreenPanels({
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
 				showSessionPanel={panelState.showSessionPanel}
+				showGoalSessionPanel={panelState.showGoalSessionPanel}
 				showMcpPanel={panelState.showMcpPanel}
 				showUsagePanel={panelState.showUsagePanel}
-				showModelsPanel={panelState.showModelsPanel}
+				showHelpPanel={panelState.showHelpPanel}
 				showCustomCommandConfig={panelState.showCustomCommandConfig}
 				showSkillsCreation={panelState.showSkillsCreation}
+				showSkillsInstall={panelState.showSkillsInstall}
 				showRoleCreation={panelState.showRoleCreation}
 				showRoleDeletion={panelState.showRoleDeletion}
 				showRoleList={panelState.showRoleList}
@@ -107,19 +132,16 @@ export default function ChatScreenPanels({
 				showRoleSubagentList={panelState.showRoleSubagentList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showBranchPanel={panelState.showBranchPanel}
-				showDiffReviewPanel={panelState.showDiffReviewPanel}
 				showConnectionPanel={panelState.showConnectionPanel}
+				showTelemetryPanel={panelState.showTelemetryPanel}
 				showTodoListPanel={panelState.showTodoListPanel}
 				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
-				diffReviewMessages={messages}
-				diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
-				advancedModel={advancedModel}
-				basicModel={basicModel}
 				setShowSessionPanel={panelState.setShowSessionPanel}
+				setShowGoalSessionPanel={panelState.setShowGoalSessionPanel}
 				setShowMcpPanel={panelState.setShowMcpPanel}
-				setShowModelsPanel={panelState.setShowModelsPanel}
 				setShowCustomCommandConfig={panelState.setShowCustomCommandConfig}
 				setShowSkillsCreation={panelState.setShowSkillsCreation}
+				setShowSkillsInstall={panelState.setShowSkillsInstall}
 				setShowRoleCreation={panelState.setShowRoleCreation}
 				setShowRoleDeletion={panelState.setShowRoleDeletion}
 				setShowRoleList={panelState.setShowRoleList}
@@ -128,10 +150,11 @@ export default function ChatScreenPanels({
 				setShowRoleSubagentList={panelState.setShowRoleSubagentList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
-				setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
 				setShowConnectionPanel={panelState.setShowConnectionPanel}
+				setShowTelemetryPanel={panelState.setShowTelemetryPanel}
 				setShowTodoListPanel={panelState.setShowTodoListPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
+				handleGoalSessionPanelSelect={handleGoalSessionPanelSelect}
 				onCustomCommandSave={async (
 					name,
 					command,
@@ -152,7 +175,9 @@ export default function ChatScreenPanels({
 					const typeDesc =
 						type === 'execute'
 							? t.customCommand.resultTypeExecute
-							: t.customCommand.resultTypePrompt;
+							: type === 'prompt'
+							? t.customCommand.resultTypePrompt
+							: t.customCommand.resultTypePanel;
 					const locationDesc =
 						location === 'global'
 							? t.customCommand.resultLocationGlobal
@@ -217,6 +242,15 @@ export default function ChatScreenPanels({
 						};
 						setMessages(prev => [...prev, errorMessage]);
 					}
+				}}
+				onSkillsInstall={(success, _skillId, message) => {
+					const content = success ? message : message;
+					const resultMessage: Message = {
+						role: 'command',
+						content,
+						commandName: 'skills',
+					};
+					setMessages(prev => [...prev, resultMessage]);
 				}}
 				onRoleSave={async location => {
 					const {createRoleFile} = await import(
@@ -452,11 +486,116 @@ export default function ChatScreenPanels({
 					filePaths={snapshotState.pendingRollback.filePaths || []}
 					notebookCount={snapshotState.pendingRollback.notebookCount}
 					teamCount={snapshotState.pendingRollback.teamCount}
+					todoCount={snapshotState.pendingRollback.todoCount}
 					previewSessionId={sessionManager.getCurrentSession()?.id}
-					previewTargetMessageIndex={snapshotState.pendingRollback.messageIndex}
+					previewTargetMessageIndex={
+						snapshotState.pendingRollback.previewTargetMessageIndex ??
+						snapshotState.pendingRollback.messageIndex
+					}
 					terminalWidth={terminalWidth}
 					onConfirm={handleRollbackConfirm}
 				/>
+			)}
+
+			{panelState.showPixelEditor && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<PixelEditorScreen
+						onBack={() => panelState.setShowPixelEditor(false)}
+					/>
+				</Box>
+			)}
+
+			{panelState.showGamesPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<GamesScreen
+						onBack={() => panelState.setShowGamesPanel(false)}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
+			)}
+			{showAnyPanel && activeAnyPanelPluginId && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<AnyPanelScreen
+						pluginId={activeAnyPanelPluginId}
+						terminalWidth={terminalWidth}
+						sessionId={sessionManager.getCurrentSession()?.id ?? ''}
+						sessionJson={
+							sessionManager.getCurrentSession()
+								? JSON.stringify(sessionManager.getCurrentSession())
+								: ''
+						}
+						onClose={() => {
+							setShowAnyPanel(false);
+							setActiveAnyPanelPluginId(null);
+						}}
+					/>
+				</Box>
+			)}
+
+			{panelState.showTaskManagerPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<TaskManagerScreen
+							onBack={() => panelState.setShowTaskManagerPanel(false)}
+							onResumeTask={() => {
+								panelState.setShowTaskManagerPanel(false);
+								onTaskResume();
+							}}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{panelState.showModelsPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<ModelsPanel
+							advancedModel={modelsPanelAdvancedModel}
+							basicModel={modelsPanelBasicModel}
+							visible={panelState.showModelsPanel}
+							onClose={() => panelState.setShowModelsPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{/* ProfileEditPanel：从 ProfilePanel 按右方向键进入，
+			    编辑指定 profile（不切换 active）。ESC 由 ConfigScreen 内部处理：
+			    保存配置并通过 onBack 触发 closeProfileEditAndReturnToPicker，
+			    返回到 ProfilePanel（picker）。 */}
+			{panelState.showProfileEditPanel && panelState.editingProfileName && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<ProfileEditPanel
+							profileName={panelState.editingProfileName}
+							onClose={panelState.closeProfileEditAndReturnToPicker}
+						/>
+					</Suspense>
+				</Box>
 			)}
 		</>
 	);

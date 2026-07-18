@@ -3,6 +3,8 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {createStreamGenerator} from './streamFactory.js';
+import {tpsTracker} from './tpsTracker.js';
+import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {
 	ConversationHandlerOptions,
 	ConversationUsage,
@@ -16,8 +18,31 @@ const THINKING_TAG_PATTERN = /\s*<\/?think(?:ing)?>\s*/gi;
 const LIST_ITEM_PATTERN = /^\s*\d+[.)]\s|^\s*[-*+]\s/;
 const LIST_CONTINUATION_PATTERN = /^\s{2,}/;
 
+function compactBuddyProgressText(value: string, maxLength = 180): string {
+	const compacted = value.replace(/\s+/g, ' ').trim();
+	return compacted.length > maxLength
+		? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
+		: compacted;
+}
+
 function cleanThinkingContent(content: string): string {
 	return content.replace(THINKING_TAG_PATTERN, '');
+}
+
+// compact 模式下将完整思考内容缩减为摘要后推入静态区。
+// 策略：保留全文开头和结尾，中间用省略号替代，控制总长度。
+function compactThinkingContent(content: string, maxLength = 200): string {
+	const trimmed = content.trim();
+	if (trimmed.length <= maxLength) {
+		return trimmed;
+	}
+	const ellipsis = '......';
+	const keepLength = maxLength - ellipsis.length;
+	const headLength = Math.ceil(keepLength / 2);
+	const tailLength = Math.floor(keepLength / 2);
+	const head = trimmed.slice(0, headLength).trimEnd();
+	const tail = trimmed.slice(-tailLength).trimStart();
+	return `${head}${ellipsis}${tail}`;
 }
 
 function isTableRow(line: string): boolean {
@@ -70,13 +95,18 @@ export async function processStreamRound(ctx: {
 	let roundUsage: ConversationUsage | null = null;
 
 	const streamingEnabled = config.streamingDisplay !== false;
+	const thinkDisplayMode = getThinkDisplayMode();
 
 	let thinkingLineBuffer = '';
+	let lastThinkingStatusTime = 0;
+	let isThinkingStatusActive = false;
 	let contentLineBuffer = '';
 	let isFirstStreamLine = true;
 	let hasReceivedContentChunk = false;
 	let hasStartedContent = false;
 	let hasStreamedLines = false;
+	let hasEmittedThinkingBuddyProgress = false;
+	let hasEmittedAnswerBuddyProgress = false;
 
 	let inCodeBlock = false;
 	let codeBlockBuffer = '';
@@ -126,16 +156,34 @@ export async function processStreamRound(ctx: {
 	};
 
 	const flushThinkingBufferToStream = () => {
-		if (hasReceivedContentChunk || !thinkingLineBuffer) {
-			thinkingLineBuffer = '';
+		if (!thinkingLineBuffer) {
+			if (isThinkingStatusActive) {
+				isThinkingStatusActive = false;
+				options.onThinkingStatus?.(null);
+			}
 			return;
 		}
 
 		const cleaned = cleanThinkingContent(thinkingLineBuffer);
-		if (cleaned.trim()) {
-			emitStreamLine(cleaned, true);
+		// showThinking=false 时，思考内容不推入静态区（与 MessageRenderer
+		// 中 showThinking=false 时隐藏思考行的行为一致）。
+		if (cleaned.trim() && config.showThinking !== false) {
+			if (thinkDisplayMode === 'full') {
+				// full 模式：将完整思考内容一次性推送到 Static 区。
+				emitStreamLine(cleaned, true);
+			} else {
+				// compact 模式：缩减思考内容后推入静态区。
+				const compacted = compactThinkingContent(cleaned);
+				if (compacted.trim()) {
+					emitStreamLine(compacted, true);
+				}
+			}
 		}
 		thinkingLineBuffer = '';
+		if (isThinkingStatusActive) {
+			isThinkingStatusActive = false;
+			options.onThinkingStatus?.(null);
+		}
 	};
 
 	const flushListBuffer = () => {
@@ -186,7 +234,10 @@ export async function processStreamRound(ctx: {
 			return;
 		}
 
-		if (listBuffer && (line.trim() === '' || LIST_CONTINUATION_PATTERN.test(line))) {
+		if (
+			listBuffer &&
+			(line.trim() === '' || LIST_CONTINUATION_PATTERN.test(line))
+		) {
 			listBuffer += line + '\n';
 			return;
 		}
@@ -199,6 +250,8 @@ export async function processStreamRound(ctx: {
 		try {
 			const deltaTokens = encoder.encode(text);
 			currentTokenCount += deltaTokens.length;
+			// 记录到 TPS 追踪器（仅在测速仪启用时生效）
+			tpsTracker.recordTokens(deltaTokens.length);
 			const now = Date.now();
 			if (now - lastTokenUpdateTime >= TOKEN_UPDATE_INTERVAL) {
 				setStreamTokenCount(currentTokenCount);
@@ -215,11 +268,15 @@ export async function processStreamRound(ctx: {
 	const onRetry = (error: Error, attempt: number, nextDelay: number) => {
 		retryInProgress = true;
 		if (setRetryStatus) {
+			// 同步写入 remainingSeconds，避免 UI 等 effect 初始化时
+			// isRetrying 已 true、秒数未定义导致倒计时 effect 早退且不再重启。
 			setRetryStatus({
 				isRetrying: true,
 				attempt,
 				nextDelay,
+				maxRetries: config.maxRetries ?? 5,
 				errorMessage: error.message,
+				remainingSeconds: Math.max(0, Math.ceil(nextDelay / 1000)),
 			});
 		}
 	};
@@ -239,6 +296,9 @@ export async function processStreamRound(ctx: {
 		onRetry,
 	});
 
+	// 重置测速仪会话统计（TTFT 计时起点）
+	tpsTracker.resetSession();
+
 	for await (const chunk of streamGenerator) {
 		if (controller.signal.aborted) {
 			break;
@@ -253,6 +313,20 @@ export async function processStreamRound(ctx: {
 		if (chunk.type === 'reasoning_started') {
 			if (!hasReceivedContentChunk) {
 				setIsReasoning?.(true);
+				if (!hasEmittedThinkingBuddyProgress) {
+					hasEmittedThinkingBuddyProgress = true;
+					options.onBuddyProgress?.({
+						stage: 'thinking_started',
+						summary: `reasoning started; recent messages: ${
+							conversationMessages.length
+						}; available tools: ${
+							activeTools
+								.slice(0, 4)
+								.map(tool => tool.function.name)
+								.join(', ') || 'none'
+						}`,
+					});
+				}
 			}
 			continue;
 		}
@@ -261,6 +335,8 @@ export async function processStreamRound(ctx: {
 			if (!hasStartedReasoning) {
 				hasStartedReasoning = true;
 				if (!hasReceivedContentChunk) {
+					// LoadingIndicator 走 isReasoning 显示“深度思考中”；
+					// ThinkingStatus 面板等真正有内容再激活，避免空思考框。
 					setIsReasoning?.(true);
 				}
 			}
@@ -271,14 +347,25 @@ export async function processStreamRound(ctx: {
 			}
 
 			thinkingLineBuffer += chunk.delta;
-			const thinkLines = thinkingLineBuffer.split('\n');
-			for (let i = 0; i < thinkLines.length - 1; i++) {
-				const cleaned = cleanThinkingContent(thinkLines[i] ?? '');
-				if (cleaned || hasStreamedLines) {
-					emitStreamLine(cleaned, true);
-				}
+			const cleanedThinking = cleanThinkingContent(thinkingLineBuffer);
+			// 清洗后仍为空（例如只有 <think> 标签）时不激活 ThinkingStatus，
+			// 否则会出现“Thinking...”标题 + 5 行空白占位的空思考。
+			if (!cleanedThinking.trim()) {
+				continue;
 			}
-			thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
+
+			const now = Date.now();
+			if (
+				!isThinkingStatusActive ||
+				now - lastThinkingStatusTime >= STREAM_FLUSH_INTERVAL
+			) {
+				lastThinkingStatusTime = now;
+				isThinkingStatusActive = true;
+				options.onThinkingStatus?.({
+					isActive: true,
+					content: cleanedThinking,
+				});
+			}
 			continue;
 		}
 
@@ -286,6 +373,16 @@ export async function processStreamRound(ctx: {
 			if (!hasReceivedContentChunk) {
 				hasReceivedContentChunk = true;
 				flushThinkingBufferToStream();
+				if (!hasEmittedAnswerBuddyProgress) {
+					hasEmittedAnswerBuddyProgress = true;
+					options.onBuddyProgress?.({
+						stage: 'answer_started',
+						summary: `assistant answer started with: ${compactBuddyProgressText(
+							chunk.content,
+							160,
+						)}`,
+					});
+				}
 			}
 			setIsReasoning?.(false);
 			streamedContent += chunk.content;
@@ -307,6 +404,20 @@ export async function processStreamRound(ctx: {
 
 		if (chunk.type === 'tool_calls' && chunk.tool_calls) {
 			receivedToolCalls = chunk.tool_calls;
+			options.onBuddyProgress?.({
+				stage: 'tool_calls_ready',
+				summary: `assistant requested tools: ${chunk.tool_calls
+					.map(toolCall => {
+						const args = compactBuddyProgressText(
+							toolCall.function.arguments || '',
+							90,
+						);
+						return args
+							? `${toolCall.function.name}(${args})`
+							: toolCall.function.name;
+					})
+					.join('; ')}`,
+			});
 			continue;
 		}
 
@@ -342,6 +453,10 @@ export async function processStreamRound(ctx: {
 		flushThinkingBufferToStream();
 	} else {
 		thinkingLineBuffer = '';
+		if (isThinkingStatusActive) {
+			isThinkingStatusActive = false;
+			options.onThinkingStatus?.(null);
+		}
 	}
 	if (contentLineBuffer.trim()) {
 		processContentLine(contentLineBuffer);

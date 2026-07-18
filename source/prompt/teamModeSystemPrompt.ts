@@ -154,6 +154,8 @@ PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 PLACEHOLDER_FOR_CODE_SEARCH_SECTION
 
 You also have access to all standard Snow AI CLI tools for your own direct use.
+For lead-side step tracking on the session TODO list, use \`todo-manage\` with \`action\`: get / add / update / delete. Teammates coordinate work via \`claim_task\`, \`complete_task\`, and \`list_team_tasks\` — those are separate from the session TODO tool.
+TODO update discipline for the lead: as soon as one concrete step is completed (or confirmed completed by teammates), update that specific TODO item immediately with \`todo-manage(action="update")\`. Do not postpone updates until all teammate work is done, and never do one final bulk status update at the end.
 `;
 
 function getCodeSearchSection(hasCodebase: boolean): string {
@@ -165,17 +167,12 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 - Query by meaning: "authentication logic", "error handling patterns"
 - Returns relevant code with full context across the entire codebase
 
-**Fallback tools:**
-- \`ace-find_definition\` - Jump to exact symbol definition
-- \`ace-find_references\` - Find all usages of a known symbol
-- \`ace-text_search\` - Literal string search`;
+**Fallback tool:**
+- \`ace-search\` - Unified ACE code search; pick \`action\`: find_definition / find_references / semantic_search / file_outline / text_search`;
 	}
 	return `## Code Search (for Lead's own use)
 
-- \`ace-semantic_search\` - Symbol search with fuzzy matching
-- \`ace-find_definition\` - Go to definition of a symbol
-- \`ace-find_references\` - Find all usages of a symbol
-- \`ace-text_search\` - Literal text/regex search`;
+- \`ace-search\` - Unified ACE code search. Required \`action\`: find_definition (go to definition) / find_references (all usages) / semantic_search (fuzzy symbol search) / file_outline / text_search (literal/regex)`;
 }
 
 const TOOL_DISCOVERY_SECTIONS = {

@@ -1,9 +1,13 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
-import type {RequestMethod} from '../../../utils/config/apiConfig.js';
+import type {
+	BaseUrlMode,
+	RequestMethod,
+} from '../../../utils/config/apiConfig.js';
 import {switchProfile} from '../../../utils/config/configManager.js';
+import {ResponsesReasoningModeSelect} from './ConfigSubViews.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
 type Props = {
@@ -16,26 +20,32 @@ export default function ConfigSelectPanel({state}: Props) {
 		theme,
 		currentField,
 		setIsEditing,
+		baseUrlMode,
+		setBaseUrlMode,
 		requestMethod,
 		setRequestMethod,
 		requestMethodOptions,
-		searchTerm,
+		visionBaseUrlMode,
+		setVisionBaseUrlMode,
+		visionRequestMethod,
+		setVisionRequestMethod,
 		thinkingMode,
 		setThinkingMode,
 		thinkingEffort,
 		setThinkingEffort,
 		geminiThinkingLevel,
 		setGeminiThinkingLevel,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		anthropicSpeed,
 		setAnthropicSpeed,
-		getCurrentOptions,
-		getCurrentValue,
+		chatReasoningEffort,
+		setChatReasoningEffort,
 		getCustomHeadersSchemeSelectItems,
 		getCustomHeadersSchemeSelectedValue,
 		applyCustomHeadersSchemeSelectValue,
-		handleModelChange,
 	} = state;
 
 	const getFieldLabel = () => {
@@ -44,10 +54,18 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.profile.replace(':', '');
 			case 'requestMethod':
 				return t.configScreen.requestMethod.replace(':', '');
+			case 'baseUrlMode':
+				return t.configScreen.baseUrlMode.replace(':', '');
 			case 'advancedModel':
 				return t.configScreen.advancedModel.replace(':', '');
 			case 'basicModel':
 				return t.configScreen.basicModel.replace(':', '');
+			case 'visionBaseUrlMode':
+				return t.configScreen.visionBaseUrlMode.replace(':', '');
+			case 'visionRequestMethod':
+				return t.configScreen.visionRequestMethod.replace(':', '');
+			case 'visionModel':
+				return t.configScreen.visionModel.replace(':', '');
 			case 'thinkingMode':
 				return t.configScreen.thinkingMode.replace(':', '');
 			case 'thinkingEffort':
@@ -56,10 +74,14 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.geminiThinkingLevel.replace(':', '');
 			case 'responsesReasoningEffort':
 				return t.configScreen.responsesReasoningEffort.replace(':', '');
+			case 'responsesReasoningMode':
+				return t.configScreen.responsesReasoningMode.replace(':', '');
 			case 'responsesVerbosity':
 				return t.configScreen.responsesVerbosity.replace(':', '');
 			case 'anthropicSpeed':
 				return t.configScreen.anthropicSpeed.replace(':', '');
+			case 'chatReasoningEffort':
+				return t.configScreen.chatReasoningEffort.replace(':', '');
 			case 'systemPromptId':
 				return t.configScreen.systemPrompt;
 			case 'customHeadersSchemeId':
@@ -83,6 +105,50 @@ export default function ConfigSelectPanel({state}: Props) {
 						isFocused={true}
 						onSelect={item => {
 							setRequestMethod(item.value as RequestMethod);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'baseUrlMode' && (
+					<ScrollableSelectInput
+						items={[
+							{label: t.configScreen.baseUrlModeAuto, value: 'auto'},
+							{label: t.configScreen.baseUrlModeBase, value: 'base'},
+							{
+								label: t.configScreen.baseUrlModeEndpoint,
+								value: 'endpoint',
+							},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['auto', 'base', 'endpoint'] as const).indexOf(baseUrlMode),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setBaseUrlMode(item.value as BaseUrlMode);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'visionBaseUrlMode' && (
+					<ScrollableSelectInput
+						items={[
+							{label: t.configScreen.baseUrlModeAuto, value: 'auto'},
+							{label: t.configScreen.baseUrlModeBase, value: 'base'},
+							{
+								label: t.configScreen.baseUrlModeEndpoint,
+								value: 'endpoint',
+							},
+						]}
+						initialIndex={Math.max(
+							0,
+							(['auto', 'base', 'endpoint'] as const).indexOf(
+								visionBaseUrlMode,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setVisionBaseUrlMode(item.value as BaseUrlMode);
 							setIsEditing(false);
 						}}
 					/>
@@ -111,27 +177,23 @@ export default function ConfigSelectPanel({state}: Props) {
 						);
 					})()}
 				{(currentField === 'advancedModel' ||
-					currentField === 'basicModel') && (
-					<Box flexDirection="column">
-						{searchTerm && (
-							<Text color={theme.colors.menuInfo}>Filter: {searchTerm}</Text>
+					currentField === 'basicModel' ||
+					currentField === 'visionModel') && <ModelSelect state={state} />}
+				{currentField === 'visionRequestMethod' && (
+					<ScrollableSelectInput
+						items={requestMethodOptions}
+						initialIndex={Math.max(
+							0,
+							requestMethodOptions.findIndex(
+								opt => opt.value === visionRequestMethod,
+							),
 						)}
-						<ScrollableSelectInput
-							items={getCurrentOptions()}
-							limit={10}
-							disableNumberShortcuts={true}
-							initialIndex={Math.max(
-								0,
-								getCurrentOptions().findIndex(
-									opt => opt.value === getCurrentValue(),
-								),
-							)}
-							isFocused={true}
-							onSelect={item => {
-								handleModelChange(item.value);
-							}}
-						/>
-					</Box>
+						isFocused={true}
+						onSelect={item => {
+							setVisionRequestMethod(item.value as RequestMethod);
+							setIsEditing(false);
+						}}
+					/>
 				)}
 				{currentField === 'thinkingMode' && (
 					<ScrollableSelectInput
@@ -153,25 +215,30 @@ export default function ConfigSelectPanel({state}: Props) {
 				{currentField === 'thinkingEffort' && (
 					<ScrollableSelectInput
 						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
 							{label: 'low', value: 'low'},
 							{label: 'medium', value: 'medium'},
 							{label: 'high', value: 'high'},
 							{label: 'max', value: 'max'},
 						]}
-						initialIndex={
-							thinkingEffort === 'low'
-								? 0
-								: thinkingEffort === 'medium'
-								? 1
-								: thinkingEffort === 'high'
-								? 2
-								: 3
-						}
+						initialIndex={Math.max(
+							0,
+							['__MANUAL_INPUT__', 'low', 'medium', 'high', 'max'].indexOf(
+								thinkingEffort,
+							),
+						)}
 						isFocused={true}
 						onSelect={item => {
-							setThinkingEffort(
-								item.value as 'low' | 'medium' | 'high' | 'max',
-							);
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(thinkingEffort);
+								return;
+							}
+							setThinkingEffort(item.value);
 							setIsEditing(false);
 						}}
 					/>
@@ -179,6 +246,10 @@ export default function ConfigSelectPanel({state}: Props) {
 				{currentField === 'geminiThinkingLevel' && (
 					<ScrollableSelectInput
 						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
 							{label: 'MINIMAL', value: 'minimal'},
 							{label: 'LOW', value: 'low'},
 							{label: 'MEDIUM', value: 'medium'},
@@ -186,21 +257,35 @@ export default function ConfigSelectPanel({state}: Props) {
 						]}
 						initialIndex={Math.max(
 							0,
-							(['minimal', 'low', 'medium', 'high'] as const).indexOf(
+							['__MANUAL_INPUT__', 'minimal', 'low', 'medium', 'high'].indexOf(
 								geminiThinkingLevel,
 							),
 						)}
 						isFocused={true}
 						onSelect={item => {
-							setGeminiThinkingLevel(
-								item.value as 'minimal' | 'low' | 'medium' | 'high',
-							);
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(geminiThinkingLevel);
+								return;
+							}
+							setGeminiThinkingLevel(item.value);
 							setIsEditing(false);
 						}}
 					/>
 				)}
 				{currentField === 'responsesReasoningEffort' && (
 					<ReasoningEffortSelect state={state} />
+				)}
+				{currentField === 'responsesReasoningMode' && (
+					<ResponsesReasoningModeSelect
+						value={responsesReasoningMode}
+						noneLabel={t.configScreen.responsesReasoningModeNone}
+						onChange={value => {
+							setResponsesReasoningMode(value);
+							setIsEditing(false);
+						}}
+					/>
 				)}
 				{currentField === 'responsesVerbosity' && (
 					<ScrollableSelectInput
@@ -224,6 +309,37 @@ export default function ConfigSelectPanel({state}: Props) {
 						}}
 					/>
 				)}
+				{currentField === 'chatReasoningEffort' && (
+					<ScrollableSelectInput
+						items={[
+							{
+								label: t.configScreen.manualInputOption,
+								value: '__MANUAL_INPUT__',
+							},
+							{label: 'LOW', value: 'low'},
+							{label: 'MEDIUM', value: 'medium'},
+							{label: 'HIGH', value: 'high'},
+							{label: 'MAX', value: 'max'},
+						]}
+						initialIndex={Math.max(
+							0,
+							['__MANUAL_INPUT__', 'low', 'medium', 'high', 'max'].indexOf(
+								chatReasoningEffort,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							if (item.value === '__MANUAL_INPUT__') {
+								setIsEditing(false);
+								state.setManualInputMode(true);
+								state.setManualInputValue(chatReasoningEffort);
+								return;
+							}
+							setChatReasoningEffort(item.value);
+							setIsEditing(false);
+						}}
+					/>
+				)}
 				{currentField === 'anthropicSpeed' && (
 					<ScrollableSelectInput
 						items={[
@@ -232,12 +348,18 @@ export default function ConfigSelectPanel({state}: Props) {
 							{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
 						]}
 						initialIndex={
-							anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+							anthropicSpeed === 'fast'
+								? 1
+								: anthropicSpeed === 'standard'
+								? 2
+								: 0
 						}
 						isFocused={true}
 						onSelect={item => {
 							setAnthropicSpeed(
-								item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+								item.value === '__NONE__'
+									? undefined
+									: (item.value as 'fast' | 'standard'),
 							);
 							setIsEditing(false);
 						}}
@@ -407,20 +529,19 @@ function SystemPromptSelect({state}: Props) {
 					});
 				}}
 				onSelect={item => {
+					// 元选项（跟随全局/禁用）保持单选语义：Enter 时直接应用光标所在项
 					if (item.value === '__FOLLOW__' || item.value === '__DISABLED__') {
 						applySystemPromptSelectValue(item.value);
 						setPendingPromptIds(new Set());
 						setIsEditing(false);
 						return;
 					}
-					const finalIds =
-						pendingPromptIds.size > 0
-							? Array.from(pendingPromptIds)
-							: [item.value];
-					if (pendingPromptIds.size > 0 && !pendingPromptIds.has(item.value)) {
-						finalIds.push(item.value);
+					// 多选模式：Enter 仅用于"保存并退出"，绝不触发光标项的选中
+					// 仅保存通过 Space 已 toggle 的集合；若未 toggle 任何项，则保持原配置不变
+					if (pendingPromptIds.size > 0) {
+						const finalIds = Array.from(pendingPromptIds);
+						setSystemPromptId(finalIds.length === 1 ? finalIds[0]! : finalIds);
 					}
-					setSystemPromptId(finalIds.length === 1 ? finalIds[0]! : finalIds);
 					setPendingPromptIds(new Set());
 					setIsEditing(false);
 				}}
@@ -435,8 +556,69 @@ function SystemPromptSelect({state}: Props) {
 	);
 }
 
+function ModelSelect({state}: Props) {
+	const {
+		t,
+		theme,
+		searchTerm,
+		getCurrentOptions,
+		getCurrentValue,
+		handleModelChange,
+	} = state;
+
+	const [highlightedIndex, setHighlightedIndex] = useState(0);
+	const options = getCurrentOptions();
+	const modelCount = options.length - 1;
+
+	return (
+		<Box flexDirection="column">
+			<Box>
+				{searchTerm && (
+					<Text color={theme.colors.menuInfo}>
+						{t.configScreen.modelSelectFilterLabel} {searchTerm}
+						{'  '}
+					</Text>
+				)}
+				<Text color={theme.colors.warning} bold>
+					{t.configScreen.modelSelectModelCount.replace(
+						'{count}',
+						modelCount.toString(),
+					)}
+					{options.length > 10 &&
+						` (${highlightedIndex + 1}/${options.length})`}
+				</Text>
+			</Box>
+			<ScrollableSelectInput
+				items={options}
+				limit={10}
+				disableNumberShortcuts={true}
+				initialIndex={Math.max(
+					0,
+					options.findIndex(opt => opt.value === getCurrentValue()),
+				)}
+				isFocused={true}
+				onSelect={item => {
+					handleModelChange(item.value);
+				}}
+				onHighlight={item => {
+					const idx = options.findIndex(o => o.value === item.value);
+					if (idx >= 0) setHighlightedIndex(idx);
+				}}
+			/>
+			{options.length > 10 && (
+				<Box>
+					<Text dimColor color={theme.colors.menuSecondary}>
+						{t.configScreen.modelSelectScrollHint}
+					</Text>
+				</Box>
+			)}
+		</Box>
+	);
+}
+
 function ReasoningEffortSelect({state}: Props) {
 	const {
+		t,
 		supportsXHigh,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
@@ -444,6 +626,7 @@ function ReasoningEffortSelect({state}: Props) {
 	} = state;
 
 	const effortOptions = [
+		{label: t.configScreen.manualInputOption, value: '__MANUAL_INPUT__'},
 		{label: 'NONE', value: 'none'},
 		{label: 'LOW', value: 'low'},
 		{label: 'MEDIUM', value: 'medium'},
@@ -460,15 +643,13 @@ function ReasoningEffortSelect({state}: Props) {
 			)}
 			isFocused={true}
 			onSelect={item => {
-				const nextEffort = item.value as
-					| 'none'
-					| 'low'
-					| 'medium'
-					| 'high'
-					| 'xhigh';
-				setResponsesReasoningEffort(
-					nextEffort === 'xhigh' && !supportsXHigh ? 'high' : nextEffort,
-				);
+				if (item.value === '__MANUAL_INPUT__') {
+					setIsEditing(false);
+					state.setManualInputMode(true);
+					state.setManualInputValue(responsesReasoningEffort);
+					return;
+				}
+				setResponsesReasoningEffort(item.value);
 				setIsEditing(false);
 			}}
 		/>

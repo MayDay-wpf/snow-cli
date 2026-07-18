@@ -7,9 +7,16 @@ import {
 	getProxyConfig,
 	updateProxyConfig,
 	type ProxyConfig,
+	type SearchEngineId,
 } from '../../utils/config/proxyConfig.js';
+import {
+	listSearchEngines,
+	listSearchEnginesAsync,
+} from '../../mcp/engines/websearch/index.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import ScrollableSelectInput from '../components/common/ScrollableSelectInput.js';
 
 type Props = {
 	onBack: () => void;
@@ -23,21 +30,40 @@ export default function ProxyConfigScreen({
 	inlineMode = false,
 }: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.proxyConfig.title}`);
 	const {theme} = useTheme();
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
 	const [browserPath, setBrowserPath] = useState('');
+	const [searchEngine, setSearchEngine] =
+		useState<SearchEngineId>('duckduckgo');
 	const [currentField, setCurrentField] = useState<
-		'enabled' | 'port' | 'browserPath'
+		'enabled' | 'searchEngine' | 'port' | 'browserPath'
 	>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
+
+	// Available search engines (built-ins plus user plugins under
+	// ~/.snow/plugin/search_engines/). Start with built-ins synchronously then
+	// merge in plugin engines once they finish loading.
+	const [availableEngines, setAvailableEngines] = useState(() =>
+		listSearchEngines(),
+	);
 
 	useEffect(() => {
 		const config = getProxyConfig();
 		setEnabled(config.enabled);
 		setPort(config.port.toString());
 		setBrowserPath(config.browserPath || '');
+		setSearchEngine(config.searchEngine || 'duckduckgo');
+
+		let cancelled = false;
+		void listSearchEnginesAsync().then(engines => {
+			if (!cancelled) setAvailableEngines(engines);
+		});
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const validateConfig = (): string[] => {
@@ -58,6 +84,7 @@ export default function ProxyConfigScreen({
 				enabled,
 				port: parseInt(port, 10),
 				browserPath: browserPath.trim() || undefined,
+				searchEngine,
 			};
 			await updateProxyConfig(config);
 			setErrors([]);
@@ -83,7 +110,9 @@ export default function ProxyConfigScreen({
 				// Exit edit mode, return to navigation
 				setIsEditing(false);
 			} else {
-				// Enter edit mode for current field (toggle for checkbox)
+				// Enter edit mode for the current field (toggle for the
+				// boolean checkbox, list selection for searchEngine, text
+				// input for the rest).
 				if (currentField === 'enabled') {
 					setEnabled(!enabled);
 				} else {
@@ -91,20 +120,14 @@ export default function ProxyConfigScreen({
 				}
 			}
 		} else if (!isEditing && key.upArrow) {
-			const fields: Array<'enabled' | 'port' | 'browserPath'> = [
-				'enabled',
-				'port',
-				'browserPath',
-			];
+			const fields: Array<'enabled' | 'searchEngine' | 'port' | 'browserPath'> =
+				['enabled', 'searchEngine', 'port', 'browserPath'];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex > 0 ? currentIndex - 1 : fields.length - 1;
 			setCurrentField(fields[newIndex]!);
 		} else if (!isEditing && key.downArrow) {
-			const fields: Array<'enabled' | 'port' | 'browserPath'> = [
-				'enabled',
-				'port',
-				'browserPath',
-			];
+			const fields: Array<'enabled' | 'searchEngine' | 'port' | 'browserPath'> =
+				['enabled', 'searchEngine', 'port', 'browserPath'];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex < fields.length - 1 ? currentIndex + 1 : 0;
 			setCurrentField(fields[newIndex]!);
@@ -149,6 +172,48 @@ export default function ProxyConfigScreen({
 								{t.proxyConfig.toggleHint}
 							</Text>
 						</Box>
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text
+							color={
+								currentField === 'searchEngine'
+									? theme.colors.menuSelected
+									: theme.colors.menuNormal
+							}
+						>
+							{currentField === 'searchEngine' ? '❯ ' : '  '}
+							{t.proxyConfig.searchEngine}
+						</Text>
+						{currentField === 'searchEngine' && isEditing ? (
+							<Box marginLeft={3}>
+								<ScrollableSelectInput
+									items={availableEngines.map(e => ({
+										label: e.name,
+										value: e.id,
+									}))}
+									initialIndex={Math.max(
+										0,
+										availableEngines.findIndex(e => e.id === searchEngine),
+									)}
+									isFocused={true}
+									onSelect={item => {
+										setSearchEngine(item.value as SearchEngineId);
+										setIsEditing(false);
+									}}
+								/>
+							</Box>
+						) : (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{availableEngines.find(e => e.id === searchEngine)?.name ||
+										searchEngine}{' '}
+									{t.proxyConfig.toggleHint}
+								</Text>
+							</Box>
+						)}
 					</Box>
 				</Box>
 

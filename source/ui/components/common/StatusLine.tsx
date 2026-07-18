@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import React from 'react';
+import React, {useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/index.js';
@@ -11,7 +11,15 @@ import {
 	loadProfile,
 	getActiveProfileName,
 } from '../../../utils/config/configManager.js';
+import {readSettings} from '../../../utils/config/unifiedSettings.js';
+import {configEvents} from '../../../utils/config/configEvents.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
+import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
+import {
+	tpsTracker,
+	subscribeTpsTracker,
+	getTpsTrackerSnapshot,
+} from '../../../hooks/conversation/core/tpsTracker.js';
 import type {
 	BackendConnectionStatus,
 	StatusLineCodebaseProgress,
@@ -20,12 +28,15 @@ import type {
 	StatusLineCopyStatusMessage,
 	StatusLineEditorContext,
 	StatusLineFileUpdateNotification,
+	StatusLinePrivacyState,
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
+import {GradientText} from './statusline/GradientText.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
 const execFileAsync = promisify(execFile);
+const TELEMETRY_STATUS_ICON = '⌁';
 const WINDOWS_POWERSHELL_CANDIDATES = [
 	'pwsh.exe',
 	'powershell.exe',
@@ -209,7 +220,10 @@ type Props = {
 	vulnerabilityHuntingMode?: boolean;
 	toolSearchDisabled?: boolean;
 	hybridCompressEnabled?: boolean;
+	imageCompressEnabled?: boolean;
 	teamMode?: boolean;
+	ultraTodoEnabled?: boolean;
+	telemetryEnabled?: boolean;
 
 	// IDE连接信息
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
@@ -219,7 +233,7 @@ type Props = {
 	connectionStatus?: BackendConnectionStatus;
 	connectionInstanceName?: string;
 
-	// Token消耗信息
+	// 词元消耗信息
 	contextUsage?: StatusLineContextUsage;
 
 	// 代码库索引状态
@@ -280,13 +294,61 @@ function buildContextWindowState(
 	};
 }
 
+function pickProjectFirst<T>(
+	projectValue: T | undefined,
+	globalValue: T | undefined,
+): T | undefined {
+	return projectValue !== undefined ? projectValue : globalValue;
+}
+
+function buildPrivacyState(
+	workingDirectory = process.cwd(),
+): StatusLinePrivacyState {
+	const globalSettings = readSettings('global');
+	const projectSettings = readSettings('project', workingDirectory);
+	const globalPrivacy = globalSettings.privacy;
+	const projectPrivacy = projectSettings.privacy;
+	const enabled = pickProjectFirst(
+		projectPrivacy?.enabled,
+		globalPrivacy?.enabled,
+	);
+	const mode =
+		pickProjectFirst(projectPrivacy?.mode, globalPrivacy?.mode) ?? 'api';
+	const apiUrl = pickProjectFirst(
+		projectPrivacy?.api?.url,
+		globalPrivacy?.api?.url,
+	)?.trim();
+	const model = pickProjectFirst(
+		projectPrivacy?.api?.model,
+		globalPrivacy?.api?.model,
+	)?.trim();
+	const toolResultTools =
+		pickProjectFirst(
+			projectPrivacy?.toolResults?.tools,
+			globalPrivacy?.toolResults?.tools,
+		) ?? [];
+
+	return {
+		configured: Boolean(projectPrivacy || globalPrivacy),
+		enabled: enabled === true,
+		mode,
+		apiUrlConfigured: Boolean(apiUrl),
+		apiUrl: mode === 'api' ? apiUrl || undefined : undefined,
+		model: model || undefined,
+		toolResultTools: [...toolResultTools],
+	};
+}
+
 export default function StatusLine({
 	yoloMode = false,
 	planMode = false,
 	vulnerabilityHuntingMode = false,
 	toolSearchDisabled = true,
 	hybridCompressEnabled = false,
+	imageCompressEnabled = false,
 	teamMode = false,
+	ultraTodoEnabled = false,
+	telemetryEnabled = false,
 	vscodeConnectionStatus,
 	editorContext,
 	connectionStatus,
@@ -305,9 +367,30 @@ export default function StatusLine({
 	const simpleMode = getSimpleMode();
 	const memoryUsageMb = useCurrentProcessMemoryUsage();
 	const formattedMemoryUsage = formatMemoryUsage(memoryUsageMb);
+	// 订阅 TPS 追踪器，测速仪启用时每秒更新
+	const tpsSnapshot = useSyncExternalStore(
+		subscribeTpsTracker,
+		getTpsTrackerSnapshot,
+	);
 	const contextWindowState = React.useMemo(
 		() => (contextUsage ? buildContextWindowState(contextUsage) : undefined),
 		[contextUsage],
+	);
+	const [privacyRevision, setPrivacyRevision] = React.useState(0);
+	React.useEffect(() => {
+		const handleConfigChange = (event: {type: string; value: any}) => {
+			if (event.type === 'privacy') {
+				setPrivacyRevision(prev => prev + 1);
+			}
+		};
+		configEvents.onConfigChange(handleConfigChange);
+		return () => {
+			configEvents.removeConfigChangeListener(handleConfigChange);
+		};
+	}, []);
+	const privacyState = React.useMemo(
+		() => buildPrivacyState(),
+		[privacyRevision],
 	);
 
 	// 获取当前 profile 的完整配置（不含 apiKey）
@@ -337,7 +420,10 @@ export default function StatusLine({
 					vulnerabilityHunting: vulnerabilityHuntingMode,
 					toolSearchEnabled: !toolSearchDisabled,
 					hybridCompress: hybridCompressEnabled,
+					imageCompress: imageCompressEnabled,
 					team: teamMode,
+					ultraTodo: ultraTodoEnabled,
+					telemetry: telemetryEnabled,
 					simple: simpleMode,
 				},
 				ide: {
@@ -359,6 +445,7 @@ export default function StatusLine({
 					fileUpdateNotification,
 				},
 				clipboard: copyStatusMessage,
+				privacy: privacyState,
 				profile: {
 					currentName: currentProfileName,
 					baseUrl: cfg?.baseUrl,
@@ -369,7 +456,9 @@ export default function StatusLine({
 					maxTokens: cfg?.maxTokens,
 					anthropicBeta: cfg?.anthropicBeta,
 					anthropicCacheTTL: cfg?.anthropicCacheTTL,
-					thinkingEnabled: cfg?.thinking?.type === 'enabled',
+					thinkingEnabled:
+						cfg?.thinking?.type === 'enabled' ||
+						cfg?.thinking?.type === 'adaptive',
 					thinkingType: cfg?.thinking?.type,
 					thinkingBudgetTokens: cfg?.thinking?.budget_tokens,
 					thinkingEffort: cfg?.thinking?.effort,
@@ -377,6 +466,8 @@ export default function StatusLine({
 					geminiThinkingLevel: cfg?.geminiThinking?.thinkingLevel,
 					responsesReasoningEnabled: cfg?.responsesReasoning?.enabled,
 					responsesReasoningEffort: cfg?.responsesReasoning?.effort,
+					chatThinkingEnabled: cfg?.chatThinking?.enabled,
+					chatReasoningEffort: cfg?.chatThinking?.reasoning_effort,
 					responsesFastMode: cfg?.responsesFastMode,
 					responsesVerbosity: cfg?.responsesVerbosity,
 					anthropicSpeed: cfg?.anthropicSpeed,
@@ -386,12 +477,18 @@ export default function StatusLine({
 					showThinking: cfg?.showThinking,
 					streamIdleTimeoutSec: cfg?.streamIdleTimeoutSec,
 					systemPromptId: cfg?.systemPromptId,
-				customHeadersSchemeId: cfg?.customHeadersSchemeId,
-				toolResultTokenLimit: cfg?.toolResultTokenLimit,
+					customHeadersSchemeId: cfg?.customHeadersSchemeId,
+					toolResultTokenLimit: cfg?.toolResultTokenLimit,
 					streamingDisplay: cfg?.streamingDisplay,
 				},
 				compression: {
 					blockToast: compressBlockToast,
+				},
+				speedometer: {
+					enabled: tpsTracker.isActive(),
+					tps: tpsSnapshot.tps,
+					peakTps: tpsSnapshot.peakTps,
+					ttftMs: tpsSnapshot.ttftMs,
 				},
 			},
 		};
@@ -410,6 +507,7 @@ export default function StatusLine({
 		language,
 		memoryUsageMb,
 		planMode,
+		privacyState,
 		profileConfig,
 		simpleMode,
 		t.chatScreen.gitBranch,
@@ -419,9 +517,18 @@ export default function StatusLine({
 		vscodeConnectionStatus,
 		vulnerabilityHuntingMode,
 		watcherEnabled,
+		ultraTodoEnabled,
+		telemetryEnabled,
 		yoloMode,
+		tpsSnapshot,
 	]);
-	const statusLineHookItems = useStatusLineHookItems(statusLineHookContext);
+	const {items: statusLineHookItems, externalHookIds} = useStatusLineHookItems(
+		statusLineHookContext,
+	);
+	const isBuiltinOverridden = React.useCallback(
+		(id: string) => externalHookIds.has(id),
+		[externalHookIds],
+	);
 
 	const simpleMemoryStatusText = `⛁ ${formattedMemoryUsage}`;
 	const detailedMemoryStatusText = `⛁ ${t.chatScreen.memoryUsageLabel} ${formattedMemoryUsage}`;
@@ -497,8 +604,10 @@ export default function StatusLine({
 		planMode ||
 		vulnerabilityHuntingMode ||
 		teamMode ||
+		ultraTodoEnabled ||
 		!toolSearchDisabled ||
 		hybridCompressEnabled ||
+		imageCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
 		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
@@ -509,17 +618,25 @@ export default function StatusLine({
 		currentProfileName ||
 		compressBlockToast ||
 		statusLineHookItems.length > 0 ||
-		detailedMemoryStatusText;
+		detailedMemoryStatusText ||
+		tpsTracker.isActive();
 
 	if (!hasAnyStatus) {
 		return null;
 	}
 
-	// 简易模式：横向单行显示状态，Token信息单独一行
+	// 简易模式：横向单行显示状态，词元信息单独一行
 	if (simpleMode) {
-		const statusItems: Array<{text: string; color: string}> = [];
+		const statusItems: Array<{
+			text: string;
+			color: string;
+			gradient?: string[];
+		}> = [];
 
-		if (currentProfileName) {
+		if (
+			currentProfileName &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.profile)
+		) {
 			statusItems.push({
 				text: `§ ${currentProfileName}`,
 				color: theme.colors.menuInfo,
@@ -530,40 +647,81 @@ export default function StatusLine({
 			statusItems.push({
 				text: item.text,
 				color: item.color || theme.colors.menuSecondary,
+				gradient: item.gradient,
 			});
 		}
 
-		if (yoloMode) {
+		if (yoloMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeYolo)) {
 			statusItems.push({text: '⧴ YOLO', color: theme.colors.warning});
 		}
 
-		if (planMode) {
+		if (planMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modePlan)) {
 			statusItems.push({text: '⚐ Plan', color: '#60A5FA'});
 		}
 
-		if (vulnerabilityHuntingMode) {
+		if (
+			vulnerabilityHuntingMode &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeHunt)
+		) {
 			statusItems.push({text: '⍨ Vuln Hunt', color: '#de409aff'});
 		}
 
-		if (!toolSearchDisabled) {
+		if (
+			!toolSearchDisabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.toolSearch)
+		) {
 			statusItems.push({
 				text: '♾︎ ToolSearch ON',
 				color: theme.colors.menuInfo,
 			});
 		}
 
-		if (teamMode) {
+		if (teamMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeTeam)) {
 			statusItems.push({text: '⚑ Team', color: '#10B981'});
 		}
 
-		if (hybridCompressEnabled) {
+		if (
+			ultraTodoEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeUltraTodo)
+		) {
+			statusItems.push({text: '◈ Ultra TODO', color: '#A78BFA'});
+		}
+
+		if (
+			telemetryEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.telemetry)
+		) {
+			statusItems.push({
+				text: `${TELEMETRY_STATUS_ICON} OTel`,
+				color: theme.colors.menuInfo,
+			});
+		}
+
+		if (
+			hybridCompressEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.hybridCompress)
+		) {
 			statusItems.push({
 				text: '⇌ Hybrid Compress',
 				color: theme.colors.menuInfo,
 			});
 		}
 
-		if (vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') {
+		if (
+			imageCompressEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.imageCompress)
+		) {
+			statusItems.push({
+				text: '🖼 Image Compress',
+				color: theme.colors.menuInfo,
+			});
+		}
+
+		if (
+			vscodeConnectionStatus &&
+			vscodeConnectionStatus !== 'disconnected' &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.ideConnection)
+		) {
 			if (vscodeConnectionStatus === 'connecting') {
 				statusItems.push({text: '◐ IDE', color: 'yellow'});
 			} else if (vscodeConnectionStatus === 'connected') {
@@ -573,7 +731,11 @@ export default function StatusLine({
 			}
 		}
 
-		if (connectionStatus && connectionStatus !== 'disconnected') {
+		if (
+			connectionStatus &&
+			connectionStatus !== 'disconnected' &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.backendConnection)
+		) {
 			if (connectionStatus === 'connecting') {
 				statusItems.push({text: '◐ Backend', color: 'yellow'});
 			} else if (connectionStatus === 'reconnecting') {
@@ -586,7 +748,11 @@ export default function StatusLine({
 			}
 		}
 
-		if ((codebaseIndexing || codebaseProgress?.error) && codebaseProgress) {
+		if (
+			(codebaseIndexing || codebaseProgress?.error) &&
+			codebaseProgress &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.codebaseIndexing)
+		) {
 			if (codebaseProgress.error) {
 				statusItems.push({
 					text: codebaseProgress.error,
@@ -602,21 +768,31 @@ export default function StatusLine({
 			}
 		}
 
-		if (!codebaseIndexing && watcherEnabled) {
+		if (
+			!codebaseIndexing &&
+			watcherEnabled &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.watcher)
+		) {
 			statusItems.push({
 				text: `☉ ${t.chatScreen.statusWatcherActiveShort || '监视'}`,
 				color: 'green',
 			});
 		}
 
-		if (fileUpdateNotification) {
+		if (
+			fileUpdateNotification &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.fileUpdate)
+		) {
 			statusItems.push({
 				text: `⛁ ${t.chatScreen.statusFileUpdatedShort || '已更新'}`,
 				color: 'yellow',
 			});
 		}
 
-		if (copyStatusMessage) {
+		if (
+			copyStatusMessage &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.copyStatus)
+		) {
 			statusItems.push({
 				text: copyStatusMessage.text,
 				color: copyStatusMessage.isError
@@ -625,17 +801,38 @@ export default function StatusLine({
 			});
 		}
 
-		if (compressBlockToast) {
+		if (
+			compressBlockToast &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.compressBlock)
+		) {
 			statusItems.push({
 				text: compressBlockToast,
 				color: theme.colors.warning,
 			});
 		}
 
-		statusItems.push({
-			text: simpleMemoryStatusText,
-			color: theme.colors.menuSecondary,
-		});
+		if (!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.memory)) {
+			statusItems.push({
+				text: simpleMemoryStatusText,
+				color: theme.colors.menuSecondary,
+			});
+		}
+
+		if (
+			tpsTracker.isActive() &&
+			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.speedometer)
+		) {
+			let speedometerText = `⏱ ${tpsSnapshot.tps} tok/s`;
+			if (tpsSnapshot.ttftMs !== null) {
+				const ttftSec = (tpsSnapshot.ttftMs / 1000).toFixed(1);
+				speedometerText += ` · ttft ${ttftSec}s`;
+			}
+			statusItems.push({
+				text: speedometerText,
+				color:
+					tpsSnapshot.tps > 0 ? theme.colors.cyan : theme.colors.menuSecondary,
+			});
+		}
 
 		return (
 			<Box flexDirection="column" paddingX={1} marginTop={1}>
@@ -648,7 +845,12 @@ export default function StatusLine({
 									{index > 0 && (
 										<Text color={theme.colors.menuSecondary}> | </Text>
 									)}
-									<Text color={item.color}>{item.text}</Text>
+									<GradientText
+										text={item.text}
+										color={item.color}
+										gradient={item.gradient}
+										dimColor
+									/>
 								</React.Fragment>
 							))}
 						</Text>
@@ -662,30 +864,66 @@ export default function StatusLine({
 		<Box flexDirection="column" paddingX={1}>
 			{contextUsage && <Box>{renderContextUsage()}</Box>}
 
-			{currentProfileName && (
+			{currentProfileName &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.profile) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							§ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
+							{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
+						</Text>
+					</Box>
+				)}
+
+			{statusLineHookItems.map(item => (
+				<Box key={item.id}>
+					<GradientText
+						text={item.detailedText || item.text}
+						color={item.color || theme.colors.menuSecondary}
+						gradient={item.gradient}
+						dimColor
+					/>
+				</Box>
+			))}
+
+			{!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.memory) && (
 				<Box>
-					<Text color={theme.colors.menuInfo} dimColor>
-						§ {t.chatScreen.profileCurrent}: {currentProfileName} |{' '}
-						{getProfileShortcut()} {t.chatScreen.profileSwitchHint}
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{detailedMemoryStatusText}
 					</Text>
 				</Box>
 			)}
 
-			{statusLineHookItems.map(item => (
-				<Box key={item.id}>
-					<Text color={item.color || theme.colors.menuSecondary} dimColor>
-						{item.detailedText || item.text}
-					</Text>
-				</Box>
-			))}
+			{tpsTracker.isActive() &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.speedometer) && (
+					<Box>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							⏱ {t.chatScreen.speedometerLabel || 'tps'}:{' '}
+							<Text
+								color={
+									tpsSnapshot.tps > 0
+										? theme.colors.cyan
+										: theme.colors.menuSecondary
+								}
+								bold
+							>
+								{tpsSnapshot.tps}
+							</Text>
+							{' tok/s'}
+							{' · peak '}
+							<Text color={theme.colors.warning}>{tpsSnapshot.peakTps}</Text>
+							{tpsSnapshot.ttftMs !== null && (
+								<>
+									{' · ttft '}
+									<Text color={theme.colors.menuInfo}>
+										{(tpsSnapshot.ttftMs / 1000).toFixed(1)}s
+									</Text>
+								</>
+							)}
+						</Text>
+					</Box>
+				)}
 
-			<Box>
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{detailedMemoryStatusText}
-				</Text>
-			</Box>
-
-			{yoloMode && (
+			{yoloMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeYolo) && (
 				<Box>
 					<Text color={theme.colors.warning} dimColor>
 						{t.chatScreen.yoloModeActive}
@@ -693,7 +931,7 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{planMode && (
+			{planMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modePlan) && (
 				<Box>
 					<Text color="#60A5FA" dimColor>
 						{t.chatScreen.planModeActive}
@@ -701,23 +939,25 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{vulnerabilityHuntingMode && (
-				<Box>
-					<Text color="#EF4444" dimColor>
-						{t.chatScreen.vulnerabilityHuntingModeActive}
-					</Text>
-				</Box>
-			)}
+			{vulnerabilityHuntingMode &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeHunt) && (
+					<Box>
+						<Text color="#EF4444" dimColor>
+							{t.chatScreen.vulnerabilityHuntingModeActive}
+						</Text>
+					</Box>
+				)}
 
-			{!toolSearchDisabled && (
-				<Box>
-					<Text color={theme.colors.menuInfo} dimColor>
-						{t.chatScreen.toolSearchEnabled}
-					</Text>
-				</Box>
-			)}
+			{!toolSearchDisabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.toolSearch) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{t.chatScreen.toolSearchEnabled}
+						</Text>
+					</Box>
+				)}
 
-			{teamMode && (
+			{teamMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeTeam) && (
 				<Box>
 					<Text color="#10B981" dimColor>
 						{t.chatScreen.teamModeActive}
@@ -725,15 +965,44 @@ export default function StatusLine({
 				</Box>
 			)}
 
-			{hybridCompressEnabled && (
-				<Box>
-					<Text color={theme.colors.menuInfo} dimColor>
-						{t.chatScreen.hybridCompressEnabled}
-					</Text>
-				</Box>
-			)}
+			{ultraTodoEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modeUltraTodo) && (
+					<Box>
+						<Text color="#A78BFA" dimColor>
+							{t.chatScreen.ultraTodoActive}
+						</Text>
+					</Box>
+				)}
+
+			{telemetryEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.telemetry) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{TELEMETRY_STATUS_ICON} {t.chatScreen.telemetryActive}
+						</Text>
+					</Box>
+				)}
+
+			{hybridCompressEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.hybridCompress) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{t.chatScreen.hybridCompressEnabled}
+						</Text>
+					</Box>
+				)}
+
+			{imageCompressEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.imageCompress) && (
+					<Box>
+						<Text color={theme.colors.menuInfo} dimColor>
+							{t.chatScreen.imageCompressEnabled}
+						</Text>
+					</Box>
+				)}
 
 			{vscodeConnectionStatus &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.ideConnection) &&
 				(vscodeConnectionStatus === 'connecting' ||
 					vscodeConnectionStatus === 'connected' ||
 					vscodeConnectionStatus === 'error') && (
@@ -774,6 +1043,7 @@ export default function StatusLine({
 				)}
 
 			{connectionStatus &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.backendConnection) &&
 				(connectionStatus === 'connecting' ||
 					connectionStatus === 'connected' ||
 					connectionStatus === 'reconnecting') && (
@@ -805,73 +1075,80 @@ export default function StatusLine({
 					</Box>
 				)}
 
-			{(codebaseIndexing || codebaseProgress?.error) && codebaseProgress && (
-				<Box>
-					{codebaseProgress.error ? (
-						<Text color="red" dimColor>
-							{codebaseProgress.error}
-						</Text>
-					) : (
-						<Text color="cyan" dimColor>
-							<Spinner type="dots" />{' '}
-							{t.chatScreen.codebaseIndexing
-								.replace(
-									'{processed}',
-									codebaseProgress.processedFiles.toString(),
-								)
-								.replace('{total}', codebaseProgress.totalFiles.toString())}
-							{codebaseProgress.totalChunks > 0 &&
-								` (${t.chatScreen.codebaseProgress.replace(
-									'{chunks}',
-									codebaseProgress.totalChunks.toString(),
-								)})`}
-						</Text>
-					)}
-				</Box>
-			)}
-
-			{!codebaseIndexing && watcherEnabled && (
-				<Box>
-					<Text color="green" dimColor>
-						☉ {t.chatScreen.statusWatcherActive}
-					</Text>
-				</Box>
-			)}
-
-			{fileUpdateNotification && (
-				<Box>
-					<Text color="yellow" dimColor>
-						⛁{' '}
-						{t.chatScreen.statusFileUpdated.replace(
-							'{file}',
-							fileUpdateNotification.file,
+			{(codebaseIndexing || codebaseProgress?.error) &&
+				codebaseProgress &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.codebaseIndexing) && (
+					<Box>
+						{codebaseProgress.error ? (
+							<Text color="red" dimColor>
+								{codebaseProgress.error}
+							</Text>
+						) : (
+							<Text color="cyan" dimColor>
+								<Spinner type="dots" />{' '}
+								{t.chatScreen.codebaseIndexing
+									.replace(
+										'{processed}',
+										codebaseProgress.processedFiles.toString(),
+									)
+									.replace('{total}', codebaseProgress.totalFiles.toString())}
+								{codebaseProgress.totalChunks > 0 &&
+									` (${t.chatScreen.codebaseProgress.replace(
+										'{chunks}',
+										codebaseProgress.totalChunks.toString(),
+									)})`}
+							</Text>
 						)}
-					</Text>
-				</Box>
-			)}
+					</Box>
+				)}
 
-			{copyStatusMessage && (
-				<Box>
-					<Text
-						color={
-							copyStatusMessage.isError
-								? theme.colors.error
-								: theme.colors.success
-						}
-						dimColor
-					>
-						{copyStatusMessage.text}
-					</Text>
-				</Box>
-			)}
+			{!codebaseIndexing &&
+				watcherEnabled &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.watcher) && (
+					<Box>
+						<Text color="green" dimColor>
+							☉ {t.chatScreen.statusWatcherActive}
+						</Text>
+					</Box>
+				)}
 
-			{compressBlockToast && (
-				<Box>
-					<Text color={theme.colors.warning} dimColor>
-						{compressBlockToast}
-					</Text>
-				</Box>
-			)}
+			{fileUpdateNotification &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.fileUpdate) && (
+					<Box>
+						<Text color="yellow" dimColor>
+							⛁{' '}
+							{t.chatScreen.statusFileUpdated.replace(
+								'{file}',
+								fileUpdateNotification.file,
+							)}
+						</Text>
+					</Box>
+				)}
+
+			{copyStatusMessage &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.copyStatus) && (
+					<Box>
+						<Text
+							color={
+								copyStatusMessage.isError
+									? theme.colors.error
+									: theme.colors.success
+							}
+							dimColor
+						>
+							{copyStatusMessage.text}
+						</Text>
+					</Box>
+				)}
+
+			{compressBlockToast &&
+				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.compressBlock) && (
+					<Box>
+						<Text color={theme.colors.warning} dimColor>
+							{compressBlockToast}
+						</Text>
+					</Box>
+				)}
 		</Box>
 	);
 }

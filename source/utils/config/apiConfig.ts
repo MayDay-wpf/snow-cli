@@ -7,32 +7,51 @@ import {
 	mkdirSync,
 	unlinkSync,
 } from 'fs';
+import {readSettings, updateSettings} from './unifiedSettings.js';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
+export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
 export interface ThinkingConfig {
 	type: 'enabled' | 'adaptive';
 	budget_tokens?: number; // For 'enabled' type
-	effort?: 'low' | 'medium' | 'high' | 'max'; // For 'adaptive' type
+	effort?: string; // For 'adaptive' type (e.g. 'low', 'medium', 'high', 'max', or custom)
 }
 
-export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+export type GeminiThinkingLevel = string; // e.g. 'minimal', 'low', 'medium', 'high', or custom
 
 export interface GeminiThinkingConfig {
 	enabled: boolean;
 	thinkingLevel: GeminiThinkingLevel;
 }
 
+export type ResponsesReasoningMode = 'standard' | 'pro';
+
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
-	effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+	effort: string; // e.g. 'none', 'low', 'medium', 'high', 'xhigh', or custom
+	mode?: ResponsesReasoningMode; // Optional Responses API reasoning mode; undefined means omit
+}
+
+export type ChatReasoningEffort = string;
+
+export interface ChatThinkingConfig {
+	enabled: boolean;
+	reasoning_effort?: ChatReasoningEffort;
 }
 
 export interface ApiConfig {
 	baseUrl: string;
+	baseUrlMode?: BaseUrlMode;
 	apiKey: string;
 	requestMethod: RequestMethod;
 	advancedModel?: string;
 	basicModel?: string;
+	supportsVision?: boolean; // Whether the primary model supports vision (default: true)
+	visionBaseUrl?: string; // Base URL for the dedicated vision model
+	visionBaseUrlMode?: BaseUrlMode; // Base URL mode for the dedicated vision model
+	visionApiKey?: string; // API key for the dedicated vision model
+	visionRequestMethod?: RequestMethod; // Request method for the dedicated vision model
+	visionModel?: string; // Dedicated vision model when primary model doesn't support vision
 	maxContextTokens?: number;
 	maxTokens?: number; // Max tokens for single response (API request parameter)
 	anthropicBeta?: boolean; // Enable Anthropic Beta features
@@ -43,6 +62,7 @@ export interface ApiConfig {
 	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
 	responsesVerbosity?: 'low' | 'medium' | 'high'; // Responses API text verbosity (default: medium)
 	anthropicSpeed?: 'fast' | 'standard'; // Anthropic speed parameter (optional, not sent when undefined)
+	chatThinking?: ChatThinkingConfig; // Chat API (DeepSeek) thinking configuration
 	enablePromptOptimization?: boolean; // Enable prompt optimization agent (default: true)
 	enableAutoCompress?: boolean; // Enable automatic context compression (default: true)
 	autoCompressThreshold?: number; // Auto compress threshold percentage (default: 80, range: 50-95)
@@ -55,8 +75,12 @@ export interface ApiConfig {
 	customHeadersSchemeId?: string;
 	// 工具返回结果的最大 token 限制百分比，基于 maxContextTokens (默认: 30%, 范围: 1-100)
 	toolResultTokenLimit?: number;
-	// 流式逐行显示 AI 回复 (默认: false)
+	// 流式逐行显示 AI 回复 (默认: true)
 	streamingDisplay?: boolean;
+	// API 请求最大重试次数 (默认: 5)
+	maxRetries?: number;
+	// API 请求重试间隔 (单位: ms, 默认: 3000)
+	retryDelayMs?: number;
 }
 
 export interface MCPServer {
@@ -68,7 +92,7 @@ export interface MCPServer {
 	environment?: Record<string, string>; // 环境变量的别名，与 env 等价
 	headers?: Record<string, string>; // HTTP 请求头
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
-	timeout?: number; // 工具调用超时时间（毫秒），默认 300000 (5分钟)
+	timeout?: number; // 工具调用超时时间（毫秒），默认 1200000 (20分钟)
 }
 
 export interface MCPConfig {
@@ -77,7 +101,18 @@ export interface MCPConfig {
 
 export interface AppConfig {
 	snowcfg: ApiConfig;
-	openai?: ApiConfig; // 向下兼容旧版本
+	companion?: {
+		name: string;
+		personality: string;
+		hatchedAt: number;
+		rarity?: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+		species?: string;
+		eye?: string;
+		hat?: string;
+		shiny?: boolean;
+		stats?: Record<string, number>;
+	};
+	companionMuted?: boolean;
 }
 
 /**
@@ -117,6 +152,7 @@ export interface CustomHeadersConfig {
 }
 
 export const DEFAULT_STREAM_IDLE_TIMEOUT_SEC = 180;
+export const DEFAULT_RETRY_DELAY_MS = 3000;
 export const DEFAULT_AUTO_COMPRESS_THRESHOLD = 80;
 export const DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT = 30;
 export const MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT = 80;
@@ -129,18 +165,47 @@ function normalizeStreamIdleTimeoutSec(value: unknown): number {
 	return value;
 }
 
+/**
+ * 归一化 retryDelayMs.
+ * 缺失或非法值统一回退默认值(3000ms).
+ * 允许 0 (立即重试), 拒绝负数和非整数.
+ */
+function normalizeRetryDelayMs(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+		return DEFAULT_RETRY_DELAY_MS;
+	}
+
+	return value;
+}
+
+export function normalizeBaseUrlMode(value: unknown): BaseUrlMode {
+	if (value === 'base' || value === 'endpoint') {
+		return value;
+	}
+
+	return 'auto';
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
 	snowcfg: {
 		baseUrl: 'https://api.openai.com/v1',
+		baseUrlMode: 'auto',
 		apiKey: '',
 		requestMethod: 'chat',
 		advancedModel: '',
 		basicModel: '',
+		supportsVision: true,
+		visionBaseUrl: '',
+		visionBaseUrlMode: 'auto',
+		visionApiKey: '',
+		visionRequestMethod: 'chat',
+		visionModel: '',
 		maxContextTokens: 200000,
 		maxTokens: 64000,
 		anthropicBeta: false,
 		streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
-		streamingDisplay: false,
+		retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+		streamingDisplay: true,
 	},
 };
 
@@ -155,19 +220,23 @@ const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本�
 const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新版本
 const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
 export const STATUSLINE_HOOKS_DIR = join(CONFIG_DIR, 'plugin', 'statusline');
+export const SEARCH_ENGINES_DIR = join(CONFIG_DIR, 'plugin', 'search_engines');
+export const CUSTOM_HEADERS_PLUGIN_DIR = join(
+	CONFIG_DIR,
+	'plugin',
+	'custom_headers',
+);
+export const GAMES_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'games');
+export const ANYPANEL_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'anypanel');
 
 export type MCPConfigScope = 'global' | 'project';
 
-function getProjectMCPConfigDir(): string {
-	return join(process.cwd(), '.snow');
-}
-
-function getProjectMCPConfigFilePath(): string {
-	return join(getProjectMCPConfigDir(), 'mcp-config.json');
-}
-
+/**
+ * Path to the unified global settings file. The MCP config now lives under
+ * `mcpServers` inside this file (previously a standalone `~/.snow/mcp-config.json`).
+ */
 export function getGlobalMCPConfigFilePath(): string {
-	return MCP_CONFIG_FILE;
+	return join(CONFIG_DIR, 'settings.json');
 }
 
 /**
@@ -211,7 +280,6 @@ function normalizeRequestMethod(method: unknown): RequestMethod {
 }
 
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-const MCP_CONFIG_FILE = join(CONFIG_DIR, 'mcp-config.json');
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
@@ -251,36 +319,38 @@ export function loadConfig(): AppConfig {
 		const {mcp: legacyMcp, proxy: legacyProxy, ...restConfig} = parsedConfig;
 		const configWithoutMcp = restConfig as Partial<AppConfig>;
 
-		// 向下兼容：如果存在 openai 配置但没有 snowcfg，则使用 openai 配置
+		// 仅使用 snowcfg；旧版的 openai 字段已不再兼容（用户长期不使用旧版）。
 		let apiConfig: ApiConfig;
 		if (configWithoutMcp.snowcfg) {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
 				...configWithoutMcp.snowcfg,
+				baseUrlMode: normalizeBaseUrlMode(configWithoutMcp.snowcfg.baseUrlMode),
+				visionBaseUrlMode: normalizeBaseUrlMode(
+					configWithoutMcp.snowcfg.visionBaseUrlMode,
+				),
 				requestMethod: normalizeRequestMethod(
 					configWithoutMcp.snowcfg.requestMethod,
+				),
+				visionRequestMethod: normalizeRequestMethod(
+					configWithoutMcp.snowcfg.visionRequestMethod,
 				),
 				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
 					configWithoutMcp.snowcfg.streamIdleTimeoutSec,
 				),
-			};
-		} else if (configWithoutMcp.openai) {
-			// 向下兼容旧版本
-			apiConfig = {
-				...DEFAULT_CONFIG.snowcfg,
-				...configWithoutMcp.openai,
-				requestMethod: normalizeRequestMethod(
-					configWithoutMcp.openai.requestMethod,
-				),
-				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
-					configWithoutMcp.openai.streamIdleTimeoutSec,
+				retryDelayMs: normalizeRetryDelayMs(
+					configWithoutMcp.snowcfg.retryDelayMs,
 				),
 			};
 		} else {
 			apiConfig = {
 				...DEFAULT_CONFIG.snowcfg,
+				baseUrlMode: DEFAULT_CONFIG.snowcfg.baseUrlMode,
+				visionBaseUrlMode: DEFAULT_CONFIG.snowcfg.visionBaseUrlMode,
 				requestMethod: DEFAULT_CONFIG.snowcfg.requestMethod,
+				visionRequestMethod: DEFAULT_CONFIG.snowcfg.visionRequestMethod,
 				streamIdleTimeoutSec: DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+				retryDelayMs: DEFAULT_RETRY_DELAY_MS,
 			};
 		}
 
@@ -311,11 +381,7 @@ export function loadConfig(): AppConfig {
 			saveConfig(mergedConfig);
 		}
 
-		if (
-			legacyMcp !== undefined ||
-			legacyProxy !== undefined ||
-			(configWithoutMcp.openai && !configWithoutMcp.snowcfg)
-		) {
+		if (legacyMcp !== undefined || legacyProxy !== undefined) {
 			saveConfig(mergedConfig);
 		}
 
@@ -332,9 +398,7 @@ export function saveConfig(config: AppConfig): void {
 	ensureConfigDirectory();
 
 	try {
-		// 只保留 snowcfg，去除 openai 字段
-		const {openai, ...configWithoutOpenai} = config;
-		const configData = JSON.stringify(configWithoutOpenai, null, 2);
+		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(CONFIG_FILE, configData, 'utf8');
 		// 清除缓存，下次加载时会重新读取
 		configCache = null;
@@ -358,7 +422,7 @@ export function reloadConfig(): AppConfig {
 	return loadConfig();
 }
 
-export async function updateOpenAiConfig(
+export async function updateSnowConfig(
 	apiConfig: Partial<ApiConfig>,
 ): Promise<void> {
 	const currentConfig = loadConfig();
@@ -366,12 +430,31 @@ export async function updateOpenAiConfig(
 		apiConfig.streamIdleTimeoutSec ??
 			currentConfig.snowcfg.streamIdleTimeoutSec,
 	);
+	const normalizedRetryDelayMs = normalizeRetryDelayMs(
+		apiConfig.retryDelayMs ?? currentConfig.snowcfg.retryDelayMs,
+	);
+	const normalizedBaseUrlMode = normalizeBaseUrlMode(
+		apiConfig.baseUrlMode ?? currentConfig.snowcfg.baseUrlMode,
+	);
+	const normalizedVisionBaseUrlMode = normalizeBaseUrlMode(
+		apiConfig.visionBaseUrlMode ?? currentConfig.snowcfg.visionBaseUrlMode,
+	);
+	const normalizedVisionRequestMethod = normalizeRequestMethod(
+		apiConfig.visionRequestMethod ?? currentConfig.snowcfg.visionRequestMethod,
+	);
 	const updatedConfig: AppConfig = {
 		...currentConfig,
 		snowcfg: {
 			...currentConfig.snowcfg,
 			...apiConfig,
+			baseUrlMode: normalizedBaseUrlMode,
+			visionBaseUrlMode: normalizedVisionBaseUrlMode,
+			requestMethod: normalizeRequestMethod(
+				apiConfig.requestMethod ?? currentConfig.snowcfg.requestMethod,
+			),
+			visionRequestMethod: normalizedVisionRequestMethod,
 			streamIdleTimeoutSec: normalizedIdleTimeoutSec,
+			retryDelayMs: normalizedRetryDelayMs,
 		},
 	};
 	saveConfig(updatedConfig);
@@ -392,7 +475,7 @@ export async function updateOpenAiConfig(
 	}
 }
 
-export function getOpenAiConfig(): ApiConfig {
+export function getSnowConfig(): ApiConfig {
 	const config = loadConfig();
 	return config.snowcfg;
 }
@@ -424,62 +507,57 @@ export function updateMCPConfig(
 	mcpConfig: MCPConfig,
 	scope: MCPConfigScope = 'global',
 ): void {
-	const configData = JSON.stringify(mcpConfig, null, 2);
-	if (scope === 'project') {
-		const projectConfigDir = getProjectMCPConfigDir();
-		if (!existsSync(projectConfigDir)) {
-			mkdirSync(projectConfigDir, {recursive: true});
+	try {
+		updateSettings(scope, settings => {
+			settings.mcpServers = mcpConfig.mcpServers as Record<string, unknown>;
+		});
+	} catch (error) {
+		throw new Error(
+			scope === 'project'
+				? `Failed to save project MCP configuration: ${error}`
+				: `Failed to save MCP configuration: ${error}`,
+		);
+	}
+}
+
+function readMCPServersFromSettings(scope: MCPConfigScope): MCPConfig {
+	try {
+		const settings = readSettings(scope);
+		const raw = settings.mcpServers;
+		if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+			return {mcpServers: raw as MCPConfig['mcpServers']};
 		}
-		try {
-			writeFileSync(getProjectMCPConfigFilePath(), configData, 'utf8');
-		} catch (error) {
-			throw new Error(`Failed to save project MCP configuration: ${error}`);
-		}
-	} else {
-		ensureConfigDirectory();
-		try {
-			writeFileSync(MCP_CONFIG_FILE, configData, 'utf8');
-		} catch (error) {
-			throw new Error(`Failed to save MCP configuration: ${error}`);
-		}
+		return cloneDefaultMCPConfig();
+	} catch {
+		return cloneDefaultMCPConfig();
 	}
 }
 
 /**
- * 读取全局 MCP 配置 (~/.snow/mcp-config.json)
+ * 读取全局 MCP 配置 (~/.snow/settings.json)
  */
 export function getGlobalMCPConfig(): MCPConfig {
 	ensureConfigDirectory();
 
-	if (!existsSync(MCP_CONFIG_FILE)) {
+	const settings = readSettings('global');
+	if (
+		!settings.mcpServers ||
+		typeof settings.mcpServers !== 'object' ||
+		Array.isArray(settings.mcpServers)
+	) {
 		const defaultMCPConfig = cloneDefaultMCPConfig();
 		updateMCPConfig(defaultMCPConfig, 'global');
 		return defaultMCPConfig;
 	}
 
-	try {
-		const configData = readFileSync(MCP_CONFIG_FILE, 'utf8');
-		return JSON.parse(configData) as MCPConfig;
-	} catch {
-		return cloneDefaultMCPConfig();
-	}
+	return readMCPServersFromSettings('global');
 }
 
 /**
- * 读取项目级 MCP 配置 (<project>/.snow/mcp-config.json)
+ * 读取项目级 MCP 配置 (<project>/.snow/settings.json)
  */
 export function getProjectMCPConfig(): MCPConfig {
-	const configPath = getProjectMCPConfigFilePath();
-	if (!existsSync(configPath)) {
-		return cloneDefaultMCPConfig();
-	}
-
-	try {
-		const configData = readFileSync(configPath, 'utf8');
-		return JSON.parse(configData) as MCPConfig;
-	} catch {
-		return cloneDefaultMCPConfig();
-	}
+	return readMCPServersFromSettings('project');
 }
 
 /**
@@ -700,7 +778,7 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
  * 返回激活提示词内容数组，每个元素对应一个提示词
  */
 export function getCustomSystemPrompt(): string[] | undefined {
-	return getCustomSystemPromptForConfig(getOpenAiConfig());
+	return getCustomSystemPromptForConfig(getSnowConfig());
 }
 
 export function getCustomSystemPromptForConfig(
@@ -746,7 +824,7 @@ export function getCustomSystemPromptForConfig(
  * 否则返回空对象
  */
 export function getCustomHeaders(): Record<string, string> {
-	return getCustomHeadersForConfig(getOpenAiConfig());
+	return getCustomHeadersForConfig(getSnowConfig());
 }
 
 export function getCustomHeadersForConfig(

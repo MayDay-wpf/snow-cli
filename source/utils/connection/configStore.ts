@@ -1,29 +1,22 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import {
+	readSettings,
+	updateSettings,
+} from '../config/unifiedSettings.js';
 import type {ConnectionConfig} from './types.js';
 
+/**
+ * Connection config storage.
+ *
+ * Now persisted to `<cwd>/.snow/settings.json` under the `connection` key
+ * (previously a standalone `connection.json` file).
+ */
 export class ConfigStore {
-	private readonly snowDir: string;
-	private readonly configPath: string;
-
-	constructor() {
-		this.snowDir = path.join(process.cwd(), '.snow');
-		this.configPath = path.join(this.snowDir, 'connection.json');
-	}
-
-	// Ensure .snow directory exists
-	private ensureSnowDir(): void {
-		if (!fs.existsSync(this.snowDir)) {
-			fs.mkdirSync(this.snowDir, {recursive: true});
-		}
-	}
-
 	// Save connection config to file
 	async save(config: ConnectionConfig): Promise<void> {
 		try {
-			this.ensureSnowDir();
-			// Save full config including password
-			fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8');
+			updateSettings('project', settings => {
+				settings.connection = config;
+			});
 		} catch {
 			// Ignore save errors
 		}
@@ -32,12 +25,16 @@ export class ConfigStore {
 	// Load connection config from file
 	load(): ConnectionConfig | null {
 		try {
-			if (!fs.existsSync(this.configPath)) {
-				return null;
+			const settings = readSettings('project');
+			const conn = settings.connection;
+			if (
+				conn &&
+				typeof conn === 'object' &&
+				typeof conn.apiUrl === 'string'
+			) {
+				return conn;
 			}
-			const content = fs.readFileSync(this.configPath, 'utf-8');
-			const config = JSON.parse(content) as ConnectionConfig;
-			return config;
+			return null;
 		} catch {
 			return null;
 		}
@@ -46,7 +43,7 @@ export class ConfigStore {
 	// Check if saved connection config exists
 	hasSavedConfig(): boolean {
 		try {
-			return fs.existsSync(this.configPath);
+			return this.load() !== null;
 		} catch {
 			return false;
 		}
@@ -55,9 +52,9 @@ export class ConfigStore {
 	// Clear saved connection config
 	clear(): void {
 		try {
-			if (fs.existsSync(this.configPath)) {
-				fs.unlinkSync(this.configPath);
-			}
+			updateSettings('project', settings => {
+				delete settings.connection;
+			});
 		} catch {
 			// Ignore clear errors
 		}

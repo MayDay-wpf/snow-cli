@@ -1,6 +1,6 @@
-import {executeSubAgent} from '../utils/execution/subAgentExecutor.js';
+import {executeSubAgentInChildProcess} from '../utils/execution/agentChildProcess.js';
 import {getUserSubAgents} from '../utils/config/subAgentConfig.js';
-import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
+import type {SubAgentMessage} from '../utils/execution/subAgentTypes.js';
 import type {ToolCall} from '../utils/execution/toolExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
 
@@ -64,7 +64,7 @@ export class SubAgentService {
 			  }
 			: undefined;
 
-		const result = await executeSubAgent(
+		const result = await executeSubAgentInChildProcess(
 			agentId,
 			prompt,
 			onMessage,

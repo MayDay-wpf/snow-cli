@@ -1,11 +1,6 @@
 import {promises as fs} from 'fs';
 import * as path from 'path';
-import * as prettier from 'prettier';
 // IDE connection supports both VSCode and JetBrains IDEs
-import {
-	vscodeConnection,
-	type Diagnostic,
-} from '../utils/ui/vscodeConnection.js';
 // SSH support for remote file operations
 import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
 import {
@@ -18,40 +13,40 @@ import type {
 	EditByHashlineResult,
 	EditByHashlineSingleResult,
 	EditByHashlineBatchResultItem,
+	EditBySearchConfig,
+	EditBySearchResult,
+	EditBySearchSingleResult,
+	EditBySearchBatchResultItem,
 	HashlineOperation,
 	SingleFileReadResult,
 	MultipleFilesReadResult,
-	MultimodalContent,
 	ImageContent,
+	FileCreateConfig,
+	FileCreateBatchResultItem,
+	FileCreateResult,
 } from './types/filesystem.types.js';
 import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
-// Utility functions
-import {normalizeForDisplay} from './utils/filesystem/similarity.utils.js';
 import {
-	analyzeCodeStructure,
-	findSmartContextBoundaries,
-} from './utils/filesystem/code-analysis.utils.js';
-import {executeBatchOperation} from './utils/filesystem/batch-operations.utils.js';
+	parseEditBySearchParams,
+	executeBatchOperation,
+} from './utils/filesystem/batch-operations.utils.js';
 import {tryFixPath} from './utils/filesystem/path-fixer.utils.js';
-import {readOfficeDocument} from './utils/filesystem/office-parser.utils.js';
-// ACE Code Search utilities for symbol parsing
-import {parseFileSymbols} from './utils/aceCodeSearch/symbol.utils.js';
+import {getFreshDiagnostics} from './utils/filesystem/diagnostics.utils.js';
+import {appendDiagnosticsSummary} from './utils/filesystem/message-format.utils.js';
+import {backupFileBeforeMutation} from './utils/filesystem/backup.utils.js';
+import {
+	executeEditBySearchSingle,
+	executeHashlineEditSingle,
+} from './utils/filesystem/edit-tools.utils.js';
+import {executeGetFileContentCore} from './utils/filesystem/read-tools.utils.js';
 import type {CodeSymbol} from './types/aceCodeSearch.types.js';
 // Notebook utilities for automatic note retrieval
 import {queryNotebook} from '../utils/core/notebookManager.js';
 // Encoding detection and conversion utilities
 import {
 	readFileWithEncoding,
-	readFileLinesStreaming,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
-import {getAutoFormatEnabled} from '../utils/config/projectSettings.js';
-import {
-	formatLineWithHash,
-	formatLineWithHashDisplay,
-	validateAnchor,
-	parseAnchor,
-} from './utils/filesystem/hashline.utils.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -441,464 +436,24 @@ export class FilesystemMCPService {
 				}
 			}
 
-			// Handle array of files
-			if (Array.isArray(filePath)) {
-				const filesData: Array<{
-					path: string;
-					startLine?: number;
-					endLine?: number;
-					totalLines?: number;
-					isImage?: boolean;
-					isDocument?: boolean;
-					fileType?: 'pdf' | 'word' | 'excel' | 'powerpoint';
-					mimeType?: string;
-				}> = [];
-				const multimodalContent: MultimodalContent = [];
-
-				// Track the last successfully resolved absolute path for context-aware relative path resolution
-				let lastAbsolutePath: string | undefined;
-
-				for (const fileItem of filePath) {
-					try {
-						// Support both string format and object format
-						let file: string;
-						let fileStartLine: number | undefined;
-						let fileEndLine: number | undefined;
-
-						if (typeof fileItem === 'string') {
-							// String format: use global startLine/endLine
-							file = fileItem;
-							fileStartLine = startLine;
-							fileEndLine = endLine;
-						} else {
-							// Object format: use per-file startLine/endLine
-							file = fileItem.path;
-							fileStartLine = fileItem.startLine ?? startLine;
-							fileEndLine = fileItem.endLine ?? endLine;
-						}
-
-						// Use context-aware path resolution for relative paths in batch operations
-						const fullPath = this.resolvePath(file, lastAbsolutePath);
-
-						// Update lastAbsolutePath for next iteration if this path is absolute
-						if (isAbsolute(file)) {
-							lastAbsolutePath = fullPath;
-						}
-
-						// For absolute paths, skip validation to allow access outside base path
-						if (!isAbsolute(file)) {
-							await this.validatePath(fullPath);
-						}
-
-						// Check if the path is a directory, if so, list its contents instead
-						const stats = await fs.stat(fullPath);
-						if (stats.isDirectory()) {
-							const dirFiles = await this.listFiles(file);
-							const fileList = dirFiles.join('\n');
-							multimodalContent.push({
-								type: 'text',
-								text: `📁 Directory: ${file}\n${fileList}`,
-							});
-							filesData.push({
-								path: file,
-								startLine: 1,
-								endLine: dirFiles.length,
-								totalLines: dirFiles.length,
-							});
-							continue;
-						}
-
-						// Check if this is an image file
-						if (this.isImageFile(fullPath)) {
-							const imageContent = await this.readImageAsBase64(fullPath);
-							if (imageContent) {
-								// Add text description first
-								multimodalContent.push({
-									type: 'text',
-									text: `🖼️  Image: ${file} (${imageContent.mimeType})`,
-								});
-								// Add image content
-								multimodalContent.push(imageContent);
-
-								filesData.push({
-									path: file,
-									isImage: true,
-									mimeType: imageContent.mimeType,
-								});
-								continue;
-							}
-						}
-
-						// Check if this is an Office document file
-						if (this.isOfficeFile(fullPath)) {
-							const docContent = await readOfficeDocument(fullPath);
-							if (docContent) {
-								// Add text description first
-								multimodalContent.push({
-									type: 'text',
-									text: `📄 ${docContent.fileType.toUpperCase()} Document: ${file}`,
-								});
-								// Add document content
-								multimodalContent.push(docContent);
-
-								filesData.push({
-									path: file,
-									isDocument: true,
-									fileType: docContent.fileType,
-								});
-								continue;
-							}
-						}
-
-						const fileSizeBytes = stats.size;
-						const FILE_SIZE_LIMIT = 256 * 1024 * 1024;
-						let content: string | undefined;
-						let lines: string[];
-						let totalLines: number;
-
-						if (fileSizeBytes > FILE_SIZE_LIMIT) {
-							const actualStart = fileStartLine ?? 1;
-							const actualEnd = fileEndLine ?? 500;
-							if (actualStart < 1) {
-								throw new Error(
-									`Start line must be greater than 0 for ${file}`,
-								);
-							}
-							const streamed = await readFileLinesStreaming(
-								fullPath,
-								actualStart,
-								actualEnd,
-							);
-							lines = streamed.lines;
-							totalLines = streamed.totalLines;
-						} else {
-							content = await readFileWithEncoding(fullPath);
-							lines = content.split('\n');
-							totalLines = lines.length;
-						}
-
-						// Default values and logic (use file-specific values)
-						const actualStartLine = fileStartLine ?? 1;
-						const actualEndLine =
-							fileSizeBytes > FILE_SIZE_LIMIT
-								? fileEndLine ?? 500
-								: fileEndLine ?? totalLines;
-
-						// Validate and adjust line numbers
-						if (actualStartLine < 1) {
-							throw new Error(`Start line must be greater than 0 for ${file}`);
-						}
-						if (actualEndLine < actualStartLine) {
-							throw new Error(
-								`End line must be greater than or equal to start line for ${file}`,
-							);
-						}
-
-						const start = Math.min(actualStartLine, totalLines);
-						const end = Math.min(totalLines, actualEndLine);
-
-						// For large files, lines are already the requested slice;
-						// for normal files, extract from the full content
-						const selectedLines =
-							fileSizeBytes > FILE_SIZE_LIMIT
-								? lines
-								: lines.slice(start - 1, end);
-						const numberedLines = selectedLines.map((line, index) => {
-							const lineNum = start + index;
-							return formatLineWithHash(lineNum, line);
-						});
-
-						const sizeWarning =
-							fileSizeBytes > FILE_SIZE_LIMIT
-								? ` [Large file: ${Math.round(fileSizeBytes / 1024 / 1024)}MB]`
-								: '';
-						let fileContent = `📄 ${file} (lines ${start}-${end}/${totalLines})${sizeWarning}\n${numberedLines.join(
-							'\n',
-						)}`;
-
-						// Parse and append symbol information (skip for large files)
-						if (content) {
-							try {
-								const symbols = await parseFileSymbols(
-									fullPath,
-									content,
-									this.basePath,
-								);
-								const symbolInfo = this.extractRelevantSymbols(
-									symbols,
-									start,
-									end,
-									totalLines,
-								);
-								if (symbolInfo) {
-									fileContent += symbolInfo;
-								}
-							} catch {
-								// Silently fail symbol parsing
-							}
-						}
-
-						// Append notebook entries
-						const notebookInfo = this.getNotebookEntries(file);
-						if (notebookInfo) {
-							fileContent += notebookInfo;
-						}
-
-						multimodalContent.push({
-							type: 'text',
-							text: fileContent,
-						});
-
-						filesData.push({
-							path: file,
-							startLine: start,
-							endLine: end,
-							totalLines,
-						});
-					} catch (error) {
-						const errorMsg =
-							error instanceof Error ? error.message : 'Unknown error';
-						// Extract file path for error message
-						const inputPath =
-							typeof fileItem === 'string' ? fileItem : fileItem.path;
-						// Try to resolve path for better error context (may fail, so wrapped in try-catch)
-						let resolvedPathInfo = '';
-						try {
-							const attemptedResolve = this.resolvePath(
-								inputPath,
-								lastAbsolutePath,
-							);
-							if (attemptedResolve !== inputPath) {
-								resolvedPathInfo = `\n   Resolved to: ${attemptedResolve}`;
-							}
-						} catch {
-							// Ignore resolution errors in error handler
-						}
-						multimodalContent.push({
-							type: 'text',
-							text: `❌ ${inputPath}${resolvedPathInfo}\n   Error: ${errorMsg}`,
-						});
-					}
-				}
-
-				return {
-					content: multimodalContent,
-					files: filesData,
-					totalFiles: filePath.length,
-				};
-			}
-
-			// Original single file logic
-			// Check if this is a remote SSH path
-			if (this.isSSHPath(filePath)) {
-				// Handle remote SSH file
-				const content = await this.readRemoteFile(filePath);
-				const lines = content.split('\n');
-				const totalLines = lines.length;
-
-				const actualStartLine = startLine ?? 1;
-				const actualEndLine = endLine ?? totalLines;
-
-				if (actualStartLine < 1) {
-					throw new Error('Start line must be greater than 0');
-				}
-				if (actualEndLine < actualStartLine) {
-					throw new Error(
-						'End line must be greater than or equal to start line',
-					);
-				}
-
-				const start = Math.min(actualStartLine, totalLines);
-				const end = Math.min(totalLines, actualEndLine);
-				const selectedLines = lines.slice(start - 1, end);
-
-				const numberedLines = selectedLines.map((line, index) => {
-					const lineNum = start + index;
-					return `${lineNum}->${line}`;
-				});
-
-				const fileContent = numberedLines.join('\n');
-
-				return {
-					content: fileContent,
-					startLine: start,
-					endLine: end,
-					totalLines,
-				};
-			}
-
-			const fullPath = this.resolvePath(filePath);
-
-			// For absolute paths, skip validation to allow access outside base path
-			if (!isAbsolute(filePath)) {
-				await this.validatePath(fullPath);
-			}
-
-			// Check if the path is a directory, if so, list its contents instead
-			const stats = await fs.stat(fullPath);
-			if (stats.isDirectory()) {
-				const files = await this.listFiles(filePath);
-				const fileList = files.join('\n');
-				const lines = fileList.split('\n');
-				return {
-					content: `Directory: ${filePath}\n\n${fileList}`,
-					startLine: 1,
-					endLine: lines.length,
-					totalLines: lines.length,
-				};
-			}
-
-			// Check if this is an image file
-			if (this.isImageFile(fullPath)) {
-				const imageContent = await this.readImageAsBase64(fullPath);
-				if (imageContent) {
-					return {
-						content: [
-							{
-								type: 'text',
-								text: `🖼️  Image: ${filePath} (${imageContent.mimeType})`,
-							},
-							imageContent,
-						],
-						isImage: true,
-						mimeType: imageContent.mimeType,
-					};
-				}
-			}
-
-			// Check if this is an Office document file
-			if (this.isOfficeFile(fullPath)) {
-				const docContent = await readOfficeDocument(fullPath);
-				if (docContent) {
-					return {
-						content: [
-							{
-								type: 'text',
-								text: `📄 ${docContent.fileType.toUpperCase()} Document: ${filePath}`,
-							},
-							docContent,
-						],
-						isDocument: true,
-						fileType: docContent.fileType,
-					};
-				}
-			}
-
-			// Text file processing — use streaming for files that exceed the
-			// in-memory string limit to avoid ERR_STRING_TOO_LONG crashes
-			let content: string | undefined;
-			let lines: string[];
-			let totalLines: number;
-
-			const fileSizeBytes = stats.size;
-			const FILE_SIZE_LIMIT = 256 * 1024 * 1024; // 256MB
-
-			if (fileSizeBytes > FILE_SIZE_LIMIT) {
-				const actualStartLine = startLine ?? 1;
-				const actualEndLine = endLine ?? 500;
-
-				if (actualStartLine < 1) {
-					throw new Error('Start line must be greater than 0');
-				}
-
-				const streamed = await readFileLinesStreaming(
-					fullPath,
-					actualStartLine,
-					actualEndLine,
-				);
-				lines = streamed.lines;
-				totalLines = streamed.totalLines;
-
-				const start = Math.min(actualStartLine, totalLines);
-				const end = Math.min(
-					totalLines,
-					Math.min(actualEndLine, start + lines.length - 1),
-				);
-				const numberedLines = lines.map((line, index) => {
-					const lineNum = start + index;
-					return formatLineWithHash(lineNum, line);
-				});
-
-				const sizeInfo = `[File: ${Math.round(
-					fileSizeBytes / 1024 / 1024,
-				)}MB, ${totalLines} lines total. Showing lines ${start}-${end}. Use startLine/endLine to read other sections.]`;
-				const partialContent = `${sizeInfo}\n${numberedLines.join('\n')}`;
-
-				return {
-					content: partialContent,
-					startLine: start,
-					endLine: end,
-					totalLines,
-				};
-			}
-
-			content = await readFileWithEncoding(fullPath);
-
-			lines = content.split('\n');
-			totalLines = lines.length;
-
-			// Default values and logic:
-			// - No params: read entire file (1 to totalLines)
-			// - Only startLine: read from startLine to end of file
-			// - Both params: read from startLine to endLine
-			const actualStartLine = startLine ?? 1;
-			const actualEndLine = endLine ?? totalLines;
-
-			// Validate and adjust line numbers
-			if (actualStartLine < 1) {
-				throw new Error('Start line must be greater than 0');
-			}
-			if (actualEndLine < actualStartLine) {
-				throw new Error('End line must be greater than or equal to start line');
-			}
-			// Auto-adjust if startLine exceeds file length
-			const start = Math.min(actualStartLine, totalLines);
-			const end = Math.min(totalLines, actualEndLine);
-
-			// Extract specified lines (convert to 0-indexed) and add line numbers
-			const selectedLines = lines.slice(start - 1, end);
-
-			// Format with line numbers and content hashes for hashline anchoring
-			const numberedLines = selectedLines.map((line, index) => {
-				const lineNum = start + index;
-				return formatLineWithHash(lineNum, line);
-			});
-
-			let partialContent = numberedLines.join('\n');
-
-			// Parse and append symbol information to provide better context for AI
-			try {
-				const symbols = await parseFileSymbols(
-					fullPath,
-					content,
-					this.basePath,
-				);
-				const symbolInfo = this.extractRelevantSymbols(
-					symbols,
-					start,
-					end,
-					totalLines,
-				);
-				if (symbolInfo) {
-					partialContent += symbolInfo;
-				}
-			} catch (error) {
-				// Silently fail symbol parsing - don't block file reading
-				// This is optional context enhancement, not critical
-			}
-
-			// Append notebook entries
-			const notebookInfo = this.getNotebookEntries(filePath);
-			if (notebookInfo) {
-				partialContent += notebookInfo;
-			}
-
-			return {
-				content: partialContent,
-				startLine: start,
-				endLine: end,
-				totalLines,
-			};
+			return await executeGetFileContentCore(
+				{
+					basePath: this.basePath,
+					resolvePath: this.resolvePath.bind(this),
+					validatePath: this.validatePath.bind(this),
+					listFiles: this.listFiles.bind(this),
+					isSSHPath: this.isSSHPath.bind(this),
+					readRemoteFile: this.readRemoteFile.bind(this),
+					isImageFile: this.isImageFile.bind(this),
+					readImageAsBase64: this.readImageAsBase64.bind(this),
+					isOfficeFile: this.isOfficeFile.bind(this),
+					getNotebookEntries: this.getNotebookEntries.bind(this),
+					extractRelevantSymbols: this.extractRelevantSymbols.bind(this),
+				},
+				filePath,
+				startLine,
+				endLine,
+			);
 		} catch (error) {
 			// Try to fix common path issues if it's a file not found error
 			if (
@@ -937,50 +492,109 @@ export class FilesystemMCPService {
 	 * @param filePath - Path where the file should be created
 	 * @param content - Content to write to the file
 	 * @param createDirectories - Whether to create parent directories if they don't exist
+	 * @param overwrite - Whether to overwrite the file if it already exists
 	 * @returns Success message
 	 * @throws Error if file creation fails
 	 */
 	async createFile(
+		filePath: string | string[] | FileCreateConfig[],
+		content?: string,
+		createDirectories: boolean = true,
+		overwrite: boolean = false,
+	): Promise<FileCreateResult> {
+		// Handle array of files (batch mode)
+		if (Array.isArray(filePath)) {
+			return await executeBatchOperation<
+				FileCreateConfig,
+				{message: string; filePath: string; content: string},
+				FileCreateBatchResultItem
+			>(
+				filePath,
+				fileItem => {
+					if (typeof fileItem === 'string') {
+						if (content === undefined) {
+							throw new Error(
+								'content is required when filePath is an array of strings',
+							);
+						}
+						return {
+							path: fileItem,
+							content,
+							createDirectories,
+							overwrite,
+						};
+					}
+					return {
+						path: fileItem.path,
+						content: fileItem.content,
+						createDirectories: fileItem.createDirectories ?? createDirectories,
+						overwrite: fileItem.overwrite ?? overwrite,
+					};
+				},
+				(path, fileContent, fileCreateDirs, fileOverwrite) =>
+					this.createFileSingle(
+						path,
+						fileContent,
+						fileCreateDirs,
+						fileOverwrite,
+					),
+				(path, result) => ({
+					path,
+					content: result.content,
+				}),
+			);
+		}
+
+		// Single file mode
+		if (content === undefined || content === null) {
+			throw new Error('content is required for single file mode');
+		}
+		const singleResult = await this.createFileSingle(
+			filePath,
+			content,
+			createDirectories,
+			overwrite,
+		);
+		return singleResult.message;
+	}
+
+	/**
+	 * Internal method: Create a single file
+	 * @private
+	 */
+	private async createFileSingle(
 		filePath: string,
 		content: string,
 		createDirectories: boolean = true,
-	): Promise<string> {
+		overwrite: boolean = false,
+	): Promise<{message: string; filePath: string; content: string}> {
 		try {
 			const fullPath = this.resolvePath(filePath);
+
+			let fileExisted = false;
+			let originalContent: string | undefined;
 
 			// Check if file already exists
 			try {
 				await fs.access(fullPath);
-				throw new Error(`File already exists: ${filePath}`);
+				if (!overwrite) {
+					throw new Error(`File already exists: ${filePath}`);
+				}
+				fileExisted = true;
+				originalContent = await readFileWithEncoding(fullPath);
 			} catch (error) {
-				// File doesn't exist, which is what we want
 				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 					throw error;
 				}
 			}
 
-			// Backup for rollback (new file, didn't exist before)
-			try {
-				const {getConversationContext} = await import(
-					'../utils/codebase/conversationContext.js'
-				);
-				const context = getConversationContext();
-				if (context) {
-					const {hashBasedSnapshotManager} = await import(
-						'../utils/codebase/hashBasedSnapshot.js'
-					);
-					await hashBasedSnapshotManager.backupFile(
-						context.sessionId,
-						context.messageIndex,
-						filePath,
-						this.basePath,
-						false, // File didn't exist
-						undefined,
-					);
-				}
-			} catch (backupError) {
-				// Don't fail the operation if backup fails
-			}
+			// Backup for rollback
+			await backupFileBeforeMutation({
+				filePath,
+				basePath: this.basePath,
+				fileExisted,
+				originalContent,
+			});
 
 			// Create parent directories if needed
 			if (createDirectories) {
@@ -989,7 +603,22 @@ export class FilesystemMCPService {
 			}
 
 			await writeFileWithEncoding(fullPath, content);
-			return `File created successfully: ${filePath}`;
+
+			let message = fileExisted
+				? `File overwritten successfully: ${filePath}`
+				: `File created successfully: ${filePath}`;
+
+			// Try to fetch fresh diagnostics after create/overwrite to avoid stale results
+			try {
+				const diagnostics = await getFreshDiagnostics(fullPath);
+				if (diagnostics.length > 0) {
+					message = appendDiagnosticsSummary(message, filePath, diagnostics);
+				}
+			} catch {
+				// Optional diagnostics retrieval, do not block create success
+			}
+
+			return {message, filePath, content};
 		} catch (error) {
 			throw new Error(
 				`Failed to create file ${filePath}: ${
@@ -1081,6 +710,90 @@ export class FilesystemMCPService {
 	}
 
 	/**
+	 * Fuzzy search-and-replace editing (exposed as MCP tool `filesystem-replaceedit`).
+	 * Copy search text from source files; strip `lineNum:hash→` prefixes if pasting from filesystem-read.
+	 */
+	async editFileBySearch(
+		filePath: string | string[] | EditBySearchConfig[],
+		searchContent?: string,
+		replaceContent?: string,
+		occurrence: number = 1,
+		contextLines: number = 8,
+	): Promise<EditBySearchResult> {
+		// Handle array of files
+		if (Array.isArray(filePath)) {
+			return await executeBatchOperation<
+				EditBySearchConfig,
+				EditBySearchSingleResult,
+				EditBySearchBatchResultItem
+			>(
+				filePath,
+				fileItem =>
+					parseEditBySearchParams(
+						fileItem,
+						searchContent,
+						replaceContent,
+						occurrence,
+					),
+				(path, search, replace, occ) =>
+					this.editFileBySearchSingle(path, search, replace, occ, contextLines),
+				(path, result) => {
+					return {path, ...result};
+				},
+			);
+		}
+
+		// Single file mode
+		if (
+			searchContent === undefined ||
+			searchContent === null ||
+			replaceContent === undefined ||
+			replaceContent === null
+		) {
+			throw new Error(
+				'searchContent and replaceContent are required for single file mode',
+			);
+		}
+
+		return await this.editFileBySearchSingle(
+			filePath,
+			searchContent,
+			replaceContent,
+			occurrence,
+			contextLines,
+		);
+	}
+
+	/**
+	 * Internal method: Edit a single file by search-replace
+	 * @private
+	 */
+	private async editFileBySearchSingle(
+		filePath: string,
+		searchContent: string,
+		replaceContent: string,
+		occurrence: number,
+		contextLines: number,
+	): Promise<EditBySearchSingleResult> {
+		return await executeEditBySearchSingle(
+			{
+				basePath: this.basePath,
+				prettierSupportedExtensions: this.prettierSupportedExtensions,
+				isSSHPath: this.isSSHPath.bind(this),
+				readRemoteFile: this.readRemoteFile.bind(this),
+				writeRemoteFile: this.writeRemoteFile.bind(this),
+				resolvePath: this.resolvePath.bind(this),
+				validatePath: this.validatePath.bind(this),
+			},
+			filePath,
+			searchContent,
+			replaceContent,
+			occurrence,
+			contextLines,
+		);
+	}
+
+	/**
 	 * Edit file(s) using hashline anchors.
 	 *
 	 * Each operation references lines by `lineNum:hash` anchors obtained from
@@ -1088,16 +801,31 @@ export class FilesystemMCPService {
 	 * so stale reads are caught early.
 	 *
 	 * Supported operation types:
-	 *   • replace  – replace startAnchor..endAnchor with content
-	 *   • insert_after – insert content after startAnchor
-	 *   • delete   – delete startAnchor..endAnchor
+	 *   • replace  – replace startAnchor..endAnchor (inclusive) with content
+	 *   • insert_after – insert content after startAnchor (endAnchor required; same as startAnchor)
+	 *   • delete   – delete startAnchor..endAnchor (inclusive)
 	 */
 	async editFile(
-		filePath: string | EditByHashlineConfig[],
+		filePath: string | string[] | EditByHashlineConfig[],
 		operations?: HashlineOperation[],
 		contextLines: number = 8,
 	): Promise<EditByHashlineResult> {
 		if (Array.isArray(filePath)) {
+			// string[] + shared operations (same batch shape as filesystem-replaceedit)
+			if (filePath.length > 0 && typeof filePath[0] === 'string') {
+				if (!operations || operations.length === 0) {
+					throw new Error(
+						'operations array is required when filePath is an array of path strings',
+					);
+				}
+				const pathList = filePath as string[];
+				const configs: EditByHashlineConfig[] = pathList.map(file => ({
+					path: file,
+					operations,
+				}));
+				return await this.editFile(configs, undefined, contextLines);
+			}
+
 			return await executeBatchOperation<
 				EditByHashlineConfig,
 				EditByHashlineSingleResult,
@@ -1130,395 +858,20 @@ export class FilesystemMCPService {
 		operations: HashlineOperation[],
 		contextLines: number,
 	): Promise<EditByHashlineSingleResult> {
-		try {
-			const isRemote = this.isSSHPath(filePath);
-			let content: string;
-			let fullPath: string;
-
-			if (isRemote) {
-				content = await this.readRemoteFile(filePath);
-				fullPath = filePath;
-			} else {
-				fullPath = this.resolvePath(filePath);
-				if (!isAbsolute(filePath)) {
-					await this.validatePath(fullPath);
-				}
-				content = await readFileWithEncoding(fullPath);
-			}
-
-			const lines = content.split('\n');
-
-			// ── Backup for rollback ──
-			try {
-				const {getConversationContext} = await import(
-					'../utils/codebase/conversationContext.js'
-				);
-				const ctx = getConversationContext();
-				if (ctx) {
-					const {hashBasedSnapshotManager} = await import(
-						'../utils/codebase/hashBasedSnapshot.js'
-					);
-					await hashBasedSnapshotManager.backupFile(
-						ctx.sessionId,
-						ctx.messageIndex,
-						filePath,
-						this.basePath,
-						true,
-						content,
-					);
-				}
-			} catch {
-				// non-fatal
-			}
-
-			// ── Validate ALL anchors before mutating anything ──
-			const anchorErrors: string[] = [];
-			for (const op of operations) {
-				const startV = validateAnchor(op.startAnchor, lines);
-				if (!startV.valid) {
-					anchorErrors.push(
-						`Anchor "${op.startAnchor}" invalid` +
-							(startV.expected && startV.actual
-								? ` (expected hash ${startV.expected}, actual ${startV.actual})`
-								: startV.lineNum > 0
-								? ` (line ${startV.lineNum} out of range or hash mismatch)`
-								: ' (bad format, expected "lineNum:hash")'),
-					);
-				}
-				if (op.endAnchor) {
-					const endV = validateAnchor(op.endAnchor, lines);
-					if (!endV.valid) {
-						anchorErrors.push(
-							`Anchor "${op.endAnchor}" invalid` +
-								(endV.expected && endV.actual
-									? ` (expected hash ${endV.expected}, actual ${endV.actual})`
-									: endV.lineNum > 0
-									? ` (line ${endV.lineNum} out of range or hash mismatch)`
-									: ' (bad format, expected "lineNum:hash")'),
-						);
-					}
-					if (startV.valid && endV.valid && endV.lineNum < startV.lineNum) {
-						anchorErrors.push(
-							`endAnchor line ${endV.lineNum} is before startAnchor line ${startV.lineNum}`,
-						);
-					}
-				}
-
-				if (
-					(op.type === 'replace' || op.type === 'insert_after') &&
-					op.content === undefined
-				) {
-					anchorErrors.push(`Operation "${op.type}" requires content`);
-				}
-			}
-
-			if (anchorErrors.length > 0) {
-				throw new Error(
-					`❌ Hashline anchor validation failed for ${filePath}:\n` +
-						anchorErrors.map(e => `  • ${e}`).join('\n') +
-						`\n\n💡 The file may have changed since your last read. Re-read the file to get fresh anchors.`,
-				);
-			}
-
-			// ── Sort operations bottom-to-top to keep line numbers stable ──
-			const sortedOps = [...operations].sort((a, b) => {
-				const aLine = parseAnchor(a.startAnchor)!.lineNum;
-				const bLine = parseAnchor(b.startAnchor)!.lineNum;
-				return bLine - aLine;
-			});
-
-			// Track the overall edit range for context display
-			let editStartLine = Infinity;
-			let editEndLine = 0;
-
-			const mutableLines = [...lines];
-			const opSummaries: string[] = [];
-
-			// Strip hashline prefixes that less-capable models may accidentally
-			// copy from filesystem-read output into their content.
-			// The exact format is "lineNum:hash→content" (e.g. "42:a3→actual code"),
-			// requiring both the 2-char hex hash AND the → arrow to avoid false positives.
-			const hashlineContentRe = /^\s*\d+:[0-9a-fA-F]{2}→/;
-			const sanitizeContent = (raw: string): string => {
-				const contentLines = raw.split('\n');
-				const hasHashlines =
-					contentLines.length > 0 &&
-					contentLines.every(l => l === '' || hashlineContentRe.test(l));
-				if (!hasHashlines) return raw;
-				return contentLines
-					.map(l => {
-						let s = l;
-						let m: RegExpExecArray | null;
-						while ((m = hashlineContentRe.exec(s))) {
-							s = s.slice(m[0].length);
-						}
-						return s;
-					})
-					.join('\n');
-			};
-
-			for (const op of sortedOps) {
-				const startLine = parseAnchor(op.startAnchor)!.lineNum;
-				const endLine = op.endAnchor
-					? parseAnchor(op.endAnchor)!.lineNum
-					: startLine;
-
-				editStartLine = Math.min(editStartLine, startLine);
-				editEndLine = Math.max(editEndLine, endLine);
-
-				switch (op.type) {
-					case 'replace': {
-						const newLines = sanitizeContent(op.content ?? '').split('\n');
-						mutableLines.splice(
-							startLine - 1,
-							endLine - startLine + 1,
-							...newLines,
-						);
-						opSummaries.push(
-							`replace lines ${startLine}-${endLine} → ${newLines.length} line(s)`,
-						);
-						break;
-					}
-					case 'insert_after': {
-						const newLines = sanitizeContent(op.content ?? '').split('\n');
-						mutableLines.splice(startLine, 0, ...newLines);
-						opSummaries.push(
-							`insert ${newLines.length} line(s) after line ${startLine}`,
-						);
-						break;
-					}
-					case 'delete': {
-						mutableLines.splice(startLine - 1, endLine - startLine + 1);
-						opSummaries.push(`delete lines ${startLine}-${endLine}`);
-						break;
-					}
-				}
-			}
-
-			// ── Build before/after content for DiffViewer ──
-			const replacedContent = lines
-				.slice(editStartLine - 1, editEndLine)
-				.map((line, idx) => {
-					const ln = editStartLine + idx;
-					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
-				})
-				.join('\n');
-
-			const smartBoundaries = findSmartContextBoundaries(
-				lines,
-				editStartLine,
-				editEndLine,
-				contextLines,
-			);
-			const contextStart = smartBoundaries.start;
-			const contextEnd = smartBoundaries.end;
-
-			const oldContent = lines
-				.slice(contextStart - 1, contextEnd)
-				.map((line, idx) => {
-					const ln = contextStart + idx;
-					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
-				})
-				.join('\n');
-
-			const modifiedContent = mutableLines.join('\n');
-
-			// ── Write ──
-			if (isRemote) {
-				await this.writeRemoteFile(fullPath, modifiedContent);
-			} else {
-				await writeFileWithEncoding(fullPath, modifiedContent);
-			}
-
-			// ── Optional Prettier format ──
-			let finalLines = mutableLines;
-			let finalTotalLines = mutableLines.length;
-			const lineDifference = mutableLines.length - lines.length;
-			let finalContextEnd = Math.min(
-				finalTotalLines,
-				contextEnd + lineDifference,
-			);
-
-			const fileExtension = path.extname(fullPath).toLowerCase();
-			const shouldFormat =
-				getAutoFormatEnabled() &&
-				this.prettierSupportedExtensions.includes(fileExtension);
-
-			if (shouldFormat) {
-				try {
-					const prettierConfig = await prettier.resolveConfig(fullPath);
-					const formatted = await prettier.format(modifiedContent, {
-						filepath: fullPath,
-						...prettierConfig,
-					});
-					if (isRemote) {
-						await this.writeRemoteFile(fullPath, formatted);
-					} else {
-						await writeFileWithEncoding(fullPath, formatted);
-					}
-					finalLines = formatted.split('\n');
-					finalTotalLines = finalLines.length;
-					finalContextEnd = Math.min(
-						finalTotalLines,
-						contextStart + (contextEnd - contextStart) + lineDifference,
-					);
-				} catch {
-					// non-fatal
-				}
-			}
-
-			const newContextContent = finalLines
-				.slice(contextStart - 1, finalContextEnd)
-				.map((line, idx) => {
-					const ln = contextStart + idx;
-					return formatLineWithHashDisplay(ln, line, normalizeForDisplay(line));
-				})
-				.join('\n');
-
-			// ── Structure analysis ──
-			const structureAnalysis = analyzeCodeStructure(
-				finalLines.join('\n'),
-				filePath,
-				finalLines.slice(
-					editStartLine - 1,
-					editStartLine - 1 + (editEndLine - editStartLine + 1),
-				),
-			);
-
-			// ── IDE diagnostics ──
-			// 延迟等待 IDE 完成文件变化的重新分析，避免拿到旧诊断
-			let diagnostics: Diagnostic[] = [];
-			try {
-				await new Promise<void>(r => setTimeout(r, 500));
-				diagnostics = await vscodeConnection.requestDiagnostics(fullPath);
-			} catch {
-				// optional
-			}
-
-			const result: EditByHashlineSingleResult = {
-				message:
-					`✅ File edited via hashline anchors: ${filePath}\n` +
-					`   Operations: ${opSummaries.join('; ')}\n` +
-					`   Result: ${finalTotalLines} total lines` +
-					(smartBoundaries.extended
-						? `\n   📍 Context auto-extended (lines ${contextStart}-${finalContextEnd})`
-						: ''),
-				filePath,
-				oldContent,
-				newContent: newContextContent,
-				replacedContent,
-				operationsSummary: opSummaries.join('; '),
-				contextStartLine: contextStart,
-				contextEndLine: finalContextEnd,
-				totalLines: finalTotalLines,
-				structureAnalysis,
-				diagnostics: undefined as Diagnostic[] | undefined,
-			};
-
-			// ── Diagnostics report ──
-			if (diagnostics.length > 0) {
-				const limitedDiagnostics = diagnostics.slice(0, 10);
-				result.diagnostics = limitedDiagnostics;
-
-				const errorCount = diagnostics.filter(
-					d => d.severity === 'error',
-				).length;
-				const warningCount = diagnostics.filter(
-					d => d.severity === 'warning',
-				).length;
-
-				if (errorCount > 0 || warningCount > 0) {
-					result.message += `\n\n⚠️  Diagnostics: ${errorCount} error(s), ${warningCount} warning(s)`;
-					const fmt = diagnostics
-						.filter(d => d.severity === 'error' || d.severity === 'warning')
-						.slice(0, 5)
-						.map(d => {
-							const icon = d.severity === 'error' ? '❌' : '⚠️';
-							return `   ${icon} [${d.source || 'unknown'}] ${filePath}:${
-								d.line
-							}:${d.character}\n      ${d.message}`;
-						})
-						.join('\n\n');
-					result.message += `\n\n📋 Details:\n${fmt}`;
-					if (errorCount + warningCount > 5) {
-						result.message += `\n   ... and ${
-							errorCount + warningCount - 5
-						} more`;
-					}
-				}
-			}
-
-			// ── Structure warnings ──
-			const sw: string[] = [];
-			if (!structureAnalysis.bracketBalance.curly.balanced) {
-				const d =
-					structureAnalysis.bracketBalance.curly.open -
-					structureAnalysis.bracketBalance.curly.close;
-				sw.push(
-					`Curly brackets: ${
-						d > 0 ? `${d} unclosed {` : `${Math.abs(d)} extra }`
-					}`,
-				);
-			}
-			if (!structureAnalysis.bracketBalance.round.balanced) {
-				const d =
-					structureAnalysis.bracketBalance.round.open -
-					structureAnalysis.bracketBalance.round.close;
-				sw.push(
-					`Round brackets: ${
-						d > 0 ? `${d} unclosed (` : `${Math.abs(d)} extra )`
-					}`,
-				);
-			}
-			if (!structureAnalysis.bracketBalance.square.balanced) {
-				const d =
-					structureAnalysis.bracketBalance.square.open -
-					structureAnalysis.bracketBalance.square.close;
-				sw.push(
-					`Square brackets: ${
-						d > 0 ? `${d} unclosed [` : `${Math.abs(d)} extra ]`
-					}`,
-				);
-			}
-			if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
-				if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
-					sw.push(
-						`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
-							', ',
-						)}`,
-					);
-				}
-				if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
-					sw.push(
-						`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
-							', ',
-						)}`,
-					);
-				}
-			}
-			if (structureAnalysis.indentationWarnings.length > 0) {
-				sw.push(
-					...structureAnalysis.indentationWarnings.map(
-						(w: string) => `Indentation: ${w}`,
-					),
-				);
-			}
-			if (sw.length > 0) {
-				result.message += `\n\n🔍 Structure Analysis:\n`;
-				sw.forEach(w => {
-					result.message += `   ⚠️  ${w}\n`;
-				});
-				result.message += `\n   💡 TIP: These warnings help identify potential issues.`;
-			}
-
-			return result;
-		} catch (error) {
-			throw new Error(
-				`Failed to edit file ${filePath}: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-			);
-		}
+		return await executeHashlineEditSingle(
+			{
+				basePath: this.basePath,
+				prettierSupportedExtensions: this.prettierSupportedExtensions,
+				isSSHPath: this.isSSHPath.bind(this),
+				readRemoteFile: this.readRemoteFile.bind(this),
+				writeRemoteFile: this.writeRemoteFile.bind(this),
+				resolvePath: this.resolvePath.bind(this),
+				validatePath: this.validatePath.bind(this),
+			},
+			filePath,
+			operations,
+			contextLines,
+		);
 	}
 
 	/**
@@ -1636,17 +989,55 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Verify file does not exist first. Automatically creates parent directories.',
+			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				filePath: {
-					type: 'string',
-					description: 'Path where the file should be created',
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path where the file should be created',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'Path where the file should be created',
+									},
+									content: {
+										type: 'string',
+										description: 'Content to write to the file',
+									},
+									overwrite: {
+										type: 'boolean',
+										description:
+											'Whether to overwrite the file if it already exists',
+									},
+									createDirectories: {
+										type: 'boolean',
+										description:
+											"Whether to create parent directories if they don't exist",
+									},
+								},
+								required: ['path', 'content'],
+							},
+							description: 'Array of file configs for batch creation',
+						},
+					],
 				},
 				content: {
 					type: 'string',
-					description: 'Content to write to the file',
+					description:
+						'Content to write to the file (required for single file mode; ignored in batch mode where each item has its own content)',
+				},
+				overwrite: {
+					type: 'boolean',
+					description:
+						'Whether to overwrite the file if it already exists. When true, the existing file content is backed up for rollback before being replaced. When false, an error is thrown if the file already exists.',
 				},
 				createDirectories: {
 					type: 'boolean',
@@ -1655,20 +1046,18 @@ export const mcpTools = [
 					default: true,
 				},
 			},
-			required: ['filePath', 'content'],
+			required: ['filePath', 'overwrite'],
 		},
 	},
 	{
-		name: 'filesystem-edit',
+		name: 'filesystem-replaceedit',
 		description:
-			'PREFERRED edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
-			'Line format: "lineNum:hash→content" (e.g. "42:a3→code"). Use anchors "lineNum:hash" to reference lines — no text reproduction needed. ' +
-			'**OPERATIONS**: (1) replace — replaces startAnchor..endAnchor with content; ' +
-			'(2) insert_after — inserts content after startAnchor; ' +
-			'(3) delete — removes startAnchor..endAnchor, set content to empty string "". ' +
-			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
-			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". Omit endAnchor for single-line operations. ' +
-			'**SUPPORTS BATCH**: Pass array of {path, operations} for multi-file edits.',
+			'DEFAULT edit tool: Fuzzy search-and-replace editing. ' +
+			'**WHEN**: Prefer this for normal workflow and diff-friendly context display. Use `filesystem-edit` when you need strict hash-anchored safety checks. ' +
+			'**REMOTE SSH**: Supports ssh:// paths like other filesystem tools. ' +
+			'**INPUT**: `searchContent` must be raw source text — strip `lineNum:hash→` prefixes if you pasted from `filesystem-read`. ' +
+			'**BATCH**: `filePath` may be a string, string[] with top-level search/replace, or {path, searchContent, replaceContent, occurrence?}[]. ' +
+			'Uses fuzzy similarity matching (fixed threshold 0.75).',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1677,6 +1066,100 @@ export const mcpTools = [
 						{
 							type: 'string',
 							description: 'Path to a single file to edit',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+							},
+							description:
+								'Array of file paths (uses unified searchContent/replaceContent from top-level)',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									path: {
+										type: 'string',
+										description: 'File path',
+									},
+									searchContent: {
+										type: 'string',
+										description: 'Content to search for in this file',
+									},
+									replaceContent: {
+										type: 'string',
+										description: 'New content to replace with',
+									},
+									occurrence: {
+										type: 'number',
+										description:
+											'Which match to replace (1-indexed, default: 1)',
+									},
+								},
+								required: ['path', 'searchContent', 'replaceContent'],
+							},
+							description:
+								'Array of edit config objects for per-file search-replace operations',
+						},
+					],
+					description: 'File path(s) to edit',
+				},
+				searchContent: {
+					type: 'string',
+					description:
+						'Content to find and replace (for single file or unified mode). Raw file text only — no hashline prefixes.',
+				},
+				replaceContent: {
+					type: 'string',
+					description:
+						'New content to replace with (for single file or unified mode)',
+				},
+				occurrence: {
+					type: 'number',
+					description:
+						'Which match to replace if multiple found (1-indexed). Default: 1 (best match first). Use -1 only when a single match exists (same as occurrence 1).',
+					default: 1,
+				},
+				contextLines: {
+					type: 'number',
+					description: 'Context lines to show before/after (default: 8)',
+					default: 8,
+				},
+			},
+			required: ['filePath'],
+		},
+	},
+	{
+		name: 'filesystem-edit',
+		description:
+			'OPTIONAL strict edit tool: Hash-anchored editing using content hashes from filesystem-read. ' +
+			'Line format: "lineNum:hash→content" (e.g. "42:a3→code"). Use anchors "lineNum:hash" to reference lines — no text reproduction needed. ' +
+			'**OPERATIONS**: (1) replace — replaces startAnchor..endAnchor with content; ' +
+			'(2) insert_after — inserts content after startAnchor; ' +
+			'(3) delete — removes startAnchor..endAnchor, set content to empty string "". ' +
+			'**WORKFLOW**: filesystem-read → note anchors → call this tool with operations. ' +
+			'**ANCHOR FORMAT**: "lineNum:hash" e.g. "10:a3". endAnchor is always required (inclusive range). Single-line edits: set endAnchor to the same anchor as startAnchor. ' +
+			'**SUPPORTS BATCH**: Pass array of {path, operations}, or path string[] with shared top-level operations (same as filesystem-replaceedit batch).',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				filePath: {
+					oneOf: [
+						{
+							type: 'string',
+							description: 'Path to a single file to edit',
+						},
+						{
+							type: 'array',
+							items: {
+								type: 'string',
+								description:
+									'File path (use with top-level operations for unified batch edit)',
+							},
+							description:
+								'Array of file paths sharing the same top-level operations',
 						},
 						{
 							type: 'array',
@@ -1705,7 +1188,7 @@ export const mcpTools = [
 												endAnchor: {
 													type: 'string',
 													description:
-														'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
+														'Inclusive end anchor (format: "lineNum:hash"). For a single line, use the same value as startAnchor.',
 												},
 												content: {
 													type: 'string',
@@ -1713,7 +1196,7 @@ export const mcpTools = [
 														'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 												},
 											},
-											required: ['type', 'startAnchor', 'content'],
+											required: ['type', 'startAnchor', 'endAnchor', 'content'],
 										},
 										description: 'Array of edit operations for this file',
 									},
@@ -1745,7 +1228,7 @@ export const mcpTools = [
 							endAnchor: {
 								type: 'string',
 								description:
-									'End anchor for range operations (format: "lineNum:hash", e.g. "10:a3"). Omit for single-line operations.',
+									'Inclusive end anchor (format: "lineNum:hash"). For a single line, use the same value as startAnchor.',
 							},
 							content: {
 								type: 'string',
@@ -1753,7 +1236,7 @@ export const mcpTools = [
 									'New content to write (for replace and insert_after). Pass empty string "" for delete. Do NOT include line numbers or hashes.',
 							},
 						},
-						required: ['type', 'startAnchor', 'content'],
+						required: ['type', 'startAnchor', 'endAnchor', 'content'],
 					},
 					description:
 						'Array of edit operations (for single file mode). Each operation references anchors from filesystem-read.',

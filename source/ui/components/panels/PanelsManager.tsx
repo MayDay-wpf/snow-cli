@@ -5,17 +5,19 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {CustomCommandConfigPanel} from './CustomCommandConfigPanel.js';
 import {SkillsCreationPanel} from './SkillsCreationPanel.js';
+import {SkillsInstallPanel} from './SkillsInstallPanel.js';
 import {RoleCreationPanel} from './RoleCreationPanel.js';
 import {RoleDeletionPanel} from './RoleDeletionPanel.js';
 import {RoleListPanel} from './RoleListPanel.js';
 import {RoleSubagentCreationPanel} from './RoleSubagentCreationPanel.js';
 import {RoleSubagentDeletionPanel} from './RoleSubagentDeletionPanel.js';
 import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
-import {ModelsPanel} from './ModelsPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
+import TelemetryPanel from './TelemetryPanel.js';
 import TodoListPanel from './TodoListPanel.js';
+import HelpPanel from './HelpPanel.js';
 import type {CommandLocation} from '../../../utils/commands/custom.js';
 import type {
 	GeneratedSkillContent,
@@ -28,17 +30,19 @@ import type {RoleSubagentLocation} from '../../../utils/commands/roleSubagent.js
 const MCPInfoPanel = lazy(() => import('./MCPInfoPanel.js'));
 const SessionListPanel = lazy(() => import('./SessionListPanel.js'));
 const UsagePanel = lazy(() => import('./UsagePanel.js'));
-const DiffReviewPanel = lazy(() => import('./DiffReviewPanel.js'));
 
 type PanelsManagerProps = {
 	terminalWidth: number;
 	workingDirectory: string;
 	showSessionPanel: boolean;
+	/** /goal resume 弹出的会话列表（goalOnly 模式） */
+	showGoalSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
-	showModelsPanel: boolean;
+	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showSkillsInstall: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
@@ -47,24 +51,16 @@ type PanelsManagerProps = {
 	showRoleSubagentList: boolean;
 	showWorkingDirPanel: boolean;
 	showBranchPanel: boolean;
-	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
+	showTelemetryPanel: boolean;
 	showTodoListPanel: boolean;
 	connectionPanelApiUrl?: string;
-	diffReviewMessages: Array<{
-		role: string;
-		content: string;
-		images?: Array<{type: 'image'; data: string; mimeType: string}>;
-		subAgentDirected?: unknown;
-	}>;
-	diffReviewSnapshotFileCount: Map<number, number>;
-	advancedModel: string;
-	basicModel: string;
 	setShowSessionPanel: (show: boolean) => void;
+	setShowGoalSessionPanel: (show: boolean) => void;
 	setShowMcpPanel: (show: boolean) => void;
-	setShowModelsPanel: (show: boolean) => void;
 	setShowCustomCommandConfig: (show: boolean) => void;
 	setShowSkillsCreation: (show: boolean) => void;
+	setShowSkillsInstall: (show: boolean) => void;
 	setShowRoleCreation: (show: boolean) => void;
 	setShowRoleDeletion: (show: boolean) => void;
 	setShowRoleList: (show: boolean) => void;
@@ -73,15 +69,20 @@ type PanelsManagerProps = {
 	setShowRoleSubagentList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
-	setShowDiffReviewPanel: (show: boolean) => void;
 	setShowConnectionPanel: (show: boolean) => void;
+	setShowTelemetryPanel: (show: boolean) => void;
 	setShowTodoListPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
+	/**
+	 * /goal resume 面板的选中回调：与常规 handleSessionPanelSelect 区别在于
+	 * 选中后不仅恢复会话，还要立刻把对应 goal 状态切回 pursuing 并启动 Ralph Loop 第一轮。
+	 */
+	handleGoalSessionPanelSelect: (sessionId: string) => Promise<void>;
 
 	onCustomCommandSave: (
 		name: string,
 		command: string,
-		type: 'execute' | 'prompt',
+		type: 'execute' | 'prompt' | 'panel',
 		location: CommandLocation,
 		description?: string,
 	) => Promise<void>;
@@ -91,6 +92,7 @@ type PanelsManagerProps = {
 		location: SkillLocation,
 		generated?: GeneratedSkillContent,
 	) => Promise<void>;
+	onSkillsInstall: (success: boolean, skillId: string, message: string) => void;
 	onRoleSave: (location: RoleLocation) => Promise<void>;
 	onRoleDelete: (location: RoleLocation) => Promise<void>;
 	onRoleSubagentSave: (
@@ -107,11 +109,13 @@ export default function PanelsManager({
 	terminalWidth,
 	workingDirectory,
 	showSessionPanel,
+	showGoalSessionPanel,
 	showMcpPanel,
 	showUsagePanel,
-	showModelsPanel,
+	showHelpPanel,
 	showCustomCommandConfig,
 	showSkillsCreation,
+	showSkillsInstall,
 	showRoleCreation,
 	showRoleDeletion,
 	showRoleList,
@@ -120,19 +124,16 @@ export default function PanelsManager({
 	showRoleSubagentList,
 	showWorkingDirPanel,
 	showBranchPanel,
-	showDiffReviewPanel,
 	showConnectionPanel,
+	showTelemetryPanel,
 	showTodoListPanel,
 	connectionPanelApiUrl,
-	diffReviewMessages,
-	diffReviewSnapshotFileCount,
-	advancedModel,
-	basicModel,
 	setShowSessionPanel,
+	setShowGoalSessionPanel,
 	setShowMcpPanel,
-	setShowModelsPanel,
 	setShowCustomCommandConfig,
 	setShowSkillsCreation,
+	setShowSkillsInstall,
 	setShowRoleCreation,
 	setShowRoleDeletion,
 	setShowRoleList,
@@ -141,12 +142,14 @@ export default function PanelsManager({
 	setShowRoleSubagentList,
 	setShowWorkingDirPanel,
 	setShowBranchPanel,
-	setShowDiffReviewPanel,
 	setShowConnectionPanel,
+	setShowTelemetryPanel,
 	setShowTodoListPanel,
 	handleSessionPanelSelect,
+	handleGoalSessionPanelSelect,
 	onCustomCommandSave,
 	onSkillsSave,
+	onSkillsInstall,
 	onRoleSave,
 	onRoleDelete,
 	onRoleSubagentSave,
@@ -172,6 +175,19 @@ export default function PanelsManager({
 						<SessionListPanel
 							onSelectSession={handleSessionPanelSelect}
 							onClose={() => setShowSessionPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{/* /goal resume 弹出的列表：复用 SessionListPanel 的 goalOnly 模式 */}
+			{showGoalSessionPanel && (
+				<Box paddingX={1} width={terminalWidth}>
+					<Suspense fallback={loadingFallback}>
+						<SessionListPanel
+							goalOnly
+							onSelectSession={handleGoalSessionPanelSelect}
+							onClose={() => setShowGoalSessionPanel(false)}
 						/>
 					</Suspense>
 				</Box>
@@ -205,15 +221,15 @@ export default function PanelsManager({
 				</Box>
 			)}
 
-			{/* Show models panel if active - replaces input */}
-			{showModelsPanel && (
+			{/* Show help panel if active - replaces input */}
+			{showHelpPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<ModelsPanel
-						advancedModel={advancedModel}
-						basicModel={basicModel}
-						visible={showModelsPanel}
-						onClose={() => setShowModelsPanel(false)}
-					/>
+					<HelpPanel />
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.chatScreen.pressEscToClose}
+						</Text>
+					</Box>
 				</Box>
 			)}
 
@@ -235,11 +251,28 @@ export default function PanelsManager({
 						projectRoot={workingDirectory}
 						onSave={onSkillsSave}
 						onCancel={() => setShowSkillsCreation(false)}
+						onInstall={() => {
+							setShowSkillsCreation(false);
+							setShowSkillsInstall(true);
+						}}
 					/>
 				</Box>
 			)}
 
-			{/* Show role creation panel if active */}
+			{/* Show skills install panel if active */}
+			{showSkillsInstall && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<SkillsInstallPanel
+						projectRoot={workingDirectory}
+						onComplete={(success, skillId, message) => {
+							onSkillsInstall(success, skillId, message);
+							setShowSkillsInstall(false);
+						}}
+						onCancel={() => setShowSkillsInstall(false)}
+					/>
+				</Box>
+			)}
+
 			{showRoleCreation && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<RoleCreationPanel
@@ -319,19 +352,6 @@ export default function PanelsManager({
 				</Box>
 			)}
 
-			{/* Show diff review panel if active */}
-			{showDiffReviewPanel && (
-				<Box paddingX={1} width={terminalWidth}>
-					<Suspense fallback={loadingFallback}>
-						<DiffReviewPanel
-							messages={diffReviewMessages}
-							snapshotFileCount={diffReviewSnapshotFileCount}
-							onClose={() => setShowDiffReviewPanel(false)}
-						/>
-					</Suspense>
-				</Box>
-			)}
-
 			{/* Show connection panel if active */}
 			{showConnectionPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
@@ -339,6 +359,13 @@ export default function PanelsManager({
 						onClose={() => setShowConnectionPanel(false)}
 						initialApiUrl={connectionPanelApiUrl}
 					/>
+				</Box>
+			)}
+
+			{/* Show OpenTelemetry telemetry panel if active */}
+			{showTelemetryPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<TelemetryPanel onClose={() => setShowTelemetryPanel(false)} />
 				</Box>
 			)}
 

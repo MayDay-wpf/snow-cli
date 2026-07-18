@@ -8,7 +8,13 @@ interface MatchCandidate {
 	similarity: number;
 	preview: string;
 }
-import {calculateSimilarity, normalizeForDisplay} from './similarity.utils.js';
+import {
+	calculateNormalizedSimilarityAsync,
+	calculateSimilarity,
+	normalizeForDisplay,
+	normalizeWhitespace,
+} from './similarity.utils.js';
+import {scanFuzzyMatchesWithNative} from './native-edit.utils.js';
 
 /**
  * Find the closest matching candidates in the file content
@@ -22,6 +28,7 @@ export async function findClosestMatches(
 	topN: number = 3,
 ): Promise<MatchCandidate[]> {
 	const searchLines = searchContent.split('\n');
+	const normalizedSearchContent = normalizeWhitespace(searchContent);
 	const candidates: MatchCandidate[] = [];
 
 	// Fast pre-filter: use first line as anchor (only for multi-line searches)
@@ -32,6 +39,30 @@ export async function findClosestMatches(
 
 	// Try to find candidates by sliding window with optimizations
 	const maxCandidates = topN * 3; // Collect more candidates, then pick best
+	const nativeMatches = await scanFuzzyMatchesWithNative(
+		fileLines.join('\n'),
+		searchContent,
+		threshold,
+		maxCandidates,
+		usePreFilter,
+		preFilterThreshold,
+	);
+	if (nativeMatches) {
+		return nativeMatches
+			.filter(candidate => candidate.similarity > threshold)
+			.map(candidate => ({
+				...candidate,
+				preview: fileLines
+					.slice(candidate.startLine - 1, candidate.endLine)
+					.map(
+						(line, index) =>
+							`${candidate.startLine + index}→${normalizeForDisplay(line)}`,
+					)
+					.join('\n'),
+			}))
+			.slice(0, topN);
+	}
+
 	const YIELD_INTERVAL = 100; // Yield control every 100 iterations
 
 	for (let i = 0; i <= fileLines.length - searchLines.length; i++) {
@@ -60,9 +91,9 @@ export async function findClosestMatches(
 		const candidateLines = fileLines.slice(i, i + searchLines.length);
 		const candidateContent = candidateLines.join('\n');
 
-		const similarity = calculateSimilarity(
-			searchContent,
-			candidateContent,
+		const similarity = await calculateNormalizedSimilarityAsync(
+			normalizedSearchContent,
+			normalizeWhitespace(candidateContent),
 			threshold,
 		);
 

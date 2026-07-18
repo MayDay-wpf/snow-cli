@@ -1,35 +1,19 @@
 import React, {useState, useEffect} from 'react';
 import {Box, Text, useInput} from 'ink';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
+import {useTheme} from '../../contexts/ThemeContext.js';
+import type {Theme} from '../../themes/index.js';
+import {
+	loadUsageData,
+	filterByPeriod,
+	aggregateByModel,
+	USAGE_PERIODS,
+	type AggregatedStats,
+	type UsagePeriod,
+} from '../../../utils/core/usageHistory.js';
 
-interface UsageLogEntry {
-	model: string;
-	profileName: string;
-	inputTokens: number;
-	outputTokens: number;
-	cacheCreationInputTokens?: number;
-	cacheReadInputTokens?: number;
-	timestamp: string;
-}
-
-interface ModelStats {
-	input: number;
-	output: number;
-	cacheCreation: number;
-	cacheRead: number;
-	total: number;
-}
-
-interface AggregatedStats {
-	models: Map<string, ModelStats>;
-	grandTotal: number;
-}
-
-type Granularity = 'hour' | 'day' | 'week' | 'month';
+type Granularity = UsagePeriod;
 
 function getModelShortName(modelName: string, maxLength = 20): string {
 	// Extract readable name from model string intelligently
@@ -148,109 +132,6 @@ function getModelShortName(modelName: string, maxLength = 20): string {
 	return result.length > maxLength ? result.slice(0, maxLength) : result;
 }
 
-async function loadUsageData(): Promise<UsageLogEntry[]> {
-	const homeDir = os.homedir();
-	const usageDir = path.join(homeDir, '.snow', 'usage');
-
-	try {
-		const entries: UsageLogEntry[] = [];
-		const dateDirs = await fs.readdir(usageDir);
-
-		for (const dateDir of dateDirs) {
-			const datePath = path.join(usageDir, dateDir);
-			const stats = await fs.stat(datePath);
-
-			if (!stats.isDirectory()) continue;
-
-			const files = await fs.readdir(datePath);
-
-			for (const file of files) {
-				if (!file.endsWith('.jsonl')) continue;
-
-				const filePath = path.join(datePath, file);
-				const content = await fs.readFile(filePath, 'utf-8');
-				const lines = content
-					.trim()
-					.split('\n')
-					.filter(l => l.trim());
-
-				for (const line of lines) {
-					try {
-						const entry = JSON.parse(line) as UsageLogEntry;
-						entries.push(entry);
-					} catch {
-						// Skip invalid lines
-					}
-				}
-			}
-		}
-
-		return entries.sort(
-			(a, b) =>
-				new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-		);
-	} catch (error) {
-		return [];
-	}
-}
-
-function filterByGranularity(
-	entries: UsageLogEntry[],
-	granularity: Granularity,
-): UsageLogEntry[] {
-	if (entries.length === 0) return [];
-
-	const now = new Date();
-	const cutoff = new Date(now);
-
-	switch (granularity) {
-		case 'hour':
-			cutoff.setHours(now.getHours() - 24);
-			break;
-		case 'day':
-			cutoff.setDate(now.getDate() - 7);
-			break;
-		case 'week':
-			cutoff.setDate(now.getDate() - 30);
-			break;
-		case 'month':
-			cutoff.setMonth(now.getMonth() - 12);
-			break;
-	}
-
-	return entries.filter(e => new Date(e.timestamp) >= cutoff);
-}
-
-function aggregateByModel(entries: UsageLogEntry[]): AggregatedStats {
-	const models = new Map<string, ModelStats>();
-	let grandTotal = 0;
-
-	for (const entry of entries) {
-		const modelName = entry.model;
-
-		if (!models.has(modelName)) {
-			models.set(modelName, {
-				input: 0,
-				output: 0,
-				cacheCreation: 0,
-				cacheRead: 0,
-				total: 0,
-			});
-		}
-
-		const stats = models.get(modelName)!;
-		stats.input += entry.inputTokens;
-		stats.output += entry.outputTokens;
-		stats.cacheCreation += entry.cacheCreationInputTokens || 0;
-		stats.cacheRead += entry.cacheReadInputTokens || 0;
-		stats.total += entry.inputTokens + entry.outputTokens;
-
-		grandTotal += entry.inputTokens + entry.outputTokens;
-	}
-
-	return {models, grandTotal};
-}
-
 function formatTokens(tokens: number, compact = false): string {
 	if (tokens >= 1000000) {
 		return compact
@@ -270,10 +151,11 @@ function renderStackedBarChart(
 	terminalWidth: number,
 	scrollOffset: number,
 	t: any,
+	theme: Theme,
 ) {
 	if (stats.models.size === 0) {
 		return (
-			<Text color="gray" dimColor>
+			<Text color={theme.colors.menuSecondary} dimColor>
 				{t.usagePanel.chart.noData}
 			</Text>
 		);
@@ -308,18 +190,18 @@ function renderStackedBarChart(
 		<Box flexDirection="column">
 			{/* Legend */}
 			<Box marginBottom={1}>
-				<Text color="cyan">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuInfo}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.usage}{' '}
 				</Text>
-				<Text color="green">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.success}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.cacheHit}{' '}
 				</Text>
-				<Text color="yellow">█</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.warning}>█</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.chart.cacheCreate}
 				</Text>
@@ -328,7 +210,7 @@ function renderStackedBarChart(
 			{/* Scroll indicator - more above */}
 			{hasMoreAbove && (
 				<Box marginBottom={1}>
-					<Text color="yellow" dimColor>
+					<Text color={theme.colors.warning} dimColor>
 						{t.usagePanel.chart.moreAbove.replace('{count}', String(startIdx))}
 					</Text>
 				</Box>
@@ -365,34 +247,40 @@ function renderStackedBarChart(
 					<Box key={modelName} flexDirection="column" marginBottom={1}>
 						{/* Line 1: Model name */}
 						<Box>
-							<Text bold color="white">
+							<Text bold color={theme.colors.text}>
 								{shortName}
 							</Text>
 						</Box>
 
 						{/* Line 2: Stacked bar chart */}
 						<Box>
-							{/* Usage segment (cyan) */}
+							{/* Usage segment */}
 							{usageLength > 0 && (
-								<Text color="cyan">{'█'.repeat(usageLength)}</Text>
+								<Text color={theme.colors.menuInfo}>
+									{'█'.repeat(usageLength)}
+								</Text>
 							)}
-							{/* Cache hit segment (green) */}
+							{/* Cache hit segment */}
 							{cacheHitLength > 0 && (
-								<Text color="green">{'█'.repeat(cacheHitLength)}</Text>
+								<Text color={theme.colors.success}>
+									{'█'.repeat(cacheHitLength)}
+								</Text>
 							)}
-							{/* Cache create segment (yellow) */}
+							{/* Cache create segment */}
 							{cacheCreateLength > 0 && (
-								<Text color="yellow">{'█'.repeat(cacheCreateLength)}</Text>
+								<Text color={theme.colors.warning}>
+									{'█'.repeat(cacheCreateLength)}
+								</Text>
 							)}
 						</Box>
 
 						{/* Line 3: Detailed stats */}
 						<Box>
-							<Text color="cyan">
+							<Text color={theme.colors.menuInfo}>
 								{t.usagePanel.chart.usage}{' '}
 								{formatTokens(modelStats.total, isNarrow)}
 							</Text>
-							<Text color="gray" dimColor>
+							<Text color={theme.colors.menuSecondary} dimColor>
 								{' '}
 								({t.usagePanel.chart.in}{' '}
 								{formatTokens(modelStats.input, isNarrow)},{' '}
@@ -401,25 +289,25 @@ function renderStackedBarChart(
 							</Text>
 							{(modelStats.cacheRead > 0 || modelStats.cacheCreation > 0) && (
 								<>
-									<Text color="gray" dimColor>
+									<Text color={theme.colors.menuSecondary} dimColor>
 										{' '}
 										|{' '}
 									</Text>
 									{modelStats.cacheRead > 0 && (
 										<>
-											<Text color="green">
+											<Text color={theme.colors.success}>
 												{t.usagePanel.chart.hit}{' '}
 												{formatTokens(modelStats.cacheRead, isNarrow)}
 											</Text>
 											{modelStats.cacheCreation > 0 && (
-												<Text color="gray" dimColor>
+												<Text color={theme.colors.menuSecondary} dimColor>
 													,{' '}
 												</Text>
 											)}
 										</>
 									)}
 									{modelStats.cacheCreation > 0 && (
-										<Text color="yellow">
+										<Text color={theme.colors.warning}>
 											{t.usagePanel.chart.create}{' '}
 											{formatTokens(modelStats.cacheCreation, isNarrow)}
 										</Text>
@@ -434,14 +322,14 @@ function renderStackedBarChart(
 			{/* Total summary */}
 			{sortedModels.length > 1 && (
 				<Box marginTop={1} flexDirection="column">
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{'─'.repeat(Math.min(terminalWidth - 8, 70))}
 					</Text>
 					<Box>
-						<Text bold color="white">
+						<Text bold color={theme.colors.text}>
 							{t.usagePanel.chart.total}{' '}
 						</Text>
-						<Text color="cyan" bold>
+						<Text color={theme.colors.menuInfo} bold>
 							{formatTokens(stats.grandTotal)}
 						</Text>
 						{Array.from(stats.models.values()).reduce(
@@ -449,11 +337,11 @@ function renderStackedBarChart(
 							0,
 						) > 0 && (
 							<>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									|{' '}
 								</Text>
-								<Text color="green" bold>
+								<Text color={theme.colors.success} bold>
 									{t.usagePanel.chart.hit}{' '}
 									{formatTokens(
 										Array.from(stats.models.values()).reduce(
@@ -469,10 +357,10 @@ function renderStackedBarChart(
 							0,
 						) > 0 && (
 							<>
-								<Text color="gray" dimColor>
+								<Text color={theme.colors.menuSecondary} dimColor>
 									,{' '}
 								</Text>
-								<Text color="yellow" bold>
+								<Text color={theme.colors.warning} bold>
 									{t.usagePanel.chart.create}{' '}
 									{formatTokens(
 										Array.from(stats.models.values()).reduce(
@@ -490,7 +378,7 @@ function renderStackedBarChart(
 			{/* Scroll indicator - more below */}
 			{hasMoreBelow && (
 				<Box marginTop={1}>
-					<Text color="yellow" dimColor>
+					<Text color={theme.colors.warning} dimColor>
 						{t.usagePanel.chart.moreBelow.replace(
 							'{count}',
 							String(sortedModels.length - endIdx),
@@ -504,6 +392,7 @@ function renderStackedBarChart(
 
 export default function UsagePanel() {
 	const {t} = useI18n();
+	const {theme} = useTheme();
 	const [granularity, setGranularity] = useState<Granularity>('week');
 	const [stats, setStats] = useState<AggregatedStats>({
 		models: new Map(),
@@ -526,7 +415,7 @@ export default function UsagePanel() {
 			setIsLoading(true);
 			try {
 				const entries = await loadUsageData();
-				const filtered = filterByGranularity(entries, granularity);
+				const filtered = filterByPeriod(entries, granularity);
 				const aggregated = aggregateByModel(filtered);
 				setStats(aggregated);
 				setError(null);
@@ -549,7 +438,7 @@ export default function UsagePanel() {
 
 	useInput((_input, key) => {
 		if (key.tab) {
-			const granularities: Granularity[] = ['hour', 'day', 'week', 'month'];
+			const granularities = USAGE_PERIODS;
 			const currentIdx = granularities.indexOf(granularity);
 			const nextIdx = (currentIdx + 1) % granularities.length;
 			setGranularity(granularities[nextIdx]!);
@@ -575,23 +464,35 @@ export default function UsagePanel() {
 
 	if (isLoading) {
 		return (
-			<Box borderColor="cyan" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="gray">{t.usagePanel.loading}</Text>
+			<Box
+				borderColor={theme.colors.menuInfo}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.menuSecondary}>{t.usagePanel.loading}</Text>
 			</Box>
 		);
 	}
 
 	if (error) {
 		return (
-			<Box borderColor="red" borderStyle="round" paddingX={2} paddingY={0}>
-				<Text color="red">{t.usagePanel.error.replace('{error}', error)}</Text>
+			<Box
+				borderColor={theme.colors.error}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Text color={theme.colors.error}>
+					{t.usagePanel.error.replace('{error}', error)}
+				</Text>
 			</Box>
 		);
 	}
 
 	return (
 		<Box
-			borderColor="cyan"
+			borderColor={theme.colors.menuInfo}
 			borderStyle="round"
 			paddingX={2}
 			paddingY={1}
@@ -599,22 +500,25 @@ export default function UsagePanel() {
 		>
 			{/* Header */}
 			<Box marginBottom={1}>
-				<Text color="cyan" bold>
+				<Text color={theme.colors.menuInfo} bold>
 					{t.usagePanel.title}
 				</Text>
-				<Text color="gray"> ({granularityLabels[granularity]})</Text>
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary}>
+					{' '}
+					({granularityLabels[granularity]})
+				</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{' '}
 					{t.usagePanel.tabToSwitch}
 				</Text>
 			</Box>
 
 			{stats.models.size === 0 ? (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.usagePanel.noDataForPeriod}
 				</Text>
 			) : (
-				renderStackedBarChart(stats, terminalWidth, scrollOffset, t)
+				renderStackedBarChart(stats, terminalWidth, scrollOffset, t, theme)
 			)}
 		</Box>
 	);

@@ -1,14 +1,6 @@
-import React, {
-	useCallback,
-	useEffect,
-	useRef,
-	useMemo,
-	lazy,
-	Suspense,
-} from 'react';
-import {Box, Text} from 'ink';
+import React, {useEffect, useRef, useMemo, lazy, Suspense} from 'react';
+import {Box, Text, useCursor} from 'ink';
 import {Viewport} from '../../../utils/ui/textBuffer.js';
-import {cpSlice, visualPosToCodePoint} from '../../../utils/core/textUtils.js';
 
 // Lazy load panel components to reduce initial bundle size
 const CommandPanel = lazy(() => import('../panels/CommandPanel.js'));
@@ -24,8 +16,18 @@ const RunningAgentsPanel = lazy(
 	() => import('../panels/RunningAgentsPanel.js'),
 );
 const RollbackMenuPanel = lazy(() => import('../panels/RollbackMenuPanel.js'));
+const CommandArgsPanel = lazy(() => import('../panels/CommandArgsPanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
-import {useCommandPanel} from '../../../hooks/ui/useCommandPanel.js';
+import {
+	useCommandPanel,
+	getCommandArgsOptions,
+	getCommandArgsHint,
+	type CommandArgOption,
+} from '../../../hooks/ui/useCommandPanel.js';
+import {
+	findInlineCommandTrigger,
+	isInlineCommand,
+} from '../../../hooks/input/keyboard/utils/inlineCommandTrigger.js';
 import {useFilePicker} from '../../../hooks/picker/useFilePicker.js';
 import {useHistoryNavigation} from '../../../hooks/input/useHistoryNavigation.js';
 import {useClipboard} from '../../../hooks/input/useClipboard.js';
@@ -241,6 +243,7 @@ type Props = {
 		} | null,
 	) => void;
 	onContextPercentageChange?: (percentage: number) => void; // Callback to notify parent of percentage changes
+	onInitialContentConsumed?: () => void;
 	// Profile picker
 	showProfilePicker?: boolean;
 	setShowProfilePicker?: (show: boolean) => void;
@@ -254,11 +257,16 @@ type Props = {
 		isActive: boolean;
 	}>;
 	handleProfileSelect?: (profileName: string) => void;
+	/**
+	 * 在 ProfilePanel 中按右方向键时调用：进入 ProfileEditPanel 编辑该 profile。
+	 */
+	handleProfileEdit?: (profileName: string) => void;
 	profileSearchQuery?: string;
 	setProfileSearchQuery?: (query: string) => void;
 	onSwitchProfile?: () => void; // Callback when Ctrl+P is pressed to switch profile
 	onCopyInputSuccess?: () => void;
 	onCopyInputError?: (errorMessage: string) => void;
+	reservedColumns?: number;
 	disableKeyboardNavigation?: boolean; // Disable arrow keys and Ctrl+K when background panel is active
 };
 
@@ -283,17 +291,20 @@ export default function ChatInput({
 	draftContent = null,
 	onDraftChange,
 	onContextPercentageChange,
+	onInitialContentConsumed,
 	showProfilePicker = false,
 	setShowProfilePicker,
 	profileSelectedIndex = 0,
 	setProfileSelectedIndex,
 	getFilteredProfiles,
 	handleProfileSelect,
+	handleProfileEdit,
 	profileSearchQuery = '',
 	setProfileSearchQuery,
 	onSwitchProfile,
 	onCopyInputSuccess,
 	onCopyInputError,
+	reservedColumns = 0,
 	disableKeyboardNavigation = false,
 }: Props) {
 	// Use i18n hook for translations
@@ -312,7 +323,12 @@ export default function ChatInput({
 
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
-	const viewportWidth = Math.max(40, terminalWidth - uiOverhead);
+	const effectiveReservedColumns = Math.max(0, reservedColumns);
+	const inputTerminalWidth = Math.max(
+		40,
+		terminalWidth - effectiveReservedColumns,
+	);
+	const viewportWidth = Math.max(40, inputTerminalWidth - uiOverhead);
 	const viewport: Viewport = useMemo(
 		() => ({
 			width: viewportWidth,
@@ -340,6 +356,26 @@ export default function ChatInput({
 		getAllCommands,
 	} = useCommandPanel(buffer, isProcessing);
 
+	// Command args picker state
+	const [showArgsPicker, setShowArgsPicker] = React.useState(false);
+	const [argsSelectedIndex, setArgsSelectedIndex] = React.useState(0);
+
+	// Compute current command name and its available args options
+	const argsPickerContext = useMemo<{
+		commandName: string;
+		options: CommandArgOption[];
+	}>(() => {
+		const text = buffer.text;
+		const rootMatch = text.match(/^\/([a-zA-Z0-9_:-]+)(?:\s+\S+)*\s*$/);
+		const inlineTrigger = findInlineCommandTrigger(
+			text,
+			buffer.getCursorPosition(),
+		);
+		const cmd = rootMatch?.[1] ?? inlineTrigger?.query ?? '';
+		const options = getCommandArgsOptions(cmd, text);
+		return {commandName: cmd, options};
+	}, [buffer, buffer.text]);
+
 	// Use file picker hook
 	const {
 		showFilePicker,
@@ -352,8 +388,10 @@ export default function ChatInput({
 		setAtSymbolPosition,
 		filteredFileCount,
 		searchMode,
+		workspaceFilter,
 		updateFilePickerState,
 		handleFileSelect,
+		handleMultipleFileSelect,
 		handleFilteredCountChange,
 		fileListRef,
 	} = useFilePicker(buffer, triggerUpdate);
@@ -424,6 +462,7 @@ export default function ChatInput({
 	const {
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits,
@@ -500,6 +539,7 @@ export default function ChatInput({
 		filteredFileCount,
 		updateFilePickerState,
 		handleFileSelect,
+		handleMultipleFileSelect,
 		fileListRef,
 		showHistoryMenu,
 		setShowHistoryMenu,
@@ -562,6 +602,7 @@ export default function ChatInput({
 		closeSkillsPicker,
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits,
@@ -579,6 +620,7 @@ export default function ChatInput({
 		setProfileSelectedIndex: setProfileSelectedIndex || (() => {}),
 		getFilteredProfiles: getFilteredProfiles || (() => []),
 		handleProfileSelect: handleProfileSelect || (() => {}),
+		handleProfileEdit,
 		profileSearchQuery,
 		setProfileSearchQuery: setProfileSearchQuery || (() => {}),
 		onSwitchProfile,
@@ -592,59 +634,65 @@ export default function ChatInput({
 		confirmRunningAgentsSelection,
 		closeRunningAgentsPicker,
 		updateRunningAgentsPickerState,
+		showArgsPicker,
+		setShowArgsPicker,
+		argsSelectedIndex,
+		setArgsSelectedIndex,
+		argsPickerContext,
 	});
 
-	// Set initial content when provided (e.g., when rolling back to first message)
+	// Set initial content when provided (e.g., rollback/history restore)
 	useEffect(() => {
-		if (initialContent) {
-			// Always do full restore to avoid duplicate placeholders
-			buffer.setText('');
+		if (!initialContent) return;
 
-			const text = initialContent.text;
-			const images = initialContent.images || [];
+		// Always do full restore to avoid duplicate placeholders
+		buffer.setText('');
 
-			if (images.length === 0) {
-				// No images, just set the text.
-				// Use restoreTextWithSkillPlaceholders() so rollback restore:
-				// - doesn't get treated as a "paste" placeholder
-				// - rebuilds Skill injection blocks back into [Skill:id] placeholders
-				if (text) {
-					restoreTextWithSkillPlaceholders(buffer, text);
+		const text = initialContent.text;
+		const images = initialContent.images || [];
+
+		if (images.length === 0) {
+			// No images, just set the text.
+			// Use restoreTextWithSkillPlaceholders() so rollback restore:
+			// - doesn't get treated as a "paste" placeholder
+			// - rebuilds Skill injection blocks back into [Skill:id] placeholders
+			if (text) {
+				restoreTextWithSkillPlaceholders(buffer, text);
+			}
+		} else {
+			// Split text by image placeholders and reconstruct with actual images
+			// Placeholder format: [image #N]
+			const imagePlaceholderPattern = /\[image #\d+\]/g;
+			const parts = text.split(imagePlaceholderPattern);
+
+			// Interleave text parts with images
+			for (let i = 0; i < parts.length; i++) {
+				// Insert text part
+				const part = parts[i];
+				if (part) {
+					restoreTextWithSkillPlaceholders(buffer, part);
 				}
-			} else {
-				// Split text by image placeholders and reconstruct with actual images
-				// Placeholder format: [image #N]
-				const imagePlaceholderPattern = /\[image #\d+\]/g;
-				const parts = text.split(imagePlaceholderPattern);
 
-				// Interleave text parts with images
-				for (let i = 0; i < parts.length; i++) {
-					// Insert text part
-					const part = parts[i];
-					if (part) {
-						restoreTextWithSkillPlaceholders(buffer, part);
-					}
-
-					// Insert image after this text part (if exists)
-					if (i < images.length) {
-						const img = images[i];
-						if (img) {
-							// Extract base64 data from data URL if present
-							let base64Data = img.data;
-							if (base64Data.startsWith('data:')) {
-								const base64Index = base64Data.indexOf('base64,');
-								if (base64Index !== -1) {
-									base64Data = base64Data.substring(base64Index + 7);
-								}
+				// Insert image after this text part (if exists)
+				if (i < images.length) {
+					const img = images[i];
+					if (img) {
+						// Extract base64 data from data URL if present
+						let base64Data = img.data;
+						if (base64Data.startsWith('data:')) {
+							const base64Index = base64Data.indexOf('base64,');
+							if (base64Index !== -1) {
+								base64Data = base64Data.substring(base64Index + 7);
 							}
-							buffer.insertImage(base64Data, img.mimeType);
 						}
+						buffer.insertImage(base64Data, img.mimeType);
 					}
 				}
 			}
-
-			triggerUpdate();
 		}
+
+		triggerUpdate();
+		onInitialContentConsumed?.();
 		// Only run when initialContent changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [initialContent]);
@@ -802,30 +850,58 @@ export default function ChatInput({
 		isPureBashMode,
 	]);
 
-	// Render cursor based on focus state
-	const renderCursor = useCallback(
-		(char: string) => {
-			if (hasFocus) {
-				// Focused: solid block cursor (use inverted colors)
-				return (
-					<Text
-						backgroundColor={theme.colors.menuNormal}
-						color={theme.colors.background}
-					>
-						{char}
-					</Text>
-				);
-			} else {
-				// Unfocused: no cursor, just render the character normally
-				return <Text>{char}</Text>;
-			}
-		},
-		[hasFocus, theme],
-	);
+	// Real terminal cursor via useCursor hook
+	const {setCursorPosition, cursorRef} = useCursor();
 
 	// Render content with cursor (treat all text including placeholders as plain text)
 	const INPUT_MAX_LINES = 6;
 	const EXPANDED_MAX_LINES = 12;
+
+	// 当输入为单行的 `/cmd` 或 `/cmd ` 形式时，计算参数提示；否则为空字符串
+	const commandArgsHint = useMemo(() => {
+		const text = buffer.text;
+		if (!text.startsWith('/')) return '';
+		const match = text.match(/^\/([a-zA-Z0-9_:-]+)(\s*)$/);
+		if (!match) return '';
+		const cmd = match[1] ?? '';
+		const hint = getCommandArgsHint(cmd);
+		if (!hint) return '';
+		// 若已经有尾随空格则直接拼接，否则前置空格将 cmd 与提示分隔
+		return match[2] && match[2].length > 0 ? hint : ` ${hint}`;
+	}, [buffer.text]);
+
+	// 计算可高亮的指令长度（含开头的 `/`）。
+	// - 行首位置允许所有已注册指令；
+	// - 内容中的内联位置只高亮真正支持内联插入的指令，避免把普通 `/help` 误标成可用内联指令。
+	const getCommandHighlightLength = useMemo(() => {
+		const allCommands = getAllCommands();
+
+		return (text: string, inlineOnly: boolean): number => {
+			if (!text.startsWith('/')) return 0;
+
+			const commandToken = text.slice(1).match(/^\S*/)?.[0] ?? '';
+			if (!commandToken) return 0;
+
+			const availableCommands = inlineOnly
+				? allCommands.filter(isInlineCommand)
+				: allCommands;
+			const exact = availableCommands.some(c => c.name === commandToken);
+			if (exact) return 1 + commandToken.length;
+
+			if (inlineOnly) return 0;
+
+			// 前缀型指令（如 agent-、todo-、skills-）：cmd 以 `name` 开头且长度更长
+			const prefixHit = availableCommands.some(
+				c =>
+					c.name.endsWith('-') &&
+					commandToken.length > c.name.length &&
+					commandToken.startsWith(c.name),
+			);
+			if (prefixHit) return 1 + commandToken.length;
+
+			return 0;
+		};
+	}, [getAllCommands]);
 
 	const renderContent = () => {
 		if (buffer.text.length > 0) {
@@ -847,6 +923,15 @@ export default function ChatInput({
 				endLine = startLine + maxLines;
 			}
 
+			// Set real terminal cursor position
+			const hasScrollUp = startLine > 0;
+			const cursorYInContent = cursorRow - startLine + (hasScrollUp ? 1 : 0);
+			if (hasFocus) {
+				setCursorPosition({x: cursorCol, y: cursorYInContent});
+			} else {
+				setCursorPosition(undefined);
+			}
+
 			const renderedLines: React.ReactNode[] = [];
 
 			// Scroll-up indicator
@@ -858,26 +943,146 @@ export default function ChatInput({
 				);
 			}
 
+			// 渲染单行内容的辅助函数：同时高亮
+			//   1. 已识别的行首完整指令 `/cmd`
+			//   2. 内容中支持内联插入的指令（如 `/gitline`、Prompt 类型自定义指令）
+			//   3. 各类 `[...]` 占位符标签（Paste / image / Skill / GitLine / » running-agent）
+			//   4. `#agent_xxx` 裸文本子代理标签（词边界上）
+			const renderLineSegments = (line: string, isFirstLine: boolean) => {
+				type Token = {text: string; highlight: boolean};
+				const tokens: Token[] = [];
+				let plainBuf = '';
+				const flushPlain = () => {
+					if (plainBuf) {
+						tokens.push({text: plainBuf, highlight: false});
+						plainBuf = '';
+					}
+				};
+
+				const isPlaceholderTag = (tag: string) =>
+					/^\[Paste \d+ lines #\d+\]$/.test(tag) ||
+					/^\[image #\d+\]$/.test(tag) ||
+					/^\[Skill:[^\]]+\]$/.test(tag) ||
+					/^\[GitLine:[^\]]+\]$/.test(tag) ||
+					/^\[»[^\]]*\]$/.test(tag) ||
+					/^\[[^\]]+\]$/.test(tag); // @[workspace] workspace tag (the @ prefix is handled separately)
+
+				let i = 0;
+				while (i < line.length) {
+					const ch = line[i];
+
+					// 1/2) slash 指令高亮：行首允许所有指令，内容中只允许可内联插入指令。
+					if (ch === '/') {
+						const prevCh = i === 0 ? '' : line[i - 1] ?? '';
+						const leftBoundary = i === 0 || /\s/.test(prevCh);
+						if (leftBoundary) {
+							const isRootCommandPosition = isFirstLine && i === 0;
+							const commandLength = getCommandHighlightLength(
+								line.slice(i),
+								!isRootCommandPosition,
+							);
+							if (commandLength > 0) {
+								flushPlain();
+								tokens.push({
+									text: line.slice(i, i + commandLength),
+									highlight: true,
+								});
+								i += commandLength;
+								continue;
+							}
+						}
+					}
+
+					// 3) [...] 占位符标签
+					if (ch === '[') {
+						const closeIdx = line.indexOf(']', i + 1);
+						if (closeIdx !== -1) {
+							const tagText = line.slice(i, closeIdx + 1);
+							if (isPlaceholderTag(tagText)) {
+								// If preceded by '@', include it in the highlighted token
+								// (e.g. @[workspace] workspace tags)
+								const atPrefix = i > 0 && line[i - 1] === '@' ? '@' : '';
+								if (atPrefix) {
+									// Remove the '@' from plainBuf if it was the last char
+									if (plainBuf.endsWith('@')) {
+										plainBuf = plainBuf.slice(0, -1);
+									}
+								}
+								flushPlain();
+								// 标签本身高亮；可能紧跟一个分隔空格，空格不高亮
+								tokens.push({text: atPrefix + tagText, highlight: true});
+								i = closeIdx + 1;
+								continue;
+							}
+						}
+					}
+
+					// 4) #agent 裸文本标签：需要词边界（前面是行首或空白，后面是行末或空白）
+					if (ch === '#') {
+						const prevCh = i === 0 ? '' : line[i - 1] ?? '';
+						const leftBoundary = i === 0 || /\s/.test(prevCh);
+						if (leftBoundary) {
+							const rest = line.slice(i);
+							const m = rest.match(/^#[A-Za-z][\w-]*/);
+							if (m) {
+								const nextIdx = i + m[0].length;
+								const nextCh = line[nextIdx];
+								const rightBoundary = !nextCh || /\s/.test(nextCh);
+								if (rightBoundary) {
+									flushPlain();
+									tokens.push({text: m[0], highlight: true});
+									i = nextIdx;
+									continue;
+								}
+							}
+						}
+					}
+
+					plainBuf += ch;
+					i++;
+				}
+				flushPlain();
+
+				if (tokens.length === 0) {
+					return <Text>{line || ' '}</Text>;
+				}
+
+				return (
+					<>
+						{tokens.map((tok, idx) =>
+							tok.highlight ? (
+								<Text key={idx} color={theme.colors.menuInfo} bold>
+									{tok.text}
+								</Text>
+							) : (
+								<Text key={idx}>{tok.text}</Text>
+							),
+						)}
+					</>
+				);
+			};
+
 			for (let i = startLine; i < endLine; i++) {
 				const line = visualLines[i] || '';
+				const isFirstLine = i === 0;
 
 				if (i === cursorRow) {
-					// This line contains the cursor
-					const cursorIndex = visualPosToCodePoint(line, cursorCol);
-					const beforeCursor = cpSlice(line, 0, cursorIndex);
-					const atCursor = cpSlice(line, cursorIndex, cursorIndex + 1) || ' ';
-					const afterCursor = cpSlice(line, cursorIndex + 1);
-
 					renderedLines.push(
 						<Box key={i} flexDirection="row">
-							<Text>{beforeCursor}</Text>
-							{renderCursor(atCursor)}
-							<Text>{afterCursor}</Text>
+							{renderLineSegments(line, isFirstLine)}
+							{commandArgsHint && i === visualLines.length - 1 ? (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{commandArgsHint}
+								</Text>
+							) : null}
 						</Box>,
 					);
 				} else {
-					// No cursor in this line
-					renderedLines.push(<Text key={i}>{line || ' '}</Text>);
+					renderedLines.push(
+						<Box key={i} flexDirection="row">
+							{renderLineSegments(line, isFirstLine)}
+						</Box>,
+					);
 				}
 			}
 
@@ -895,19 +1100,23 @@ export default function ChatInput({
 
 			return <Box flexDirection="column">{renderedLines}</Box>;
 		} else {
+			// Empty input: cursor at start
+			if (hasFocus) {
+				setCursorPosition({x: 0, y: 0});
+			} else {
+				setCursorPosition(undefined);
+			}
+
 			return (
-				<>
-					{renderCursor(' ')}
-					<Text color={theme.colors.menuSecondary} dimColor>
-						{disabled ? t.chatScreen.waitingForResponse : placeholder}
-					</Text>
-				</>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{disabled ? t.chatScreen.waitingForResponse : placeholder}
+				</Text>
 			);
 		}
 	};
 
 	return (
-		<Box flexDirection="column" paddingX={1} width={terminalWidth}>
+		<Box flexDirection="column" paddingX={1} width={inputTerminalWidth}>
 			<Suspense fallback={null}>
 				<RollbackMenuPanel
 					isVisible={showHistoryMenu}
@@ -920,7 +1129,7 @@ export default function ChatInput({
 			</Suspense>
 			{!showHistoryMenu && (
 				<>
-					<Box flexDirection="column" width={terminalWidth - 2}>
+					<Box flexDirection="column" width={inputTerminalWidth - 2}>
 						<Text
 							color={
 								isPureBashMode
@@ -933,8 +1142,8 @@ export default function ChatInput({
 							}
 						>
 							{buffer.isExpandedView
-								? '═'.repeat(terminalWidth - 2)
-								: '─'.repeat(terminalWidth - 2)}
+								? '═'.repeat(inputTerminalWidth - 2)
+								: '─'.repeat(inputTerminalWidth - 2)}
 						</Text>
 						<Box flexDirection="row">
 							<Text
@@ -955,7 +1164,9 @@ export default function ChatInput({
 									? '⤢'
 									: '❯'}{' '}
 							</Text>
-							<Box flexGrow={1}>{renderContent()}</Box>
+							<Box ref={cursorRef} flexGrow={1}>
+								{renderContent()}
+							</Box>
 						</Box>
 						<Box flexDirection="row">
 							<Text
@@ -970,8 +1181,8 @@ export default function ChatInput({
 								}
 							>
 								{buffer.isExpandedView
-									? '═'.repeat(terminalWidth - 2)
-									: '─'.repeat(terminalWidth - 2)}
+									? '═'.repeat(inputTerminalWidth - 2)
+									: '─'.repeat(inputTerminalWidth - 2)}
 							</Text>
 						</Box>
 						{buffer.isExpandedView && (
@@ -1006,6 +1217,14 @@ export default function ChatInput({
 							visible={showCommands}
 						/>
 					</Suspense>
+					<Suspense fallback={null}>
+						<CommandArgsPanel
+							commandName={argsPickerContext.commandName}
+							options={argsPickerContext.options}
+							selectedIndex={argsSelectedIndex}
+							visible={showArgsPicker}
+						/>
+					</Suspense>
 					<Box>
 						<Suspense fallback={null}>
 							<FileList
@@ -1017,6 +1236,7 @@ export default function ChatInput({
 								rootPath={process.cwd()}
 								onFilteredCountChange={handleFilteredCountChange}
 								searchMode={searchMode}
+								workspaceFilter={workspaceFilter}
 							/>
 						</Suspense>
 						<Suspense fallback={null}>

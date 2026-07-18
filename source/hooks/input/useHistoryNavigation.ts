@@ -66,9 +66,7 @@ export function useHistoryNavigation(
 			.map((msg, index) => ({...msg, originalIndex: index}))
 			.filter(
 				msg =>
-					msg.role === 'user' &&
-					msg.content.trim() &&
-					!msg.subAgentDirected,
+					msg.role === 'user' && msg.content.trim() && !msg.subAgentDirected,
 			);
 
 		// Keep original order (oldest first, newest last) and map with display numbers
@@ -128,6 +126,8 @@ export function useHistoryNavigation(
 		const entry = history[newIndex];
 		if (entry) {
 			buffer.setText(entry.content);
+			// Move cursor to end so subsequent Down at end-of-text can keep navigating.
+			buffer.setCursorPosition(buffer.getFullText().length);
 			triggerUpdate();
 		}
 		return true;
@@ -143,6 +143,7 @@ export function useHistoryNavigation(
 		if (newIndex < 0) {
 			// Restore original input
 			buffer.setText(savedInput.current);
+			buffer.setCursorPosition(buffer.getFullText().length);
 			setCurrentHistoryIndex(-1);
 			savedInput.current = '';
 		} else {
@@ -150,6 +151,7 @@ export function useHistoryNavigation(
 			const entry = history[newIndex];
 			if (entry) {
 				buffer.setText(entry.content);
+				buffer.setCursorPosition(buffer.getFullText().length);
 			}
 		}
 		triggerUpdate();

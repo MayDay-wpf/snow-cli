@@ -1,5 +1,6 @@
 (function () {
 	const vscode = acquireVsCodeApi();
+	const isRemoteSsh = document.body?.dataset?.remoteSsh === 'true';
 
 	const normalizeLogMessage = value => {
 		if (typeof value === 'string') {
@@ -234,6 +235,18 @@
 		}
 	};
 
+	const applyTerminalBackground = (term, color) => {
+		if (typeof color !== 'string' || !color.trim()) {
+			return;
+		}
+		const normalized = color.trim();
+		document.documentElement.style.setProperty('--terminal-bg', normalized);
+		term.options.theme = {
+			...(term.options.theme || {}),
+			background: normalized,
+		};
+	};
+
 	const createTimerRegistry = () => {
 		const timers = new Map();
 
@@ -439,6 +452,292 @@
 
 	const createClipboardAndContextController = ({term, sendInput}) => {
 		const isMacPlatform = /mac/i.test(navigator.userAgent);
+		const SUPPORTED_IMAGE_MIME_PATTERN = /^image\/(?:png|jpe?g|gif|webp)$/i;
+		const IMAGE_PASTE_DEDUPE_MS = 1000;
+		let lastImagePasteSignature = '';
+		let lastImagePasteAt = 0;
+		let pendingSystemPasteShortcut = false;
+		let suppressPasteUntilSystemPasteKeyup = false;
+
+		const normalizeImageMimeType = mimeType => {
+			const normalized = String(mimeType || 'image/png').toLowerCase();
+			return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+		};
+
+		const getImageBlobSignature = (blob, mimeType) => {
+			if (!blob) {
+				return '';
+			}
+			const normalizedMimeType = normalizeImageMimeType(mimeType || blob.type);
+			const size = typeof blob.size === 'number' ? blob.size : 0;
+			const lastModified =
+				typeof blob.lastModified === 'number' ? blob.lastModified : 0;
+			return `${normalizedMimeType}:${size}:${lastModified}`;
+		};
+
+		const shouldSkipDuplicateImagePaste = (signature, source) => {
+			if (!signature) {
+				return false;
+			}
+
+			const now = Date.now();
+			if (
+				signature === lastImagePasteSignature &&
+				now - lastImagePasteAt <= IMAGE_PASTE_DEDUPE_MS
+			) {
+				logInfo('Skipped duplicate clipboard image paste.', {
+					source,
+					signature,
+				});
+				return true;
+			}
+
+			lastImagePasteSignature = signature;
+			lastImagePasteAt = now;
+			return false;
+		};
+
+		const writeClipboardText = (text, source) => {
+			if (typeof text !== 'string' || text.length === 0) {
+				return;
+			}
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.writeText !== 'function'
+			) {
+				logWarn('Clipboard write API is unavailable.', `source=${source}`);
+				return;
+			}
+
+			navigator.clipboard.writeText(text).catch(error => {
+				logWarn('Failed to write text to clipboard.', {
+					source,
+					error: stringifyLogDetails(error),
+				});
+			});
+		};
+
+		const forwardImagePasteShortcutToTerminal = source => {
+			// In local Windows/Linux extension hosts, the Snow CLI image paste shortcut
+			// is Alt+V, which arrives at the Ink input layer as ESC followed by "v".
+			// Delegating lets the CLI read/compress the clipboard image itself instead
+			// of pushing a multi-megabyte data URL through the webview and PTY input
+			// stream. Remote SSH keeps the original PTY data URL path because the CLI
+			// runs remotely and cannot read the user's local clipboard image.
+			sendInput('\x1bv');
+			logInfo('Forwarded clipboard image paste to terminal shortcut.', {
+				source,
+			});
+			return true;
+		};
+
+		const blobToDataUrl = blob =>
+			new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => {
+					if (typeof reader.result === 'string') {
+						resolve(reader.result);
+						return;
+					}
+					reject(new Error('Clipboard image did not produce a data URL.'));
+				};
+				reader.onerror = () => {
+					reject(reader.error || new Error('Failed to read clipboard image.'));
+				};
+				reader.readAsDataURL(blob);
+			});
+
+		const getImageFileFromDataTransfer = dataTransfer => {
+			const items = Array.from(dataTransfer?.items || []);
+			for (const item of items) {
+				if (
+					item.kind === 'file' &&
+					SUPPORTED_IMAGE_MIME_PATTERN.test(normalizeImageMimeType(item.type))
+				) {
+					const file = item.getAsFile();
+					if (file) {
+						return file;
+					}
+				}
+			}
+			return undefined;
+		};
+
+		const readImageBlobFromClipboardItems = async clipboardItems => {
+			for (const item of clipboardItems || []) {
+				const imageType = (item.types || []).find(type =>
+					SUPPORTED_IMAGE_MIME_PATTERN.test(normalizeImageMimeType(type)),
+				);
+				if (!imageType) {
+					continue;
+				}
+				const blob = await item.getType(imageType);
+				return {blob, mimeType: imageType};
+			}
+			return undefined;
+		};
+
+		const readImageBlobFromNavigatorClipboard = async () => {
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.read !== 'function'
+			) {
+				return undefined;
+			}
+			return readImageBlobFromClipboardItems(await navigator.clipboard.read());
+		};
+
+		const getDataUrlSignature = dataUrl => {
+			const prefix = dataUrl.slice(0, 96);
+			const suffix = dataUrl.slice(Math.max(0, dataUrl.length - 96));
+			return `data-url:${dataUrl.length}:${prefix}:${suffix}`;
+		};
+
+		const sendClipboardImageDataUrl = (
+			dataUrl,
+			source,
+			signature,
+			{dedupeChecked = false} = {},
+		) => {
+			if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+				return false;
+			}
+
+			const imageSignature = signature || getDataUrlSignature(dataUrl);
+			if (
+				!dedupeChecked &&
+				shouldSkipDuplicateImagePaste(imageSignature, source)
+			) {
+				return true;
+			}
+
+			sendInput(dataUrl);
+			logInfo('Clipboard image converted to data URL for terminal input.', {
+				source,
+				length: dataUrl.length,
+				signature: imageSignature,
+			});
+			return true;
+		};
+
+		const readAndSendClipboardImageBlob = async (blob, source, mimeType) => {
+			const signature = getImageBlobSignature(blob, mimeType);
+			if (shouldSkipDuplicateImagePaste(signature, source)) {
+				return true;
+			}
+
+			const dataUrl = await blobToDataUrl(blob);
+			return sendClipboardImageDataUrl(dataUrl, source, signature, {
+				dedupeChecked: true,
+			});
+		};
+
+		const readAndSendClipboardText = async source => {
+			if (
+				!navigator.clipboard ||
+				typeof navigator.clipboard.readText !== 'function'
+			) {
+				logWarn('Clipboard readText API is unavailable.', `source=${source}`);
+				return false;
+			}
+			const text = await navigator.clipboard.readText();
+			if (text) {
+				sendInput(text);
+				return true;
+			}
+			return false;
+		};
+
+		const handleClipboardPaste = async ({
+			event,
+			source,
+			allowNavigatorImage = !event,
+			fallbackToText = !event,
+		}) => {
+			try {
+				const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
+				if (pastedFile) {
+					event.preventDefault();
+					return readAndSendClipboardImageBlob(
+						pastedFile,
+						source,
+						pastedFile.type,
+					);
+				}
+
+				if (allowNavigatorImage) {
+					const image = await readImageBlobFromNavigatorClipboard();
+					if (
+						image &&
+						(await readAndSendClipboardImageBlob(
+							image.blob,
+							source,
+							image.mimeType,
+						))
+					) {
+						event?.preventDefault?.();
+						return true;
+					}
+				}
+
+				if (!event && fallbackToText) {
+					return readAndSendClipboardText(source);
+				}
+			} catch (error) {
+				logWarn('Failed to read clipboard image for terminal paste.', {
+					source,
+					error: stringifyLogDetails(error),
+				});
+				if (!event && fallbackToText) {
+					try {
+						return await readAndSendClipboardText(source);
+					} catch (textError) {
+						logWarn(
+							'Failed to read text from clipboard after image paste fallback.',
+							{
+								source,
+								error: stringifyLogDetails(textError),
+							},
+						);
+					}
+				}
+			}
+			return false;
+		};
+
+		const registerOsc52ClipboardHandler = () => {
+			const parser = term.parser;
+			if (!parser || typeof parser.registerOscHandler !== 'function') {
+				logWarn('OSC 52 clipboard passthrough is unavailable.');
+				return undefined;
+			}
+
+			return parser.registerOscHandler(52, data => {
+				const parts = String(data).split(';');
+				if (parts.length < 2) {
+					return true;
+				}
+
+				const base64 = parts.slice(1).join(';').trim();
+				if (!base64 || base64 === '?') {
+					return true;
+				}
+
+				try {
+					const binary = atob(base64);
+					const bytes = new Uint8Array(binary.length);
+					for (let index = 0; index < binary.length; index += 1) {
+						bytes[index] = binary.charCodeAt(index);
+					}
+					const text = new TextDecoder('utf-8', {fatal: false}).decode(bytes);
+					writeClipboardText(text, 'osc52');
+				} catch (error) {
+					logWarn('Failed to decode OSC 52 clipboard payload.', error);
+				}
+
+				return true;
+			});
+		};
 
 		const shouldUseCtrlSelectionCopy = event => {
 			if (
@@ -455,54 +754,178 @@
 			return term.hasSelection() && Boolean(term.getSelection());
 		};
 
-		const allowTerminalKeyEvent = event => {
-			if (
-				!isMacPlatform &&
-				event.type === 'keydown' &&
-				event.ctrlKey &&
-				!event.shiftKey &&
-				!event.altKey &&
-				!event.metaKey &&
-				event.key.toLowerCase() === 'v'
-			) {
+		const isImagePasteShortcut = event => {
+			if (event.type !== 'keydown') {
 				return false;
 			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			if (key !== 'v' || event.shiftKey || event.metaKey) {
+				return false;
+			}
+			if (isMacPlatform) {
+				return event.ctrlKey && !event.altKey;
+			}
+			return event.altKey && !event.ctrlKey;
+		};
+
+		const isSystemPasteShortcut = event => {
+			if (event.type !== 'keydown') {
+				return false;
+			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			if (key !== 'v' || event.altKey) {
+				return false;
+			}
+			if (isMacPlatform) {
+				return event.metaKey && !event.ctrlKey;
+			}
+			return event.ctrlKey && !event.metaKey;
+		};
+
+		const handleImagePasteShortcut = event => {
+			if (!isImagePasteShortcut(event)) {
+				return undefined;
+			}
+
+			event.preventDefault?.();
+			if (!isMacPlatform && !isRemoteSsh) {
+				forwardImagePasteShortcutToTerminal('windows-alt-v-image-shortcut');
+				// Returning false prevents xterm from also translating Alt+V into
+				// ESC+v, which would trigger the CLI image paste handler twice.
+				return false;
+			}
+
+			void handleClipboardPaste({
+				allowNavigatorImage: true,
+				fallbackToText: false,
+				source: isRemoteSsh
+					? 'remote-ssh-alt-v-image-shortcut'
+					: 'macos-ctrl-v-image-shortcut',
+			});
+			return false;
+		};
+
+		const handleSystemPasteShortcut = event => {
+			if (!isSystemPasteShortcut(event)) {
+				return undefined;
+			}
+
+			if (!isMacPlatform) {
+				pendingSystemPasteShortcut = true;
+				suppressPasteUntilSystemPasteKeyup = false;
+				return false;
+			}
+
+			return true;
+		};
+
+		const isSystemPasteKeyRelease = event => {
+			if (isMacPlatform || event.type !== 'keyup') {
+				return false;
+			}
+			const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+			return key === 'v';
+		};
+
+		const allowTerminalKeyEvent = event => {
+			if (isSystemPasteKeyRelease(event)) {
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = false;
+				return true;
+			}
+
+			const imagePasteDecision = handleImagePasteShortcut(event);
+			if (typeof imagePasteDecision === 'boolean') {
+				return imagePasteDecision;
+			}
+
+			const systemPasteDecision = handleSystemPasteShortcut(event);
+			if (typeof systemPasteDecision === 'boolean') {
+				return systemPasteDecision;
+			}
+
 			if (shouldUseCtrlSelectionCopy(event)) {
 				const selection = term.getSelection();
 				if (selection) {
-					navigator.clipboard.writeText(selection).catch(() => {
-						// Ignore clipboard write failures.
-					});
+					writeClipboardText(selection, 'selection-keyboard');
 				}
 				return false;
 			}
 			return true;
 		};
 
+		const handlePasteEvent = event => {
+			const pastedFile = getImageFileFromDataTransfer(event?.clipboardData);
+			const text =
+				event?.clipboardData?.getData('text/plain') ||
+				event?.clipboardData?.getData('text') ||
+				'';
+			const isSystemShortcutPaste =
+				!isMacPlatform && pendingSystemPasteShortcut;
+			const isDuplicateSystemShortcutPaste =
+				!isMacPlatform && suppressPasteUntilSystemPasteKeyup;
+
+			event.preventDefault?.();
+			event.stopImmediatePropagation?.();
+			event.stopPropagation?.();
+
+			if (isDuplicateSystemShortcutPaste) {
+				return;
+			}
+
+			if (pastedFile) {
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
+				if (isSystemShortcutPaste && !isMacPlatform && !isRemoteSsh) {
+					forwardImagePasteShortcutToTerminal('windows-ctrl-v-image-shortcut');
+					return;
+				}
+
+				void handleClipboardPaste({
+					allowNavigatorImage: false,
+					event,
+					fallbackToText: false,
+					source:
+						isSystemShortcutPaste && isRemoteSsh
+							? 'remote-ssh-ctrl-v-image-shortcut'
+							: 'paste-event-image',
+				});
+				return;
+			}
+
+			if (text) {
+				pendingSystemPasteShortcut = false;
+				suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
+				sendInput(text);
+				return;
+			}
+
+			pendingSystemPasteShortcut = false;
+			suppressPasteUntilSystemPasteKeyup = isSystemShortcutPaste;
+			void handleClipboardPaste({
+				allowNavigatorImage: true,
+				fallbackToText: false,
+				source: 'paste-event-image-probe',
+			});
+		};
+
 		const handleContextMenu = event => {
 			event.preventDefault();
 			const selection = term.getSelection();
 			if (selection) {
-				navigator.clipboard.writeText(selection).catch(() => {
-					// Ignore clipboard write failures.
-				});
+				writeClipboardText(selection, 'selection-context-menu');
 				term.clearSelection();
 				return;
 			}
 
-			navigator.clipboard
-				.readText()
-				.then(text => {
-					sendInput(text);
-				})
-				.catch(() => {
-					// Ignore clipboard read failures.
-				});
+			void handleClipboardPaste({source: 'context-menu'});
 		};
 
 		return {
 			allowTerminalKeyEvent,
 			handleContextMenu,
+			handlePasteEvent,
+			registerOsc52ClipboardHandler,
 		};
 	};
 
@@ -554,6 +977,7 @@
 
 		let currentTabId;
 		let tabStates = [];
+		const terminalTitleByTabId = new Map();
 
 		const normalizeTabState = value => {
 			if (!value || typeof value !== 'object') {
@@ -561,12 +985,17 @@
 			}
 			const id = typeof value.id === 'string' ? value.id : '';
 			const title = typeof value.title === 'string' ? value.title : '';
+			const terminalTitle =
+				typeof value.terminalTitle === 'string'
+					? value.terminalTitle.trim()
+					: '';
 			if (!id || !title) {
 				return undefined;
 			}
 			return {
 				id,
 				title,
+				terminalTitle: terminalTitle || undefined,
 				isActive: Boolean(value.isActive),
 				isRunning: Boolean(value.isRunning),
 				isRestarting: Boolean(value.isRestarting),
@@ -576,6 +1005,114 @@
 						: undefined,
 			};
 		};
+
+		const getTabHoverTitle = tab => {
+			const storedTitle = terminalTitleByTabId.get(tab.id);
+			if (typeof storedTitle === 'string' && storedTitle.trim()) {
+				return storedTitle.trim();
+			}
+			if (typeof tab.terminalTitle === 'string' && tab.terminalTitle.trim()) {
+				return tab.terminalTitle.trim();
+			}
+			return tab.title;
+		};
+
+		const updateActiveTabTerminalTitle = title => {
+			const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+			if (!currentTabId || !normalizedTitle) {
+				return;
+			}
+			if (terminalTitleByTabId.get(currentTabId) === normalizedTitle) {
+				return;
+			}
+			terminalTitleByTabId.set(currentTabId, normalizedTitle);
+			renderTabs();
+		};
+
+		const createTabTooltipController = () => {
+			const tooltip = document.createElement('div');
+			tooltip.className = 'terminal-tab-tooltip';
+			tooltip.setAttribute('role', 'tooltip');
+			tooltip.hidden = true;
+			document.body.appendChild(tooltip);
+
+			let activeTarget;
+
+			const positionTooltip = target => {
+				if (!(target instanceof HTMLElement) || tooltip.hidden) {
+					return;
+				}
+				const targetRect = target.getBoundingClientRect();
+				const tooltipRect = tooltip.getBoundingClientRect();
+				const viewportWidth =
+					document.documentElement.clientWidth || window.innerWidth;
+				const viewportHeight =
+					document.documentElement.clientHeight || window.innerHeight;
+				const margin = 6;
+				let left =
+					targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+				left = Math.max(
+					margin,
+					Math.min(left, viewportWidth - tooltipRect.width - margin),
+				);
+
+				let top = targetRect.bottom + margin;
+				if (top + tooltipRect.height + margin > viewportHeight) {
+					top = Math.max(margin, targetRect.top - tooltipRect.height - margin);
+				}
+
+				tooltip.style.left = `${Math.round(left)}px`;
+				tooltip.style.top = `${Math.round(top)}px`;
+			};
+
+			const show = (target, text) => {
+				const normalizedText = typeof text === 'string' ? text.trim() : '';
+				if (!(target instanceof HTMLElement) || !normalizedText) {
+					hide();
+					return;
+				}
+				activeTarget = target;
+				tooltip.textContent = normalizedText;
+				tooltip.hidden = false;
+				tooltip.classList.add('is-visible');
+				positionTooltip(target);
+				window.requestAnimationFrame(() => {
+					if (activeTarget === target) {
+						positionTooltip(target);
+					}
+				});
+			};
+
+			const hide = () => {
+				activeTarget = undefined;
+				tooltip.classList.remove('is-visible');
+				tooltip.hidden = true;
+			};
+
+			const bindTarget = (target, getText) => {
+				const resolveText =
+					typeof getText === 'function' ? getText : () => String(getText || '');
+				target.addEventListener('pointerenter', () => {
+					show(target, resolveText());
+				});
+				target.addEventListener('pointerleave', hide);
+				target.addEventListener('focus', () => {
+					show(target, resolveText());
+				});
+				target.addEventListener('blur', hide);
+				target.addEventListener('click', hide);
+			};
+
+			const dispose = () => {
+				hide();
+				tooltip.remove();
+			};
+
+			return {bindTarget, dispose, hide};
+		};
+
+		const tabTooltip = createTabTooltipController();
+		registerCleanup(tabTooltip.dispose);
 
 		const revealTabItem = item => {
 			if (!(item instanceof HTMLElement)) {
@@ -597,15 +1134,18 @@
 		};
 
 		const renderTabs = () => {
+			tabTooltip.hide();
 			tabStrip.replaceChildren();
 			if (tabStates.length === 0) {
 				return;
 			}
 			let activeItem;
 			for (const tab of tabStates) {
+				const hoverTitle = getTabHoverTitle(tab);
 				const item = document.createElement('div');
 				item.className = 'terminal-tab-item';
 				item.dataset.tabId = tab.id;
+				item.dataset.tooltip = hoverTitle;
 				if (tab.isActive) {
 					item.classList.add('is-active');
 					activeItem = item;
@@ -620,7 +1160,10 @@
 				button.setAttribute('role', 'tab');
 				button.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
 				button.setAttribute('aria-controls', 'terminal-container');
-				button.title = tab.title;
+				button.setAttribute(
+					'aria-label',
+					hoverTitle === tab.title ? tab.title : `${tab.title}: ${hoverTitle}`,
+				);
 
 				const label = document.createElement('span');
 				label.className = 'terminal-tab-label';
@@ -657,6 +1200,7 @@
 
 				item.appendChild(button);
 				item.appendChild(closeButton);
+				tabTooltip.bindTarget(item, () => getTabHoverTitle(tab));
 				tabStrip.appendChild(item);
 			}
 			if (activeItem) {
@@ -671,8 +1215,15 @@
 			if (normalizedTabs.length === 0) {
 				tabStates = [];
 				currentTabId = undefined;
+				terminalTitleByTabId.clear();
 				renderTabs();
 				return;
+			}
+			const nextTabIds = new Set(normalizedTabs.map(tab => tab.id));
+			for (const tabId of terminalTitleByTabId.keys()) {
+				if (!nextTabIds.has(tabId)) {
+					terminalTitleByTabId.delete(tabId);
+				}
 			}
 			const activeTab =
 				normalizedTabs.find(tab => tab.isActive) || normalizedTabs[0];
@@ -690,6 +1241,266 @@
 			}
 			vscode.postMessage({type: 'input', data: text});
 		};
+
+		const createBellPlayer = () => {
+			const config = {
+				enabled: true,
+				volume: 0.5,
+				sound: 'beep',
+				visualFlash: true,
+			};
+			let audioCtx = null;
+			let lastBellAt = 0;
+			let visualFlashClearTimer = null;
+			const MIN_BELL_INTERVAL_MS = 80;
+			const VISUAL_FLASH_DURATION_MS = 320;
+
+			const ensureAudioCtx = () => {
+				if (audioCtx) {
+					return audioCtx;
+				}
+				const Ctor =
+					typeof window.AudioContext === 'function'
+						? window.AudioContext
+						: typeof window.webkitAudioContext === 'function'
+						? window.webkitAudioContext
+						: undefined;
+				if (!Ctor) {
+					return null;
+				}
+				try {
+					audioCtx = new Ctor();
+				} catch (error) {
+					logWarn(
+						'Failed to initialize AudioContext for terminal bell.',
+						error,
+					);
+					audioCtx = null;
+				}
+				return audioCtx;
+			};
+
+			const unlockAudio = () => {
+				const ctx = ensureAudioCtx();
+				if (!ctx || ctx.state !== 'suspended') {
+					return;
+				}
+				ctx.resume().catch(() => {
+					// AudioContext will be retried on the next user gesture.
+				});
+			};
+
+			const updateConfig = next => {
+				if (!next || typeof next !== 'object') {
+					return;
+				}
+				if (typeof next.enabled === 'boolean') {
+					config.enabled = next.enabled;
+				}
+				if (typeof next.volume === 'number' && Number.isFinite(next.volume)) {
+					config.volume = Math.min(1, Math.max(0, next.volume));
+				}
+				if (typeof next.sound === 'string') {
+					config.sound = next.sound;
+				}
+				if (typeof next.visualFlash === 'boolean') {
+					config.visualFlash = next.visualFlash;
+				}
+			};
+
+			const flashBellOverlay = () => {
+				if (!config.visualFlash) {
+					return;
+				}
+				container.classList.remove('bell-flash');
+				// Force reflow so the animation restarts on rapid consecutive bells.
+				void container.offsetWidth;
+				container.classList.add('bell-flash');
+				if (visualFlashClearTimer) {
+					clearTimeout(visualFlashClearTimer);
+				}
+				visualFlashClearTimer = setTimeout(() => {
+					container.classList.remove('bell-flash');
+					visualFlashClearTimer = null;
+				}, VISUAL_FLASH_DURATION_MS);
+			};
+
+			const scheduleBellTone = (ctx, gainNode, spec) => {
+				const oscillator = ctx.createOscillator();
+				oscillator.type = spec.type || 'sine';
+				oscillator.frequency.setValueAtTime(spec.frequency, spec.startTime);
+				if (typeof spec.endFrequency === 'number') {
+					oscillator.frequency.exponentialRampToValueAtTime(
+						spec.endFrequency,
+						spec.startTime + spec.duration,
+					);
+				}
+				oscillator.connect(gainNode);
+				oscillator.start(spec.startTime);
+				oscillator.stop(spec.startTime + spec.duration + 0.02);
+			};
+
+			const renderSound = ctx => {
+				const masterGain = ctx.createGain();
+				masterGain.gain.value = config.volume;
+				masterGain.connect(ctx.destination);
+
+				const now = ctx.currentTime;
+				const peak = 0.6; // pre-volume peak; final amplitude = peak * config.volume
+				const tones = [];
+
+				switch (config.sound) {
+					case 'ding': {
+						const envGain = ctx.createGain();
+						envGain.gain.setValueAtTime(0.0001, now);
+						envGain.gain.exponentialRampToValueAtTime(peak, now + 0.005);
+						envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+						envGain.connect(masterGain);
+						tones.push({
+							type: 'triangle',
+							frequency: 1320,
+							startTime: now,
+							duration: 0.32,
+							gain: envGain,
+						});
+						tones.push({
+							type: 'triangle',
+							frequency: 1980,
+							startTime: now,
+							duration: 0.28,
+							gain: envGain,
+						});
+						break;
+					}
+					case 'chime': {
+						const env1 = ctx.createGain();
+						env1.gain.setValueAtTime(0.0001, now);
+						env1.gain.exponentialRampToValueAtTime(peak, now + 0.01);
+						env1.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+						env1.connect(masterGain);
+						tones.push({
+							type: 'sine',
+							frequency: 1046.5,
+							startTime: now,
+							duration: 0.2,
+							gain: env1,
+						});
+
+						const env2 = ctx.createGain();
+						env2.gain.setValueAtTime(0.0001, now + 0.16);
+						env2.gain.exponentialRampToValueAtTime(peak, now + 0.17);
+						env2.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+						env2.connect(masterGain);
+						tones.push({
+							type: 'sine',
+							frequency: 783.99,
+							startTime: now + 0.16,
+							duration: 0.26,
+							gain: env2,
+						});
+						break;
+					}
+					case 'pluck': {
+						const envGain = ctx.createGain();
+						envGain.gain.setValueAtTime(0.0001, now);
+						envGain.gain.exponentialRampToValueAtTime(peak * 0.85, now + 0.005);
+						envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+						envGain.connect(masterGain);
+						tones.push({
+							type: 'sawtooth',
+							frequency: 660,
+							endFrequency: 330,
+							startTime: now,
+							duration: 0.18,
+							gain: envGain,
+						});
+						break;
+					}
+					case 'blip': {
+						const envGain = ctx.createGain();
+						envGain.gain.setValueAtTime(0.0001, now);
+						envGain.gain.exponentialRampToValueAtTime(peak, now + 0.004);
+						envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+						envGain.connect(masterGain);
+						tones.push({
+							type: 'square',
+							frequency: 1760,
+							startTime: now,
+							duration: 0.08,
+							gain: envGain,
+						});
+						break;
+					}
+					case 'beep':
+					default: {
+						const envGain = ctx.createGain();
+						envGain.gain.setValueAtTime(0.0001, now);
+						envGain.gain.exponentialRampToValueAtTime(peak, now + 0.01);
+						envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+						envGain.connect(masterGain);
+						tones.push({
+							type: 'sine',
+							frequency: 800,
+							startTime: now,
+							duration: 0.13,
+							gain: envGain,
+						});
+						break;
+					}
+				}
+
+				for (const tone of tones) {
+					scheduleBellTone(ctx, tone.gain, tone);
+				}
+			};
+
+			const playBell = () => {
+				if (!config.enabled) {
+					return;
+				}
+				const now = Date.now();
+				if (now - lastBellAt < MIN_BELL_INTERVAL_MS) {
+					return;
+				}
+				lastBellAt = now;
+				flashBellOverlay();
+				if (config.sound === 'none' || config.volume <= 0) {
+					return;
+				}
+				const ctx = ensureAudioCtx();
+				if (!ctx) {
+					return;
+				}
+				if (ctx.state === 'suspended') {
+					ctx.resume().catch(() => {
+						// User has not yet interacted with the webview; visual flash is the only feedback this time.
+					});
+					return;
+				}
+				try {
+					renderSound(ctx);
+				} catch (error) {
+					logWarn('Failed to play terminal bell.', error);
+				}
+			};
+
+			const dispose = () => {
+				if (visualFlashClearTimer) {
+					clearTimeout(visualFlashClearTimer);
+					visualFlashClearTimer = null;
+				}
+			};
+
+			return {playBell, unlockAudio, updateConfig, dispose};
+		};
+
+		const {
+			playBell: playTerminalBell,
+			unlockAudio: unlockTerminalAudio,
+			updateConfig: updateBellConfig,
+			dispose: disposeBellPlayer,
+		} = createBellPlayer();
+		registerCleanup(disposeBellPlayer);
 
 		const term = new TerminalCtor({
 			cursorBlink: true,
@@ -1443,14 +2254,39 @@
 			}),
 		);
 
-		const {allowTerminalKeyEvent, handleContextMenu} =
-			createClipboardAndContextController({term, sendInput});
+		registerDisposable(
+			term.onBell(() => {
+				playTerminalBell();
+			}),
+		);
 
-		// On macOS, Ctrl+V passes through to CLI which handles paste (including images).
-		// On Windows/Linux, Ctrl+V must be intercepted to suppress the raw \x16 that
-		// xterm would otherwise emit.  We return false so xterm ignores the keydown,
-		// but do NOT call preventDefault — the browser / VS Code webview will still
-		// fire a paste event which xterm's built-in paste handler processes via onData.
+		if (typeof term.onTitleChange === 'function') {
+			registerDisposable(
+				term.onTitleChange(title => {
+					updateActiveTabTerminalTitle(title);
+				}),
+			);
+		}
+
+		// AudioContext starts suspended in webviews until a user gesture occurs;
+		// arm it on first interaction so subsequent bells can produce sound.
+		addManagedListener(container, 'pointerdown', unlockTerminalAudio);
+		addManagedListener(container, 'keydown', unlockTerminalAudio);
+
+		const {
+			allowTerminalKeyEvent,
+			handleContextMenu,
+			handlePasteEvent,
+			registerOsc52ClipboardHandler,
+		} = createClipboardAndContextController({term, sendInput});
+		registerDisposable(registerOsc52ClipboardHandler());
+		addManagedListener(document, 'paste', handlePasteEvent, true);
+
+		// Returning false from xterm's custom key handler stops terminal key
+		// processing, but the DOM keydown event can still lead to the native paste.
+		// Windows Ctrl+V image paste is delegated to Snow CLI's Alt+V handler so
+		// large images are not serialized through the webview/PTY input stream.
+		// Existing in-app image paste shortcuts still work inside Snow CLI itself.
 		term.attachCustomKeyEventHandler(allowTerminalKeyEvent);
 
 		const {
@@ -1553,8 +2389,12 @@
 				applyTermOption(term.options, 'fontSize', payload.fontSize);
 				applyTermOption(term.options, 'fontWeight', payload.fontWeight);
 				applyTermOption(term.options, 'lineHeight', payload.lineHeight);
+				applyTerminalBackground(term, payload.backgroundColor);
 				fitTerminal();
 				scheduleFocusRecovery();
+			},
+			updateBell: payload => {
+				updateBellConfig(payload);
 			},
 			exit: payload => {
 				if (

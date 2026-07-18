@@ -12,6 +12,18 @@ export interface TodoItem {
 	createdAt: string;
 	updatedAt: string;
 	parentId?: string;
+	phaseId?: string;
+}
+
+/**
+ * Ultra TODO phase
+ */
+export interface TodoPhase {
+	id: string;
+	title: string;
+	status: 'pending' | 'inProgress' | 'completed';
+	createdAt: string;
+	updatedAt: string;
 }
 
 /**
@@ -22,6 +34,9 @@ export interface TodoList {
 	todos: TodoItem[];
 	createdAt: string;
 	updatedAt: string;
+	ultraMode?: boolean;
+	phases?: TodoPhase[];
+	currentPhaseId?: string;
 }
 
 /**

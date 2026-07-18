@@ -43,6 +43,7 @@ export class CodebaseIndexAgent {
 	private consecutiveFailures: number = 0;
 	private readonly MAX_CONSECUTIVE_FAILURES = 3;
 	private fileWatcher: any | null = null;
+	private watcherClosePromise: Promise<void> | null = null;
 	private watchDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
 	// Supported code file extensions
@@ -247,8 +248,7 @@ export class CodebaseIndexAgent {
 				logger.info('Indexing paused by user, progress saved');
 			}
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
+			const errorMessage = this.extractDetailedError(error);
 
 			this.db.updateProgress({
 				status: 'error',
@@ -280,6 +280,12 @@ export class CodebaseIndexAgent {
 	 * Stop indexing gracefully
 	 */
 	async stop(): Promise<void> {
+		// Immediately clear progress callback to prevent stale progress reports
+		// from this agent. This is critical for force reindex scenarios where a
+		// new agent will take over - the old agent must not emit any more progress
+		// updates that would conflict with the new agent's progress.
+		this.progressCallback = undefined;
+
 		if (!this.isRunning) {
 			return;
 		}
@@ -448,7 +454,7 @@ export class CodebaseIndexAgent {
 	 */
 	stopWatching(): void {
 		if (this.fileWatcher) {
-			this.fileWatcher.close();
+			this.watcherClosePromise = this.fileWatcher.close();
 			this.fileWatcher = null;
 
 			// Persist watcher state to database
@@ -462,6 +468,18 @@ export class CodebaseIndexAgent {
 			clearTimeout(timer);
 		}
 		this.watchDebounceTimers.clear();
+	}
+
+	/**
+	 * Wait for the chokidar file watcher to fully close its libuv handles.
+	 * Must be awaited before process.exit() on Windows to avoid
+	 * UV_HANDLE_CLOSING assertion failure.
+	 */
+	async waitForWatcherClose(): Promise<void> {
+		if (this.watcherClosePromise) {
+			await this.watcherClosePromise;
+			this.watcherClosePromise = null;
+		}
 	}
 
 	/**
@@ -490,6 +508,13 @@ export class CodebaseIndexAgent {
 		filePath: string,
 		relativePath: string,
 	): Promise<void> {
+		// Skip if agent is being stopped (e.g., during force reindex).
+		// This prevents the watcher from triggering file processing and
+		// progress reports after the agent has been asked to stop.
+		if (this.shouldStop) {
+			return;
+		}
+
 		try {
 			// Notify UI that file is being reindexed
 			this.notifyProgress({
@@ -553,7 +578,7 @@ export class CodebaseIndexAgent {
 	/**
 	 * Scan project directory for code files
 	 */
-	private async scanFiles(): Promise<string[]> {
+	public async scanFiles(): Promise<string[]> {
 		const files: string[] = [];
 
 		const scanDir = (dir: string) => {
@@ -603,6 +628,14 @@ export class CodebaseIndexAgent {
 
 		scanDir(this.projectRoot);
 		return files;
+	}
+
+	/**
+	 * Count scannable files
+	 */
+	public async countFiles(): Promise<number> {
+		const files = await this.scanFiles();
+		return files.length;
 	}
 
 	/**
@@ -766,9 +799,10 @@ export class CodebaseIndexAgent {
 					this.consecutiveFailures = 0;
 				} catch (error) {
 					this.consecutiveFailures++;
+					const detailedError = this.extractDetailedError(error);
 					logger.error(
 						`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
-						error,
+						detailedError,
 					);
 
 					// Stop indexing if too many consecutive failures
@@ -778,9 +812,7 @@ export class CodebaseIndexAgent {
 						);
 						this.db.updateProgress({
 							status: 'error',
-							lastError: `Too many failures: ${
-								error instanceof Error ? error.message : 'Unknown error'
-							}`,
+							lastError: `Too many failures: ${detailedError}`,
 						});
 						throw new Error(
 							`Indexing stopped after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
@@ -944,6 +976,29 @@ export class CodebaseIndexAgent {
 			`Document split into ${chunks.length} semantic chunks for: ${filePath}`,
 		);
 		return chunks;
+	}
+
+	/**
+	 * Extract detailed error message including cause chain
+	 */
+	private extractDetailedError(error: unknown): string {
+		if (!(error instanceof Error)) {
+			return String(error);
+		}
+
+		const parts: string[] = [error.message];
+		let current: unknown = (error as any).cause;
+		while (current) {
+			if (current instanceof Error) {
+				parts.push(current.message);
+				current = (current as any).cause;
+			} else {
+				parts.push(String(current));
+				break;
+			}
+		}
+
+		return parts.join(' -> ');
 	}
 
 	/**

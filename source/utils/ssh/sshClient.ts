@@ -1,9 +1,70 @@
-import {Client, type ConnectConfig, type SFTPWrapper} from 'ssh2';
+import type {Client as SSH2Client, ConnectConfig, SFTPWrapper} from 'ssh2';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import {logger} from '../core/logger.js';
 import type {SSHConfig} from '../config/workingDirConfig.js';
+
+// ---------------------------------------------------------------------------
+// Lazy ssh2 loader
+//
+// We intentionally avoid a static `import` of the `ssh2` package because the
+// native/JS files inside `ssh2` are occasionally missing in user installs
+// (broken global npm install, antivirus quarantining `crypto/poly1305.js`,
+// half-written `node_modules`, disk-full during install, etc.). A static
+// import would crash the entire CLI at startup with an opaque
+// "Cannot find module './crypto/poly1305.js'" stack trace.
+//
+// Instead, we lazy-load ssh2 on first SSH operation and translate load
+// failures into a friendly, actionable error message.
+// ---------------------------------------------------------------------------
+
+type Ssh2Module = typeof import('ssh2');
+
+let ssh2ModulePromise: Promise<Ssh2Module> | null = null;
+
+function getFriendlySsh2ErrorMessage(error: unknown): string {
+	const rawMessage = error instanceof Error ? error.message : String(error);
+	const isModuleMissing =
+		/Cannot find module/i.test(rawMessage) ||
+		/MODULE_NOT_FOUND/i.test(rawMessage) ||
+		/ENOENT/i.test(rawMessage);
+
+	if (!isModuleMissing) {
+		return `Failed to load ssh2 module: ${rawMessage}`;
+	}
+
+	return [
+		'SSH module (ssh2) failed to load. It looks like the package is missing or corrupted.',
+		`Underlying error: ${rawMessage}`,
+		'',
+		'How to fix:',
+		'  1) Reinstall snow-ai:',
+		'       npm uninstall -g snow-ai',
+		'       npm cache clean --force',
+		'       npm install -g snow-ai',
+		'  2) Or repair the ssh2 sub-dependency only:',
+		'       cd <snow-ai install dir>',
+		'       npm install ssh2 --force',
+		'  3) On Windows, temporarily disable antivirus / Windows Defender during install,',
+		'     then add the snow-ai install directory to its whitelist (some AVs quarantine',
+		"     ssh2's crypto/poly1305.js).",
+	].join('\n');
+}
+
+async function loadSsh2(): Promise<Ssh2Module> {
+	if (!ssh2ModulePromise) {
+		ssh2ModulePromise = import('ssh2').catch((error: unknown) => {
+			// Reset so subsequent calls can re-attempt (e.g. user may reinstall in another terminal
+			// while the CLI is still running).
+			ssh2ModulePromise = null;
+			const friendly = new Error(getFriendlySsh2ErrorMessage(error));
+			(friendly as Error & {cause?: unknown}).cause = error;
+			throw friendly;
+		});
+	}
+	return ssh2ModulePromise;
+}
 
 export interface SSHConnectionResult {
 	success: boolean;
@@ -21,12 +82,25 @@ export interface RemoteDirectoryEntry {
  * SSH Client for remote directory operations
  */
 export class SSHClient {
-	private client: Client;
+	private client: SSH2Client | null = null;
 	private sftp: SFTPWrapper | null = null;
 	private connected = false;
 
 	constructor() {
-		this.client = new Client();
+		// Intentionally empty: ssh2 is loaded lazily in connect() so that a broken
+		// ssh2 install never crashes consumers that only construct the client.
+	}
+
+	/**
+	 * Lazily obtain the underlying ssh2 Client, creating it on first use.
+	 * Throws a friendly error if the ssh2 package is missing or broken.
+	 */
+	private async ensureClient(): Promise<SSH2Client> {
+		if (!this.client) {
+			const {Client} = await loadSsh2();
+			this.client = new Client();
+		}
+		return this.client;
 	}
 
 	/**
@@ -36,6 +110,15 @@ export class SSHClient {
 		config: SSHConfig,
 		password?: string,
 	): Promise<SSHConnectionResult> {
+		let client: SSH2Client;
+		try {
+			client = await this.ensureClient();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error('Failed to load ssh2 module', error);
+			return {success: false, error: message};
+		}
+
 		return new Promise(resolve => {
 			const connectConfig: ConnectConfig = {
 				host: config.host,
@@ -72,9 +155,9 @@ export class SSHClient {
 				connectConfig.agent = process.env['SSH_AUTH_SOCK'];
 			}
 
-			this.client.on('ready', () => {
+			client.on('ready', () => {
 				this.connected = true;
-				this.client.sftp((err, sftp) => {
+				client.sftp((err, sftp) => {
 					if (err) {
 						resolve({
 							success: false,
@@ -87,7 +170,7 @@ export class SSHClient {
 				});
 			});
 
-			this.client.on('error', err => {
+			client.on('error', err => {
 				logger.error('SSH connection error', err);
 				resolve({
 					success: false,
@@ -95,7 +178,7 @@ export class SSHClient {
 				});
 			});
 
-			this.client.connect(connectConfig);
+			client.connect(connectConfig);
 		});
 	}
 
@@ -218,12 +301,13 @@ export class SSHClient {
 			signal?: AbortSignal;
 		},
 	): Promise<{stdout: string; stderr: string; code: number}> {
-		if (!this.connected) {
+		if (!this.connected || !this.client) {
 			throw new Error('Not connected');
 		}
+		const client = this.client;
 
 		return new Promise((resolve, reject) => {
-			this.client.exec(command, (err, stream) => {
+			client.exec(command, (err, stream) => {
 				if (err) {
 					reject(new Error(`Failed to execute command: ${err.message}`));
 					return;
@@ -323,7 +407,7 @@ export class SSHClient {
 	 * Disconnect from SSH server
 	 */
 	disconnect(): void {
-		if (this.connected) {
+		if (this.connected && this.client) {
 			this.client.end();
 			this.connected = false;
 			this.sftp = null;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {Box, Static} from 'ink';
 import type {Message} from '../../components/chat/MessageList.js';
 import PendingMessages from '../../components/chat/PendingMessages.js';
@@ -10,11 +10,18 @@ import {
 } from '../../components/bash/BashCommandConfirmation.js';
 import {CustomCommandExecutionDisplay} from '../../components/bash/CustomCommandExecutionDisplay.js';
 import {SchedulerCountdown} from '../../components/scheduler/SchedulerCountdown.js';
-import MessageRenderer from '../../components/chat/MessageRenderer.js';
+import MessageRenderer, {
+	computeParallelGroupEdges,
+} from '../../components/chat/MessageRenderer.js';
 import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
+import {HookStatusDisplay} from '../../components/special/HookStatusDisplay.js';
+import type {HookStatusEvent} from '../../../utils/execution/hookStatusEvents.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {CompressionStatus as CompressionStatusType} from '../../components/compression/CompressionStatus.js';
+import {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
+import type {ThinkingStatus as ThinkingStatusType} from '../../components/chat/ThinkingStatus.js';
+import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
@@ -30,6 +37,8 @@ type Props = {
 	simpleMode: boolean;
 	messages: Message[];
 	showThinking: boolean;
+	toolDisplayMode: 'full' | 'compact' | 'hidden';
+	thinkDisplayMode: ThinkDisplayMode;
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
@@ -39,9 +48,11 @@ type Props = {
 	customCommandExecution: CustomCommandExecutionState;
 	bashMode: any;
 	hookError: HookErrorDetails | null;
+	hookStatus: HookStatusEvent | null;
 	handleUserQuestionAnswer: (result: any) => void;
 	setHookError: React.Dispatch<React.SetStateAction<HookErrorDetails | null>>;
 	compressionStatus: CompressionStatusType | null;
+	thinkingStatus: ThinkingStatusType | null;
 };
 
 export default function ChatScreenConversationView({
@@ -51,6 +62,8 @@ export default function ChatScreenConversationView({
 	simpleMode,
 	messages,
 	showThinking,
+	toolDisplayMode,
+	thinkDisplayMode,
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
@@ -60,10 +73,24 @@ export default function ChatScreenConversationView({
 	customCommandExecution,
 	bashMode,
 	hookError,
+	hookStatus,
 	handleUserQuestionAnswer,
 	setHookError,
 	compressionStatus,
+	thinkingStatus,
 }: Props) {
+	// Pre-compute parallel group edges for non-streaming messages.
+	// This replaces the old index-based lookups inside MessageRenderer,
+	// enabling React.memo to skip re-renders for unchanged messages.
+	const staticMessages = useMemo(
+		() => messages.filter(m => !m.streaming),
+		[messages],
+	);
+	const {isFirstInGroup, isLastInGroup} = useMemo(
+		() => computeParallelGroupEdges(staticMessages),
+		[staticMessages],
+	);
+
 	return (
 		<>
 			<Static
@@ -75,18 +102,18 @@ export default function ChatScreenConversationView({
 						simpleMode={simpleMode}
 						workingDirectory={workingDirectory}
 					/>,
-					...messages
-						.filter(m => !m.streaming)
-						.map((message, index, filteredMessages) => (
-							<MessageRenderer
-								key={`msg-${index}`}
-								message={message}
-								index={index}
-								filteredMessages={filteredMessages}
-								terminalWidth={terminalWidth}
-								showThinking={showThinking}
-							/>
-						)),
+					...staticMessages.map((message, index) => (
+						<MessageRenderer
+							key={`msg-${index}`}
+							message={message}
+							terminalWidth={terminalWidth}
+							isFirstInGroup={isFirstInGroup[index]}
+							isLastInGroup={isLastInGroup[index]}
+							showThinking={showThinking}
+							toolDisplayMode={toolDisplayMode}
+							thinkDisplayMode={thinkDisplayMode}
+						/>
+					)),
 				]}
 			>
 				{item => item}
@@ -95,6 +122,12 @@ export default function ChatScreenConversationView({
 			<Box paddingX={1} width={terminalWidth}>
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
+
+			{hookStatus && (
+				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+					<HookStatusDisplay status={hookStatus} />
+				</Box>
+			)}
 
 			{hookError && (
 				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
@@ -106,6 +139,15 @@ export default function ChatScreenConversationView({
 				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
 					<CompressionStatus
 						status={compressionStatus}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
+			)}
+
+			{thinkingStatus && thinkingStatus.isActive && showThinking && (
+				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+					<ThinkingStatus
+						status={thinkingStatus}
 						terminalWidth={terminalWidth}
 					/>
 				</Box>

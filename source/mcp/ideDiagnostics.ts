@@ -89,7 +89,7 @@ export const mcpTools = [
 	{
 		name: 'ide-get_diagnostics',
 		description:
-			'🔍 Get diagnostics (errors, warnings, hints) for a specific file from the connected IDE. Works with both VSCode and JetBrains IDEs. Returns array of diagnostic information including severity, line number, character position, message, and source. Requires IDE plugin to be installed and running.',
+			'Get diagnostics (errors, warnings, hints) for a specific file from the connected IDE. Works with both VSCode and JetBrains IDEs. Returns array of diagnostic information including severity, line number, character position, message, and source. Requires IDE plugin to be installed and running.',
 		inputSchema: {
 			type: 'object',
 			properties: {

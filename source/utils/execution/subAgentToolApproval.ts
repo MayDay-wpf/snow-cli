@@ -3,7 +3,20 @@ import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
 import {checkYoloPermission} from './yoloPermissionChecker.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
-import type {SubAgentExecutionContext, ChatMessage, SubAgentResult} from './subAgentTypes.js';
+import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
+import {sessionManager} from '../session/sessionManager.js';
+import {extractMultimodalContent} from './toolResultNormalizer.js';
+import {
+	endToolSpan,
+	recordToolContent,
+	startToolSpan,
+	withActiveTelemetrySpan,
+} from '../telemetry/otel.js';
+import type {
+	SubAgentExecutionContext,
+	ChatMessage,
+	SubAgentResult,
+} from './subAgentTypes.js';
 
 export interface ApprovalResult {
 	approvedToolCalls: any[];
@@ -188,6 +201,7 @@ export async function executeMcpTools(
 		}
 
 		let args: any = {};
+		let telemetry: ReturnType<typeof startToolSpan> | undefined;
 		try {
 			args = JSON.parse(toolCall.function.arguments);
 
@@ -204,39 +218,106 @@ export async function executeMcpTools(
 						role: 'tool' as const,
 						tool_call_id: toolCall.id,
 						content,
-						...(interpreted.hookFailed ? {hookFailed: true, hookErrorDetails: interpreted.errorDetails} : {}),
+						...(interpreted.hookFailed
+							? {hookFailed: true, hookErrorDetails: interpreted.errorDetails}
+							: {}),
 					} as ChatMessage);
 					emitSubAgentMessage(ctx, {
 						type: 'tool_result',
 						tool_call_id: toolCall.id,
 						tool_name: toolCall.function.name,
 						content,
-						...(interpreted.hookFailed ? {hookFailed: true, hookErrorDetails: interpreted.errorDetails} : {}),
+						...(interpreted.hookFailed
+							? {hookFailed: true, hookErrorDetails: interpreted.errorDetails}
+							: {}),
 					});
 					continue;
 				}
 			} catch (hookError) {
-				console.warn('Failed to execute beforeToolCall hook in sub-agent:', hookError);
+				console.warn(
+					'Failed to execute beforeToolCall hook in sub-agent:',
+					hookError,
+				);
 			}
 
-			const result = await executeMCPTool(
-				toolCall.function.name,
+			const currentSession = sessionManager.getCurrentSession();
+			telemetry = startToolSpan({
+				toolName: toolCall.function.name,
+				toolCallId: toolCall.id,
+				sessionId: currentSession?.id,
+				conversationId: currentSession?.id,
+			});
+			recordToolContent(
+				telemetry.span,
+				'tool.input',
 				args,
-				ctx.abortSignal,
+				telemetry.metricAttributes,
 			);
 
-			const resultContent = JSON.stringify(result);
+			const result = await withActiveTelemetrySpan(telemetry.span, () =>
+				executeMCPTool(toolCall.function.name, args, ctx.abortSignal),
+			);
+
+			let contentSource: unknown = result;
+			let editDiffData: Record<string, any> | undefined;
+			if (
+				result &&
+				typeof result === 'object' &&
+				'editDiffData' in result &&
+				(result as {editDiffData?: Record<string, any>}).editDiffData
+			) {
+				editDiffData = (result as {editDiffData: Record<string, any>})
+					.editDiffData;
+				if ('__toolResultContent' in result) {
+					contentSource = (result as {__toolResultContent: unknown})
+						.__toolResultContent;
+				}
+			} else {
+				editDiffData = extractFilesystemEditDiffFromRawResult(
+					toolCall.function.name,
+					result,
+				);
+			}
+			if (
+				editDiffData &&
+				!editDiffData['filename'] &&
+				typeof args['filePath'] === 'string'
+			) {
+				editDiffData['filename'] = args['filePath'];
+			}
+
+			const {textContent: resultContent, images} =
+				extractMultimodalContent(contentSource);
 			toolResults.push({
 				role: 'tool' as const,
 				tool_call_id: toolCall.id,
 				content: resultContent,
-			});
+				...(images ? {images} : {}),
+				...(editDiffData ? {editDiffData} : {}),
+			} as ChatMessage);
 			emitSubAgentMessage(ctx, {
 				type: 'tool_result',
 				tool_call_id: toolCall.id,
 				tool_name: toolCall.function.name,
 				content: resultContent,
+				...(editDiffData ? {editDiffData} : {}),
 			});
+
+			if (telemetry) {
+				const telemetryAttributes = {
+					...telemetry.metricAttributes,
+					'snow.tool.status': 'success',
+					'snow.tool.output.length': resultContent.length,
+				};
+				recordToolContent(
+					telemetry.span,
+					'tool.output',
+					resultContent,
+					telemetryAttributes,
+				);
+				endToolSpan(telemetry.span, telemetry.startTime, telemetryAttributes);
+				telemetry = undefined;
+			}
 
 			// Execute afterToolCall hook
 			try {
@@ -245,24 +326,56 @@ export async function executeMcpTools(
 					{
 						toolName: toolCall.function.name,
 						args,
-						result: {tool_call_id: toolCall.id, role: 'tool', content: resultContent},
+						result: {
+							tool_call_id: toolCall.id,
+							role: 'tool',
+							content: resultContent,
+							...(images ? {images} : {}),
+						},
 						error: null,
 					},
 				);
-				const afterInterpreted = interpretHookResult('afterToolCall', afterHookResult);
+				const afterInterpreted = interpretHookResult(
+					'afterToolCall',
+					afterHookResult,
+				);
 				if (afterInterpreted.action === 'replace') {
 					const lastResult = toolResults[toolResults.length - 1];
 					if (lastResult) {
-						lastResult.content = afterInterpreted.replacedContent || lastResult.content;
+						lastResult.content =
+							afterInterpreted.replacedContent || lastResult.content;
 					}
 				}
 			} catch (hookError) {
-				console.warn('Failed to execute afterToolCall hook in sub-agent:', hookError);
+				console.warn(
+					'Failed to execute afterToolCall hook in sub-agent:',
+					hookError,
+				);
 			}
 		} catch (error) {
-			const errorContent = `Error: ${
-				error instanceof Error ? error.message : 'Tool execution failed'
-			}`;
+			const normalizedError =
+				error instanceof Error ? error : new Error(String(error));
+			const errorContent = `Error: ${normalizedError.message}`;
+			if (telemetry) {
+				const telemetryAttributes = {
+					...telemetry.metricAttributes,
+					'snow.tool.status': 'error',
+					'snow.tool.output.length': errorContent.length,
+				};
+				recordToolContent(
+					telemetry.span,
+					'tool.output',
+					errorContent,
+					telemetryAttributes,
+				);
+				endToolSpan(
+					telemetry.span,
+					telemetry.startTime,
+					telemetryAttributes,
+					normalizedError,
+				);
+				telemetry = undefined;
+			}
 			toolResults.push({
 				role: 'tool' as const,
 				tool_call_id: toolCall.id,
@@ -279,11 +392,18 @@ export async function executeMcpTools(
 				await unifiedHooksExecutor.executeHooks('afterToolCall', {
 					toolName: toolCall.function.name,
 					args,
-					result: {tool_call_id: toolCall.id, role: 'tool', content: errorContent},
-					error: error instanceof Error ? error : new Error(String(error)),
+					result: {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: errorContent,
+					},
+					error: normalizedError,
 				});
 			} catch (hookError) {
-				console.warn('Failed to execute afterToolCall hook in sub-agent:', hookError);
+				console.warn(
+					'Failed to execute afterToolCall hook in sub-agent:',
+					hookError,
+				);
 			}
 		}
 	}

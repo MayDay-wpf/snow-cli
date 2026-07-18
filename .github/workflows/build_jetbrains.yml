@@ -77,6 +77,10 @@ jobs:
             ## 🚀 Snow CLI JetBrains plugin 
             Latest release version: `v${{ env.PLUGIN_VERSION }}`
 
+            ### What's New
+
+            - Supports code completion and Tab&Tab AI cross-file suggestions
+
             ### Usage
 
             JetBrains IDE plugin for integrating with Snow AI CLI. Provides intelligent code navigation and search powered by AI, with support for IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs.

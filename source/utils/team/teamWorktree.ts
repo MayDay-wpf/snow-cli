@@ -6,7 +6,23 @@ import {mkdirSync, rmSync} from 'fs';
 const WORKTREE_BASE = join(process.cwd(), '.snow', 'worktrees');
 
 function sanitizeName(name: string): string {
-	return name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+	return name
+		.normalize('NFKC')
+		.replace(/[^\p{L}\p{N}_-]/gu, '_')
+		.replace(/_+/g, '_')
+		.replace(/^_+|_+$/g, '')
+		.toLowerCase();
+}
+
+export function validateTeamWorktreeName(name: string, label = 'name'): string {
+	const sanitized = sanitizeName(name);
+	if (!/[\p{L}\p{N}]/u.test(sanitized)) {
+		throw new Error(
+			`Invalid ${label}: must contain at least one letter or number after sanitization. Chinese, English letters, numbers, "_" and "-" are supported.`,
+		);
+	}
+
+	return sanitized;
 }
 
 export function getWorktreeBase(): string {
@@ -14,19 +30,29 @@ export function getWorktreeBase(): string {
 }
 
 export function getWorktreePath(teamName: string, memberName: string): string {
-	return join(
-		WORKTREE_BASE,
-		sanitizeName(teamName),
-		sanitizeName(memberName),
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
+		memberName,
+		'teammate name',
 	);
+	return join(WORKTREE_BASE, sanitizedTeamName, sanitizedMemberName);
 }
 
 export async function createTeamWorktree(
 	teamName: string,
 	memberName: string,
 ): Promise<string> {
-	const worktreePath = getWorktreePath(teamName, memberName);
-	const branchName = `snow-team/${sanitizeName(teamName)}/${sanitizeName(memberName)}`;
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
+		memberName,
+		'teammate name',
+	);
+	const worktreePath = join(
+		WORKTREE_BASE,
+		sanitizedTeamName,
+		sanitizedMemberName,
+	);
+	const branchName = `snow-team/${sanitizedTeamName}/${sanitizedMemberName}`;
 
 	if (existsSync(worktreePath)) {
 		return worktreePath;
@@ -39,18 +65,18 @@ export async function createTeamWorktree(
 
 	try {
 		// Create a new worktree with a new branch based on HEAD
-		execSync(
-			`git worktree add -b "${branchName}" "${worktreePath}" HEAD`,
-			{stdio: 'pipe', encoding: 'utf8'},
-		);
+		execSync(`git worktree add -b "${branchName}" "${worktreePath}" HEAD`, {
+			stdio: 'pipe',
+			encoding: 'utf8',
+		});
 	} catch (error: any) {
 		// Branch may already exist, try without -b
 		if (error.message?.includes('already exists')) {
 			try {
-				execSync(
-					`git worktree add "${worktreePath}" "${branchName}"`,
-					{stdio: 'pipe', encoding: 'utf8'},
-				);
+				execSync(`git worktree add "${worktreePath}" "${branchName}"`, {
+					stdio: 'pipe',
+					encoding: 'utf8',
+				});
 			} catch (retryError: any) {
 				throw new Error(
 					`Failed to create worktree for ${memberName}: ${retryError.message}`,
@@ -90,9 +116,14 @@ export async function removeWorktreeBranch(
 	teamName: string,
 	memberName: string,
 ): Promise<void> {
-	const branchName = `snow-team/${sanitizeName(teamName)}/${sanitizeName(memberName)}`;
+	const branchName = `snow-team/${sanitizeName(teamName)}/${sanitizeName(
+		memberName,
+	)}`;
 	try {
-		execSync(`git branch -D "${branchName}"`, {stdio: 'pipe', encoding: 'utf8'});
+		execSync(`git branch -D "${branchName}"`, {
+			stdio: 'pipe',
+			encoding: 'utf8',
+		});
 	} catch {
 		// Branch may not exist
 	}
@@ -141,8 +172,16 @@ export function listTeamWorktrees(teamName: string): string[] {
 
 // ── Merge helpers ──
 
-export function getTeammateBranchName(teamName: string, memberName: string): string {
-	return `snow-team/${sanitizeName(teamName)}/${sanitizeName(memberName)}`;
+export function getTeammateBranchName(
+	teamName: string,
+	memberName: string,
+): string {
+	const sanitizedTeamName = validateTeamWorktreeName(teamName, 'team name');
+	const sanitizedMemberName = validateTeamWorktreeName(
+		memberName,
+		'teammate name',
+	);
+	return `snow-team/${sanitizedTeamName}/${sanitizedMemberName}`;
 }
 
 export function hasUncommittedChanges(worktreePath: string): boolean {
@@ -198,20 +237,22 @@ export function getTeammateDiffSummary(
 ): {commitCount: number; filesChanged: number; diffStat: string} | null {
 	const branchName = getTeammateBranchName(teamName, memberName);
 	try {
-		const countStr = execSync(
-			`git rev-list HEAD..${branchName} --count`,
-			{encoding: 'utf8', stdio: 'pipe'},
-		).trim();
+		const countStr = execSync(`git rev-list HEAD..${branchName} --count`, {
+			encoding: 'utf8',
+			stdio: 'pipe',
+		}).trim();
 		const commitCount = parseInt(countStr, 10) || 0;
 		if (commitCount === 0) return null;
 
-		const diffStat = execSync(
-			`git diff HEAD...${branchName} --stat`,
-			{encoding: 'utf8', stdio: 'pipe'},
-		).trim();
+		const diffStat = execSync(`git diff HEAD...${branchName} --stat`, {
+			encoding: 'utf8',
+			stdio: 'pipe',
+		}).trim();
 
 		const filesChangedMatch = diffStat.match(/(\d+) files? changed/);
-		const filesChanged = filesChangedMatch ? parseInt(filesChangedMatch[1]!, 10) : 0;
+		const filesChanged = filesChangedMatch
+			? parseInt(filesChangedMatch[1]!, 10)
+			: 0;
 
 		return {commitCount, filesChanged, diffStat};
 	} catch {
@@ -227,19 +268,22 @@ export function mergeTeammateBranch(
 	const branchName = getTeammateBranchName(teamName, memberName);
 
 	try {
-		const countStr = execSync(
-			`git rev-list HEAD..${branchName} --count`,
-			{encoding: 'utf8', stdio: 'pipe'},
-		).trim();
+		const countStr = execSync(`git rev-list HEAD..${branchName} --count`, {
+			encoding: 'utf8',
+			stdio: 'pipe',
+		}).trim();
 		const commitCount = parseInt(countStr, 10) || 0;
 
 		if (commitCount === 0) {
 			return {success: true, merged: false, commitCount: 0, filesChanged: 0};
 		}
 
-		const strategyFlag = strategy === 'theirs' ? ' -X theirs'
-			: strategy === 'ours' ? ' -X ours'
-			: '';
+		const strategyFlag =
+			strategy === 'theirs'
+				? ' -X theirs'
+				: strategy === 'ours'
+				? ' -X ours'
+				: '';
 		const mergeCmd = `git merge ${branchName} --no-edit${strategyFlag} -m "[Snow Team] Merge ${memberName}'s work"`;
 
 		try {
@@ -251,8 +295,13 @@ export function mergeTeammateBranch(
 					encoding: 'utf8',
 					stdio: 'pipe',
 				});
-				filesChanged = stat.trim().split('\n').filter(l => l.trim()).length;
-			} catch { /* best effort */ }
+				filesChanged = stat
+					.trim()
+					.split('\n')
+					.filter(l => l.trim()).length;
+			} catch {
+				/* best effort */
+			}
 
 			return {success: true, merged: true, commitCount, filesChanged};
 		} catch (mergeError: any) {
@@ -272,16 +321,25 @@ export function mergeTeammateBranch(
 			}
 
 			if (strategy !== 'manual' || conflictFiles.length === 0) {
-				try { execSync('git merge --abort', {stdio: 'pipe'}); } catch { /* noop */ }
+				try {
+					execSync('git merge --abort', {stdio: 'pipe'});
+				} catch {
+					/* noop */
+				}
 				return {
 					success: false,
 					merged: false,
 					commitCount,
 					filesChanged: 0,
 					conflictFiles,
-					error: conflictFiles.length > 0
-						? `Merge conflicts in ${conflictFiles.length} file(s) even with strategy "${strategy}": ${conflictFiles.join(', ')}`
-						: mergeError.message,
+					error:
+						conflictFiles.length > 0
+							? `Merge conflicts in ${
+									conflictFiles.length
+							  } file(s) even with strategy "${strategy}": ${conflictFiles.join(
+									', ',
+							  )}`
+							: mergeError.message,
 				};
 			}
 
@@ -311,7 +369,10 @@ export function mergeTeammateBranch(
 
 export function isInMergeState(): boolean {
 	try {
-		execSync('git rev-parse --verify MERGE_HEAD', {stdio: 'pipe', encoding: 'utf8'});
+		execSync('git rev-parse --verify MERGE_HEAD', {
+			stdio: 'pipe',
+			encoding: 'utf8',
+		});
 		return true;
 	} catch {
 		return false;
@@ -324,13 +385,19 @@ export function getConflictedFiles(): string[] {
 			encoding: 'utf8',
 			stdio: 'pipe',
 		});
-		return output.trim().split('\n').filter(f => f);
+		return output
+			.trim()
+			.split('\n')
+			.filter(f => f);
 	} catch {
 		return [];
 	}
 }
 
-export function completeMerge(message?: string): {success: boolean; error?: string} {
+export function completeMerge(message?: string): {
+	success: boolean;
+	error?: string;
+} {
 	if (!isInMergeState()) {
 		return {success: false, error: 'Not currently in a merge state.'};
 	}
@@ -339,7 +406,11 @@ export function completeMerge(message?: string): {success: boolean; error?: stri
 	if (remaining.length > 0) {
 		return {
 			success: false,
-			error: `${remaining.length} file(s) still have unresolved conflicts: ${remaining.join(', ')}. Edit them to remove conflict markers first.`,
+			error: `${
+				remaining.length
+			} file(s) still have unresolved conflicts: ${remaining.join(
+				', ',
+			)}. Edit them to remove conflict markers first.`,
 		};
 	}
 
@@ -407,7 +478,10 @@ export function enforceWorktreePath(
 	if (isAbsolute(filePath)) {
 		const resolved = resolve(filePath);
 
-		if (resolved === resolvedWorktree || resolved.startsWith(resolvedWorktree + '/')) {
+		if (
+			resolved === resolvedWorktree ||
+			resolved.startsWith(resolvedWorktree + '/')
+		) {
 			return resolved;
 		}
 
@@ -436,7 +510,10 @@ export function rewriteToolArgsForWorktree(
 
 	// filesystem-read / filesystem-create / filesystem-edit
 	if (toolName.startsWith('filesystem-')) {
-		const isWrite = toolName === 'filesystem-create' || toolName === 'filesystem-edit';
+		const isWrite =
+			toolName === 'filesystem-create' ||
+			toolName === 'filesystem-edit' ||
+			toolName === 'filesystem-replaceedit';
 		const verb = isWrite ? 'modify' : 'access';
 
 		if (typeof args.filePath === 'string') {
@@ -444,7 +521,8 @@ export function rewriteToolArgsForWorktree(
 			if (newPath === null) {
 				return {
 					args,
-					error: `[Worktree Enforcement] Path "${args.filePath}" is outside your worktree. ` +
+					error:
+						`[Worktree Enforcement] Path "${args.filePath}" is outside your worktree. ` +
 						`You can only ${verb} files within: ${worktreePath}. ` +
 						`Use relative paths like "src/foo.ts" — they will be resolved to your worktree automatically.`,
 				};
@@ -492,22 +570,25 @@ export function rewriteToolArgsForWorktree(
 		if (/\bgit\s+push\b/i.test(cmd)) {
 			return {
 				args,
-				error: '[Worktree Enforcement] Teammates are NOT allowed to run `git push`. ' +
+				error:
+					'[Worktree Enforcement] Teammates are NOT allowed to run `git push`. ' +
 					'All pushes are handled by the team lead after merging.',
 			};
 		}
 	}
 
-	// ace-file_outline: rewrite filePath
-	if (toolName === 'ace-file_outline' && args.filePath) {
-		const np = rw(args.filePath);
-		if (np) args = {...args, filePath: np};
-	}
-
-	// ace-text_search: rewrite directory
-	if (toolName === 'ace-text_search' && args.directory) {
-		const np = rw(args.directory);
-		if (np) args = {...args, directory: np};
+	// ace-search: rewrite path-like fields based on action
+	if (toolName === 'ace-search') {
+		// action=file_outline 使用 filePath
+		if (args.filePath) {
+			const np = rw(args.filePath);
+			if (np) args = {...args, filePath: np};
+		}
+		// action=text_search 使用 directory（如果提供）
+		if (args.directory) {
+			const np = rw(args.directory);
+			if (np) args = {...args, directory: np};
+		}
 	}
 
 	// codebase-search: rewrite directory

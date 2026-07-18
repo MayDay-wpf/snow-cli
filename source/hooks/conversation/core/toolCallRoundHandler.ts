@@ -22,6 +22,8 @@ import type {
 } from './conversationTypes.js';
 import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
+import {visionAgent} from '../../../agents/visionAgent.js';
+import {sessionManager} from '../../../utils/session/sessionManager.js';
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -82,6 +84,40 @@ export async function handleToolCallRound(ctx: {
 	let {accumulatedUsage} = ctx;
 
 	const receivedToolCalls = streamResult.receivedToolCalls!;
+	const summarizeToolNames = (toolCalls: ToolCall[]) =>
+		toolCalls.map(toolCall => toolCall.function.name).join(', ');
+	const compactBuddyProgressText = (value: string, maxLength = 180) => {
+		const compacted = value.replace(/\s+/g, ' ').trim();
+		return compacted.length > maxLength
+			? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
+			: compacted;
+	};
+	const summarizeToolCalls = (toolCalls: ToolCall[]) =>
+		toolCalls
+			.map(toolCall => {
+				const args = compactBuddyProgressText(
+					toolCall.function.arguments || '',
+					90,
+				);
+				return args
+					? `${toolCall.function.name}(${args})`
+					: toolCall.function.name;
+			})
+			.join('; ');
+	const summarizeToolResults = (
+		toolCalls: ToolCall[],
+		toolResults: Array<{content: string}>,
+	) =>
+		toolResults
+			.slice(0, 4)
+			.map((result, index) => {
+				const toolName = toolCalls[index]?.function.name ?? 'tool';
+				const failed = result.content.startsWith('Error:');
+				return `${toolName} ${
+					failed ? 'failed' : 'returned'
+				}: ${compactBuddyProgressText(result.content, 120)}`;
+			})
+			.join('; ');
 
 	const {parallelGroupId} = await processToolCallsAfterStream({
 		receivedToolCalls,
@@ -122,6 +158,12 @@ export async function handleToolCallRound(ctx: {
 	}
 
 	const approvedTools = confirmResult.approvedTools;
+	options.onBuddyProgress?.({
+		stage: 'tool_execution_started',
+		summary: `running ${approvedTools.length} tool${
+			approvedTools.length === 1 ? '' : 's'
+		}: ${summarizeToolCalls(approvedTools)}`,
+	});
 
 	if (controller.signal.aborted) {
 		for (const toolCall of approvedTools) {
@@ -140,7 +182,6 @@ export async function handleToolCallRound(ctx: {
 
 	const subAgentHandler = new SubAgentUIHandler(
 		encoder,
-		setStreamTokenCount,
 		saveMessage,
 		options.setIsReasoning
 			? (isReasoning: boolean) => options.setIsReasoning!(isReasoning)
@@ -148,7 +189,7 @@ export async function handleToolCallRound(ctx: {
 		streamingEnabled,
 	);
 
-	const toolResults = await executeToolCalls(
+	const rawToolResults = await executeToolCalls(
 		approvedTools,
 		controller.signal,
 		setStreamTokenCount,
@@ -192,6 +233,14 @@ export async function handleToolCallRound(ctx: {
 				multiSelect,
 			);
 		},
+		sessionManager.getCurrentSession()?.id,
+		process.cwd(),
+	);
+
+	const toolResults = await Promise.all(
+		rawToolResults.map(result =>
+			visionAgent.prepareToolResultForNonVisionModel(result, controller.signal),
+		),
 	);
 
 	if (controller.signal.aborted) {
@@ -276,6 +325,12 @@ export async function handleToolCallRound(ctx: {
 			console.error('Failed to save tool result before compression:', error);
 		}
 	}
+	options.onBuddyProgress?.({
+		stage: 'tool_results_ready',
+		summary: `tool results ready for ${summarizeToolNames(
+			receivedToolCalls,
+		)}; ${summarizeToolResults(receivedToolCalls, toolResults)}`,
+	});
 
 	const autoCompressOpts = {
 		getCurrentContextPercentage: options.getCurrentContextPercentage,
@@ -359,7 +414,11 @@ export async function handleToolCallRound(ctx: {
 
 				const uiMessage: Message = {
 					role: 'subagent',
-					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${spawnedResult.agentName}\x1b[0m (by ${spawnedResult.spawnedBy.agentName}): ${spawnedResult.success ? 'completed' : 'failed'}`,
+					content: `\x1b[38;2;150;120;255m⚇${statusIcon} Spawned ${
+						spawnedResult.agentName
+					}\x1b[0m (by ${spawnedResult.spawnedBy.agentName}): ${
+						spawnedResult.success ? 'completed' : 'failed'
+					}`,
 					streaming: false,
 					messageStatus: spawnedResult.success ? 'success' : 'error',
 					subAgent: {
@@ -383,6 +442,7 @@ export async function handleToolCallRound(ctx: {
 		saveMessage,
 		setMessages,
 		autoCompressOptions: autoCompressOpts,
+		abortSignal: controller.signal,
 	});
 
 	if (pendingResult.hookFailed) {

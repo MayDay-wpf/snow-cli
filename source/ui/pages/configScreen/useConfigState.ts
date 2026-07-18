@@ -1,18 +1,21 @@
 import React, {useState, useEffect} from 'react';
 import {
-	getOpenAiConfig,
-	updateOpenAiConfig,
+	getSnowConfig,
+	updateSnowConfig,
 	validateApiConfig,
 	getSystemPromptConfig,
 	getCustomHeadersConfig,
 	type RequestMethod,
+	type BaseUrlMode,
 	type ApiConfig,
+	type ResponsesReasoningMode,
 } from '../../../utils/config/apiConfig.js';
 import {
 	fetchAvailableModels,
 	filterModels,
 	type Model,
 } from '../../../api/models.js';
+import {resolveApiEndpoint} from '../../../api/endpointResolver.js';
 import {
 	getActiveProfileName,
 	getAllProfiles,
@@ -21,6 +24,7 @@ import {
 	deleteProfile,
 	renameProfile,
 	saveProfile,
+	loadProfile,
 	type ConfigProfile,
 } from '../../../utils/config/configManager.js';
 import {useI18n} from '../../../i18n/index.js';
@@ -33,9 +37,20 @@ import {
 	stripFocusArtifacts,
 } from './types.js';
 
-export function useConfigState() {
+export type UseConfigStateOptions = {
+	/**
+	 * 指定要加载/保存的 profile 名称。
+	 * 提供时，加载的配置来自该 profile 文件，保存只写回该 profile，
+	 * 不会修改全局的 config.json 与当前 active profile（即不切换激活配置）。
+	 * 未提供时回退到当前 active profile（旧行为）。
+	 */
+	targetProfileName?: string;
+};
+
+export function useConfigState(options?: UseConfigStateOptions) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
+	const targetProfileName = options?.targetProfileName;
 
 	// Profile management
 	const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
@@ -47,6 +62,7 @@ export function useConfigState() {
 
 	// API settings
 	const [baseUrl, setBaseUrl] = useState('');
+	const [baseUrlMode, setBaseUrlMode] = useState<BaseUrlMode>('auto');
 	const [apiKey, setApiKey] = useState('');
 	const [requestMethod, setRequestMethod] = useState<RequestMethod>('chat');
 	const [systemPromptId, setSystemPromptId] = useState<
@@ -80,18 +96,17 @@ export function useConfigState() {
 		'tokens',
 	);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
-	const [thinkingEffort, setThinkingEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [thinkingEffort, setThinkingEffort] = useState<string>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
-		'minimal' | 'low' | 'medium' | 'high'
-	>('high');
+	const [geminiThinkingLevel, setGeminiThinkingLevel] =
+		useState<string>('high');
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
-	const [responsesReasoningEffort, setResponsesReasoningEffort] = useState<
-		'none' | 'low' | 'medium' | 'high' | 'xhigh'
-	>('high');
+	const [responsesReasoningEffort, setResponsesReasoningEffort] =
+		useState<string>('high');
+	const [responsesReasoningMode, setResponsesReasoningMode] = useState<
+		ResponsesReasoningMode | undefined
+	>(undefined);
 	const [responsesVerbosity, setResponsesVerbosity] = useState<
 		'low' | 'medium' | 'high'
 	>('medium');
@@ -99,17 +114,34 @@ export function useConfigState() {
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
 		'fast' | 'standard' | undefined
 	>(undefined);
+	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
+	const [chatReasoningEffort, setChatReasoningEffort] =
+		useState<string>('high');
 
 	// Model settings
 	const [advancedModel, setAdvancedModel] = useState('');
 	const [basicModel, setBasicModel] = useState('');
+	const [supportsVision, setSupportsVision] = useState(true);
+	const [visionBaseUrl, setVisionBaseUrl] = useState('');
+	const [visionBaseUrlMode, setVisionBaseUrlMode] =
+		useState<BaseUrlMode>('auto');
+	const [visionApiKey, setVisionApiKey] = useState('');
+	const [visionRequestMethod, setVisionRequestMethod] =
+		useState<RequestMethod>('chat');
+	const [visionModel, setVisionModel] = useState('');
 	const [maxContextTokens, setMaxContextTokens] = useState(4000);
 	const [maxTokens, setMaxTokens] = useState(4096);
 	const [toolResultTokenLimit, setToolResultTokenLimit] = useState(30);
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
+	const [maxRetries, setMaxRetries] = useState(5);
+	const [retryDelayMs, setRetryDelayMs] = useState(3000);
 
 	// UI state
-	const [currentField, setCurrentField] = useState<ConfigField>('profile');
+	// 当从 ProfileEditPanel 进入（提供 targetProfileName）时，profile 字段被隐藏，
+	// 初始光标应落在第一个分组标题 apiConnectionGroup，避免 currentFieldIndex 为 -1。
+	const [currentField, setCurrentField] = useState<ConfigField>(
+		targetProfileName ? 'apiConnectionGroup' : 'profile',
+	);
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
 	const [models, setModels] = useState<Model[]>([]);
@@ -118,6 +150,16 @@ export function useConfigState() {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
+	const [visionConfigMode, setVisionConfigMode] = useState(false);
+
+	// Group expansion state (collapsible categories)
+	const [apiConnectionExpanded, setApiConnectionExpanded] = useState(false);
+	const [promptHeadersExpanded, setPromptHeadersExpanded] = useState(false);
+	const [displayCompressExpanded, setDisplayCompressExpanded] = useState(false);
+	const [reasoningExpanded, setReasoningExpanded] = useState(false);
+	const [modelExpanded, setModelExpanded] = useState(false);
+	const [tokenTimeoutExpanded, setTokenTimeoutExpanded] = useState(false);
+
 	const [, forceUpdate] = useState(0);
 
 	const supportsXHigh = requestMethod === 'responses';
@@ -142,51 +184,101 @@ export function useConfigState() {
 	];
 
 	const getAllFields = (): ConfigField[] => {
+		if (visionConfigMode) {
+			return [
+				'visionBaseUrl',
+				'visionBaseUrlMode',
+				'visionApiKey',
+				'visionRequestMethod',
+				'visionModel',
+			];
+		}
+
 		return [
-			'profile',
-			'baseUrl',
-			'apiKey',
-			'requestMethod',
-			'systemPromptId',
-			'customHeadersSchemeId',
-			'enableAutoCompress',
-			...(enableAutoCompress ? ['autoCompressThreshold' as ConfigField] : []),
-			'showThinking',
-			'streamingDisplay',
-			...(requestMethod === 'anthropic'
-				? [
-						'anthropicBeta' as ConfigField,
-						'anthropicCacheTTL' as ConfigField,
-						'anthropicSpeed' as ConfigField,
-						'thinkingEnabled' as ConfigField,
-						'thinkingMode' as ConfigField,
-						...(thinkingEnabled && thinkingMode === 'tokens'
-							? ['thinkingBudgetTokens' as ConfigField]
-							: []),
-						...(thinkingEnabled && thinkingMode === 'adaptive'
-							? ['thinkingEffort' as ConfigField]
-							: []),
-				  ]
-				: requestMethod === 'gemini'
-				? [
-						'geminiThinkingEnabled' as ConfigField,
-						'geminiThinkingLevel' as ConfigField,
-				  ]
-				: requestMethod === 'responses'
-				? [
-						'responsesReasoningEnabled' as ConfigField,
-						'responsesReasoningEffort' as ConfigField,
-						'responsesVerbosity' as ConfigField,
-						'responsesFastMode' as ConfigField,
-				  ]
+			// 仅在未指定 targetProfileName（即从主菜单常规进入 ConfigScreen）时才允许
+			// 显示/操作 profile 切换项；从 ProfileEditPanel 进入时彻底隐藏，
+			// 防止用户切换 active profile 或对 profile 进行增删改。
+			...(targetProfileName ? [] : ['profile' as ConfigField]),
+			'apiConnectionGroup',
+			...(apiConnectionExpanded
+				? ([
+						'baseUrl',
+						'baseUrlMode',
+						'apiKey',
+						'requestMethod',
+				  ] as ConfigField[])
 				: []),
-			'advancedModel',
-			'basicModel',
-			'maxContextTokens',
-			'maxTokens',
-			'streamIdleTimeoutSec',
-		'toolResultTokenLimit',
-	];
+			'promptHeadersGroup',
+			...(promptHeadersExpanded
+				? (['systemPromptId', 'customHeadersSchemeId'] as ConfigField[])
+				: []),
+			'displayCompressGroup',
+			...(displayCompressExpanded
+				? ([
+						'enableAutoCompress',
+						...(enableAutoCompress
+							? ['autoCompressThreshold' as ConfigField]
+							: []),
+						'showThinking',
+						'streamingDisplay',
+				  ] as ConfigField[])
+				: []),
+			'reasoningGroup',
+			...(reasoningExpanded
+				? requestMethod === 'anthropic'
+					? ([
+							'anthropicBeta',
+							'anthropicCacheTTL',
+							'anthropicSpeed',
+							'thinkingEnabled',
+							'thinkingMode',
+							...(thinkingEnabled && thinkingMode === 'tokens'
+								? ['thinkingBudgetTokens' as ConfigField]
+								: []),
+							...(thinkingEnabled && thinkingMode === 'adaptive'
+								? ['thinkingEffort' as ConfigField]
+								: []),
+					  ] as ConfigField[])
+					: requestMethod === 'gemini'
+					? (['geminiThinkingEnabled', 'geminiThinkingLevel'] as ConfigField[])
+					: requestMethod === 'responses'
+					? ([
+							'responsesReasoningEnabled',
+							'responsesReasoningEffort',
+							'responsesReasoningMode',
+							'responsesVerbosity',
+							'responsesFastMode',
+					  ] as ConfigField[])
+					: requestMethod === 'chat'
+					? ([
+							'chatThinkingEnabled',
+							...(chatThinkingEnabled
+								? ['chatReasoningEffort' as ConfigField]
+								: []),
+					  ] as ConfigField[])
+					: []
+				: []),
+			'modelGroup',
+			...(modelExpanded
+				? ([
+						'advancedModel',
+						'basicModel',
+						'supportsVision',
+						...(supportsVision ? [] : ['visionConfig' as ConfigField]),
+				  ] as ConfigField[])
+				: []),
+			'tokenTimeoutGroup',
+			...(tokenTimeoutExpanded
+				? ([
+						'maxContextTokens',
+						'maxTokens',
+						'streamIdleTimeoutSec',
+						'toolResultTokenLimit',
+						'maxRetries',
+						'retryDelayMs',
+				  ] as ConfigField[])
+				: []),
+		];
 	};
 
 	const allFields = getAllFields();
@@ -238,23 +330,31 @@ export function useConfigState() {
 				currentField === 'thinkingEnabled' ||
 				currentField === 'thinkingBudgetTokens')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 		if (
 			requestMethod !== 'gemini' &&
 			(currentField === 'geminiThinkingEnabled' ||
 				currentField === 'geminiThinkingLevel')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
 		}
 		if (
 			requestMethod !== 'responses' &&
 			(currentField === 'responsesReasoningEnabled' ||
 				currentField === 'responsesReasoningEffort' ||
+				currentField === 'responsesReasoningMode' ||
 				currentField === 'responsesVerbosity' ||
 				currentField === 'responsesFastMode')
 		) {
-			setCurrentField('advancedModel');
+			setCurrentField('reasoningGroup');
+		}
+		if (
+			requestMethod !== 'chat' &&
+			(currentField === 'chatThinkingEnabled' ||
+				currentField === 'chatReasoningEffort')
+		) {
+			setCurrentField('reasoningGroup');
 		}
 	}, [requestMethod, currentField]);
 
@@ -263,6 +363,22 @@ export function useConfigState() {
 			setCurrentField('showThinking');
 		}
 	}, [enableAutoCompress, currentField]);
+
+	useEffect(() => {
+		if (
+			supportsVision &&
+			(visionConfigMode ||
+				currentField === 'visionConfig' ||
+				currentField === 'visionBaseUrl' ||
+				currentField === 'visionBaseUrlMode' ||
+				currentField === 'visionApiKey' ||
+				currentField === 'visionRequestMethod' ||
+				currentField === 'visionModel')
+		) {
+			setVisionConfigMode(false);
+			setCurrentField('supportsVision');
+		}
+	}, [supportsVision, visionConfigMode, currentField]);
 
 	useEffect(() => {
 		if (responsesReasoningEffort === 'xhigh' && !supportsXHigh) {
@@ -282,8 +398,14 @@ export function useConfigState() {
 		const loadedProfiles = getAllProfiles();
 		setProfiles(loadedProfiles);
 
-		const config = getOpenAiConfig();
+		// 当指定了 targetProfileName 时，从该 profile 文件加载配置
+		// （而不是当前 active profile 的全局 config）。这样可以编辑非激活 profile。
+		const targetConfig = targetProfileName
+			? loadProfile(targetProfileName)
+			: undefined;
+		const config = targetConfig?.snowcfg ?? getSnowConfig();
 		setBaseUrl(config.baseUrl);
+		setBaseUrlMode(config.baseUrlMode || 'auto');
 		setApiKey(config.apiKey);
 		setRequestMethod(config.requestMethod || 'chat');
 		setSystemPromptId(config.systemPromptId);
@@ -308,15 +430,31 @@ export function useConfigState() {
 		setGeminiThinkingLevel(config.geminiThinking?.thinkingLevel || 'high');
 		setResponsesReasoningEnabled(config.responsesReasoning?.enabled || false);
 		setResponsesReasoningEffort(config.responsesReasoning?.effort || 'high');
+		setResponsesReasoningMode(
+			config.responsesReasoning?.mode === 'standard' ||
+				config.responsesReasoning?.mode === 'pro'
+				? config.responsesReasoning.mode
+				: undefined,
+		);
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
 		setResponsesFastMode(config.responsesFastMode || false);
 		setAnthropicSpeed(config.anthropicSpeed);
+		setChatThinkingEnabled(config.chatThinking?.enabled || false);
+		setChatReasoningEffort(config.chatThinking?.reasoning_effort || 'high');
 		setAdvancedModel(config.advancedModel || '');
 		setBasicModel(config.basicModel || '');
+		setSupportsVision(config.supportsVision !== false);
+		setVisionBaseUrl(config.visionBaseUrl || '');
+		setVisionBaseUrlMode(config.visionBaseUrlMode || 'auto');
+		setVisionApiKey(config.visionApiKey || '');
+		setVisionRequestMethod(config.visionRequestMethod || 'chat');
+		setVisionModel(config.visionModel || '');
 		setMaxContextTokens(config.maxContextTokens || 4000);
 		setMaxTokens(config.maxTokens || 4096);
 		setToolResultTokenLimit(config.toolResultTokenLimit ?? 30);
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
+		setMaxRetries(config.maxRetries ?? 5);
+		setRetryDelayMs(config.retryDelayMs ?? 3000);
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -330,22 +468,30 @@ export function useConfigState() {
 		);
 		setActiveCustomHeadersSchemeId(customHeadersConfig?.active || '');
 
-		setActiveProfile(getActiveProfileName());
+		// 当编辑指定 profile 时，把 activeProfile 状态指向目标 profile，
+		// 让 UI（标题/保存逻辑等）按目标 profile 显示，但不实际切换全局 active。
+		setActiveProfile(targetProfileName ?? getActiveProfileName());
 	};
 
 	const loadModels = async () => {
 		setLoading(true);
 		setLoadError('');
 
+		const isVisionModelField = currentField === 'visionModel';
 		const tempConfig: Partial<ApiConfig> = {
-			baseUrl,
-			apiKey,
-			requestMethod,
+			baseUrl: isVisionModelField ? visionBaseUrl : baseUrl,
+			baseUrlMode: isVisionModelField ? visionBaseUrlMode : baseUrlMode,
+			apiKey: isVisionModelField ? visionApiKey : apiKey,
+			requestMethod: isVisionModelField ? visionRequestMethod : requestMethod,
+			customHeadersSchemeId,
 		};
-		await updateOpenAiConfig(tempConfig);
 
+		// loadModels 只是为了拉模型列表临时使用 baseUrl/apiKey/method，
+		// 一律不调 updateSnowConfig（它会写全局 config.json 并 saveProfile 到磁盘当前的 active profile，
+		// 在多开 CLI / ProfileEditPanel 编辑非激活 profile 等场景都会造成污染），
+		// 改为通过 overrideConfig 直接传给 fetchAvailableModels 做一次性请求。
 		try {
-			const fetchedModels = await fetchAvailableModels();
+			const fetchedModels = await fetchAvailableModels(tempConfig);
 			setModels(fetchedModels);
 		} catch (err) {
 			const errorMessage =
@@ -361,10 +507,17 @@ export function useConfigState() {
 
 	const getCurrentOptions = () => {
 		const filteredModels = filterModels(models, searchTerm);
-		const modelOptions = filteredModels.map(model => ({
-			label: model.id,
-			value: model.id,
-		}));
+		const seen = new Set<string>();
+		const modelOptions = filteredModels
+			.filter(model => {
+				if (seen.has(model.id)) return false;
+				seen.add(model.id);
+				return true;
+			})
+			.map(model => ({
+				label: model.id,
+				value: model.id,
+			}));
 
 		return [
 			{label: t.configScreen.manualInputOption, value: '__MANUAL_INPUT__'},
@@ -375,24 +528,32 @@ export function useConfigState() {
 	const getCurrentValue = () => {
 		if (currentField === 'profile') return activeProfile;
 		if (currentField === 'baseUrl') return baseUrl;
+		if (currentField === 'baseUrlMode') return baseUrlMode;
 		if (currentField === 'apiKey') return apiKey;
 		if (currentField === 'advancedModel') return advancedModel;
 		if (currentField === 'basicModel') return basicModel;
+		if (currentField === 'visionBaseUrl') return visionBaseUrl;
+		if (currentField === 'visionBaseUrlMode') return visionBaseUrlMode;
+		if (currentField === 'visionApiKey') return visionApiKey;
+		if (currentField === 'visionRequestMethod') return visionRequestMethod;
+		if (currentField === 'visionModel') return visionModel;
 		if (currentField === 'maxContextTokens') return maxContextTokens.toString();
 		if (currentField === 'maxTokens') return maxTokens.toString();
 		if (currentField === 'streamIdleTimeoutSec')
 			return streamIdleTimeoutSec.toString();
-	if (currentField === 'toolResultTokenLimit')
-		return toolResultTokenLimit.toString();
-	if (currentField === 'thinkingBudgetTokens')
+		if (currentField === 'toolResultTokenLimit')
+			return toolResultTokenLimit.toString();
+		if (currentField === 'maxRetries') return maxRetries.toString();
+		if (currentField === 'retryDelayMs') return retryDelayMs.toString();
+		if (currentField === 'thinkingBudgetTokens')
 			return thinkingBudgetTokens.toString();
 		if (currentField === 'thinkingMode') return thinkingMode;
 		if (currentField === 'thinkingEffort') return thinkingEffort;
-		if (currentField === 'geminiThinkingLevel')
-			return geminiThinkingLevel;
+		if (currentField === 'geminiThinkingLevel') return geminiThinkingLevel;
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
 		if (currentField === 'anthropicSpeed') return anthropicSpeed || '';
+		if (currentField === 'chatReasoningEffort') return chatReasoningEffort;
 		return '';
 	};
 
@@ -405,9 +566,12 @@ export function useConfigState() {
 	const getNormalizedBaseUrl = (value: string) =>
 		value.trim().replace(/\/+$/, '');
 
-	const getResolvedBaseUrl = (method: RequestMethod) => {
+	const getResolvedBaseUrl = (
+		method: RequestMethod,
+		baseUrlValue: string = baseUrl,
+	) => {
 		const defaultOpenAiBaseUrl = 'https://api.openai.com/v1';
-		const trimmedBaseUrl = getNormalizedBaseUrl(baseUrl || '');
+		const trimmedBaseUrl = getNormalizedBaseUrl(baseUrlValue || '');
 		const shouldUseCustomBaseUrl =
 			trimmedBaseUrl.length > 0 && trimmedBaseUrl !== defaultOpenAiBaseUrl;
 
@@ -430,26 +594,50 @@ export function useConfigState() {
 	};
 
 	const getRequestUrl = () => {
-		const resolvedBaseUrl = getResolvedBaseUrl(requestMethod);
+		const isVisionField =
+			visionConfigMode ||
+			currentField === 'visionBaseUrl' ||
+			currentField === 'visionBaseUrlMode' ||
+			currentField === 'visionApiKey' ||
+			currentField === 'visionRequestMethod' ||
+			currentField === 'visionModel';
+		const activeRequestMethod = isVisionField
+			? visionRequestMethod
+			: requestMethod;
+		const activeBaseUrlMode = isVisionField ? visionBaseUrlMode : baseUrlMode;
+		const activeModel = isVisionField ? visionModel : advancedModel;
+		const resolvedBaseUrl = getResolvedBaseUrl(
+			activeRequestMethod,
+			isVisionField ? visionBaseUrl : baseUrl,
+		);
 
-		if (requestMethod === 'responses') {
-			return `${resolvedBaseUrl}/responses`;
+		if (activeRequestMethod === 'responses') {
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'responses',
+				activeBaseUrlMode,
+			);
 		}
 
-		if (requestMethod === 'anthropic') {
-			const endpoint = anthropicBeta ? '/messages?beta=true' : '/messages';
-			return `${resolvedBaseUrl}${endpoint}`;
+		if (activeRequestMethod === 'anthropic') {
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'anthropicMessages',
+				activeBaseUrlMode,
+				{anthropicBeta},
+			);
 		}
 
-		if (requestMethod === 'gemini') {
-			const effectiveModel = advancedModel || 'model-id';
-			const modelName = effectiveModel.startsWith('models/')
-				? effectiveModel
-				: `models/${effectiveModel}`;
-			return `${resolvedBaseUrl}/${modelName}:streamGenerateContent?alt=sse`;
+		if (activeRequestMethod === 'gemini') {
+			return resolveApiEndpoint(
+				resolvedBaseUrl,
+				'geminiStreamGenerateContent',
+				activeBaseUrlMode,
+				{modelName: activeModel || 'model-id'},
+			);
 		}
 
-		return `${resolvedBaseUrl}/chat/completions`;
+		return resolveApiEndpoint(resolvedBaseUrl, 'chat', activeBaseUrlMode);
 	};
 
 	const getSystemPromptSelectItems = () => {
@@ -540,6 +728,7 @@ export function useConfigState() {
 			const currentConfig = {
 				snowcfg: {
 					baseUrl,
+					baseUrlMode,
 					apiKey,
 					requestMethod,
 					systemPromptId,
@@ -556,12 +745,23 @@ export function useConfigState() {
 							: {type: 'enabled' as const, budget_tokens: thinkingBudgetTokens}
 						: undefined,
 					anthropicSpeed,
+					chatThinking: chatThinkingEnabled
+						? {enabled: true, reasoning_effort: chatReasoningEffort}
+						: undefined,
 					advancedModel,
 					basicModel,
+					supportsVision,
+					visionBaseUrl,
+					visionBaseUrlMode,
+					visionApiKey,
+					visionRequestMethod,
+					visionModel,
 					maxContextTokens,
 					maxTokens,
 					streamIdleTimeoutSec,
 					toolResultTokenLimit,
+					maxRetries,
+					retryDelayMs,
 				},
 			};
 			createProfile(cleaned, currentConfig as any);
@@ -653,6 +853,8 @@ export function useConfigState() {
 			setAdvancedModel(value);
 		} else if (currentField === 'basicModel') {
 			setBasicModel(value);
+		} else if (currentField === 'visionModel') {
+			setVisionModel(value);
 		}
 
 		setIsEditing(false);
@@ -668,6 +870,7 @@ export function useConfigState() {
 		if (validationErrors.length === 0) {
 			const config: Partial<ApiConfig> = {
 				baseUrl,
+				baseUrlMode,
 				apiKey,
 				requestMethod,
 				systemPromptId,
@@ -680,13 +883,20 @@ export function useConfigState() {
 				streamingDisplay,
 				advancedModel,
 				basicModel,
+				supportsVision,
+				visionBaseUrl,
+				visionBaseUrlMode,
+				visionApiKey,
+				visionRequestMethod,
+				visionModel,
 				maxContextTokens,
 				maxTokens,
-			streamIdleTimeoutSec,
-			toolResultTokenLimit,
-		};
-
-		if (thinkingEnabled) {
+				streamIdleTimeoutSec,
+				toolResultTokenLimit,
+				maxRetries,
+				retryDelayMs,
+			};
+			if (thinkingEnabled) {
 				config.thinking =
 					thinkingMode === 'adaptive'
 						? {
@@ -710,21 +920,37 @@ export function useConfigState() {
 				(config as any).geminiThinking = undefined;
 			}
 
-			(config as any).responsesReasoning = {
+			config.responsesReasoning = {
 				enabled: responsesReasoningEnabled,
 				effort: responsesReasoningEffort,
+				mode: responsesReasoningMode,
 			};
 
 			config.responsesFastMode = responsesFastMode;
 			config.responsesVerbosity = responsesVerbosity;
 			config.anthropicSpeed = anthropicSpeed;
 
-			await updateOpenAiConfig(config);
+			(config as any).chatThinking = chatThinkingEnabled
+				? {enabled: true, reasoning_effort: chatReasoningEffort}
+				: undefined;
+
+			// 保存对齐（统一规则，覆盖所有入口）：
+			// editingProfile = 进入页面时记录的目标 profile（targetProfileName 优先，否则 activeProfile state）。
+			// 仅当磁盘当前 active 仍然 === editingProfile 时，才调 updateSnowConfig 刷新全局 config.json + 缓存。
+			// 否则（CLI 多开场景：另一个实例已经把 active 切走了；或 ProfileEditPanel 编辑非激活 profile）
+			// 一律跳过 updateSnowConfig，避免把当前编辑结果错误写到磁盘当前 active profile 文件。
+			const editingProfile =
+				targetProfileName ?? activeProfile ?? getActiveProfileName();
+			const liveActiveProfile = getActiveProfileName();
+			if (liveActiveProfile === editingProfile) {
+				await updateSnowConfig(config);
+			}
 
 			try {
 				const fullConfig = {
 					snowcfg: {
 						baseUrl,
+						baseUrlMode,
 						apiKey,
 						requestMethod,
 						systemPromptId,
@@ -749,19 +975,34 @@ export function useConfigState() {
 						responsesReasoning: {
 							enabled: responsesReasoningEnabled,
 							effort: responsesReasoningEffort,
+							mode: responsesReasoningMode,
 						},
 						responsesVerbosity,
 						responsesFastMode,
 						anthropicSpeed,
+						chatThinking: chatThinkingEnabled
+							? {enabled: true, reasoning_effort: chatReasoningEffort}
+							: undefined,
 						advancedModel,
 						basicModel,
+						supportsVision,
+						visionBaseUrl,
+						visionBaseUrlMode,
+						visionApiKey,
+						visionRequestMethod,
+						visionModel,
 						maxContextTokens,
 						maxTokens,
-					streamIdleTimeoutSec,
-					toolResultTokenLimit,
-				},
+						streamIdleTimeoutSec,
+						toolResultTokenLimit,
+						maxRetries,
+						retryDelayMs,
+					},
 				};
-				saveProfile(activeProfile, fullConfig as any);
+				// 写回的目标固定为 editingProfile（与上面 updateSnowConfig 判定使用同一个值）。
+				// 即使另一个 CLI 实例已经把磁盘 active 切走，也保证把当前编辑结果
+				// 准确落盘到"用户进入页面时编辑的那个 profile"文件，绝不污染其他 profile。
+				saveProfile(editingProfile, fullConfig as any);
 			} catch (err) {
 				console.error('Failed to save profile:', err);
 			}
@@ -793,6 +1034,8 @@ export function useConfigState() {
 		// API settings
 		baseUrl,
 		setBaseUrl,
+		baseUrlMode,
+		setBaseUrlMode,
 		apiKey,
 		setApiKey,
 		requestMethod,
@@ -835,26 +1078,48 @@ export function useConfigState() {
 		setResponsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		responsesFastMode,
 		setResponsesFastMode,
 		anthropicSpeed,
 		setAnthropicSpeed,
+		chatThinkingEnabled,
+		setChatThinkingEnabled,
+		chatReasoningEffort,
+		setChatReasoningEffort,
 		// Model settings
 		advancedModel,
 		setAdvancedModel,
 		basicModel,
 		setBasicModel,
+		supportsVision,
+		setSupportsVision,
+		visionBaseUrl,
+		setVisionBaseUrl,
+		visionBaseUrlMode,
+		setVisionBaseUrlMode,
+		visionApiKey,
+		setVisionApiKey,
+		visionRequestMethod,
+		setVisionRequestMethod,
+		visionModel,
+		setVisionModel,
 		maxContextTokens,
 		setMaxContextTokens,
 		maxTokens,
 		setMaxTokens,
 		streamIdleTimeoutSec,
 		setStreamIdleTimeoutSec,
-	toolResultTokenLimit,
-	setToolResultTokenLimit,
-	// UI state
+		toolResultTokenLimit,
+		setToolResultTokenLimit,
+		maxRetries,
+		setMaxRetries,
+		retryDelayMs,
+		setRetryDelayMs,
+		// UI state
 		currentField,
 		setCurrentField,
 		errors,
@@ -869,9 +1134,24 @@ export function useConfigState() {
 		setSearchTerm,
 		manualInputMode,
 		setManualInputMode,
-	manualInputValue,
-	setManualInputValue,
-	// Derived
+		manualInputValue,
+		setManualInputValue,
+		visionConfigMode,
+		setVisionConfigMode,
+		// Group expansion
+		apiConnectionExpanded,
+		setApiConnectionExpanded,
+		promptHeadersExpanded,
+		setPromptHeadersExpanded,
+		displayCompressExpanded,
+		setDisplayCompressExpanded,
+		reasoningExpanded,
+		setReasoningExpanded,
+		modelExpanded,
+		setModelExpanded,
+		tokenTimeoutExpanded,
+		setTokenTimeoutExpanded,
+		// Derived
 		supportsXHigh,
 		requestMethodOptions,
 		allFields,

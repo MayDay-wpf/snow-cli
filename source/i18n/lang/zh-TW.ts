@@ -1,5 +1,9 @@
 import type {TranslationKeys} from '../types.js';
 
+const inputNewlineShortcut =
+	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+const pasteImageShortcut = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+
 export const zhTW: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
@@ -28,6 +32,8 @@ export const zhTW: TranslationKeys = {
 		languageSettingsInfo: '切換應用語言',
 		themeSettings: '主題設定',
 		themeSettingsInfo: '設定主題並預覽差異檢視器',
+		privacySettings: '隱私設定',
+		privacySettingsInfo: '設定隱私相關選項',
 		hooksSettings: 'Hooks 設定',
 		hooksSettingsInfo: '設定 Hooks 以自訂 AI 工作流程',
 		updateNoticeTitle: '有新版本可用',
@@ -35,8 +41,116 @@ export const zhTW: TranslationKeys = {
 		updateNoticeLatest: '最新版本',
 		updateNoticeRun: '更新指令',
 		updateNoticeGithub: '專案網址',
+		updateNow: '立即更新',
+		updateNowInfo: '退出 CLI 並執行 "npm i -g snow-ai" 升級到最新版本',
 		exit: '退出',
 		exitInfo: '退出應用程式',
+	},
+	notification: {
+		taskCompletedTitle: 'Snow 任務已完成',
+		taskFailedTitle: 'Snow 任務失敗',
+		agentWaitingForInputTitle: 'Snow 智能體正在等待輸入',
+		unknownError: '未知錯誤',
+	},
+	doctor: {
+		available: '可用',
+		unavailableOrFailed: '不可用或執行失敗',
+		exitCodeColon: '退出碼: {code}',
+		exitCode: '退出碼 {code}',
+		bundledRipgrepMissingPath: '@vscode/ripgrep 未提供 rgPath',
+		bundledRipgrep: 'bundled @vscode/ripgrep: {version}',
+		systemRg: 'system rg: {version}',
+		bundledRipgrepFailed: 'bundled @vscode/ripgrep 執行失敗: {reason}',
+		bothRipgrepUnavailable: 'bundled @vscode/ripgrep 與 system rg 都不可用',
+		bundledPath: 'bundled path: {path}',
+		bundledError: 'bundled error: {reason}',
+		systemError: 'system error: {reason}',
+		bundledRipgrepUnavailable: 'bundled @vscode/ripgrep 不可用: {reason}',
+		privacyNotConfigured: '未配置',
+		privacyEnabled: '已啟用',
+		privacyDisabled: '未啟用',
+		version: 'version {version}',
+		unknown: 'unknown',
+		required: ', required {version}',
+		readFailed: '無法讀取',
+		npmRegistry: 'npm registry',
+		workingDirectory: '工作目錄',
+		projectPackageJson: '專案 package.json',
+		parseFailed: '解析失敗',
+		found: '已找到',
+		notFoundInCurrentDirectory: '目前目錄未找到',
+		userConfigDirectory: '使用者配置目錄',
+		notReadableWritable: '不可讀寫',
+		userConfigDirectoryMissing: '不存在，首次完成配置後會建立',
+		globalSettingsJson: '全域 settings.json',
+		readable: '可讀取',
+		notCreated: '未建立',
+		projectSettingsJson: '專案 settings.json',
+		projectSettingsNotConfigured: '未配置專案級設定',
+		activeProfile: '活動 Profile',
+		profileMissing: '{profile} 不存在',
+		apiKeyConfigured: '已配置',
+		apiKeyMissing: '未在活動 Profile 中配置',
+		profileCount: '{count} 個 profile',
+		mcpServices: 'MCP 服務',
+		mcpServerCount: '全域 {global} 個，專案 {project} 個',
+		privacyFilter: '隱私過濾',
+		asyncTasks: '非同步任務',
+		taskFileCount: '{count} 個任務檔案',
+		sseDaemonRecordCount: '記錄 {total} 個，執行中 {alive} 個，陳舊 {stale} 個',
+		nodeOptionsMayAffect: '已設定，可能影響 Node.js 啟動行為',
+		notSet: '未設定',
+		proxyEnvironmentVariables: '代理環境變數',
+		setItemCount: '已設定 {count} 項',
+		title: '[i] Snow Doctor 環境診斷',
+		summary: '摘要',
+		summaryOk: '{count} OK',
+		summaryWarning: '{count} 個警告',
+		summaryFailed: '{count} 個失敗',
+		summaryInfo: '{count} 條資訊',
+		blockingIssues: '\n[x] Doctor 發現阻塞性環境問題。',
+		completedWithWarnings: '\n[!] Doctor 已完成，但存在警告。',
+		completedSuccessfully: '\n[OK] Doctor 已成功完成。',
+	},
+	updateCheck: {
+		checking: '正在檢查 snow-ai 是否可以安全更新...',
+		failed: '- {label}: 失敗',
+		error: '  錯誤: {error}',
+		stderr: '  stderr: {stderr}',
+		exitCode: '  退出碼: {code}',
+		notFoundInPath: '- {label}: 未在 PATH 中找到',
+		allFoundInPath: '  PATH 中找到的所有 {label}:',
+		npmPath: 'npm 路徑',
+		npmPathLookup: 'npm 路徑查找',
+		warningMultipleNpm:
+			'  警告: PATH 中發現多個 npm 可執行檔。更新時可能會使用與你的 shell 目前使用的 npm 不同的 npm 來安裝 snow-ai。',
+		npm: 'npm',
+		cannotUpdateNpmUnavailable: '無法更新，因為 npm 不可用。',
+		npmGlobalPrefix: 'npm 全域 prefix',
+		npmGlobalRoot: 'npm 全域 root',
+		snowPath: 'snow 路徑',
+		snowPathLookup: 'snow 路徑查找',
+		warningMultipleSnow:
+			'  警告: PATH 中發現多個 snow 可執行檔。更新後，你的 shell 可能仍會優先執行舊的 snow。',
+		warningSnowOutsidePrefix:
+			'  警告: 至少有一個 snow 可執行檔不在目前 npm 全域 prefix 下。更新可能不會影響你的 shell 實際優先執行的 snow 指令。',
+		globalSnowAiPackage: '全域 snow-ai 套件',
+		globalSnowAiPackageLabel: '- 全域 snow-ai 套件:',
+		npmRegistry: 'npm registry',
+		warningNonOfficialRegistry:
+			'  警告: 目前不是官方 npm registry。鏡像 registry 可能落後於官方最新版本。',
+		officialLatestVersion: '官方 registry 最新版本',
+		latestOfficialRegistry: '- 官方 registry 最新版本: {version}',
+		configuredLatestVersion: '目前配置 registry 最新版本',
+		latestConfiguredRegistry: '- 目前配置 registry 最新版本: {version}',
+		warningRegistryLatestDiffers:
+			'  警告: 目前配置 registry 的最新版本與官方 registry 不一致。現在更新可能會安裝到鏡像延遲版本。',
+		currentSnowAi: '- 目前 snow-ai: {version}',
+		updateCheckFailed: '更新檢查失敗。請先修復上面的阻塞問題再更新。',
+		alreadyUpToDate: 'snow-ai 已是最新版本。',
+		updatePossibleWithWarnings:
+			'可以更新，但請先確認上面的警告，再執行 snow --update。',
+		environmentSuitable: '目前環境適合更新。執行 snow --update 即可更新。',
 	},
 	menu: {
 		navigate: '使用 ↑↓ 鍵導航,按 Enter 選擇:',
@@ -52,6 +166,7 @@ export const zhTW: TranslationKeys = {
 		notSet: '未設定',
 		browserPath: '瀏覽器路徑(可選):',
 		autoDetect: '自動偵測',
+		searchEngine: '搜尋引擎:',
 		errors: '錯誤:',
 		editingHint: '編輯模式: 按 Enter 儲存並退出編輯(完成更改後按 Enter)',
 		navigationHint:
@@ -83,6 +198,10 @@ export const zhTW: TranslationKeys = {
 		embeddingApiKey: '嵌入 API 金鑰:',
 		embeddingApiKeyOptional: '嵌入 API 金鑰(本地部署可選):',
 		embeddingDimensions: '嵌入維度:',
+		embeddingSettingsGroup: '嵌入模型設定',
+		embeddingSettingsExpandHint: '(按 Enter 展開/收起)',
+		batchSettingsGroup: '批次處理設定',
+		batchSettingsExpandHint: '(按 Enter 展開/收起)',
 		batchMaxLines: '批次處理最大行數:',
 		batchConcurrency: '批次處理並行數:',
 		notSet: '未設定',
@@ -104,6 +223,19 @@ export const zhTW: TranslationKeys = {
 		chunkingMinLinesPerChunk: '每塊最小行數:',
 		chunkingMinCharsPerChunk: '每塊最小字元數:',
 		chunkingOverlapLines: '重疊行數:',
+		rerankingToggle: '結果重排序:',
+		rerankingSettingsGroup: '重排序模型設定',
+		rerankingSettingsExpandHint: '(按 Enter 展開/收起)',
+		rerankingModelName: '模型名:',
+		rerankingBaseUrl: 'Base URL:',
+		rerankingApiKey: 'API 金鑰:',
+		rerankingContextLength: '模型上下文長度:',
+		rerankingTopN: 'Top N:',
+		rerankingNotConfigured: '請先在「重排序模型設定」中設定模型名和 Base URL',
+		validationRerankingModelNameRequired: '啟用重排序時需要模型名',
+		validationRerankingBaseUrlRequired: '啟用重排序時需要 Base URL',
+		validationRerankingContextLengthPositive: '模型上下文長度必須大於 0',
+		validationRerankingTopNPositive: 'Top N 必須大於 0',
 		saveError: '儲存配置失敗',
 		gitignoreNotFound:
 			'無法建立索引：未找到 .gitignore 檔案。請在專案中新增 .gitignore 檔案以防止索引不必要的檔案。',
@@ -154,6 +286,10 @@ export const zhTW: TranslationKeys = {
 		moreBelow: '下方還有 {count} 項',
 		profile: '配置檔案:',
 		baseUrl: 'Base URL:',
+		baseUrlMode: 'Base URL 模式:',
+		baseUrlModeAuto: '自動',
+		baseUrlModeBase: '基礎地址',
+		baseUrlModeEndpoint: '完整端點',
 		apiKey: 'API 金鑰:',
 		requestMethod: '請求方式:',
 		requestUrlLabel: '請求 URL: ',
@@ -184,13 +320,34 @@ export const zhTW: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini 思考級別:',
 		responsesReasoningEnabled: '啟用 Responses 推理:',
 		responsesReasoningEffort: 'Responses 推理強度:',
+		responsesReasoningMode: 'Responses 推理模式:',
+		responsesReasoningModeNone: '無',
 		responsesVerbosity: 'Responses 輸出詳細度:',
 		responsesFastMode: 'Responses Fast (priority):',
+		chatThinkingEnabled: '啟用 Chat 思考 (DeepSeek):',
+		chatReasoningEffort: 'Chat 思考強度:',
 		advancedModel: '進階模型(輸入後可以搜尋):',
 		basicModel: '基礎模型(輸入後可以搜尋):',
+		supportsVision: '目前模型支援視覺:',
+		supportsVisionYes: '是',
+		supportsVisionNo: '否，需要單獨配置視覺模型',
+		visionConfig: '視覺模型配置:',
+		visionConfigTitle: '視覺模型配置',
+		visionConfigSubtitle:
+			'為不支援視覺的主模型配置獨立視覺模型 URL、APIKey、請求方案和模型',
+		visionConfigOpenHint: '(按 Enter 進入，Esc 返回主配置)',
+		visionConfigNavigationHint:
+			'↑↓ 導航 · Enter 編輯/選擇 · Esc 返回主配置 · Ctrl+S 儲存',
+		visionBaseUrl: '視覺模型 URL:',
+		visionBaseUrlMode: '視覺模型 URL 模式:',
+		visionApiKey: '視覺模型 APIKey:',
+		visionRequestMethod: '視覺模型請求方案:',
+		visionModel: '視覺模型(輸入後可以搜尋):',
 		maxContextTokens: '最大上下文令牌:',
 		maxTokens: '最大回复令牌數:',
 		streamIdleTimeoutSec: '流式閒置超時(秒):',
+		maxRetries: '最大重試次數:',
+		retryDelayMs: '重試間隔(毫秒):',
 		toolResultTokenLimit: '工具返回結果限制(%):',
 		toolResultTokenLimitHint:
 			'算法: maxContextTokens × {percentage}% = {actualLimit} tokens',
@@ -255,6 +412,16 @@ export const zhTW: TranslationKeys = {
 		followGlobalNoneWithParentheses: '跟隨全域（無）',
 		notUse: '不使用',
 		systemPromptMultiSelectHint: '空格: 切換選中 | Enter: 確認 | Esc: 取消',
+		modelSelectFilterLabel: '篩選:',
+		modelSelectModelCount: '共 {count} 個模型',
+		modelSelectScrollHint: '↑↓ 捲動瀏覽更多模型',
+		apiConnectionGroup: 'API 連接',
+		promptHeadersGroup: '提示詞與請求頭',
+		displayCompressGroup: '顯示與壓縮',
+		reasoningGroup: '推理設定',
+		modelGroup: '模型設定',
+		tokenTimeoutGroup: '令牌與逾時',
+		groupExpandHint: '(按 Enter 展開/收起)',
 	},
 	customHeaders: {
 		title: '自訂請求頭管理',
@@ -294,6 +461,8 @@ export const zhTW: TranslationKeys = {
 		headerKeyPlaceholder: '請求頭鍵 (例如, X-API-Key)',
 		headerValuePlaceholder: '請求頭值',
 		headerEditingHint: '↑↓: 導航欄位 | Enter: 編輯 | Ctrl+S: 儲存 | ESC: 取消',
+		placeholderHint:
+			'值支援 {{占位符}} 語法,由 ~/.snow/plugin/custom_headers/ 中的外掛動態解析',
 	},
 	subAgentConfig: {
 		title: '子代理配置',
@@ -327,6 +496,7 @@ export const zhTW: TranslationKeys = {
 		terminalTools: '終端工具',
 		todoTools: 'TODO 管理工具',
 		webSearchTools: '網路搜尋工具',
+		snowDocsTools: 'Snow 官方文件工具',
 		ideTools: 'IDE 診斷工具',
 		userInteractionTools: '用戶交互工具',
 		skillTools: '技能工具',
@@ -427,10 +597,57 @@ export const zhTW: TranslationKeys = {
 		solarizedDarkInfo: '具有精確色彩的 Solarized 深色主題',
 		nord: 'Nord',
 		nordInfo: '北極、北方藍調色板',
+		tiffany: '蒂芙尼藍',
+		tiffanyInfo: '清新優雅的蒂芙尼藍色調',
+		macaronPink: '馬卡龍粉',
+		macaronPinkInfo: '甜美柔和的馬卡龍粉色調',
+		trumpGold: '川普金',
+		trumpGoldInfo: '高調醒目的金色主題',
+		chinaRed: '中國紅',
+		chinaRedInfo: '典雅喜慶的中華紅色調',
+		evaPurple: '柯博文',
+		evaPurpleInfo: '紅藍銀經典卡車配色，博派出擊',
 		custom: '自訂',
 		customInfo: '使用你自己的自訂顏色',
 		editCustom: '編輯自訂主題...',
 		editCustomInfo: '自訂主題顏色',
+	},
+	privacySettings: {
+		title: '隱私設定',
+		apiConfig: 'API 配置',
+		apiConfigInfo: '管理線上隱私過濾 API 配置',
+		toolResultsConfig: '檢測工具結果配置',
+		toolResultsConfigInfo: '管理檢測工具結果相關的隱私選項',
+		enablePrivacy: '啟用隱私過濾',
+		enablePrivacyInfo: '開啟後依所選模式處理相關內容',
+		enabled: '[✓] 已啟用',
+		disabled: '[ ] 已停用',
+		modeLabel: '過濾模式',
+		modeApi: '線上 API',
+		modeApiInfo: '使用配置的線上隱私過濾 API 進行脫敏',
+		modeLocalRules: '本地規則',
+		modeLocalRulesInfo: '使用 @blindfold/sdk 本地規則脫敏，無需配置 API',
+		modeSelectInfo: '選擇隱私過濾模式',
+		configLocation: '配置位置',
+		projectLocation: '專案',
+		projectLocationInfo: '儲存到目前工作目錄根目錄的 .snow/settings.json',
+		globalLocation: '全域',
+		globalLocationInfo: '儲存到使用者目錄的 .snow/settings.json',
+		scopeSelectInfo: '先選擇隱私配置儲存位置',
+		urlLabel: 'URL(完整路徑)',
+		urlInfo: '填寫隱私過濾 API 的完整 URL',
+		apiKeyLabel: 'APIKEY(選填)',
+		apiKeyInfo: '填寫 APIKEY；不需要鑑權時可以留空',
+		modelLabel: '模型',
+		modelInfo: '模型名稱，預設 openai/privacy-filter',
+		notSet: '未設定',
+		configured: '已配置',
+		optional: '選填',
+		save: '儲存',
+		saveInfo: '儲存 API 配置到所選位置',
+		savedInfo: '隱私設定已儲存',
+		back: '← 返回',
+		backInfo: '返回主選單',
 	},
 	customTheme: {
 		title: '自訂主題編輯器',
@@ -448,7 +665,8 @@ export const zhTW: TranslationKeys = {
 		confirm: '確認',
 		preview: '預覽',
 		userMessagePreview: '使用者訊息預覽',
-		userMessageSample: '用於檢查 userMessageBackground 是否合適。',
+		userMessageSample:
+			'用於檢查使用者訊息左側強調條（userMessageBackground）是否合適。',
 		colorHint: '按 Enter 編輯此顏色',
 	},
 	helpPanel: {
@@ -529,6 +747,44 @@ export const zhTW: TranslationKeys = {
 		useCommandPrefix: '使用',
 		useCommandSuffix: '命令中斷連線',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry 遙測',
+		description1:
+			'僅在明確啟用時收集 trace、metric 和 log。資料以 OpenTelemetry 格式匯出到外部收集器，如 Jaeger、Prometheus、Grafana 或 APM/HPM 平台。',
+		description2:
+			'設定儲存到 Snow JSON 專案設定中，並直接傳遞給 OpenTelemetry 匯出器。不使用環境變數。',
+		enableTelemetry: '啟用遙測',
+		serviceName: 'Service 名稱',
+		tracesExporter: 'Traces 匯出器',
+		metricsExporter: 'Metrics 匯出器',
+		logsExporter: 'Logs 匯出器',
+		otlpProtocol: 'OTLP 協定',
+		otlpEndpoint: 'OTLP 基礎端點',
+		otlpHeaders: 'OTLP 標頭',
+		injectSessionIdHeader: '注入 Session-Id 標頭',
+		captureContent: '收集 prompt/tool 原文',
+		contentMaxLength: '原文最大長度',
+		hintEnabled: '儲存在 Snow JSON 專案設定中',
+		hintServiceName:
+			'OpenTelemetry resource.service.name。留空使用預設 snow-cli。修改後需重啟 Snow 生效。',
+		hintTracesExporter: '可選: otlp, console, none',
+		hintMetricsExporter: '可選: otlp, prometheus, console, none',
+		hintLogsExporter: '可選: otlp, console, none',
+		hintOtlpProtocol: '可選: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint:
+			'例如: http://localhost:4317 或 /api/public/otel，匯出器會自動補全各訊號路徑',
+		hintOtlpHeaders: '例如: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'啟用後若未手動設定 Session-Id，則使用目前鏈路 Tags 中的 snow.session_id 注入標頭',
+		hintCaptureContent:
+			'預設開啟。如果 trace 不應包含 prompt、completion、tool 參數或 tool 結果，請關閉。',
+		hintContentMaxLength: '開啟原文收集後，每個 content 事件最多保留的字元數。',
+		empty: '(空)',
+		savedMessage:
+			'OpenTelemetry 遙測設定已儲存。重啟 Snow 以重新初始化匯出器。',
+		navigationHint:
+			'\u2191\u2193 選擇 \u00b7 \u2190\u2192 切換 \u00b7 S 儲存 \u00b7 Esc 儲存並關閉',
+	},
 	commandPanel: {
 		title: '命令面板',
 		availableCommands: '可用命令',
@@ -542,6 +798,7 @@ export const zhTW: TranslationKeys = {
 			help: '顯示快捷鍵和說明資訊',
 			clear: '清空聊天上下文和對話歷史',
 			copyLast: '複製最後一條AI回覆到剪貼簿',
+			delSession: '刪除目前會話並清屏',
 			resume: '恢復對話',
 			mcp: '顯示模型上下文協定服務和工具',
 			yolo: '切換無人值守模式(自動批准所有工具)',
@@ -552,11 +809,13 @@ export const zhTW: TranslationKeys = {
 			home: '返回歡迎畫面修改設定',
 			review: '審查工作區變更與選定提交。會開啟選擇面板，可多選並輸入備註。',
 			gitline: '選擇 Git 提交記錄並將提交內容插入到目前輸入框',
+			goal: '設定可持久化目標，驅動 AI 自動續接直到達成或耗盡預算。用法: /goal <目標> | /goal pause | /goal resume | /goal clear | /goal status',
 			role: '開啟或建立 ROLE.md 檔案以自訂 AI 助手角色。使用 -l 或 --list 參數列出所有角色',
 			roleSubagent:
 				'為子代理自訂前置提示詞 (ROLE-名字.md)。使用 -l 列出，-d 刪除',
 			usage: '查看帶有互動式圖表的令牌使用統計',
 			export: '將聊天對話匯出到帶儲存對話方塊的文字檔案',
+			config: '匯出或匯入 Snow CLI YAML 設定。用法: /config <export|import>',
 			custom: '新增自訂命令並儲存到 ~/.snow/commands',
 			skills: '建立包含文件和範例的技能模板',
 			skillsPicker: '選擇 Skill 並將其 SKILL.md 內容注入到輸入框',
@@ -568,24 +827,47 @@ export const zhTW: TranslationKeys = {
 			codebase: '切換當前專案的代碼庫索引功能。用法: /codebase [on|off|status]',
 			permissions: '管理永遠允許的工具權限',
 			backend: '顯示背景處理程序面板',
-			loop: '建立會話級循環任務。用法: /loop 5m <提示詞>',
+			loop: '按間隔或每日具體時刻建立循環任務。用法: /loop 5m <提示詞> 或 /loop daily 09:30 <提示詞>',
 			profiles: '開啟設定檔切換面板',
 			models: '開啟模型切換面板',
 			subAgentDepth: '設定子代理巢狀建立深度上限',
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			autoFormat:
 				'文件編輯後自動格式化開關。用法: /auto-format [on|off|status]',
+			simple: '切換主題簡易模式。用法: /simple [on|off|status]',
+			buddy:
+				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
 			hybridCompress:
 				'切換混合壓縮模式（AI 摘要 + 智慧截斷，用於 /compact 和自動壓縮）',
+			imageCompress:
+				'切換圖片壓縮模式（歷史記錄生成 PNG 圖片，用於 /compact 和自動壓縮）',
 			team: '切換 Agent Team 模式 - 協調多個代理在獨立 Git Worktree 中並行工作',
+			ultraTodo: '切換 Ultra TODO 模式 - 按階段細分任務並在階段推進前強制校驗',
+			telemetry: '設定 OpenTelemetry 遙測',
+			branch: '將目前對話分叉為新分支，可用 /resume 返回原會話',
 			worktree: '開啟 Git 分支管理面板，支援切換、新建和刪除分支',
 			diff: '在 IDE 中查看對話的檔案修改 Diff',
 			connect: '連接到 Snow Instance 進行 AI 處理',
 			disconnect: '斷開目前 Snow Instance 連接',
 			connectionStatus: '顯示目前 Snow Instance 連接狀態',
 			newPrompt: '根據需求使用 AI 生成精煉的提示詞',
+			pixel: '開啟終端像素編輯器',
+			games: '開啟遊戲面板 - 遊玩內建和外掛小遊戲',
 			btw: '在 AI 運行時快速提問（臨時對話，不儲存上下文）',
+			deepresearch:
+				'執行自主多步聯網深度研究，並將帶引用的 Markdown 報告儲存到 .snow/deepresearch/',
+			toolDisplay:
+				'控制工具呼叫顯示模式。用法: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'控制工具類型圖示。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'自訂工具顯示名（官方路徑，勿整檔改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
+			thinkDisplay:
+				'控制思考內容顯示模式。用法: /think-display [full|compact|status]',
+			speedometer:
+				'切換即時測速儀，監控 token/s 輸出速率。用法: /speedometer [on|off|status]',
+			cut: '打斷 AI 回覆並立即傳送訊息。用法: /cut <訊息內容>',
 			quit: '退出應用程式',
 		},
 		copyLastFeedback: {
@@ -594,6 +876,10 @@ export const zhTW: TranslationKeys = {
 			copySuccess: '✓ 已複製最後一條 AI 消息到剪貼簿',
 			copyFailedPrefix: '✗ 複製到剪貼簿失敗',
 			unknownError: '未知錯誤',
+		},
+		delSessionFeedback: {
+			noCurrentSession: '目前沒有可刪除的會話。',
+			deleteFailed: '刪除目前會話失敗。',
 		},
 		// 命令輸出消息（用於命令執行結果）
 		commandOutput: {
@@ -604,13 +890,352 @@ export const zhTW: TranslationKeys = {
 				statusEnabled: '自動格式化: 已啟用',
 				statusDisabled: '自動格式化: 已停用',
 			},
+			// 簡易模式命令訊息
+			simpleMode: {
+				enabled: '簡易模式: 已啟用',
+				disabled: '簡易模式: 已停用',
+				statusEnabled: '簡易模式: 已啟用',
+				statusDisabled: '簡易模式: 已停用',
+			},
+			// 工具顯示模式命令訊息
+			toolDisplay: {
+				status: (mode: string) =>
+					`工具顯示模式: ${mode}` +
+					(mode === 'full'
+						? '（顯示工具名 + 參數 + 結果）'
+						: mode === 'compact'
+						? '（僅顯示工具名 + 簡要狀態）'
+						: '（隱藏所有工具呼叫，僅顯示 AI 回覆）'),
+				set: (mode: string) => `工具顯示模式已設定為: ${mode}`,
+				invalid: '無效的模式。用法: /tool-display [full|compact|hidden|status]',
+			},
+			// 工具類型圖示 + 狀態前綴命令訊息
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? '無覆蓋'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `工具類型圖示: ${
+						enabled ? '開啟' : '關閉'
+					} · 覆蓋: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`工具類型圖示已${enabled ? '開啟' : '關閉'}（僅影響新工具標題）`,
+				setOverride: (toolName: string, icon: string) =>
+					`已設定 ${toolName} 圖示為 ${icon}`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的圖示覆蓋`,
+				setStatusEnabled: (enabled: boolean) =>
+					`工具狀態前綴已${
+						enabled ? '開啟' : '關閉'
+					}（預設 ✓/·/✗，僅影響新標題）`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`已設定狀態 ${statusKey} 符號為 ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`已恢復狀態 ${statusKey} 為預設符號`,
+				invalid:
+					'無效參數。用法: /tool-icons [on|off|status|status on|off|status:<key>:<符號>|<tool>:<emoji>]',
+			},
+			// 工具顯示名（僅使用者覆蓋，無內建預設譯名）
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return '工具顯示名: 無覆蓋（顯示技術 ID）。批量請用 /tool-names a:甲 b:乙（勿整檔改 theme.json）';
+					}
+					return (
+						`工具顯示名覆蓋 (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`已設定 ${toolName} 顯示為「${displayName}」（僅影響新工具標題）`,
+				cleared: (toolName: string) => `已清除 ${toolName} 的顯示名覆蓋`,
+				batch: (set: number, cleared: number) =>
+					`已批量更新工具顯示名：設定 ${set} 項` +
+					(cleared > 0 ? `，清除 ${cleared} 項` : '') +
+					'（僅影響新工具標題）',
+				clearAll: (count: number) =>
+					count === 0
+						? '工具顯示名: 本無覆蓋'
+						: `已清除全部 ${count} 項工具顯示名覆蓋`,
+				invalid:
+					'無效參數。用法: /tool-names [status|clear|<tool>:<顯示名> …]；可批量空格/逗號分隔；`<tool>:` 清除單項',
+			},
+			// 思考顯示模式命令訊息
+			thinkDisplay: {
+				status: (mode: string) =>
+					`思考顯示模式: ${mode}` +
+					(mode === 'full'
+						? '（全量思考內容移入靜態區）'
+						: '（縮減思考內容後移入靜態區）'),
+				set: (mode: string) => `思考顯示模式已設定為: ${mode}`,
+				invalid: '無效的模式。用法: /think-display [full|compact|status]',
+			},
+			// 測速儀命令訊息
+			speedometer: {
+				enabled: '測速儀: 已啟用',
+				disabled: '測速儀: 已停用',
+				statusEnabled: '測速儀: 已啟用',
+				statusDisabled: '測速儀: 已停用',
+			},
+			// 寵物命令訊息
+			buddy: {
+				noCompanion: '還沒有寵物夥伴孵化。使用 /buddy hatch [名字] 孵化一個。',
+				statusLine: '{name}，{shiny}{rarity} {species}',
+				shinyPrefix: '閃光',
+				personalityLabel: '性格',
+				hatLabel: '帽子',
+				eyeLabel: '眼睛',
+				colorLabel: '顏色',
+				colorDefault: '預設（物種/閃光）',
+				mutedLabel: '已靜音',
+				mutedYes: '是',
+				mutedNo: '否',
+				profileLabel: 'AI 配置',
+				currentProfileLabel: '（目前 Snow 配置）',
+				hatchedLabel: '孵化時間',
+				statsLabel: '屬性',
+				alreadyExists:
+					'已經有一個寵物夥伴了。\n\n{status}\n\n孵化新夥伴前請先使用 /buddy reset。',
+				availableSpecies: '可孵化寵物類型：{species}',
+				invalidSpecies: '未知寵物類型「{species}」。可選類型：{available}',
+				hatchGreeting:
+					'{name} 孵化成了{shiny}{rarity} {species}{hat}：{flavor}。試試 /buddy say hello。',
+				hatchedSummary: '已孵化 {name}，{rarity} {species}。',
+				hatchKeepChatting: '使用 /buddy pet 或 /buddy say <訊息> 繼續互動。',
+				noBuddyToPet: '還沒有可摸摸的寵物。請先使用 /buddy hatch [名字]。',
+				petReaction: '{name} 看起來很開心。',
+				petSuccess: '你摸了摸 {name}。',
+				noBuddyToRename:
+					'還沒有可重新命名的寵物。請先使用 /buddy hatch [名字]。',
+				renameUsage: '用法: /buddy rename <名字>',
+				renameReaction: '{oldName} 現在叫 {newName} 了。',
+				renameSuccess: '已將寵物從 {oldName} 重新命名為 {newName}。',
+				noBuddyToSet: '還沒有可自訂的寵物。請先使用 /buddy hatch [名字]。',
+				setUsage:
+					'用法: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] 或 /buddy set --list',
+				setSuccess: '已更新 {name}：{changed}。',
+				setReaction: '新造型好看！已更新 {changed}。',
+				setOptionsTitle: '桌寵自訂選項：',
+				setOptionsHats: '帽子: {hats}',
+				setOptionsEyes: '眼睛: {eyes}',
+				setOptionsRarities: '稀有度: {rarities}',
+				setOptionsSpecies: '物種: {species}',
+				setOptionsColors: '顏色: {colors}',
+				setOptionsStats: '屬性 (1-10): {stats}',
+				noBuddyToTalk: '還沒有可聊天的寵物。請先使用 /buddy hatch [名字]。',
+				sayUsage: '用法: /buddy say <訊息>',
+				profileListTitle: '寵物 AI 配置：{profile}',
+				profileListItem: '{marker} {name} {active}',
+				profileUsage:
+					'用法: /buddy profile [list|current|default|reset|<配置名>]',
+				profileSet: '寵物 AI 配置已切換為 {profile}。',
+				profileCleared: '寵物 AI 配置已清除，將跟隨目前 Snow 配置：{profile}。',
+				profileNotFound:
+					'未找到配置「{profile}」。請使用 /buddy profile list 查看。',
+				muted:
+					'寵物已靜音。UI 寵物和提示詞上下文將隱藏，直到使用 /buddy unmute。',
+				unmutedReaction: '我回來啦。',
+				unmuted: '寵物已取消靜音。',
+				reset: '寵物已重置。使用 /buddy hatch [名字] 孵化新的夥伴。',
+				usage:
+					'用法: /buddy [status|hatch [名字] [--species=類型] [--list-species] [--personality=文字]|pet|rename <名字>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <訊息>|profile [list|current|default|reset|<配置名>]|mute|unmute|reset]',
+				teaser: '悄悄說一句……試試 /buddy',
+				noModelConfigured: '沒有為寵物回覆設定模型',
+				emptyReply: '{name} 正在認真聽。',
+				replyError: '{name} 想回應，但出了點小狀況：{error}',
+			},
+			// Ultra TODO 命令訊息
+			ultraTodo: {
+				toggling: '正在切換 Ultra TODO 模式',
+				enabled: 'Ultra TODO 已啟用。todo-manage 已停用，todo-ultra 可用。',
+				disabled: 'Ultra TODO 已停用。todo-manage 已重新可用。',
+				failed: '切換 Ultra TODO 失敗：{error}',
+				unknownError: '未知錯誤',
+			},
 			// 導出命令消息
 			export: {
 				exporting: '正在導出對話...',
 				openingDialog: '正在開啟檔案儲存對話方塊...',
 				cancelledByUser: '導出已被使用者取消。',
+				invalidFormat: '不支援的匯出格式：{format}。可選：txt、md、html。',
+				noSession: '目前沒有可匯出的會話，請先進行一輪對話後再試 /export。',
+			},
+			// 設定命令訊息
+			config: {
+				exporting: '正在匯出設定...',
+				importing: '正在匯入設定...',
+				openingDialog: '正在開啟設定儲存對話方塊...',
+				saveDialogTitle: '匯出 Snow CLI 設定',
+				openDialogTitle: '匯入 Snow CLI 設定',
+				cancelledByUser: '設定匯出已被使用者取消。',
+				importCancelledByUser: '設定匯入已被使用者取消。',
+				fileDialogUnsupported: '目前平台不支援檔案對話方塊，已取消設定操作。',
+				exportSuccess: '設定已成功匯出到:\n{path}',
+				exportFailed: '設定匯出失敗: {error}',
+				importWarning:
+					'設定匯入將覆蓋 YAML 中包含的設定項；YAML 中沒有的設定項會跳過並保持不變。',
+				importConfirmTitle: '確認匯入設定',
+				importConfirmMessage:
+					'這是覆蓋式匯入：YAML 中包含的設定項會覆蓋目前設定，未包含的設定項會跳過。是否繼續？',
+				importSuccess:
+					'設定已成功從以下檔案匯入:\n{path}\n已匯入: {imported}\n已跳過: {skipped}',
+				importFailed: '設定匯入失敗: {error}',
+				none: '無',
+				usage: '用法: /config <export|import>',
+				unknownError: '未知錯誤',
+			},
+			// IDE 命令訊息
+			ide: {
+				disconnected: '已中斷 IDE 連線。',
+				noAvailableIDEs:
+					'未偵測到可用的 IDE。請確認 IDE 已安裝 Snow CLI 擴充套件/外掛程式且正在執行。',
+				unmatchedIDEs:
+					'發現 {count} 個其他執行中的 IDE，但其工作區/專案目錄與目前工作目錄不相符。',
+				connectedTo: '已連線至 {label}',
+				connectFailed: '連線 IDE 失敗：{error}',
+			},
+			branchFork: {
+				noActiveSession: '沒有可分叉的活躍會話。',
+				success:
+					'對話已分叉為分支 {name}。返回原會話請執行:\n/resume {originalId}',
+				failed: '會話分叉失敗',
+			},
+			// Deep Research 命令訊息
+			deepResearch: {
+				usage:
+					'用法: /deepresearch <提示詞>\n範例: /deepresearch 對比 OpenAI Deep Research 與 Gemini Deep Research 的架構差異',
+			},
+			// Cut (打斷) 命令訊息
+			cut: {
+				usage: '用法: /cut <訊息>',
+			},
+			// BTW 命令訊息
+			btw: {
+				usage: '用法: /btw <你的問題>',
+			},
+			loop: {
+				usage:
+					'用法: /loop 5m <提示詞> | /loop daemon 5m <提示詞> | /loop daily 09:30 <提示詞> | /loop at 09:30 <提示詞> | /loop every day at 09:30 <提示詞> | /loop <提示詞> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
+				openingTaskManager: '正在開啟任務管理員...',
+				relatedLoopTasks: '相關迴圈任務:',
+				noActiveLoops:
+					'目前沒有活躍的迴圈任務。可使用 /loop 5m <提示詞>、/loop daily 09:30 <提示詞> 建立，或使用 /loop daemon 5m <提示詞> 建立守護迴圈。',
+				loopNotFound: '找不到迴圈任務: {id}',
+				cancelled: '已取消迴圈任務 {id}（{schedule}）',
+				created: '迴圈任務已建立: {id}',
+				scheduleEvery: '排程: {schedule}',
+				promptLabel: '提示詞: {prompt}',
+				nextRun: '下次執行: {time}',
+				sessionScopedNote: '僅限會話作用域: Snow CLI 結束後迴圈任務將停止。',
+				daemonScopedNote:
+					'守護模式: Snow CLI 結束後迴圈仍會繼續執行，只能透過手動取消停止。',
+				logPath: '日誌: {path}',
+				usageHint:
+					'使用 /loop list 檢視任務，或使用 /loop cancel <id> 停止某個任務。',
+			},
+			// Goal 命令訊息
+			goal: {
+				noActiveGoal: '目前沒有活躍目標。',
+				noActiveGoalInSession: '此會話沒有活躍目標。',
+				usageHeader: '用法:',
+				usageObjective:
+					'  /goal <目標>                 建立並啟動一個新的可持久化目標',
+				usageBudget:
+					'  /goal <目標> --budget=N      設定 Token 預算，單位 M（預設 2M）',
+				usagePause: '  /goal pause                  暫停目前活躍的目標',
+				usageResume:
+					'  /goal resume                 開啟目標會話選擇面板（或恢復目前已暫停的目標）',
+				usageResumeSession:
+					'  /goal resume <會話ID>        直接恢復指定會話的目標',
+				usageClear: '  /goal clear                  清除目前活躍目標',
+				usageStatus: '  /goal status                 顯示目前目標摘要',
+				tipHeader: '提示: 將目標寫成可驗證的契約，而非模糊的願望。',
+				tipGood:
+					'  推薦: "將 src/auth/login.ts 重構為 async/await；以 npm test 驗證"',
+				tipBad: '  避免: "改進一下這個專案"',
+				currentGoal: '目前目標:',
+				noActiveGoalToPause: '沒有可暫停的活躍目標。',
+				pauseSuccess:
+					'目標 {id} 已暫停。迴圈不會自動續接。使用 /goal resume 重新啟動。',
+				resumingSession: '正在恢復目標會話 {sessionId}...',
+				noGoalToResume: '沒有可恢復的目標。',
+				cannotResumeStatus:
+					'無法恢復狀態為 "{status}" 的目標。請使用 /goal clear 重新開始。',
+				resumeSuccess: '目標 {id} 已恢復（狀態: pursuing）。',
+				resumeHint: '按 ESC 暫停。使用 /goal clear 中止。',
+				openSessionPicker: '開啟目標會話選擇面板。',
+				noActiveGoalToClear: '沒有可清除的活躍目標。',
+				clearSuccess: '目標 {id} 已清除。會話回到單輪聊天模式。',
+				created: '目標 {id} 已建立並開始追逐。',
+				tokenBudget: 'Token 預算: {budget}',
+				createHint: '按 ESC 暫停。使用 /goal resume 繼續，/goal clear 中止。',
+				createFailed: '建立目標失敗: {error}',
+				unknownError: '未知錯誤',
+				invalidUsage: '無效的 /goal 用法。直接執行 /goal 可查看用法提示。',
+				budgetUnlimited: '無限制',
+				budgetMillion: '{value}M tokens',
+				budgetThousand: '{value}K tokens',
+				budgetTokens: '{value} tokens',
+			},
+			// Codebase 命令訊息
+			codebase: {
+				notConfigured: '代碼庫: 尚未配置。請先在 /home 中配置嵌入模型設定。',
+				cannotEnable:
+					'無法啟用代碼庫: 嵌入模型設定未配置。請先在 /home 中配置。',
+				enabledLabel: '已啟用',
+				disabledLabel: '已停用',
+				statusWithFiles: '代碼庫: 此專案{status}（將索引 {count} {fileWord}）',
+				status: '代碼庫: 此專案{status}',
+				fileSingular: '個檔案',
+				filePlural: '個檔案',
 			},
 		},
+	},
+	fileList: {
+		loadingFiles: '正在載入檔案...',
+		noFilesFound: '未找到檔案',
+		searchingDeeper: '正在搜尋更深目錄（深度 {depth}）...',
+		scanning: '正在掃描...（已索引 {count}）',
+		scanningDeeper: '正在搜尋更深目錄（深度 {depth}，已索引 {count}）...',
+		deeperSearchHint: '尚有更深目錄未掃描 · 在末項按 ↓ 繼續深入搜尋',
+		multiSelectHint: '空白鍵 勾選 · Enter 一次插入 · 支援多選',
+		multiSelectActiveHint: '已勾選 {count} 項 · 空白鍵 切換 · Enter 一次插入',
+		workspaceFilterHint: '工作區: {filter} · 僅搜尋所選目錄',
+		contentSearchHeader: '≡ 內容搜尋',
+		filesHeader: '≡ 檔案 [{mode} • Ctrl+T]',
+		treeMode: '樹狀',
+		listMode: '清單',
+		agentSearching: '✦ AI 搜尋中...（第 {round} 輪）',
+		agentSearchError: '✦ AI 搜尋失敗：{error}',
+		agentNoResults: '✦ AI 未找到相關檔案',
+		agentSearchHeader: '✦ AI 搜尋',
+		agentPreviewAssistantPrefix: 'AI',
+		agentPreviewRoundRequest: '第 {round}/{maxRounds} 輪：送出搜尋請求',
+		agentPreviewRequestedToolCalls: 'AI 請求 {count} 次工具呼叫',
+		agentPreviewToolCall: '工具：{tool}{args}',
+		agentPreviewToolResultCandidates: '工具結果：{count} 個候選檔案',
+		agentPreviewToolResultReceived: '已收到工具結果',
+		agentPreviewToolError: '工具錯誤：{error}',
+		agentPreviewParsingFinalResults: '正在解析最終結果',
+		agentPreviewFinalizing: '正在整理結果，不再呼叫工具',
+	},
+	ideSelectPanel: {
+		title: '選擇 IDE',
+		subtitle: '連線至 IDE 以使用整合開發功能。',
+		noneOption: '無',
+		connectedMark: ' ✔',
+		hint: '↑↓ 導覽 • Enter 選擇 • ESC 關閉',
+		connecting: '正在連線...',
+		connectSuccess: '已連線至 {label}',
+		connectError: '連線失敗：{error}',
+		unmatchedIDEs:
+			'上述 {count} 個 IDE 的工作區與目前目錄不相符，選擇後將自動切換工作目錄。',
+		unmatchedHeader: '— 切換工作目錄 —',
+		switchWorkdirMark: ' (切換工作目錄)',
+		switchWorkdirError: '切換工作目錄失敗：{error}',
 	},
 	permissionsPanel: {
 		title: '權限',
@@ -643,7 +1268,7 @@ export const zhTW: TranslationKeys = {
 		loadingModels: '正在載入模型...',
 		hint: 'Enter 選擇模型 | m 手動輸入 | Esc 關閉',
 		manualInputTitle: '手動輸入',
-		manualInputHint: 'Enter儲存 | Esc 關閉',
+		manualInputHint: 'Enter 儲存 | Esc 關閉',
 		filterLabel: '篩選:',
 		manualInputOption: '手動輸入',
 		requestMethod: '請求方式:',
@@ -651,9 +1276,9 @@ export const zhTW: TranslationKeys = {
 		enableThinking: '啟用思考:',
 		thinkingMode: '思考模式:',
 		thinkingStrength: '思考強度:',
-		inputNumberHint: '輸入數字,Enter儲存',
+		inputNumberHint: '輸入數字，Enter 儲存',
 		escCancel: 'Esc 取消',
-		navigationHint: '↑↓選擇 | Enter 切換 | Esc 關閉',
+		navigationHint: '↑↓ 選擇 | Enter 切換 | Esc 關閉',
 		notSupported: '不支援',
 		advancedModelLabel: '進階模型',
 		basicModelLabel: '基礎模型',
@@ -666,6 +1291,8 @@ export const zhTW: TranslationKeys = {
 		saveFailed: '儲存失敗',
 		modelSaveFailed: '模型儲存失敗',
 		tipLabel: '提示:',
+		modelCount: '共 {count} 個模型',
+		scrollHint: '↑↓ 捲動瀏覽更多模型',
 	},
 	profilePanel: {
 		title: '選擇設定檔',
@@ -674,6 +1301,7 @@ export const zhTW: TranslationKeys = {
 		moreAbove: '上方還有 {count} 項',
 		moreBelow: '下方還有 {count} 項',
 		escHint: '按 ESC 關閉',
+		editHint: '按 Tab 編輯',
 		activeLabel: '(目前)',
 		searchLabel: '搜尋:',
 		noResults: '未找到符合的設定檔',
@@ -757,6 +1385,7 @@ export const zhTW: TranslationKeys = {
 			beforeCompress: '在即將執行壓縮操作之前執行',
 			onSessionStart: '當啟動新會話或恢復現有會話時執行',
 			onStop: 'Stop AI流程結束前執行',
+			beforeSubAgentStart: '子代理啟動前執行（可注入或替換 prompt）',
 		},
 		hookList: {
 			title: 'Hooks 配置',
@@ -831,6 +1460,12 @@ export const zhTW: TranslationKeys = {
 		namePlaceholder: 'e.g., open',
 		commandLabel: 'Enter the command to execute:',
 		commandPlaceholder: 'npm run build && npm run deploy...',
+		commandLabelExecute: '輸入要在終端執行的命令:',
+		commandLabelPrompt: '輸入發送給 AI 的提示詞:',
+		commandLabelPanel: '輸入 AnyPanel 外掛 id:',
+		commandPlaceholderExecute: 'npm run build && npm run deploy...',
+		commandPlaceholderPrompt: '請幫我重構這段程式碼...',
+		commandPlaceholderPanel: 'my-panel',
 		descriptionLabel: '描述(可選):',
 		descriptionPlaceholder: '簡短描述...',
 		descriptionHint: '可選，建議簡短（直接 Enter 跳過）',
@@ -838,6 +1473,9 @@ export const zhTW: TranslationKeys = {
 		typeLabel: 'Select command type:',
 		typeExecute: 'Execute (run in terminal)',
 		typePrompt: 'Prompt (send to AI)',
+		typePanel: '面板（載入 AnyPanel 外掛）',
+		typePanelHint:
+			'面板類型：command 欄位填寫 AnyPanel 外掛 id（~/.snow/plugin/anypanel/）',
 		locationLabel: '選擇儲存位置:',
 		locationGlobal: '全域',
 		locationProject: '專案',
@@ -849,6 +1487,7 @@ export const zhTW: TranslationKeys = {
 		escCancel: 'Press ESC to cancel',
 		resultTypeExecute: '在終端執行',
 		resultTypePrompt: '傳送給 AI',
+		resultTypePanel: 'AnyPanel 外掛',
 		resultLocationGlobal: '全域 (~/.snow/commands/)',
 		resultLocationProject: '專案 (.snow/commands/)',
 		saveSuccessMessage:
@@ -865,11 +1504,13 @@ export const zhTW: TranslationKeys = {
 		headerShortcuts:
 			"快捷鍵: Ctrl+L (刪除至開頭) • Ctrl+R (刪除至末尾) • Ctrl+O (複製輸入) • {pasteKey} (貼上圖片) • '@' (檔案) • '@@' (搜尋內容) • '#' (子代理) • '/' (命令)",
 		headerExpandedView: '按 Ctrl+T: 切換貼上文字的展開/摺疊顯示',
+		headerSimpleHint: '輸入 /simple 切換至簡易顯示',
 		headerWorkingDirectory: '工作目錄: {directory}',
 		// Status messages
 		statusThinking: '思考中...',
 		statusDeepThinking: '深度思考中...',
 		statusWriting: '輸出中...',
+		statusFinishing: '收尾中...',
 		statusStreaming: '串流傳輸中',
 		statusWorking: '工作中',
 		statusIndexing: '索引代碼庫...',
@@ -892,6 +1533,7 @@ export const zhTW: TranslationKeys = {
 		profileSwitchHint: '切換',
 		gitBranch: 'Git分支',
 		memoryUsageLabel: '記憶體佔用:',
+		speedometerLabel: '測速',
 		// Tool execution
 		toolCall: '工具呼叫',
 		toolThinking: '思考',
@@ -909,6 +1551,14 @@ export const zhTW: TranslationKeys = {
 		assistantMessage: '助手',
 		commandMessage: '命令',
 		discontinuedMessage: '└─ 使用者中斷',
+		aiCompletionTimeMessage: '└─ AI 結束時間：{time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI 結束時間：{time} (耗時 {duration})',
+		compressionSummaryAutoTitle: '自動壓縮摘要已摺疊',
+		compressionSummaryManualTitle: '手動壓縮摘要已摺疊',
+		compressionSummaryStats: '{lines} 行 · {chars} 字元',
+		compressionSummaryPreviewPrefix: '摘要預覽',
+		compressionSummaryOriginalSaved: '僅最佳化顯示，原文已完整儲存',
 		// File operations
 		fileCreated: '已建立',
 		fileModified: '已修改',
@@ -984,7 +1634,7 @@ export const zhTW: TranslationKeys = {
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| 已選擇 {count} 個字元',
 		// Input
-		inputPlaceholder: '詢問我有關程式設計的任何問題...',
+		inputPlaceholder: `詢問我有關程式設計的任何問題... 換行：${inputNewlineShortcut}`,
 		inputProcessing: '處理中...',
 		inputDisabled: '輸入已停用',
 		// Shortcuts
@@ -1003,6 +1653,7 @@ export const zhTW: TranslationKeys = {
 		rollbackConversation: '僅回復對話',
 		rollbackWarning: '將影響 {count} 個檔案',
 		// Session
+		chatInitializing: '初始化中...',
 		sessionCreating: '建立第一個對話記錄檔案...',
 		sessionLoading: '載入會話...',
 		sessionSaving: '儲存會話...',
@@ -1026,6 +1677,51 @@ export const zhTW: TranslationKeys = {
 		pressCtrlC: 'Ctrl+C 取消',
 		pressCtrlR: 'Ctrl+R 重新產生',
 		pressCtrlS: 'Ctrl+S 儲存',
+		loadingTips: [
+			'輸入 / 查看所有命令',
+			'使用 /help 查看所有快捷鍵',
+			'輸入 @ 引用檔案，輸入 @@ 搜尋檔案內容',
+			`按 ${pasteImageShortcut} 可從剪貼簿貼上圖片`,
+			`需要多行輸入時，按 ${inputNewlineShortcut} 換行`,
+			'按 ESC 可中斷目前回應',
+			'用 Shift+Tab 或 Ctrl+Y 切換 YOLO、Plan、Team 模式',
+			'先說明目標和限制，結果會更穩定',
+			'需要分步驟時，可以要求先給計畫再執行',
+			'使用 # 選擇子代理處理專項任務',
+			'輸入 /todo 查看或管理任務清單',
+			'複雜專案可用 /add-dir 新增工作目錄',
+			'想減少顯示干擾，可輸入 /simple',
+			'貼上截圖後可以繼續補充文字說明，再一起傳送',
+			'回報錯誤時，請同時描述預期行為和實際行為',
+			'除錯時提供重現步驟、錯誤訊息和相關日誌，會更容易定位',
+			'可以指出你認為相關的檔案、函式或模組',
+			'要求重構前，先說明哪些行為或公開介面必須保持不變',
+			'高風險修改可以要求 Snow 分成小步驟並逐步驗證',
+			'提供驗收標準，最後結果會更容易檢查',
+			'如果專案有驗證命令，請告訴 Snow 應該用哪個命令確認結果',
+			'關心效能時，補充輸入規模和延遲目標會更有幫助',
+			'回報 UI 問題時，可附上終端大小、主題和預期畫面',
+			'調整 API 時，請說明相容性要求和既有呼叫方',
+			'如果希望最小化修改，請在開始編輯前明確說明',
+			'命令執行失敗時，請同時貼出命令和關鍵輸出',
+			'做程式碼審查時，可以說明你最關心的風險區域',
+			'需求不確定時，可以先要求 Snow 列出假設再動手',
+			'使用 /models 可不離開對話直接切換模型',
+			'使用 /profiles 可快速切換 API 和模型設定檔',
+			'長對話接近上下文上限時，可使用 /compact 壓縮上下文',
+			'使用 /review 可讓 Snow 審查工作區變更或選定提交',
+			'使用 /diff 可在 IDE 中重新查看目前對話造成的檔案變更',
+			'使用 /new-prompt 可將粗略需求整理成更清晰的提示詞',
+			'主任務運行時，可用 /btw 提出臨時旁支問題',
+			'使用 /loop 可建立會話級週期任務，例如定時檢查',
+			'使用 /skills- 可選擇 Skill 並把可重用指令注入輸入框',
+			'使用 /role 可為目前專案自訂助手行為',
+			'大量修改代碼庫後，使用 /reindex 重新整理搜尋結果',
+			'使用 /permissions 可檢查已永久允許的工具',
+			'專案支援格式化時，可啟用 /auto-format 在編輯後自動格式化',
+			'使用 /usage 可查看 Token 消耗和快取統計',
+			'探索另一個方向前，可用 /branch 分叉目前對話',
+		],
 		// Context
 		contextUsage: '上下文使用: {percentage}%',
 		contextPercentage: '{percentage}%',
@@ -1046,8 +1742,12 @@ export const zhTW: TranslationKeys = {
 			'⍨ Vulnerability Hunting 模式已啟用 - 專注漏洞挖掘與安全分析',
 		toolSearchEnabled: '♾︎ 工具搜尋已開啟 - 按需搜尋載入工具',
 		hybridCompressEnabled: '⇌ 混合壓縮已開啟 - AI 摘要 + 智慧截斷',
+		imageCompressEnabled: '🖼 圖片壓縮已開啟 - 歷史記錄渲染為 PNG 圖片',
 		teamModeActive: '⚑ Agent Team 模式已啟用 - 多代理獨立 Worktree 協同工作',
-		tokens: ' 個token',
+		ultraTodoActive: '◈ Ultra TODO 模式已啟用 - 階段任務推進將強制校驗',
+		telemetryActive:
+			'OpenTelemetry 遙測已開啟 - trace 和 metric 將匯出到外部元件',
+		tokens: ' 個詞元',
 		cached: '已快取',
 		newCache: '新快取',
 	},
@@ -1093,6 +1793,7 @@ export const zhTW: TranslationKeys = {
 		modeLabel: '選擇創建方式:',
 		modeAi: 'AI 生成（輸入需求即可）',
 		modeManual: '手動創建（生成模板）',
+		modeInstall: '從 GitHub 安裝技能',
 		requirementLabel: '技能需求:',
 		requirementHint: '簡要描述你希望該技能完成什麼（生成內容將跟隨此語言）',
 		requirementPlaceholder: '例如：生成一個用於發佈 npm 套件的技能…',
@@ -1133,6 +1834,26 @@ export const zhTW: TranslationKeys = {
 			'技能 "{name}" 創建成功！\n模式: {mode}\n位置: {location}\n路徑: {path}\n\n已創建以下檔案：\n- SKILL.md（主技能文件）\n- reference.md（詳細參考）\n- examples.md（使用範例）\n- templates/template.txt（模板檔案）\n- scripts/helper.py（輔助腳本）\n\n你現在可以編輯這些檔案來自訂技能。',
 		createErrorMessage: '創建技能失敗：{error}',
 		errorUnknown: '未知錯誤',
+	},
+	skillsInstall: {
+		title: '從 GitHub 安裝技能',
+		urlLabel: 'GitHub 地址:',
+		urlPlaceholder: 'https://github.com/owner/repo 或 owner/repo',
+		urlHint: '輸入包含 SKILL.md 的 GitHub 倉庫地址',
+		urlExamples:
+			'範例:\n  https://github.com/owner/repo\n  https://github.com/owner/repo/tree/main/skills/my-skill\n  owner/repo@main:skills/my-skill',
+		urlActions: 'Enter: 繼續 | ESC: 取消',
+		locationLabel: '選擇安裝位置:',
+		locationGlobal: '全域 (~/.snow/skills/)',
+		locationProject: '專案 (.snow/skills/ 在專案根目錄)',
+		locationActions: '上/下: 選擇位置 | Enter: 安裝 | ESC: 取消',
+		installing: '正在從 GitHub 安裝技能...',
+		installingHint: '正在下載並解壓縮倉庫，請稍等',
+		installSuccess: '技能 "{name}" 安裝成功！\n路徑: {path}',
+		batchInstallSuccess: '已從倉庫安裝 {count}/{total} 個技能: {names}',
+		installError: '安裝失敗：{error}',
+		errorUnknown: '未知錯誤',
+		resultActions: 'Enter: 繼續安裝 | ESC: 關閉',
 	},
 	roleCreation: {
 		title: '創建 ROLE.md',
@@ -1179,10 +1900,15 @@ export const zhTW: TranslationKeys = {
 		createSuccess: '角色創建成功',
 		deleteSuccess: '角色刪除成功',
 		loading: '處理中...',
-		hints: 'Tab: 切換作用域 | Enter: 啟用 | N: 新建 | D: 刪除 | ESC: 關閉',
+		hints:
+			'Tab: 切換作用域 | Enter: 啟用 | N: 新建 | D: 刪除 | R: 覆蓋系統提示詞 | ESC: 關閉',
 		cannotDeleteActive: '無法刪除啟用的角色',
 		confirmDelete: '確認刪除該角色？',
 		confirmDeleteHint: '按 Y 確認，按 N 取消',
+		overrideTag: '覆蓋',
+		overrideEnabled: '已啟用：使用該角色覆蓋系統提示詞',
+		overrideDisabled: '已關閉：恢復使用預設系統提示詞',
+		cannotOverrideInactive: '只有啟用的角色才能標記為覆蓋',
 	},
 
 	roleSubagentCreation: {
@@ -1325,13 +2051,14 @@ export const zhTW: TranslationKeys = {
 		emptyHint: '無背景處理程序',
 	},
 	fileRollback: {
-		title: '檔案回滾確認',
+		title: '回滾確認',
 		description: '此檢查點包含',
 		filesCount: '{count} 個檔案將被回滾',
 		filesCountWithSelection:
 			'{count} 個檔案將被回滾 ({selected}/{total} 已選擇)',
 		notebookCount: '{count} 條備忘錄也將被回滾',
 		teamCount: '{count} 個團隊成員將被終止，工作區將被清理',
+		todoCount: '{count} 個 TODO 快照也將被回滾',
 		question: '請選擇回滾方式：',
 		conversationOnly: '僅回滾對話',
 		conversationAndFiles: '回滾對話 + 檔案',
@@ -1349,7 +2076,7 @@ export const zhTW: TranslationKeys = {
 		backHint: 'Tab 返回',
 		closeHint: 'ESC 關閉',
 		emptyHint: '無檔案可回滾',
-		noFilesConfirm: '未偵測到檔案變更。僅回滾對話？',
+		noFilesConfirm: '未偵測到檔案變更。確認回滾？',
 		noFilesConfirmHint: 'Enter 確認 · ESC 取消',
 	},
 	usagePanel: {
@@ -1427,6 +2154,10 @@ export const zhTW: TranslationKeys = {
 		title: 'Diff 審查',
 		noSnapshots: '該會話沒有找到檔案變更記錄',
 		navigationHint: '↑↓ 導航 • Tab 查看檔案 • Enter 開啟全部 • ESC 關閉',
+		filesSuffix: '{count} 個檔案',
+		filesViewNavigationHint: '↑↓ 導航 • Tab 返回 • Enter 開啟全部 • ESC 關閉',
+		moreAbove: '↑ 上方還有 {count} 個',
+		moreBelow: '↓ 下方還有 {count} 個',
 	},
 	sessionListPanel: {
 		title: '恢復會話',
@@ -1449,6 +2180,7 @@ export const zhTW: TranslationKeys = {
 		renamePrompt: '重新命名會話',
 		renaming: '重新命名中...',
 		renamePlaceholder: '輸入新的標題',
+		confirmDelete: '1 秒內再按一次 D 確認刪除（共 {count} 個）',
 	},
 	mcpInfoPanel: {
 		title: 'MCP 服務',
@@ -1480,18 +2212,45 @@ export const zhTW: TranslationKeys = {
 		mcpSourceProject: ' [專案]',
 		mcpSourceGlobal: ' [全域]',
 	},
+	skillsListPanel: {
+		title: '技能列表',
+		loading: '載入技能中...',
+		error: '錯誤: {message}',
+		noSkills: '沒有可用的技能',
+		locationProject: '(專案)',
+		locationGlobal: '(全域)',
+		statusDisabled: '(已停用)',
+		navigationHint:
+			'↑↓ 導航 • Tab/空格/Enter 啟停 • U 更新選中 • A 更新全部 • ESC 關閉',
+		moreAbove: '↑ 上方還有 {count} 項',
+		moreBelow: '↓ 下方還有 {count} 項',
+		updateInProgress: '正在更新: {name}...',
+		updateSingleSuccess: '{name}: 已更新到最新版本。',
+		updateSingleUpToDate: '{name}: 已是最新版本。',
+		updateNoSkills: '未找到可更新的 GitHub 技能。',
+		updateFailed: '更新失敗',
+		updateTimeout: '更新逾時',
+		updateAllInProgress: '正在更新全部 GitHub 技能...',
+		updateResult: '已更新 {updated}/{total} 個技能。',
+		updateAllUpToDate: '已檢查 {total} 個技能，全部為最新版本。',
+		updatePartial: '已更新 {updated}/{total} 個，{failed} 個失敗。',
+	},
 	mcpConfigScreen: {
 		title: 'MCP 設定 - 選擇編輯範圍',
 		scopeProject: '專案級設定',
 		scopeGlobal: '全域設定',
 		navigationHint: '↑↓ 導航 • Enter 編輯 • ESC 返回',
-		savedSuccess: '{scope} MCP 設定儲存成功！請用 `snow` 重新啟動！',
+		savedSuccess: '{scope} MCP 設定儲存成功！工具列表已熱刷新，無需重啟。',
 		configErrors: '設定錯誤: {errors}',
 		reverted: '修改已還原至上一個有效設定。',
 		invalidJson: 'JSON 格式無效，修改已還原至上一個有效設定。',
 	},
+	commandArgsPanel: {
+		navigationHint:
+			'\u2191\u2193 \u5c0e\u822a  Enter \u9078\u64c7  Tab/ESC \u95dc\u9589',
+	},
 	runningAgentsPanel: {
-		title: '執行中的代理',
+		title: '\u57f7\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '目前沒有執行中的代理或隊友',
 		keyboardHint: '(空白鍵: 切換 · Enter: 確認 · Esc: 取消)',
 		selected: '已選擇: {count}',
@@ -1570,10 +2329,87 @@ export const zhTW: TranslationKeys = {
 		errorPrefix: '錯誤：',
 		scrollHint: '↑↓ 捲動瀏覽',
 	},
+	pixelEditor: {
+		title: '像素編輯器',
+		palette: '調色盤',
+		eraser: '橡皮擦',
+		colorNumber: '顏色 {n}',
+		canvasCleared: '畫布已清空',
+		clearCancelled: '已取消清空',
+		saveCancelled: '已取消儲存',
+		nameCannotBeEmpty: '名稱不能為空',
+		savedAs: '已儲存為 {name}',
+		controlsHint:
+			'方向鍵：移動 • 空白鍵：繪製/擦除 • Enter：繪製 • 1-9：選色 • 0：擦除 • C：清空畫布',
+		controlsHintPosBrush:
+			'ESC/Q：返回 • Ctrl+S：儲存 • 座標：({x}, {y}) • 筆刷： ',
+		saveDrawingLabel: '儲存作品：',
+		namePlaceholder: '輸入名稱...',
+		escCancelHint: '  ESC 取消',
+		confirmClearCanvas: '清空畫布？按 Y 確認，按其他鍵取消。',
+	},
+	pixelEditorScreen: {
+		screenTitle: '像素編輯器',
+		newCanvas: '新建畫布',
+		manageDrawings: '管理作品',
+		menuNavigateHint: '↑↓ 選擇 • Enter 確認 • Esc 返回',
+		manageTitle: '管理作品',
+		noDrawings: '尚無作品。',
+		managerHint:
+			'↑↓ 移動 • 空白鍵 多選 • D 刪除 • S 切換結束畫面 • Enter 編輯 • Esc 返回',
+		confirmDeleteMany: '確認刪除 {count} 項？Enter/Y/D 確認，N/Esc 取消',
+		moreAbove: '↑ 上方還有 {count} 項',
+		moreBelow: '↓ 下方還有 {count} 項',
+		selectedCount: '已選擇 {count} 項',
+		exitImageDisabled: '已關閉結束畫面',
+		failedDisableExitImage: '關閉結束畫面失敗',
+		setAsExitImage: '已將「{name}」設為結束畫面',
+	},
+	gamesScreen: {
+		screenTitle: '小遊戲',
+		loading: '正在載入遊戲列表...',
+		noGames: '尚無遊戲。將遊戲外掛放入 ~/.snow/plugin/games/ 目錄即可載入。',
+		menuHint: '↑↓ 選擇 • Enter 開始遊戲 • Esc 返回',
+		moreAbove: '↑ 上方還有 {count} 項',
+		moreBelow: '↓ 下方還有 {count} 項',
+		pluginDirHint: '外掛目錄: ~/.snow/plugin/games/ (.js/.mjs/.cjs)',
+	},
+	anyPanel: {
+		loading: '正在載入面板...',
+		errorTitle: '面板錯誤',
+		pluginNotFound: '未找到 ID 為 {id} 的面板外掛',
+		loadError: '載入面板外掛失敗: {error}',
+		renderError: '面板渲染出錯: {error}',
+		pressEscToClose: '按 Esc 關閉',
+	},
+	agentPickerPanel: {
+		title: '子代理選擇',
+		noAgentsWarning: '尚未配置子代理。請先配置子代理。',
+		selectAgent: '選擇子代理',
+		escHint: '（按 ESC 關閉）',
+		noDescription: '無描述',
+		scrollHint: '· ↑↓ 捲動',
+		moreAbove: '上方還有 {count} 項',
+		moreBelow: '下方還有 {count} 項',
+	},
+	todoPickerPanel: {
+		title: 'TODO 選擇',
+		scanning: '正在掃描專案中的 TODO 註釋...',
+		noTodosFound: '專案中未找到 TODO 註釋',
+		noMatchSearch: '沒有符合 "{searchQuery}" 的 TODO（總數：{totalCount}）',
+		typeToClearSearch: '輸入以篩選 · 退格鍵清除搜尋',
+		selectTodos: '選擇 TODO',
+		filteringLabel: '篩選: "{searchQuery}"',
+		typeToFilterHint: '輸入篩選 · 退格清除 · 空白鍵: 切換 · Enter: 確認',
+		typeToSearchHint: '輸入搜尋 · 空白鍵: 切換 · Enter: 確認 · Esc: 取消',
+		selectedCount: '已選擇 {count} 個 TODO',
+		noDescription: '無描述',
+	},
 	exitScreen: {
 		title: '再見',
 		goodbye: '感謝使用 Snow CLI',
 		thankYou: '期待下次相見',
+		resumeSession: '恢復會話',
 		version: 'v{version}',
 	},
 };

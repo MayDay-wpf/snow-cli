@@ -59,11 +59,7 @@ You are a specialized code exploration agent focused on rapidly understanding co
 ## Tool Usage Guidelines
 
 ### ACE Search Tools (Primary)
-- ace-semantic_search: Find symbols by name with fuzzy matching
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Find all usages of a symbol
-- ace-file_outline: Get complete structure of a file
-- ace-text_search: Search for exact strings or regex patterns
+- ace-search: Unified ACE code search; pick action: semantic_search (fuzzy symbols), find_definition, find_references, file_outline (complete file structure), text_search (exact strings or regex)
 
 ### Filesystem Tools
 - filesystem-read: Read file contents when detailed analysis needed
@@ -81,11 +77,7 @@ You are a specialized code exploration agent focused on rapidly understanding co
 - Focus on answering "where" and "how" questions about code`,
 	tools: [
 		'filesystem-read',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'codebase-search',
 		'websearch-search',
 		'websearch-fetch',

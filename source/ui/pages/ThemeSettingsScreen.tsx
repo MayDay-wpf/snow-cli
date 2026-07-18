@@ -14,6 +14,7 @@ import {useTheme} from '../contexts/ThemeContext.js';
 import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';
 import {getSimpleMode, setSimpleMode} from '../../utils/config/themeConfig.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 const CustomThemeScreen = React.lazy(() => import('./CustomThemeScreen.js'));
 
@@ -40,6 +41,7 @@ export default function ThemeSettingsScreen({
 }: Props) {
 	const {themeType, setThemeType, diffOpacity, setDiffOpacity} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.themeSettings.title}`);
 	const {stdout} = useStdout();
 
 	// Use themeType from context which is already loaded from config
@@ -131,6 +133,46 @@ export default function ThemeSettingsScreen({
 						: t.themeSettings.nord,
 				value: 'nord',
 				infoText: t.themeSettings.nordInfo,
+			},
+			{
+				label:
+					selectedTheme === 'tiffany'
+						? `✓ ${t.themeSettings.tiffany}`
+						: t.themeSettings.tiffany,
+				value: 'tiffany',
+				infoText: t.themeSettings.tiffanyInfo,
+			},
+			{
+				label:
+					selectedTheme === 'macaron-pink'
+						? `✓ ${t.themeSettings.macaronPink}`
+						: t.themeSettings.macaronPink,
+				value: 'macaron-pink',
+				infoText: t.themeSettings.macaronPinkInfo,
+			},
+			{
+				label:
+					selectedTheme === 'trump-gold'
+						? `✓ ${t.themeSettings.trumpGold}`
+						: t.themeSettings.trumpGold,
+				value: 'trump-gold',
+				infoText: t.themeSettings.trumpGoldInfo,
+			},
+			{
+				label:
+					selectedTheme === 'china-red'
+						? `✓ ${t.themeSettings.chinaRed}`
+						: t.themeSettings.chinaRed,
+				value: 'china-red',
+				infoText: t.themeSettings.chinaRedInfo,
+			},
+			{
+				label:
+					selectedTheme === 'eva-purple'
+						? `✓ ${t.themeSettings.evaPurple}`
+						: t.themeSettings.evaPurple,
+				value: 'eva-purple',
+				infoText: t.themeSettings.evaPurpleInfo,
 			},
 			{
 				label:

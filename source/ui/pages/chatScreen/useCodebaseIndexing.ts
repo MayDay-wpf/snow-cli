@@ -84,6 +84,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 
 				const agent = new CodebaseIndexAgent(workingDirectory);
 				codebaseAgentRef.current = agent;
+				(global as any).__codebaseAgent = agent;
 
 				const progress = await agent.getProgress();
 				if (progress.status === 'completed' && progress.totalChunks > 0) {
@@ -138,6 +139,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 			if (codebaseAgentRef.current) {
 				await codebaseAgentRef.current.stop();
 				codebaseAgentRef.current.stopWatching();
+				await codebaseAgentRef.current.waitForWatcherClose();
 				setCodebaseIndexing(false);
 				setWatcherEnabled(false);
 				setCodebaseProgress(null);

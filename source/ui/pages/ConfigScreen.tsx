@@ -6,6 +6,7 @@ import {
 	type ConfigScreenProps,
 	MAX_VISIBLE_FIELDS,
 	isSelectField,
+	isGroupField,
 } from './configScreen/types.js';
 import {useConfigState} from './configScreen/useConfigState.js';
 import {useConfigInput} from './configScreen/useConfigInput.js';
@@ -18,13 +19,15 @@ import {
 	LoadingView,
 	ManualInputView,
 } from './configScreen/ConfigSubViews.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 export default function ConfigScreen({
 	onBack,
 	onSave,
 	inlineMode = false,
+	targetProfileName,
 }: ConfigScreenProps) {
-	const state = useConfigState();
+	const state = useConfigState({targetProfileName});
 	useConfigInput(state, {onBack, onSave});
 
 	const {
@@ -33,6 +36,7 @@ export default function ConfigScreen({
 		profileMode,
 		loading,
 		manualInputMode,
+		visionConfigMode,
 		isEditing,
 		currentField,
 		activeProfile,
@@ -44,6 +48,8 @@ export default function ConfigScreen({
 		hiddenBelowFieldsCount,
 		getRequestUrl,
 	} = state;
+
+	useTerminalTitle(`Snow CLI - ${t.configScreen.title}`);
 
 	if (profileMode === 'creating') {
 		return <ProfileCreateView state={state} inlineMode={inlineMode} />;
@@ -77,9 +83,15 @@ export default function ConfigScreen({
 					paddingX={2}
 				>
 					<Box flexDirection="column">
-						<Gradient name="rainbow">{t.configScreen.title}</Gradient>
+						<Gradient name="rainbow">
+							{visionConfigMode
+								? t.configScreen.visionConfigTitle
+								: t.configScreen.title}
+						</Gradient>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.configScreen.subtitle}
+							{visionConfigMode
+								? t.configScreen.visionConfigSubtitle
+								: t.configScreen.subtitle}
 						</Text>
 						{activeProfile && (
 							<Text color={theme.colors.menuInfo} dimColor>
@@ -125,9 +137,15 @@ export default function ConfigScreen({
 				<ConfigSelectPanel state={state} />
 			) : (
 				<Box flexDirection="column">
-					{fieldsDisplayWindow.items.map(field => (
-						<ConfigFieldRenderer key={field} field={field} state={state} />
-					))}
+					{fieldsDisplayWindow.items.map(field => {
+						const isGroupChild =
+							!visionConfigMode && !isGroupField(field) && field !== 'profile';
+						return (
+							<Box key={field} marginLeft={isGroupChild ? 2 : 0}>
+								<ConfigFieldRenderer field={field} state={state} />
+							</Box>
+						);
+					})}
 				</Box>
 			)}
 
@@ -155,7 +173,11 @@ export default function ConfigScreen({
 										: t.configScreen.editingHintGeneral
 							  }
 ${t.configScreen.requestUrlLabel}${getRequestUrl()}`
-							: `${t.configScreen.navigationHint}
+							: `${
+									visionConfigMode
+										? t.configScreen.visionConfigNavigationHint
+										: t.configScreen.navigationHint
+							  }
 ${t.configScreen.requestUrlLabel}${getRequestUrl()}`}
 					</Alert>
 				</Box>

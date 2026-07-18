@@ -153,6 +153,36 @@ body {
 	outline-offset: -1px;
 }
 
+.terminal-tab-tooltip {
+	position: fixed;
+	z-index: 1000;
+	max-width: calc(100vw - 12px);
+	padding: 5px 8px;
+	border: 1px solid var(--vscode-editorHoverWidget-border, var(--terminal-border));
+	border-radius: 4px;
+	background-color: var(--vscode-editorHoverWidget-background, #252526);
+	color: var(--vscode-editorHoverWidget-foreground, var(--terminal-button-fg));
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(-2px);
+	transition: opacity 80ms ease-out, transform 80ms ease-out;
+}
+
+.terminal-tab-tooltip[hidden] {
+	display: none;
+}
+
+.terminal-tab-tooltip.is-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
 .terminal-tab-spinner {
 	width: 10px;
 	height: 10px;
@@ -214,6 +244,40 @@ body {
 #terminal-container.drag-over {
 	outline: 2px dashed var(--terminal-drag-outline);
 	outline-offset: -2px;
+}
+
+#terminal-container::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	pointer-events: none;
+	background: rgba(255, 255, 255, 0);
+	border: 0 solid rgba(255, 255, 255, 0);
+	box-sizing: border-box;
+	opacity: 0;
+}
+
+#terminal-container.bell-flash::after {
+	animation: terminal-bell-flash 320ms ease-out;
+}
+
+@keyframes terminal-bell-flash {
+	0% {
+		opacity: 1;
+		background: rgba(255, 255, 255, 0.18);
+		border: 3px solid rgba(255, 255, 255, 0.85);
+	}
+	60% {
+		opacity: 0.6;
+		background: rgba(255, 255, 255, 0.05);
+		border: 3px solid rgba(255, 255, 255, 0.4);
+	}
+	100% {
+		opacity: 0;
+		background: rgba(255, 255, 255, 0);
+		border: 3px solid rgba(255, 255, 255, 0);
+	}
 }
 
 #terminal-container.terminal-error {

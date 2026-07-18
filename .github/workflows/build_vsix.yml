@@ -65,7 +65,7 @@ jobs:
 
             ### What's New
 
-            - feat(vsix): 支持启动命令轮询、终端代理和选区位置发送
+            - Add Git timeline
 
             ### Installation
 

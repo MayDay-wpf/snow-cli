@@ -1,7 +1,83 @@
 import type {ChatMessage} from '../../api/chat.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {formatToolCallMessage} from '../ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
+import {
+	isToolNeedTwoStepDisplay,
+	extractFilesystemEditDiffDataForPersistence,
+} from '../config/toolDisplayConfig.js';
+import {enrichPendingEditArgs} from '../ui/diffPreview.js';
+import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
+
+/**
+ * 从后续的 tool result 消息中提取 editDiffData。
+ *
+ * 当 resume 会话时，pending 消息需要恢复 DiffViewer 显示。但此时文件
+ * 已经被编辑过，enrichPendingEditArgs 从磁盘读取的文件内容无法正确
+ * 计算 diff（searchContent 找不到、hash 锚点失效等）。
+ *
+ * 因此需要从后续的 tool result 消息中提取保存的 editDiffData —— 这是
+ * 工具执行时提取的原始 diff 元数据，包含了正确的 oldContent/newContent。
+ *
+ * @param sessionMessages - 完整的会话消息列表
+ * @param startIndex - 当前 assistant 消息的索引
+ * @param toolCallId - 要查找的 tool_call ID
+ * @returns editDiffData 或 undefined
+ */
+function findToolResultDiffData(
+	sessionMessages: ChatMessage[],
+	startIndex: number,
+	toolCallId: string,
+): Record<string, any> | undefined {
+	for (let j = startIndex + 1; j < sessionMessages.length; j++) {
+		const nextMsg = sessionMessages[j];
+		if (!nextMsg) break;
+		// tool result 消息的 tool_call_id 匹配
+		if (nextMsg.role === 'tool' && nextMsg.tool_call_id === toolCallId) {
+			// 优先使用保存的 editDiffData 字段
+			const savedEditDiffData = (nextMsg as any).editDiffData;
+			if (
+				savedEditDiffData &&
+				(typeof savedEditDiffData.oldContent === 'string' ||
+					typeof savedEditDiffData.content === 'string' ||
+					Array.isArray(savedEditDiffData.batchResults))
+			) {
+				return savedEditDiffData;
+			}
+			// 回退：从 content JSON 中提取
+			const toolName = findToolNameForToolCall(
+				sessionMessages,
+				startIndex,
+				toolCallId,
+			);
+			if (toolName) {
+				return extractFilesystemEditDiffDataForPersistence(
+					toolName,
+					nextMsg.content,
+				);
+			}
+			return undefined;
+		}
+		// 遇到下一个 assistant 消息就停止
+		if (nextMsg.role === 'assistant' && !nextMsg.subAgentInternal) {
+			break;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * 向前查找 assistant 消息中某个 tool_call 的工具名。
+ */
+function findToolNameForToolCall(
+	sessionMessages: ChatMessage[],
+	assistantIndex: number,
+	toolCallId: string,
+): string | undefined {
+	const msg = sessionMessages[assistantIndex];
+	if (!msg || !msg.tool_calls) return undefined;
+	const tc = msg.tool_calls.find(t => t.id === toolCallId);
+	return tc?.function.name;
+}
 
 /**
  * Clean thinking content by removing XML-like tags
@@ -9,6 +85,33 @@ import {isToolNeedTwoStepDisplay} from '../config/toolDisplayConfig.js';
  */
 function cleanThinkingContent(content: string): string {
 	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
+}
+
+function isValidTimestamp(timestamp: unknown): timestamp is number {
+	return typeof timestamp === 'number' && Number.isFinite(timestamp);
+}
+
+function appendAiCompletionTimeMessage(
+	uiMessages: Message[],
+	timestamp: unknown,
+	durationMs?: number,
+): void {
+	if (!isValidTimestamp(timestamp)) {
+		return;
+	}
+
+	uiMessages.push({
+		role: 'assistant',
+		content: '',
+		streaming: false,
+		aiCompletionTime: new Date(timestamp),
+		aiCompletionDurationMs:
+			typeof durationMs === 'number' &&
+			Number.isFinite(durationMs) &&
+			durationMs >= 0
+				? durationMs
+				: undefined,
+	});
 }
 
 /**
@@ -99,13 +202,23 @@ export function convertSessionMessagesToUI(
 					paramDisplay = ` (${params})`;
 				}
 
+				// Prefer saved editDiffData from the subsequent tool result
+				// (same rationale as the non-subagent path above).
+				const subAgentSavedDiffData = findToolResultDiffData(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
+				const subAgentEnrichedArgs = subAgentSavedDiffData
+					? {...toolArgs, ...subAgentSavedDiffData}
+					: enrichPendingEditArgs(toolCall.function.name, toolArgs);
 				uiMessages.push({
 					role: 'subagent',
-					content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
+					content: `\x1b[38;2;184;122;206m\u2687\u26A1 ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 					streaming: false,
 					toolCall: {
 						name: toolCall.function.name,
-						arguments: toolArgs,
+						arguments: subAgentEnrichedArgs,
 					},
 					toolCallId: toolCall.id,
 					toolPending: false,
@@ -191,7 +304,6 @@ export function convertSessionMessagesToUI(
 
 			// For time-consuming tools, always show result with full details
 			if (isTimeConsumingTool) {
-				const statusIcon = isError ? '✗' : '✓';
 				// UI only shows simple failure message, detailed error is sent to AI via msg.content
 				const statusText = '';
 
@@ -229,8 +341,21 @@ export function convertSessionMessagesToUI(
 				if (
 					!isError &&
 					(toolName === 'filesystem-create' ||
-						toolName === 'filesystem-edit')
+						toolName === 'filesystem-edit' ||
+						toolName === 'filesystem-replaceedit')
 				) {
+					const editDiffData = (msg as any).editDiffData;
+					if (
+						editDiffData &&
+						(typeof editDiffData.oldContent === 'string' ||
+							typeof editDiffData.content === 'string' ||
+							Array.isArray(editDiffData.batchResults))
+					) {
+						fileToolData = {
+							name: toolName,
+							arguments: editDiffData,
+						};
+					}
 					try {
 						const resultData = JSON.parse(msg.content);
 
@@ -258,14 +383,15 @@ export function convertSessionMessagesToUI(
 								},
 							};
 						} else if (
-							resultData.batchResults &&
-							Array.isArray(resultData.batchResults)
+							!fileToolData &&
+							resultData.results &&
+							Array.isArray(resultData.results)
 						) {
 							fileToolData = {
 								name: toolName,
 								arguments: {
 									isBatch: true,
-									batchResults: resultData.batchResults,
+									batchResults: resultData.results,
 								},
 							};
 						}
@@ -276,7 +402,10 @@ export function convertSessionMessagesToUI(
 
 				uiMessages.push({
 					role: 'subagent',
-					content: `\x1b[38;2;0;186;255m⚇${statusIcon} ${toolName}\x1b[0m${statusText}`,
+					content: `${formatToolTitleLine(
+						toolName,
+						isError ? 'error' : 'success',
+					)}${statusText}`,
 					streaming: false,
 					toolResult: !isError ? msg.content : undefined,
 					terminalResult: terminalResultData,
@@ -298,7 +427,7 @@ export function convertSessionMessagesToUI(
 					// UI only shows simple failure message, detailed error is sent to AI
 					uiMessages.push({
 						role: 'subagent',
-						content: `\x1b[38;2;255;100;100m⚇✗ ${toolName}\x1b[0m`,
+						content: formatToolTitleLine(toolName, 'error'),
 						streaming: false,
 						messageStatus: 'error',
 						subAgentInternal: true,
@@ -353,16 +482,33 @@ export function convertSessionMessagesToUI(
 				// Only add "in progress" message for tools that need two-step display
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
 				if (needTwoSteps) {
-					// Add tool call message (in progress)
+					// When resuming a session, the file on disk has already been
+					// edited, so enrichPendingEditArgs (which reads the current
+					// file) cannot compute a correct diff. Instead, prefer the
+					// editDiffData saved in the subsequent tool result message —
+					// it contains the original oldContent/newContent captured at
+					// execution time.
+					const savedDiffData = findToolResultDiffData(
+						sessionMessages,
+						i,
+						toolCall.id,
+					);
+					const enrichedArgs = savedDiffData
+						? {...toolArgs, ...savedDiffData}
+						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
+					// Rebuild the historical pending step with the current marker config;
+					// the following persisted tool result restores success or error.
 					uiMessages.push({
 						role: 'assistant',
-						content: `⚡ ${toolDisplay.toolName}`,
+						content: formatToolTitleLine(toolCall.function.name, 'pending'),
 						streaming: false,
 						toolCall: {
 							name: toolCall.function.name,
-							arguments: toolArgs,
+							arguments: enrichedArgs,
 						},
 						toolDisplay,
+						toolCallId: toolCall.id,
+						toolPending: true,
 						messageStatus: 'pending',
 					});
 				}
@@ -390,7 +536,6 @@ export function convertSessionMessagesToUI(
 					? 'error'
 					: 'success');
 			const isError = status === 'error';
-			const statusIcon = isError ? '✗' : '✓';
 
 			// UI only shows simple failure message, detailed error is sent to AI via msg.content
 			let statusText = '';
@@ -410,6 +555,8 @@ export function convertSessionMessagesToUI(
 				| {
 						oldContent?: string;
 						newContent?: string;
+						content?: string;
+						path?: string;
 						filename?: string;
 						completeOldContent?: string;
 						completeNewContent?: string;
@@ -447,13 +594,33 @@ export function convertSessionMessagesToUI(
 
 						// Extract edit diff data
 						if (
-							(toolName === 'filesystem-edit') &&
+							(toolName === 'filesystem-edit' ||
+								toolName === 'filesystem-replaceedit' ||
+								toolName === 'filesystem-create') &&
 							!isError
 						) {
+							if (
+								(msg as any).editDiffData &&
+								(typeof (msg as any).editDiffData.oldContent === 'string' ||
+									typeof (msg as any).editDiffData.content === 'string' ||
+									Array.isArray((msg as any).editDiffData.batchResults))
+							) {
+								editDiffData = (msg as any).editDiffData;
+								toolArgs = {...toolArgs, ...(msg as any).editDiffData};
+							}
 							try {
 								const resultData = JSON.parse(msg.content);
+								// Handle single file create
+								if (resultData.content) {
+									editDiffData = {
+										content: resultData.content,
+										path: resultData.path || resultData.filename,
+									};
+									toolArgs.content = resultData.content;
+									toolArgs.path = resultData.path || resultData.filename;
+								}
 								// Handle single file edit
-								if (resultData.oldContent && resultData.newContent) {
+								else if (resultData.oldContent && resultData.newContent) {
 									editDiffData = {
 										oldContent: resultData.oldContent,
 										newContent: resultData.newContent,
@@ -469,8 +636,9 @@ export function convertSessionMessagesToUI(
 									toolArgs.completeNewContent = resultData.completeNewContent;
 									toolArgs.contextStartLine = resultData.contextStartLine;
 								}
-								// Handle batch edit
+								// Handle batch edit/create
 								else if (
+									!editDiffData &&
 									resultData.results &&
 									Array.isArray(resultData.results)
 								) {
@@ -534,7 +702,10 @@ export function convertSessionMessagesToUI(
 
 			uiMessages.push({
 				role: 'assistant',
-				content: `${statusIcon} ${toolName}${statusText}`,
+				content: `${formatToolTitleLine(
+					toolName,
+					isError ? 'error' : 'success',
+				)}${statusText}`,
 				streaming: false,
 				toolResult: !isError ? msg.content : undefined,
 				toolCall:
@@ -575,6 +746,38 @@ export function convertSessionMessagesToUI(
 				thinking: extractThinkingFromMessage(msg),
 				editorContext: msg.role === 'user' ? msg.editorContext : undefined,
 			});
+
+			if (msg.role === 'assistant') {
+				// 计算本轮耗时：向前查找最近的 user 消息 timestamp，
+				// 用 assistant 的 timestamp 减去它得到总耗时（毫秒）。
+				let durationMs: number | undefined;
+				const assistantTimestamp = (msg as any).timestamp;
+				if (isValidTimestamp(assistantTimestamp)) {
+					for (let j = i - 1; j >= 0; j--) {
+						const prevMsg = sessionMessages[j];
+						if (
+							prevMsg &&
+							prevMsg.role === 'user' &&
+							!prevMsg.subAgentInternal
+						) {
+							const userTimestamp = (prevMsg as any).timestamp;
+							if (isValidTimestamp(userTimestamp)) {
+								const diff = assistantTimestamp - userTimestamp;
+								if (diff >= 0) {
+									durationMs = diff;
+								}
+							}
+							break;
+						}
+					}
+				}
+				appendAiCompletionTimeMessage(
+					uiMessages,
+					assistantTimestamp,
+					durationMs,
+				);
+			}
+
 			continue;
 		}
 	}

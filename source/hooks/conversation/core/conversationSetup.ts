@@ -7,9 +7,11 @@ import {
 import {toolSearchService} from '../../../utils/execution/toolSearchService.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {initializeConversationSession} from './sessionInitializer.js';
+import {getPostAppendSnapshotMessageIndex} from './snapshotMessageIndex.js';
 import {buildEditorContextContent} from './editorContextBuilder.js';
 import {cleanOrphanedToolCalls} from '../utils/messageCleanup.js';
 import type {ConversationHandlerOptions} from './conversationTypes.js';
+import {visionAgent} from '../../../agents/visionAgent.js';
 
 export type PreparedConversationSetup = {
 	conversationMessages: ChatMessage[];
@@ -65,6 +67,7 @@ export async function appendUserMessageAndSyncContext(options: {
 	editorContext: ConversationHandlerOptions['editorContext'];
 	imageContents: ConversationHandlerOptions['imageContents'];
 	saveMessage: ConversationHandlerOptions['saveMessage'];
+	abortSignal?: AbortSignal;
 }): Promise<void> {
 	const {
 		conversationMessages,
@@ -72,21 +75,32 @@ export async function appendUserMessageAndSyncContext(options: {
 		editorContext,
 		imageContents,
 		saveMessage,
+		abortSignal,
 	} = options;
 
-	const finalUserContent = buildEditorContextContent(editorContext, userContent);
+	const processedVisionContent =
+		await visionAgent.prepareContentForNonVisionModel(
+			userContent,
+			imageContents,
+			{source: 'user', abortSignal},
+		);
+
+	const finalUserContent = buildEditorContextContent(
+		editorContext,
+		processedVisionContent.content,
+	);
 
 	conversationMessages.push({
 		role: 'user',
 		content: finalUserContent,
-		images: imageContents,
+		images: processedVisionContent.images,
 	});
 
 	try {
 		await saveMessage({
 			role: 'user',
-			content: userContent,
-			images: imageContents,
+			content: processedVisionContent.content,
+			images: processedVisionContent.images,
 		});
 	} catch (error) {
 		console.error('Failed to save user message:', error);
@@ -98,11 +112,10 @@ export async function appendUserMessageAndSyncContext(options: {
 		);
 		const updatedSession = sessionManager.getCurrentSession();
 		if (updatedSession) {
-			const {convertSessionMessagesToUI} = await import(
-				'../../../utils/session/sessionConverter.js'
+			const snapshotMessageIndex = getPostAppendSnapshotMessageIndex(
+				updatedSession.messages,
 			);
-			const uiMessages = convertSessionMessagesToUI(updatedSession.messages);
-			setConversationContext(updatedSession.id, uiMessages.length);
+			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
 		console.error('Failed to set conversation context:', error);

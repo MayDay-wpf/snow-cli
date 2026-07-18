@@ -40,6 +40,7 @@ export function createApiStream(
 				tools: allowedTools,
 				sessionId,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -52,6 +53,7 @@ export function createApiStream(
 				temperature: 0,
 				tools: allowedTools,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -63,8 +65,11 @@ export function createApiStream(
 				messages,
 				temperature: 0,
 				tools: allowedTools,
+				tool_choice: 'auto',
 				prompt_cache_key: sessionId,
+				sessionId,
 				configProfile,
+				isSubAgentRequest: true,
 			},
 			abortSignal,
 		);
@@ -75,7 +80,10 @@ export function createApiStream(
 			messages,
 			temperature: 0,
 			tools: allowedTools,
+			tool_choice: 'auto',
+			sessionId,
 			configProfile,
+			isSubAgentRequest: true,
 		},
 		abortSignal,
 	);
@@ -208,15 +216,23 @@ function handleUsageEvent(
 		}
 	}
 
-	if (config.maxContextTokens && ctx.latestTotalTokens > 0) {
+	const promptTokens = eventUsage.prompt_tokens || 0;
+	const cacheCreationTokens = eventUsage.cache_creation_input_tokens || 0;
+	const cacheReadTokens = eventUsage.cache_read_input_tokens || 0;
+	const isAnthropic = cacheCreationTokens > 0 || cacheReadTokens > 0;
+	const totalInputTokens = isAnthropic
+		? promptTokens + cacheCreationTokens + cacheReadTokens
+		: promptTokens;
+
+	if (config.maxContextTokens && totalInputTokens > 0) {
 		const ctxPct = getContextPercentage(
-			ctx.latestTotalTokens,
+			totalInputTokens,
 			config.maxContextTokens,
 		);
 		emitSubAgentMessage(ctx, {
 			type: 'context_usage',
 			percentage: Math.max(1, Math.round(ctxPct)),
-			inputTokens: ctx.latestTotalTokens,
+			inputTokens: totalInputTokens,
 			maxTokens: config.maxContextTokens,
 		});
 	}
@@ -253,19 +269,55 @@ export async function handleContextCompression(
 	const lockId = ctx.instanceId || `subagent-${ctx.agent.id}`;
 	await compressionCoordinator.acquireLock(lockId);
 	try {
-		const compressionResult = await compressSubAgentContext(
-			ctx.messages,
-			ctx.latestTotalTokens,
-			config.maxContextTokens,
-			{
-				model,
-				requestMethod: config.requestMethod,
-				maxTokens: config.maxTokens,
-				configProfile: ctx.agent.configProfile,
-			},
-		);
+		const COMPRESS_MAX_RETRIES = 3;
+		const COMPRESS_RETRY_BASE_DELAY = 1000;
+		let compressionResult;
 
-		if (compressionResult.compressed) {
+		for (
+			let retryAttempt = 0;
+			retryAttempt <= COMPRESS_MAX_RETRIES;
+			retryAttempt++
+		) {
+			try {
+				compressionResult = await compressSubAgentContext(
+					ctx.messages,
+					ctx.latestTotalTokens,
+					config.maxContextTokens,
+					{
+						model,
+						requestMethod: config.requestMethod,
+						maxTokens: config.maxTokens,
+						configProfile: ctx.agent.configProfile,
+					},
+				);
+				break;
+			} catch (retryError) {
+				if (retryAttempt < COMPRESS_MAX_RETRIES) {
+					const retryDelay =
+						COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
+					emitSubAgentMessage(ctx, {
+						type: 'context_compress_retrying',
+						attempt: retryAttempt + 1,
+						maxRetries: COMPRESS_MAX_RETRIES,
+						error:
+							retryError instanceof Error
+								? retryError.message
+								: String(retryError),
+					});
+					console.warn(
+						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${
+							retryAttempt + 1
+						}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
+						retryError,
+					);
+					await new Promise(resolve => setTimeout(resolve, retryDelay));
+					continue;
+				}
+				throw retryError;
+			}
+		}
+
+		if (compressionResult?.compressed) {
 			ctx.messages.length = 0;
 			ctx.messages.push(...compressionResult.messages);
 
@@ -288,7 +340,7 @@ export async function handleContextCompression(
 		}
 	} catch (compressError) {
 		console.error(
-			`[SubAgent:${ctx.agent.name}] Context compression failed:`,
+			`[SubAgent:${ctx.agent.name}] Context compression failed after retries:`,
 			compressError,
 		);
 	} finally {

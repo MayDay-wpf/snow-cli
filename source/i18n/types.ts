@@ -28,6 +28,8 @@ export type TranslationKeys = {
 		languageSettingsInfo: string;
 		themeSettings: string;
 		themeSettingsInfo: string;
+		privacySettings: string;
+		privacySettingsInfo: string;
 		hooksSettings: string;
 		hooksSettingsInfo: string;
 		updateNoticeTitle: string;
@@ -35,8 +37,110 @@ export type TranslationKeys = {
 		updateNoticeLatest: string;
 		updateNoticeRun: string;
 		updateNoticeGithub: string;
+		updateNow: string;
+		updateNowInfo: string;
 		exit: string;
 		exitInfo: string;
+	};
+	notification: {
+		taskCompletedTitle: string;
+		taskFailedTitle: string;
+		agentWaitingForInputTitle: string;
+		unknownError: string;
+	};
+	doctor: {
+		available: string;
+		unavailableOrFailed: string;
+		exitCodeColon: string;
+		exitCode: string;
+		bundledRipgrepMissingPath: string;
+		bundledRipgrep: string;
+		systemRg: string;
+		bundledRipgrepFailed: string;
+		bothRipgrepUnavailable: string;
+		bundledPath: string;
+		bundledError: string;
+		systemError: string;
+		bundledRipgrepUnavailable: string;
+		privacyNotConfigured: string;
+		privacyEnabled: string;
+		privacyDisabled: string;
+		version: string;
+		unknown: string;
+		required: string;
+		readFailed: string;
+		npmRegistry: string;
+		workingDirectory: string;
+		projectPackageJson: string;
+		parseFailed: string;
+		found: string;
+		notFoundInCurrentDirectory: string;
+		userConfigDirectory: string;
+		notReadableWritable: string;
+		userConfigDirectoryMissing: string;
+		globalSettingsJson: string;
+		readable: string;
+		notCreated: string;
+		projectSettingsJson: string;
+		projectSettingsNotConfigured: string;
+		activeProfile: string;
+		profileMissing: string;
+		apiKeyConfigured: string;
+		apiKeyMissing: string;
+		profileCount: string;
+		mcpServices: string;
+		mcpServerCount: string;
+		privacyFilter: string;
+		asyncTasks: string;
+		taskFileCount: string;
+		sseDaemonRecordCount: string;
+		nodeOptionsMayAffect: string;
+		notSet: string;
+		proxyEnvironmentVariables: string;
+		setItemCount: string;
+		title: string;
+		summary: string;
+		summaryOk: string;
+		summaryWarning: string;
+		summaryFailed: string;
+		summaryInfo: string;
+		blockingIssues: string;
+		completedWithWarnings: string;
+		completedSuccessfully: string;
+	};
+	updateCheck: {
+		checking: string;
+		failed: string;
+		error: string;
+		stderr: string;
+		exitCode: string;
+		notFoundInPath: string;
+		allFoundInPath: string;
+		npmPath: string;
+		npmPathLookup: string;
+		warningMultipleNpm: string;
+		npm: string;
+		cannotUpdateNpmUnavailable: string;
+		npmGlobalPrefix: string;
+		npmGlobalRoot: string;
+		snowPath: string;
+		snowPathLookup: string;
+		warningMultipleSnow: string;
+		warningSnowOutsidePrefix: string;
+		globalSnowAiPackage: string;
+		globalSnowAiPackageLabel: string;
+		npmRegistry: string;
+		warningNonOfficialRegistry: string;
+		officialLatestVersion: string;
+		latestOfficialRegistry: string;
+		configuredLatestVersion: string;
+		latestConfiguredRegistry: string;
+		warningRegistryLatestDiffers: string;
+		currentSnowAi: string;
+		updateCheckFailed: string;
+		alreadyUpToDate: string;
+		updatePossibleWithWarnings: string;
+		environmentSuitable: string;
 	};
 	// Menu
 	menu: {
@@ -54,6 +158,7 @@ export type TranslationKeys = {
 		notSet: string;
 		browserPath: string;
 		autoDetect: string;
+		searchEngine: string;
 		errors: string;
 		editingHint: string;
 		navigationHint: string;
@@ -83,6 +188,10 @@ export type TranslationKeys = {
 		embeddingApiKey: string;
 		embeddingApiKeyOptional: string;
 		embeddingDimensions: string;
+		embeddingSettingsGroup: string;
+		embeddingSettingsExpandHint: string;
+		batchSettingsGroup: string;
+		batchSettingsExpandHint: string;
 		batchMaxLines: string;
 		batchConcurrency: string;
 		notSet: string;
@@ -104,6 +213,19 @@ export type TranslationKeys = {
 		chunkingMinLinesPerChunk: string;
 		chunkingMinCharsPerChunk: string;
 		chunkingOverlapLines: string;
+		rerankingToggle: string;
+		rerankingSettingsGroup: string;
+		rerankingSettingsExpandHint: string;
+		rerankingModelName: string;
+		rerankingBaseUrl: string;
+		rerankingApiKey: string;
+		rerankingContextLength: string;
+		rerankingTopN: string;
+		rerankingNotConfigured: string;
+		validationRerankingModelNameRequired: string;
+		validationRerankingBaseUrlRequired: string;
+		validationRerankingContextLengthPositive: string;
+		validationRerankingTopNPositive: string;
 		saveError: string;
 		gitignoreNotFound: string;
 		enterValue: string;
@@ -154,6 +276,10 @@ export type TranslationKeys = {
 		moreBelow: string;
 		profile: string;
 		baseUrl: string;
+		baseUrlMode: string;
+		baseUrlModeAuto: string;
+		baseUrlModeBase: string;
+		baseUrlModeEndpoint: string;
 		apiKey: string;
 		requestMethod: string;
 		requestUrlLabel: string;
@@ -182,13 +308,32 @@ export type TranslationKeys = {
 		geminiThinkingLevel: string;
 		responsesReasoningEnabled: string;
 		responsesReasoningEffort: string;
+		responsesReasoningMode: string;
+		responsesReasoningModeNone: string;
 		responsesVerbosity: string;
 		responsesFastMode: string;
+		chatThinkingEnabled: string;
+		chatReasoningEffort: string;
 		advancedModel: string;
 		basicModel: string;
+		supportsVision: string;
+		supportsVisionYes: string;
+		supportsVisionNo: string;
+		visionConfig: string;
+		visionConfigTitle: string;
+		visionConfigSubtitle: string;
+		visionConfigOpenHint: string;
+		visionConfigNavigationHint: string;
+		visionBaseUrl: string;
+		visionBaseUrlMode: string;
+		visionApiKey: string;
+		visionRequestMethod: string;
+		visionModel: string;
 		maxContextTokens: string;
 		maxTokens: string;
 		streamIdleTimeoutSec: string;
+		maxRetries: string;
+		retryDelayMs: string;
 		toolResultTokenLimit: string;
 		toolResultTokenLimitHint: string;
 		toolResultTokenLimitDesc: string;
@@ -249,6 +394,16 @@ export type TranslationKeys = {
 		followGlobalNoneWithParentheses: string;
 		notUse: string;
 		systemPromptMultiSelectHint: string;
+		modelSelectFilterLabel: string;
+		modelSelectModelCount: string;
+		modelSelectScrollHint: string;
+		apiConnectionGroup: string;
+		promptHeadersGroup: string;
+		displayCompressGroup: string;
+		reasoningGroup: string;
+		modelGroup: string;
+		tokenTimeoutGroup: string;
+		groupExpandHint: string;
 	};
 	// Custom Headers Screen
 	customHeaders: {
@@ -289,6 +444,7 @@ export type TranslationKeys = {
 		headerKeyPlaceholder: string;
 		headerValuePlaceholder: string;
 		headerEditingHint: string;
+		placeholderHint: string;
 	};
 	subAgentConfig: {
 		title: string;
@@ -321,6 +477,7 @@ export type TranslationKeys = {
 		terminalTools: string;
 		todoTools: string;
 		webSearchTools: string;
+		snowDocsTools: string;
 		ideTools: string;
 		userInteractionTools: string;
 		skillTools: string;
@@ -420,10 +577,57 @@ export type TranslationKeys = {
 		solarizedDarkInfo: string;
 		nord: string;
 		nordInfo: string;
+		tiffany: string;
+		tiffanyInfo: string;
+		macaronPink: string;
+		macaronPinkInfo: string;
+		trumpGold: string;
+		trumpGoldInfo: string;
+		chinaRed: string;
+		chinaRedInfo: string;
+		evaPurple: string;
+		evaPurpleInfo: string;
 		custom: string;
 		customInfo: string;
 		editCustom: string;
 		editCustomInfo: string;
+	};
+	privacySettings: {
+		title: string;
+		apiConfig: string;
+		apiConfigInfo: string;
+		toolResultsConfig: string;
+		toolResultsConfigInfo: string;
+		enablePrivacy: string;
+		enablePrivacyInfo: string;
+		enabled: string;
+		disabled: string;
+		modeLabel: string;
+		modeApi: string;
+		modeApiInfo: string;
+		modeLocalRules: string;
+		modeLocalRulesInfo: string;
+		modeSelectInfo: string;
+		configLocation: string;
+		projectLocation: string;
+		projectLocationInfo: string;
+		globalLocation: string;
+		globalLocationInfo: string;
+		scopeSelectInfo: string;
+		urlLabel: string;
+		urlInfo: string;
+		apiKeyLabel: string;
+		apiKeyInfo: string;
+		modelLabel: string;
+		modelInfo: string;
+		notSet: string;
+		configured: string;
+		optional: string;
+		save: string;
+		saveInfo: string;
+		savedInfo: string;
+		back: string;
+		backInfo: string;
 	};
 	customTheme: {
 		title: string;
@@ -521,6 +725,36 @@ export type TranslationKeys = {
 		useCommandPrefix: string;
 		useCommandSuffix: string;
 	};
+	telemetryPanel: {
+		title: string;
+		description1: string;
+		description2: string;
+		enableTelemetry: string;
+		serviceName: string;
+		tracesExporter: string;
+		metricsExporter: string;
+		logsExporter: string;
+		otlpProtocol: string;
+		otlpEndpoint: string;
+		otlpHeaders: string;
+		injectSessionIdHeader: string;
+		captureContent: string;
+		contentMaxLength: string;
+		hintEnabled: string;
+		hintServiceName: string;
+		hintTracesExporter: string;
+		hintMetricsExporter: string;
+		hintLogsExporter: string;
+		hintOtlpProtocol: string;
+		hintOtlpEndpoint: string;
+		hintOtlpHeaders: string;
+		hintInjectSessionIdHeader: string;
+		hintCaptureContent: string;
+		hintContentMaxLength: string;
+		empty: string;
+		savedMessage: string;
+		navigationHint: string;
+	};
 	// Command Panel
 	commandPanel: {
 		title: string;
@@ -535,6 +769,7 @@ export type TranslationKeys = {
 			help: string;
 			clear: string;
 			copyLast: string;
+			delSession: string;
 			resume: string;
 			mcp: string;
 			yolo: string;
@@ -545,6 +780,7 @@ export type TranslationKeys = {
 			home: string;
 			review: string;
 			gitline: string;
+			goal: string;
 			role: string;
 			roleSubagent: string;
 			usage: string;
@@ -554,6 +790,7 @@ export type TranslationKeys = {
 			models: string;
 			subAgentDepth: string;
 			export: string;
+			config: string;
 			custom: string;
 			skills: string;
 			skillsPicker: string;
@@ -566,16 +803,31 @@ export type TranslationKeys = {
 			permissions: string;
 			vulnerabilityHunting: string;
 			autoFormat: string;
+			simple: string;
+			buddy: string;
 			toolSearch: string;
 			hybridCompress: string;
+			imageCompress: string;
 			team: string;
+			ultraTodo: string;
+			telemetry: string;
+			branch: string; // Fork conversation into a new branch
 			worktree: string; // Git branch management panel
 			diff: string;
 			connect: string;
 			disconnect: string;
 			connectionStatus: string;
 			newPrompt: string;
+			pixel: string;
+			games: string;
 			btw: string;
+			deepresearch: string;
+			toolDisplay: string;
+			toolIcons: string;
+			toolNames: string;
+			thinkDisplay: string;
+			speedometer: string;
+			cut: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -584,6 +836,10 @@ export type TranslationKeys = {
 			copySuccess: string;
 			copyFailedPrefix: string;
 			unknownError: string;
+		};
+		delSessionFeedback: {
+			noCurrentSession: string;
+			deleteFailed: string;
 		};
 		// Command output messages (for command execution results)
 		commandOutput: {
@@ -594,13 +850,296 @@ export type TranslationKeys = {
 				statusEnabled: string;
 				statusDisabled: string;
 			};
+			// Simple mode command messages
+			simpleMode: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+			};
+			// Tool display mode command messages
+			toolDisplay: {
+				status: (mode: string) => string;
+				set: (mode: string) => string;
+				invalid: string;
+			};
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => string;
+				setEnabled: (enabled: boolean) => string;
+				setOverride: (toolName: string, icon: string) => string;
+				cleared: (toolName: string) => string;
+				setStatusEnabled: (enabled: boolean) => string;
+				setStatusOverride: (statusKey: string, icon: string) => string;
+				clearedStatus: (statusKey: string) => string;
+				invalid: string;
+			};
+			// Tool display name overrides (user-defined only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => string;
+				setOverride: (toolName: string, displayName: string) => string;
+				cleared: (toolName: string) => string;
+				batch: (set: number, cleared: number) => string;
+				clearAll: (count: number) => string;
+				invalid: string;
+			};
+			// Think display mode command messages
+			thinkDisplay: {
+				status: (mode: string) => string;
+				set: (mode: string) => string;
+				invalid: string;
+			};
+			// Speedometer command messages
+			speedometer: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+			};
+			// Buddy command messages
+			buddy: {
+				noCompanion: string;
+				statusLine: string;
+				shinyPrefix: string;
+				personalityLabel: string;
+				hatLabel: string;
+				eyeLabel: string;
+				colorLabel: string;
+				colorDefault: string;
+				mutedLabel: string;
+				mutedYes: string;
+				mutedNo: string;
+				profileLabel: string;
+				currentProfileLabel: string;
+				hatchedLabel: string;
+				statsLabel: string;
+				alreadyExists: string;
+				availableSpecies: string;
+				invalidSpecies: string;
+				hatchGreeting: string;
+				hatchedSummary: string;
+				hatchKeepChatting: string;
+				noBuddyToPet: string;
+				petReaction: string;
+				petSuccess: string;
+				noBuddyToRename: string;
+				renameUsage: string;
+				renameReaction: string;
+				renameSuccess: string;
+				noBuddyToSet: string;
+				setUsage: string;
+				setSuccess: string;
+				setReaction: string;
+				setOptionsTitle: string;
+				setOptionsHats: string;
+				setOptionsEyes: string;
+				setOptionsRarities: string;
+				setOptionsSpecies: string;
+				setOptionsColors: string;
+				setOptionsStats: string;
+				noBuddyToTalk: string;
+				sayUsage: string;
+				profileListTitle: string;
+				profileListItem: string;
+				profileUsage: string;
+				profileSet: string;
+				profileCleared: string;
+				profileNotFound: string;
+				muted: string;
+				unmutedReaction: string;
+				unmuted: string;
+				reset: string;
+				usage: string;
+				teaser: string;
+				noModelConfigured: string;
+				emptyReply: string;
+				replyError: string;
+			};
+			// Ultra TODO command messages
+			ultraTodo: {
+				toggling: string;
+				enabled: string;
+				disabled: string;
+				failed: string;
+				unknownError: string;
+			};
 			// Export command messages
 			export: {
 				exporting: string;
 				openingDialog: string;
 				cancelledByUser: string;
+				invalidFormat: string;
+				noSession: string;
+			};
+			// Config command messages
+			config: {
+				exporting: string;
+				importing: string;
+				openingDialog: string;
+				saveDialogTitle: string;
+				openDialogTitle: string;
+				cancelledByUser: string;
+				importCancelledByUser: string;
+				fileDialogUnsupported: string;
+				exportSuccess: string;
+				exportFailed: string;
+				importWarning: string;
+				importConfirmTitle: string;
+				importConfirmMessage: string;
+				importSuccess: string;
+				importFailed: string;
+				none: string;
+				usage: string;
+				unknownError: string;
+			};
+			// IDE command messages
+			ide: {
+				disconnected: string;
+				noAvailableIDEs: string;
+				unmatchedIDEs: string;
+				connectedTo: string;
+				connectFailed: string;
+			};
+			branchFork: {
+				noActiveSession: string;
+				success: string;
+				failed: string;
+			};
+			// Deep Research command messages
+			deepResearch: {
+				usage: string;
+			};
+			// Cut (interrupt) command messages
+			cut: {
+				usage: string;
+			};
+			// BTW command messages
+			btw: {
+				usage: string;
+			};
+			// Loop command messages
+			loop: {
+				usage: string;
+				openingTaskManager: string;
+				relatedLoopTasks: string;
+				noActiveLoops: string;
+				loopNotFound: string;
+				cancelled: string;
+				created: string;
+				scheduleEvery: string;
+				promptLabel: string;
+				nextRun: string;
+				sessionScopedNote: string;
+				daemonScopedNote: string;
+				logPath: string;
+				usageHint: string;
+			};
+			// Goal command messages
+			goal: {
+				noActiveGoal: string;
+				noActiveGoalInSession: string;
+				usageHeader: string;
+				usageObjective: string;
+				usageBudget: string;
+				usagePause: string;
+				usageResume: string;
+				usageResumeSession: string;
+				usageClear: string;
+				usageStatus: string;
+				tipHeader: string;
+				tipGood: string;
+				tipBad: string;
+				currentGoal: string;
+				noActiveGoalToPause: string;
+				pauseSuccess: string; // {id}
+				resumingSession: string; // {sessionId}
+				noGoalToResume: string;
+				cannotResumeStatus: string; // {status}
+				resumeSuccess: string; // {id}
+				resumeHint: string;
+				openSessionPicker: string;
+				noActiveGoalToClear: string;
+				clearSuccess: string; // {id}
+				created: string; // {id}
+				tokenBudget: string; // {budget}
+				createHint: string;
+				createFailed: string; // {error}
+				unknownError: string;
+				invalidUsage: string;
+				budgetUnlimited: string;
+				budgetMillion: string; // {value}
+				budgetThousand: string; // {value}
+				budgetTokens: string; // {value}
+			};
+			// Codebase command messages
+			codebase: {
+				notConfigured: string;
+				cannotEnable: string;
+				enabledLabel: string;
+				disabledLabel: string;
+				statusWithFiles: string; // {status} {count} {fileWord}
+				status: string; // {status}
+				fileSingular: string;
+				filePlural: string;
 			};
 		};
+	};
+	// File search list (`@` panel)
+	fileList: {
+		loadingFiles: string;
+		noFilesFound: string;
+		// Used while a deeper rescan is queued or running
+		searchingDeeper: string; // {depth}
+		// Inline status while streaming results in
+		scanning: string; // {count}
+		scanningDeeper: string; // {depth} {count}
+		// Hint shown at the bottom of the list when more directories are still
+		// available to scan, telling the user how to trigger a deeper search.
+		deeperSearchHint: string;
+		// Multi-select hint shown when no files are checked yet (instructs the
+		// user that Space toggles the checkbox and Enter inserts all checked
+		// items together).
+		multiSelectHint: string;
+		// Multi-select hint shown after at least one file has been checked.
+		// {count} is the number of currently checked items.
+		multiSelectActiveHint: string;
+		// Workspace pre-filter hint shown when @: or @@: narrows to a workspace.
+		// {filter} is the workspace filter word typed by the user.
+		workspaceFilterHint: string;
+		// Header labels
+		contentSearchHeader: string;
+		filesHeader: string; // {mode}
+		treeMode: string;
+		listMode: string;
+		// AI agent search (@?? / @@??): status / error / empty / header labels.
+		agentSearching: string; // {round}
+		agentSearchError: string; // {error}
+		agentNoResults: string;
+		agentSearchHeader: string;
+		agentPreviewAssistantPrefix: string;
+		agentPreviewRoundRequest: string; // {round} {maxRounds}
+		agentPreviewRequestedToolCalls: string; // {count}
+		agentPreviewToolCall: string; // {tool} {args}
+		agentPreviewToolResultCandidates: string; // {count}
+		agentPreviewToolResultReceived: string;
+		agentPreviewToolError: string; // {error}
+		agentPreviewParsingFinalResults: string;
+		agentPreviewFinalizing: string;
+	};
+	// IDE Select Panel
+	ideSelectPanel: {
+		title: string;
+		subtitle: string;
+		noneOption: string;
+		connectedMark: string;
+		hint: string;
+		connecting: string;
+		connectSuccess: string;
+		connectError: string;
+		unmatchedIDEs: string;
+		unmatchedHeader: string;
+		switchWorkdirMark: string;
+		switchWorkdirError: string;
 	};
 	// Profile Panel
 	profilePanel: {
@@ -610,6 +1149,8 @@ export type TranslationKeys = {
 		moreAbove: string;
 		moreBelow: string;
 		escHint: string;
+		// 提示用户按右方向键打开当前光标聚焦 profile 的编辑面板
+		editHint: string;
 		activeLabel: string;
 		searchLabel: string;
 		noResults: string;
@@ -693,7 +1234,6 @@ export type TranslationKeys = {
 		hint: string;
 		fileHint: string;
 	};
-
 	modelsPanel: {
 		title: string;
 		subtitle: string;
@@ -726,6 +1266,8 @@ export type TranslationKeys = {
 		saveFailed: string;
 		modelSaveFailed: string;
 		tipLabel: string;
+		modelCount: string;
+		scrollHint: string;
 	};
 
 	// Hooks
@@ -753,6 +1295,7 @@ export type TranslationKeys = {
 			beforeCompress: string;
 			onSessionStart: string;
 			onStop: string;
+			beforeSubAgentStart: string;
 		};
 		hookList: {
 			title: string;
@@ -826,6 +1369,12 @@ export type TranslationKeys = {
 		namePlaceholder: string;
 		commandLabel: string;
 		commandPlaceholder: string;
+		commandLabelExecute: string;
+		commandLabelPrompt: string;
+		commandLabelPanel: string;
+		commandPlaceholderExecute: string;
+		commandPlaceholderPrompt: string;
+		commandPlaceholderPanel: string;
 		descriptionLabel: string;
 		descriptionPlaceholder: string;
 		descriptionHint: string;
@@ -833,6 +1382,8 @@ export type TranslationKeys = {
 		typeLabel: string;
 		typeExecute: string;
 		typePrompt: string;
+		typePanel: string;
+		typePanelHint: string;
 		locationLabel: string;
 		locationGlobal: string;
 		locationProject: string;
@@ -844,6 +1395,7 @@ export type TranslationKeys = {
 		escCancel: string;
 		resultTypeExecute: string;
 		resultTypePrompt: string;
+		resultTypePanel: string;
 		resultLocationGlobal: string;
 		resultLocationProject: string;
 		saveSuccessMessage: string;
@@ -858,11 +1410,13 @@ export type TranslationKeys = {
 		headerYolo: string;
 		headerShortcuts: string;
 		headerExpandedView: string;
+		headerSimpleHint: string;
 		headerWorkingDirectory: string;
 		// Status messages
 		statusThinking: string;
 		statusDeepThinking: string;
 		statusWriting: string;
+		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;
 		statusIndexing: string;
@@ -884,6 +1438,7 @@ export type TranslationKeys = {
 		profileSwitchHint: string;
 		gitBranch: string;
 		memoryUsageLabel: string;
+		speedometerLabel: string;
 		// Tool execution
 		toolCall: string;
 		toolThinking: string;
@@ -901,6 +1456,13 @@ export type TranslationKeys = {
 		assistantMessage: string;
 		commandMessage: string;
 		discontinuedMessage: string;
+		aiCompletionTimeMessage: string;
+		aiCompletionTimeWithDurationMessage: string;
+		compressionSummaryAutoTitle: string;
+		compressionSummaryManualTitle: string;
+		compressionSummaryStats: string;
+		compressionSummaryPreviewPrefix: string;
+		compressionSummaryOriginalSaved: string;
 		// File operations
 		fileCreated: string;
 		fileModified: string;
@@ -994,6 +1556,7 @@ export type TranslationKeys = {
 		rollbackConversation: string;
 		rollbackWarning: string;
 		// Session
+		chatInitializing: string;
 		sessionCreating: string;
 		sessionLoading: string;
 		sessionSaving: string;
@@ -1017,6 +1580,7 @@ export type TranslationKeys = {
 		pressCtrlC: string;
 		pressCtrlR: string;
 		pressCtrlS: string;
+		loadingTips: string[];
 		// Context
 		contextUsage: string;
 		contextPercentage: string;
@@ -1035,7 +1599,10 @@ export type TranslationKeys = {
 		vulnerabilityHuntingModeActive: string;
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;
+		imageCompressEnabled: string;
 		teamModeActive: string;
+		ultraTodoActive: string;
+		telemetryActive: string;
 		tokens: string;
 		cached: string;
 		newCache: string;
@@ -1080,6 +1647,7 @@ export type TranslationKeys = {
 		modeLabel: string;
 		modeAi: string;
 		modeManual: string;
+		modeInstall: string;
 		requirementLabel: string;
 		requirementHint: string;
 		requirementPlaceholder: string;
@@ -1119,6 +1687,25 @@ export type TranslationKeys = {
 		createSuccessMessage: string;
 		createErrorMessage: string;
 		errorUnknown: string;
+	};
+	skillsInstall: {
+		title: string;
+		urlLabel: string;
+		urlPlaceholder: string;
+		urlHint: string;
+		urlExamples: string;
+		urlActions: string;
+		locationLabel: string;
+		locationGlobal: string;
+		locationProject: string;
+		locationActions: string;
+		installing: string;
+		installingHint: string;
+		installSuccess: string;
+		batchInstallSuccess: string;
+		installError: string;
+		errorUnknown: string;
+		resultActions: string;
 	};
 	roleCreation: {
 		title: string;
@@ -1169,6 +1756,10 @@ export type TranslationKeys = {
 		cannotDeleteActive: string;
 		confirmDelete: string;
 		confirmDeleteHint: string;
+		overrideTag: string;
+		overrideEnabled: string;
+		overrideDisabled: string;
+		cannotOverrideInactive: string;
 	};
 	roleSubagentCreation: {
 		title: string;
@@ -1313,6 +1904,7 @@ export type TranslationKeys = {
 		filesCountWithSelection: string;
 		notebookCount: string;
 		teamCount: string;
+		todoCount: string;
 		question: string;
 		conversationOnly: string;
 		conversationAndFiles: string;
@@ -1412,6 +2004,10 @@ export type TranslationKeys = {
 		title: string;
 		noSnapshots: string;
 		navigationHint: string;
+		filesSuffix: string;
+		filesViewNavigationHint: string;
+		moreAbove: string;
+		moreBelow: string;
 	};
 	sessionListPanel: {
 		title: string;
@@ -1433,6 +2029,7 @@ export type TranslationKeys = {
 		renamePrompt: string;
 		renaming: string;
 		renamePlaceholder: string;
+		confirmDelete: string;
 	};
 	mcpInfoPanel: {
 		title: string;
@@ -1464,6 +2061,28 @@ export type TranslationKeys = {
 		mcpSourceProject: string;
 		mcpSourceGlobal: string;
 	};
+	skillsListPanel: {
+		title: string;
+		loading: string;
+		error: string;
+		noSkills: string;
+		locationProject: string;
+		locationGlobal: string;
+		statusDisabled: string;
+		navigationHint: string;
+		moreAbove: string;
+		moreBelow: string;
+		updateInProgress: string;
+		updateSingleSuccess: string;
+		updateSingleUpToDate: string;
+		updateNoSkills: string;
+		updateFailed: string;
+		updateTimeout: string;
+		updateAllInProgress: string;
+		updateResult: string;
+		updateAllUpToDate: string;
+		updatePartial: string;
+	};
 	mcpConfigScreen: {
 		title: string;
 		scopeProject: string;
@@ -1473,6 +2092,10 @@ export type TranslationKeys = {
 		configErrors: string;
 		reverted: string;
 		invalidJson: string;
+	};
+	// Command Args Panel
+	commandArgsPanel: {
+		navigationHint: string;
 	};
 	// Running Agents Panel
 	runningAgentsPanel: {
@@ -1555,10 +2178,84 @@ export type TranslationKeys = {
 		errorPrefix: string;
 		scrollHint: string;
 	};
+	pixelEditor: {
+		title: string;
+		palette: string;
+		eraser: string;
+		colorNumber: string;
+		canvasCleared: string;
+		clearCancelled: string;
+		saveCancelled: string;
+		nameCannotBeEmpty: string;
+		savedAs: string;
+		controlsHint: string;
+		controlsHintPosBrush: string;
+		saveDrawingLabel: string;
+		namePlaceholder: string;
+		escCancelHint: string;
+		confirmClearCanvas: string;
+	};
+	pixelEditorScreen: {
+		screenTitle: string;
+		newCanvas: string;
+		manageDrawings: string;
+		menuNavigateHint: string;
+		manageTitle: string;
+		noDrawings: string;
+		managerHint: string;
+		confirmDeleteMany: string;
+		moreAbove: string;
+		moreBelow: string;
+		selectedCount: string;
+		exitImageDisabled: string;
+		failedDisableExitImage: string;
+		setAsExitImage: string;
+	};
+	gamesScreen: {
+		screenTitle: string;
+		loading: string;
+		noGames: string;
+		menuHint: string;
+		moreAbove: string;
+		moreBelow: string;
+		pluginDirHint: string;
+	};
+	anyPanel: {
+		loading: string;
+		errorTitle: string;
+		pluginNotFound: string;
+		loadError: string;
+		renderError: string;
+		pressEscToClose: string;
+	};
+	agentPickerPanel: {
+		title: string;
+		noAgentsWarning: string;
+		selectAgent: string;
+		escHint: string;
+		noDescription: string;
+		scrollHint: string;
+		moreAbove: string;
+		moreBelow: string;
+	};
+	todoPickerPanel: {
+		title: string;
+		scanning: string;
+		noTodosFound: string;
+		noMatchSearch: string;
+		typeToClearSearch: string;
+		selectTodos: string;
+		filteringLabel: string;
+		typeToFilterHint: string;
+		typeToSearchHint: string;
+		selectedCount: string;
+		noDescription: string;
+	};
 	exitScreen: {
 		title: string;
 		goodbye: string;
 		thankYou: string;
+		resumeSession: string;
 		version: string;
 	};
 };

@@ -1,7 +1,35 @@
 import {EventEmitter} from 'events';
 
 export type ConfigChangeEvent = {
-	type: 'showThinking' | 'simpleMode' | 'other';
+	type:
+		| 'showThinking'
+		| 'simpleMode'
+		| 'toolDisplayMode'
+		| 'toolIcons'
+		| 'toolStatusIcons'
+		| 'toolDisplayNames'
+		| 'thinkDisplayMode'
+		| 'yoloMode'
+		| 'planMode'
+		| 'teamMode'
+		| 'vulnerabilityHuntingMode'
+		| 'toolSearchEnabled'
+		| 'ultraTodoEnabled'
+		| 'imageCompressEnabled'
+		| 'hybridCompressEnabled'
+		| 'speedometerEnabled'
+		| 'autoFormatEnabled'
+		| 'telemetryEnabled'
+		| 'subAgentMaxSpawnDepth'
+		| 'fileListDisplayMode'
+		| 'language'
+		| 'privacy'
+		| 'codebaseEnabled'
+		| 'codebaseFlags'
+		| 'theme'
+		| 'customColors'
+		| 'diffOpacity'
+		| 'other';
 	value: any;
 };
 

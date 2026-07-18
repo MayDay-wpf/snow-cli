@@ -11,12 +11,19 @@ import {
 	performAutoCompression,
 } from '../../../utils/core/autoCompress.js';
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	DEFAULT_AUTO_COMPRESS_THRESHOLD,
 } from '../../../utils/config/apiConfig.js';
 import {runningSubAgentTracker} from '../../../utils/execution/runningSubAgentTracker.js';
 import {teamTracker} from '../../../utils/execution/teamTracker.js';
 import {compressionCoordinator} from '../../../utils/core/compressionCoordinator.js';
+import {goalManager} from '../../../utils/task/goalManager.js';
+import {getProjectName} from '../../../utils/session/projectUtils.js';
+import {
+	notifyAgentTurnComplete,
+	shouldNotifyAgentTurnCompletion,
+} from '../../../utils/platform/notification.js';
+import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
 
 interface MessageTarget {
 	instanceId: string;
@@ -94,33 +101,81 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		setCompressionError,
 		currentContextPercentageRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
+		hasFocus,
 	} = props;
 
-	const processMessageRef =
-		useRef<
-			(
+	const processMessageRef = useRef<
+		| ((
 				message: string,
 				images?: Array<{data: string; mimeType: string}>,
 				useBasicModel?: boolean,
 				hideUserMessage?: boolean,
-			) => Promise<void>
-		>();
+		  ) => Promise<void>)
+		| null
+	>(null);
 
 	const yoloModeRef = useRef(yoloMode);
+	const hasFocusRef = useRef(hasFocus ?? true);
 
 	useEffect(() => {
 		yoloModeRef.current = yoloMode;
 	}, [yoloMode]);
+
+	useEffect(() => {
+		hasFocusRef.current = hasFocus ?? true;
+	}, [hasFocus]);
+
+	const appendAiCompletionTimeMessage = (durationMs?: number) => {
+		setMessages(prev => {
+			// 连续自动续跑（onStop/goal 等）可能多次收尾；折叠尾部旧的结束时间，
+			// 只保留最终一次，避免 UI 叠出两条 “AI 结束时间”。
+			const next = [...prev];
+			while (next.length > 0) {
+				const last = next[next.length - 1];
+				if (!last?.aiCompletionTime) {
+					break;
+				}
+				next.pop();
+			}
+			next.push({
+				role: 'assistant',
+				content: '',
+				streaming: false,
+				aiCompletionTime: new Date(),
+				aiCompletionDurationMs:
+					typeof durationMs === 'number' &&
+					Number.isFinite(durationMs) &&
+					durationMs >= 0
+						? durationMs
+						: undefined,
+			});
+			return next;
+		});
+	};
+
+	const notifyAgentTurnWaitingForInput = () => {
+		notifyAgentTurnComplete({
+			projectName: getProjectName(),
+		});
+	};
 
 	const processMessage = async (
 		message: string,
 		images?: Array<{data: string; mimeType: string}>,
 		useBasicModel?: boolean,
 		hideUserMessage?: boolean,
+		/**
+		 * Optional text for the chat bubble only.
+		 * When onUserMessage hooks replace the prompt (exit 1 inject), keep the
+		 * user-typed text visible while `message` (possibly enriched) goes to the AI.
+		 */
+		displayMessage?: string,
 	) => {
-		const autoCompressConfig = getOpenAiConfig();
+		const turnStartTime = Date.now();
+		const autoCompressConfig = getSnowConfig();
 		if (
 			autoCompressConfig.enableAutoCompress !== false &&
 			shouldAutoCompress(
@@ -133,35 +188,65 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			streamingState.setIsAutoCompressing(true);
 			setCompressionError(null);
 
+			let sessionId = sessionManager.getCurrentSession()?.id;
+			let lastCompressionStep: string | null = 'saving';
+			props.onCompressionStatus?.({
+				step: 'saving',
+				message: 'Auto-compressing context due to token limit...',
+				sessionId,
+			});
+
 			await compressionCoordinator.acquireLock('main');
 			try {
-				const compressingMessage: Message = {
-					role: 'assistant',
-					content: '✵ Auto-compressing context due to token limit...',
-					streaming: false,
-				};
-				setMessages(prev => [...prev, compressingMessage]);
+				sessionId = sessionManager.getCurrentSession()?.id;
+				const compressionResult = await performAutoCompression(
+					sessionId,
+					status => {
+						lastCompressionStep = status?.step ?? null;
+						props.onCompressionStatus?.(status);
+					},
+				);
 
-				const session = sessionManager.getCurrentSession();
-				const compressionResult = await performAutoCompression(session?.id);
+				if (compressionResult && (compressionResult as any).hookFailed) {
+					const errorMsg = 'Blocked by beforeCompress hook';
+					setCompressionError(errorMsg);
+					props.onCompressionStatus?.({
+						step: 'failed',
+						message: errorMsg,
+						sessionId,
+					});
+					setTimeout(() => {
+						props.onCompressionStatus?.(null);
+					}, 5000);
+					return;
+				}
 
 				if (compressionResult) {
+					props.onCompressionStatus?.(null);
 					clearSavedMessages();
 					setMessages(compressionResult.uiMessages);
 					setRemountKey(prev => prev + 1);
 					streamingState.setContextUsage(compressionResult.usage);
 					snapshotState.setSnapshotFileCount(new Map());
-				} else {
-					setMessages(prev => prev.filter(m => m !== compressingMessage));
+				} else if (lastCompressionStep !== 'failed') {
+					props.onCompressionStatus?.(null);
 				}
 			} catch (error) {
 				const errorMsg =
 					error instanceof Error ? error.message : 'Unknown error';
 				setCompressionError(errorMsg);
+				props.onCompressionStatus?.({
+					step: 'failed',
+					message: errorMsg,
+					sessionId,
+				});
+				setTimeout(() => {
+					props.onCompressionStatus?.(null);
+				}, 5000);
 
 				const errorMessage: Message = {
 					role: 'assistant',
-					content: `**Auto-compression Failed**\n\n${errorMsg}`,
+					content: `**Auto-compression Failed**`,
 					streaming: false,
 				};
 				setMessages(prev => [...prev, errorMessage]);
@@ -177,9 +262,20 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		streamingState.setRetryStatus(null);
 
+		// UI bubble: prefer user-typed text when hooks rewrote the AI prompt.
+		const uiSource =
+			typeof displayMessage === 'string' && displayMessage.length > 0
+				? displayMessage
+				: message;
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			message,
+			uiSource,
 		);
+		// AI path: may include onUserMessage inject tags (snow-mode / workflow-state).
+		const aiSource = message;
+		const aiCleanContent =
+			aiSource === uiSource
+				? cleanContent
+				: (await parseAndValidateFileReferences(aiSource)).cleanContent;
 
 		const imageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
@@ -213,9 +309,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const controller = new AbortController();
 		streamingState.setAbortController(controller);
 
-		let originalMessage = message;
-		let optimizedMessage = message;
-		let optimizedCleanContent = cleanContent;
+		// originalMessage = what the user typed (for session originalContent).
+		// optimizedMessage / AI body may be hook-enriched.
+		let originalMessage = uiSource;
+		let optimizedMessage = aiSource;
+		let optimizedCleanContent = aiCleanContent;
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(
@@ -223,6 +321,22 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				regularFiles,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
+
+			// ── /goal continuation injection ──
+			// 如果当前会话有活跃目标且需要续接，将 continuation prompt
+			// 追加到本轮 messageForAI.content 末尾。该提示词不写入用户消息历史，
+			// 仅作为本轮 AI 输入的一部分，驱动 Ralph Loop。
+			try {
+				const continuationPrompt =
+					await goalManager.consumePendingContinuation();
+				if (continuationPrompt) {
+					messageForAI.content = messageForAI.content
+						? `${messageForAI.content}\n\n${continuationPrompt}`
+						: continuationPrompt;
+				}
+			} catch (err) {
+				console.error('[goal] consumePendingContinuation failed:', err);
+			}
 
 			const saveMessageWithOriginal = async (msg: any) => {
 				if (msg.role === 'user' && optimizedMessage !== originalMessage) {
@@ -237,6 +351,26 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						editorContext:
 							msg.role === 'user' ? messageForAI.editorContext : undefined,
 					});
+				}
+			};
+
+			// /goal: 跟踪本轮 token 用量。包装 setContextUsage，每次更新都把
+			// total_tokens 增量累加给 goalManager；超出预算时切到 budget-limited。
+			let lastSeenTotalTokens = 0;
+			const wrappedSetContextUsage = (usage: any) => {
+				streamingState.setContextUsage(usage);
+				try {
+					if (usage && typeof usage.total_tokens === 'number') {
+						const delta = Math.max(0, usage.total_tokens - lastSeenTotalTokens);
+						if (delta > 0) {
+							lastSeenTotalTokens = usage.total_tokens;
+							void goalManager.accrueTokens(delta).catch(err => {
+								console.error('[goal] accrueTokens failed:', err);
+							});
+						}
+					}
+				} catch (err) {
+					console.error('[goal] wrappedSetContextUsage failed:', err);
 				}
 			};
 
@@ -259,7 +393,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					vulnerabilityHuntingMode,
 					teamMode,
 					toolSearchDisabled,
-					setContextUsage: streamingState.setContextUsage,
+					setContextUsage: wrappedSetContextUsage,
 					useBasicModel,
 					getPendingMessages: () => pendingMessagesRef.current,
 					clearPendingMessages: () => setPendingMessages([]),
@@ -273,6 +407,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					onThinkingStatus: props.onThinkingStatus,
 					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
@@ -290,8 +425,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}
+			props.onThinkingStatus?.(null);
 		} finally {
-			if (userInterruptedRef.current) {
+			// CRITICAL: 必须先用局部变量快照住 userInterruptedRef.current 的值！
+			// 下面的清理逻辑会把它 reset 为 false，之后 goal 续接调度（最末尾）
+			// 如果还读 userInterruptedRef.current，会得到错误的 false，导致 ESC 中断
+			// 后仍然立即触发下一轮续接（典型 bug 现象：用户按 ESC 不能停）。
+			const wasUserInterrupted = userInterruptedRef.current;
+			const wasCutInterrupt = cutInterruptRef.current;
+
+			if (wasUserInterrupted) {
 				const session = sessionManager.getCurrentSession();
 				if (session && session.messages.length > 0) {
 					(async () => {
@@ -358,27 +501,91 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					})();
 				}
 
-				setMessages(prev => [
-					...prev,
-					{
-						role: 'assistant',
-						content: '',
-						streaming: false,
-						discontinued: true,
-					},
-				]);
+				// /cut 中断时静默过渡：不追加 discontinued 标记消息，
+				// 让用户消息直接紧接 AI 的不完整回复，避免割裂感。
+				if (!wasCutInterrupt) {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: '',
+							streaming: false,
+							discontinued: true,
+						},
+					]);
+				}
 
 				userInterruptedRef.current = false;
+				cutInterruptRef.current = false;
 
 				streamingState.setIsStopping(false);
 			}
 
+			// /cut 中断时跳过 AI 完成时间标记，避免与用户消息间产生割裂的视觉间隔
+			if (!wasCutInterrupt) {
+				appendAiCompletionTimeMessage(Date.now() - turnStartTime);
+			}
+
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);
-			streamingState.setIsStreaming(false);
-			streamingState.setAbortController(null);
-			streamingState.setStreamTokenCount(0);
+
+			// ── /goal Ralph Loop continuation scheduling ──
+			// 用本轮初始快照的 wasUserInterrupted 判定，避免 ref 已被 reset 的陷阱。
+			// 同时再次校验 goal 当前状态：用户 ESC 时 handleInterrupt 会把 goal 置为
+			// paused，所以即使 wasUserInterrupted 漏判，status !== 'pursuing' 也能兜底。
+			void (async () => {
+				let willAutoContinue = false;
+
+				try {
+					if (!wasUserInterrupted) {
+						const current = await goalManager.loadCurrentGoal();
+						if (current?.status === 'pursuing') {
+							willAutoContinue = true;
+							await goalManager.markPendingContinuation();
+							// 调度下一轮：用空消息 + hideUserMessage 触发，使续接 prompt 作为唯一输入
+							setTimeout(() => {
+								const ref = processMessageRef.current;
+								if (ref) {
+									void ref('', undefined, false, true).catch(err => {
+										console.error('[goal] auto-continuation failed:', err);
+									});
+								}
+							}, 0);
+						} else if (
+							current?.status === 'budget-limited' &&
+							current.pendingContinuation
+						) {
+							willAutoContinue = true;
+							// 预算已耗尽，但还有一次 budget_limit 收尾轮次
+							setTimeout(() => {
+								const ref = processMessageRef.current;
+								if (ref) {
+									void ref('', undefined, false, true).catch(err => {
+										console.error('[goal] budget-limit wrap-up failed:', err);
+									});
+								}
+							}, 0);
+						}
+					}
+				} catch (err) {
+					console.error('[goal] continuation scheduling failed:', err);
+				} finally {
+					if (
+						shouldNotifyAgentTurnCompletion({
+							terminalFocused: hasFocusRef.current,
+							wasUserInterrupted,
+							willAutoContinue,
+							pendingMessageCount: pendingMessagesRef.current.length,
+							hasOnStopHook: hasEnabledHookActions('onStop'),
+						})
+					) {
+						notifyAgentTurnWaitingForInput();
+					}
+				}
+			})();
 		}
 	};
 
@@ -417,9 +624,9 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						messageWithoutTargets,
 					);
 					if (success) {
-						const agentInfo = runningSubAgentTracker.getRunningAgents().find(
-							a => a.instanceId === target.instanceId,
-						);
+						const agentInfo = runningSubAgentTracker
+							.getRunningAgents()
+							.find(a => a.instanceId === target.instanceId);
 						rawPrompt = agentInfo?.prompt || '';
 					}
 				}
@@ -463,6 +670,13 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			return;
 		}
 
+		// Reserve a stable identity before the first message hook. The session is
+		// still created lazily after the hook succeeds.
+		const current = sessionManager.getCurrentSession();
+		const sessionId = current?.id ?? sessionManager.reserveNewSessionId();
+
+		// Keep user-typed text for the bubble; hook replace only rewrites AI input.
+		const typedMessage = message;
 		try {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
@@ -472,9 +686,20 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			);
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
-				{message, imageCount: images?.length || 0, source: 'normal'},
+				{
+					message,
+					imageCount: images?.length || 0,
+					source: 'normal',
+					sessionId,
+					cwd: process.cwd(),
+					messageCount: current?.messages?.length ?? 0,
+				},
 			);
-			const interpreted = interpretHookResult('onUserMessage', hookResult, message);
+			const interpreted = interpretHookResult(
+				'onUserMessage',
+				hookResult,
+				message,
+			);
 
 			if (interpreted.action === 'block' && interpreted.errorDetails) {
 				setMessages(prev => [
@@ -488,9 +713,16 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				]);
 				return;
 			}
-			if (interpreted.action === 'replace' && interpreted.replacedContent) {
-				message = interpreted.replacedContent;
-			}
+
+			const pending = sessionManager.consumePendingAdditionalContext();
+			const {applyOnUserMessageHookResult} = await import(
+				'../../../utils/execution/hookContextInject.js'
+			);
+			message = applyOnUserMessageHookResult(
+				message,
+				interpreted,
+				pending.context,
+			);
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
@@ -509,7 +741,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (pureBashResult.hasCommands) {
 				if (pureBashResult.hasRejectedCommands) {
 					setRestoreInputContent({
-						text: message,
+						text: typedMessage,
 						images: images?.map(img => ({type: 'image' as const, ...img})),
 					});
 					return;
@@ -583,18 +815,15 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			console.error('Failed to process bash commands:', error);
 		}
 
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) {
-			await sessionManager.createNewSession();
-		}
-
-		await processMessage(message, images);
+		// typedMessage = bubble text; message may be hook-enriched for the model.
+		await processMessage(message, images, undefined, undefined, typedMessage);
 	};
 
 	const processPendingMessages = async () => {
 		const pendingMessages = pendingMessagesRef.current;
 		if (pendingMessages.length === 0) return;
 
+		const turnStartTime = Date.now();
 		streamingState.setRetryStatus(null);
 
 		const messagesToProcess = [...pendingMessages];
@@ -602,6 +831,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
+		// Bubble shows user-typed combined text; AI may get hook inject.
+		const typedPending = combinedMessage;
 		let messageToSend = combinedMessage;
 		try {
 			const {unifiedHooksExecutor} = await import(
@@ -611,11 +842,23 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				'../../../utils/execution/hookResultInterpreter.js'
 			);
 			const allImages = messagesToProcess.flatMap(m => m.images || []);
+			const current = sessionManager.getCurrentSession();
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onUserMessage',
-				{message: combinedMessage, imageCount: allImages.length, source: 'pending'},
+				{
+					message: combinedMessage,
+					imageCount: allImages.length,
+					source: 'pending',
+					sessionId: current?.id,
+					cwd: process.cwd(),
+					messageCount: current?.messages?.length ?? 0,
+				},
 			);
-			const interpreted = interpretHookResult('onUserMessage', hookResult, combinedMessage);
+			const interpreted = interpretHookResult(
+				'onUserMessage',
+				hookResult,
+				combinedMessage,
+			);
 
 			if (interpreted.action === 'block' && interpreted.errorDetails) {
 				setMessages(prev => [
@@ -629,16 +872,26 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				]);
 				return;
 			}
-			if (interpreted.action === 'replace' && interpreted.replacedContent) {
-				messageToSend = interpreted.replacedContent;
-			}
+			const pending = sessionManager.consumePendingAdditionalContext();
+			const {applyOnUserMessageHookResult} = await import(
+				'../../../utils/execution/hookContextInject.js'
+			);
+			messageToSend = applyOnUserMessageHookResult(
+				messageToSend,
+				interpreted,
+				pending.context,
+			);
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
 
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
-			messageToSend,
+			typedPending,
 		);
+		const aiCleanPending =
+			messageToSend === typedPending
+				? cleanContent
+				: (await parseAndValidateFileReferences(messageToSend)).cleanContent;
 
 		const imageFiles = validFiles.filter(
 			f => f.isImage && f.imageData && f.mimeType,
@@ -678,7 +931,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		try {
 			const messageForAI = createMessageWithFileInstructions(
-				cleanContent,
+				aiCleanPending,
 				regularFiles,
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
@@ -715,6 +968,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						currentContextPercentageRef.current,
 					setCurrentModel: streamingState.setCurrentModel,
 					onCompressionStatus: props.onCompressionStatus,
+					onThinkingStatus: props.onThinkingStatus,
 					setIsAutoCompressing: streamingState.setIsAutoCompressing,
 				});
 			} finally {
@@ -732,6 +986,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				};
 				setMessages(prev => [...prev, finalMessage]);
 			}
+			props.onThinkingStatus?.(null);
 		} finally {
 			if (userInterruptedRef.current) {
 				const session = sessionManager.getCurrentSession();
@@ -800,6 +1055,10 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				streamingState.setIsStopping(false);
 			}
 
+			appendAiCompletionTimeMessage(Date.now() - turnStartTime);
+
+			props.onThinkingStatus?.(null);
+			streamingState.setIsReasoning(false);
 			streamingState.setIsStreaming(false);
 			streamingState.setAbortController(null);
 			streamingState.setStreamTokenCount(0);

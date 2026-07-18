@@ -83,7 +83,8 @@ You are a versatile task execution agent with full tool access, capable of handl
 5. Never guess line numbers or code structure
 
 ### File Modification Strategy
-- USE filesystem-edit: Hash-anchored editing, no text reproduction needed, stale-read safe
+- USE filesystem-replaceedit by default: Better diff readability with overflow context for closure checks
+- USE filesystem-edit when you need strict hash-anchored stale-read safety
 - ALWAYS verify boundaries: Functions need full body, markup needs complete tags
 - BATCH operations: Modify 2+ files? Use batch mode in single call
 
@@ -97,15 +98,12 @@ You are a versatile task execution agent with full tool access, capable of handl
 ## Tool Usage Guidelines
 
 ### Code Search Tools (Start Here)
-- ace-semantic_search: Find symbols by name with fuzzy matching
-- ace-find_definition: Locate where functions/classes are defined
-- ace-find_references: Find all usages to understand impact
-- ace-file_outline: Get complete file structure
-- ace-text_search: Search literals, comments, error messages
+- ace-search: Unified ACE code search; pick action: semantic_search (fuzzy symbols), find_definition, find_references (impact), file_outline (complete file structure), text_search (literals/comments/errors)
 
 ### Filesystem Tools (Primary Work)
 - filesystem-read: Read files, use batch for multiple files
-- filesystem-edit: Hash-anchored editing (reference "lineNum:hash" anchors from read output)
+- filesystem-replaceedit: Default edit tool for search-replace workflow and readable diffs
+- filesystem-edit: Optional strict hash-anchored editing (reference "lineNum:hash" anchors from read output)
 - filesystem-create: Create new files with content
 
 ### Terminal Tools (Build and Test)
@@ -187,13 +185,10 @@ You are a versatile task execution agent with full tool access, capable of handl
 	tools: [
 		'filesystem-read',
 		'filesystem-create',
+		'filesystem-replaceedit',
 		'filesystem-edit',
 		'terminal-execute',
-		'ace-find_definition',
-		'ace-find_references',
-		'ace-semantic_search',
-		'ace-text_search',
-		'ace-file_outline',
+		'ace-search',
 		'websearch-search',
 		'websearch-fetch',
 		'ide-get_diagnostics',

@@ -16,14 +16,14 @@ export const mcpTools: MCPTool[] = [
 		function: {
 			name: 'askuser-ask_question',
 			description:
-				'Ask the user a question with multiple choice options to clarify requirements. The AI workflow pauses until the user selects an option or provides custom input. Use this when you need user input to continue processing. Supports both single and multiple selection - user can choose one or more options.',
+				'Ask the user a concise, focused question with multiple choice options to clarify requirements. Keep wording short and centered on one decision point. The AI workflow pauses until the user selects an option or provides custom input. Use this when you need user input to continue processing. Supports both single and multiple selection - user can choose one or more options.',
 			parameters: {
 				type: 'object',
 				properties: {
 					question: {
 						type: 'string',
 						description:
-							'The question to ask the user. Be clear and specific about what information you need.',
+							'The question to ask the user. Keep it short, focused, and specific. Avoid long-winded wording and ask only for the key information needed.',
 					},
 					options: {
 						type: 'array',

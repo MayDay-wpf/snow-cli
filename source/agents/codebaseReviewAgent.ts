@@ -1,4 +1,4 @@
-import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -65,7 +65,7 @@ export class CodebaseReviewAgent {
 	 */
 	private async initialize(): Promise<boolean> {
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			if (!config.basicModel) {
 				logger.warn(
@@ -185,41 +185,12 @@ export class CodebaseReviewAgent {
 					throw new Error('Request aborted');
 				}
 
-				if (this.requestMethod === 'chat') {
-					// OpenAI chat format
-					if (chunk.choices && chunk.choices[0]?.delta?.content) {
-						completeContent += chunk.choices[0].delta.content;
-					}
-					if (chunk.choices && chunk.choices[0]?.delta?.tool_calls) {
-						// Accumulate tool calls
-						const deltaToolCalls = chunk.choices[0].delta.tool_calls;
-						for (const tc of deltaToolCalls) {
-							if (tc.index !== undefined) {
-								if (!tool_calls[tc.index]) {
-									tool_calls[tc.index] = {
-										id: tc.id || '',
-										type: 'function',
-										function: {name: '', arguments: ''},
-									};
-								}
-								if (tc.function?.name) {
-									tool_calls[tc.index].function.name += tc.function.name;
-								}
-								if (tc.function?.arguments) {
-									tool_calls[tc.index].function.arguments +=
-										tc.function.arguments;
-								}
-							}
-						}
-					}
-				} else {
-					// Anthropic/Gemini/Responses format
-					if (chunk.type === 'content' && chunk.content) {
-						completeContent += chunk.content;
-					}
-					if (chunk.type === 'tool_calls' && chunk.tool_calls) {
-						tool_calls = chunk.tool_calls;
-					}
+				// All streaming APIs yield the unified StreamChunk format
+				if (chunk.type === 'content' && chunk.content) {
+					completeContent += chunk.content;
+				}
+				if (chunk.type === 'tool_calls' && chunk.tool_calls) {
+					tool_calls = chunk.tool_calls;
 				}
 			}
 		} catch (streamError) {

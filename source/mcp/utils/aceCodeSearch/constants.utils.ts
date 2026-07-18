@@ -89,7 +89,7 @@ export const ACE_IDLE_CLEANUP_MS = 2 * 60 * 1000;
 
 /**
  * Maximum number of files kept in the semantic symbol index
- * Prevents ace-semantic_search from exhausting memory on very large workspaces
+ * Prevents ace-search (action=semantic_search) from exhausting memory on very large workspaces
  */
 export const MAX_INDEXED_FILES = 2000;
 
@@ -104,6 +104,18 @@ export const MAX_SYMBOLS_PER_FILE = 100;
  * Above this threshold we fall back to manual scoring to avoid large heap spikes
  */
 export const MAX_FZF_SYMBOL_NAMES = 30000;
+
+/**
+ * Default maximum symbols returned by action=file_outline.
+ * Prevents large files from producing huge tool results when maxResults is omitted.
+ */
+export const MAX_FILE_OUTLINE_SYMBOLS = 200;
+
+/**
+ * Maximum serialized payload size for action=file_outline before dropping context/signature.
+ * This is a source-level guard before the global token limiter runs.
+ */
+export const MAX_FILE_OUTLINE_PAYLOAD_CHARS = 120_000;
 
 /**
  * File size threshold for switching to chunked reading (1MB)

@@ -2,12 +2,14 @@
 import {promises as fs, createReadStream} from 'fs';
 import * as path from 'path';
 import {spawn} from 'child_process';
+import {createRequire} from 'module';
 import {createInterface} from 'readline';
 import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
 import {logger} from '../utils/core/logger.js';
 // SSH support for remote file operations
-import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
+import {parseSSHUrl} from '../utils/ssh/sshClient.js';
+import {sshConnectionPool} from '../utils/ssh/sshConnectionPool.js';
 import {
 	getWorkingDirectories,
 	type SSHConfig,
@@ -40,6 +42,21 @@ import {
 	processWithConcurrency,
 } from './utils/aceCodeSearch/search.utils.js';
 import {
+	splitSshUrl,
+	toSshUrl,
+	resolveRemotePath,
+} from './utils/aceCodeSearch/pathRemote.utils.js';
+import {
+	detectRemoteTools,
+	buildRemoteTextSearchCommand,
+	buildRemoteReferencesCommand,
+	buildRemoteDefinitionGrepCommand,
+	parseRemoteGrepOutput,
+	runRemoteCtags,
+	parseCtagsJsonOutput,
+	RemoteToolUnavailableError,
+} from './utils/aceCodeSearch/remote.utils.js';
+import {
 	INDEX_CACHE_DURATION,
 	BATCH_SIZE,
 	BINARY_EXTENSIONS,
@@ -47,6 +64,8 @@ import {
 	MAX_INDEXED_FILES,
 	MAX_SYMBOLS_PER_FILE,
 	MAX_FZF_SYMBOL_NAMES,
+	MAX_FILE_OUTLINE_SYMBOLS,
+	MAX_FILE_OUTLINE_PAYLOAD_CHARS,
 	LARGE_FILE_THRESHOLD,
 	FILE_READ_CHUNK_SIZE,
 	TEXT_SEARCH_TIMEOUT_MS,
@@ -59,6 +78,12 @@ import {
 	MEMORY_PRESSURE_THRESHOLD_BYTES,
 	MEMORY_CHECK_INTERVAL_MS,
 } from './utils/aceCodeSearch/constants.utils.js';
+
+const nodeRequire = createRequire(import.meta.url);
+
+type RipgrepModule = {
+	rgPath?: string;
+};
 
 export class ACECodeSearchService {
 	private basePath: string;
@@ -82,6 +107,7 @@ export class ACECodeSearchService {
 
 	// 命令可用性缓存（避免重复 spawn which 进程）
 	private commandAvailabilityCache: Map<string, boolean> = new Map();
+	private bundledRipgrepPath: string | null | undefined;
 	// Git 仓库状态缓存
 	private isGitRepoCache: boolean | null = null;
 	// 文件修改时间缓存（用于 sortResultsByRecency）
@@ -215,7 +241,9 @@ export class ACECodeSearchService {
 		const rss = process.memoryUsage.rss();
 		if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES) {
 			logger.warn(
-				`ACE memory pressure detected (RSS: ${Math.round(rss / 1024 / 1024)}MB), triggering aggressive cleanup`,
+				`ACE memory pressure detected (RSS: ${Math.round(
+					rss / 1024 / 1024,
+				)}MB), triggering aggressive cleanup`,
 			);
 			this.clearContentCache();
 			this.fileStatCache.clear();
@@ -296,6 +324,7 @@ export class ACECodeSearchService {
 
 		if (!options?.preserveCommandCache) {
 			this.commandAvailabilityCache.clear();
+			this.bundledRipgrepPath = undefined;
 			this.isGitRepoCache = null;
 		}
 	}
@@ -367,18 +396,40 @@ export class ACECodeSearchService {
 			throw new Error(`No SSH configuration found for: ${sshUrl}`);
 		}
 
-		const client = new SSHClient();
-		const connectResult = await client.connect(sshConfig);
-		if (!connectResult.success) {
-			throw new Error(`SSH connection failed: ${connectResult.error}`);
-		}
+		// Use the shared connection pool so repeated remote ACE actions reuse a single
+		// SSH/SFTP session instead of paying the connect + handshake cost every time.
+		return sshConnectionPool.withClient(sshConfig, client =>
+			client.readFile(parsed.path),
+		);
+	}
 
-		try {
-			const content = await client.readFile(parsed.path);
-			return content;
-		} finally {
-			client.disconnect();
+	/**
+	 * Resolve the SSH context for this service's basePath (when basePath is an
+	 * ssh:// URL). Throws if there is no SSH configuration registered for the
+	 * remote — callers should treat this as a non-fatal tool error.
+	 */
+	private async getRemoteBaseContext(): Promise<{
+		prefix: string;
+		root: string;
+		remoteKey: string;
+		sshConfig: SSHConfig;
+	}> {
+		const parts = splitSshUrl(this.basePath);
+		if (!parts) {
+			throw new Error(`Invalid SSH base path: ${this.basePath}`);
 		}
+		const sshConfig = await this.getSSHConfigForPath(this.basePath);
+		if (!sshConfig) {
+			throw new Error(
+				`No SSH configuration found for remote workspace: ${this.basePath}. Use /add-dir to register the remote directory first.`,
+			);
+		}
+		return {
+			prefix: parts.prefix,
+			root: parts.root,
+			remoteKey: `${parts.prefix}|${parts.root}`,
+			sshConfig,
+		};
 	}
 
 	/**
@@ -401,6 +452,32 @@ export class ACECodeSearchService {
 		const available = await isCommandAvailable(command);
 		this.commandAvailabilityCache.set(command, available);
 		return available;
+	}
+
+	/**
+	 * Get the ripgrep binary bundled by @vscode/ripgrep.
+	 * Keep this dependency loaded at runtime so local search does not depend on a
+	 * system-level rg installation.
+	 */
+	private getBundledRipgrepPath(): string | null {
+		const cached = this.bundledRipgrepPath;
+		if (cached !== undefined) {
+			return cached;
+		}
+
+		try {
+			const ripgrep = nodeRequire('@vscode/ripgrep') as RipgrepModule;
+			const rgPath = typeof ripgrep.rgPath === 'string' ? ripgrep.rgPath : '';
+			this.bundledRipgrepPath = rgPath.length > 0 ? rgPath : null;
+		} catch (error) {
+			logger.debug(
+				'Bundled ripgrep unavailable, falling back to system search tools',
+				error,
+			);
+			this.bundledRipgrepPath = null;
+		}
+
+		return this.bundledRipgrepPath;
 	}
 
 	/**
@@ -814,6 +891,12 @@ export class ACECodeSearchService {
 		maxResults: number = 100,
 	): Promise<CodeReference[]> {
 		this.markActivity();
+
+		// Remote workspaces use a server-side word-bounded grep instead of indexing.
+		if (this.basePath.startsWith('ssh://')) {
+			return this.remoteFindReferences(symbolName, maxResults);
+		}
+
 		const references: CodeReference[] = [];
 
 		// Load exclusion patterns
@@ -960,6 +1043,13 @@ export class ACECodeSearchService {
 		contextFile?: string,
 	): Promise<CodeSymbol | null> {
 		this.markActivity();
+
+		// Remote workspaces resolve definitions on the remote host (ctags preferred,
+		// grep pattern fallback). We never build an index on the local machine.
+		if (this.basePath.startsWith('ssh://')) {
+			return this.remoteFindDefinition(symbolName, contextFile);
+		}
+
 		await this.buildIndex();
 		await this.indexBuildQueue;
 
@@ -1101,27 +1191,34 @@ export class ACECodeSearchService {
 	}
 
 	/**
-	 * Strategy 2: Use system grep (or ripgrep if available) for fast searching
-	 * Enhanced with timeout protection to prevent hanging on Windows
+	 * Strategy 2: Use ripgrep/grep for fast searching.
+	 * Enhanced with timeout protection to prevent hanging on Windows.
 	 */
 	private async systemGrepSearch(
 		pattern: string,
 		fileGlob?: string,
 		maxResults: number = 100,
-		grepCommand: 'rg' | 'grep' = 'grep',
+		grepCommand: string = 'grep',
+		isRegex: boolean = true,
 	): Promise<
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		this.markActivity();
-		const isRipgrep = grepCommand === 'rg';
+		const commandName = path.basename(grepCommand).toLowerCase();
+		const isRipgrep = commandName === 'rg' || commandName === 'rg.exe';
+		const displayCommand = isRipgrep ? 'rg' : commandName || grepCommand;
 		const timeoutMs = 15000;
 
 		return new Promise((resolve, reject) => {
 			const args = isRipgrep
-				? ['-n', '-i', '--no-heading']
-				: ['-r', '-n', '-H', '-E', '-i'];
+				? ['-n', '-i', '--no-heading', '--color=never', '--hidden']
+				: ['-r', '-n', '-H', '-i'];
 
 			if (isRipgrep) {
+				if (!isRegex) {
+					args.push('-F');
+				}
+
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push('--glob', `!${dir}/`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
@@ -1129,6 +1226,7 @@ export class ACECodeSearchService {
 					expandedGlobs.forEach(glob => args.push('--glob', glob));
 				}
 			} else {
+				args.push(isRegex ? '-E' : '-F');
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push(`--exclude-dir=${dir}`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
@@ -1176,9 +1274,9 @@ export class ACECodeSearchService {
 			const timeoutId = setTimeout(() => {
 				finalize(() => {
 					logger.warn(
-						`${grepCommand} timed out after ${timeoutMs}ms, killing process`,
+						`${displayCommand} timed out after ${timeoutMs}ms, killing process`,
 					);
-					reject(new Error(`${grepCommand} timed out after ${timeoutMs}ms`));
+					reject(new Error(`${displayCommand} timed out after ${timeoutMs}ms`));
 				}, true);
 			}, timeoutMs);
 			timeoutId.unref?.();
@@ -1196,7 +1294,7 @@ export class ACECodeSearchService {
 
 			child.once('error', err => {
 				finalize(() => {
-					reject(new Error(`Failed to start ${grepCommand}: ${err.message}`));
+					reject(new Error(`Failed to start ${displayCommand}: ${err.message}`));
 				});
 			});
 
@@ -1213,7 +1311,7 @@ export class ACECodeSearchService {
 					} else if (stderrData) {
 						reject(
 							new Error(
-								`${grepCommand} exited with code ${code}: ${stderrData}`,
+								`${displayCommand} exited with code ${code}: ${stderrData}`,
 							),
 						);
 					} else {
@@ -1544,6 +1642,13 @@ export class ACECodeSearchService {
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		this.markActivity();
+
+		// Remote workspaces always run grep on the remote host; nothing about the
+		// local-only strategy (git grep / rg / grep / JS fallback) is reused.
+		if (this.basePath.startsWith('ssh://')) {
+			return this.remoteTextSearch(pattern, fileGlob, isRegex, maxResults);
+		}
+
 		const timeoutMs = TEXT_SEARCH_TIMEOUT_MS;
 
 		return new Promise((resolve, reject) => {
@@ -1572,10 +1677,11 @@ export class ACECodeSearchService {
 	 * Internal text search implementation (separated for timeout wrapping)
 	 *
 	 * Strategy priority:
-	 * 1. git grep (fastest, works in git repos)
-	 * 2. system grep (reliable on all platforms, especially Windows)
-	 * 3. ripgrep (fast but can hang on Windows)
-	 * 4. JavaScript fallback (always works)
+	 * 1. bundled ripgrep from @vscode/ripgrep (consistent local rg search)
+	 * 2. system ripgrep (if bundled rg is unavailable)
+	 * 3. git grep (fast fallback in Git repositories)
+	 * 4. system grep
+	 * 5. JavaScript fallback (always works)
 	 */
 	private async executeTextSearch(
 		pattern: string,
@@ -1586,6 +1692,26 @@ export class ACECodeSearchService {
 		Array<{filePath: string; line: number; column: number; content: string}>
 	> {
 		this.markActivity();
+
+		// Prefer the package-provided ripgrep binary for local workspaces so users
+		// do not need to install rg manually.
+		const bundledRipgrepPath = this.getBundledRipgrepPath();
+		if (bundledRipgrepPath) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					bundledRipgrepPath,
+					isRegex,
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('Bundled ripgrep failed, trying next strategy');
+				// Fall through to system tools or JavaScript fallback
+			}
+		}
+
 		// Check command availability once (cached)
 		const [isGitRepo, gitAvailable, rgAvailable, grepAvailable] =
 			await Promise.all([
@@ -1595,7 +1721,24 @@ export class ACECodeSearchService {
 				this.isCommandAvailableCached('grep'),
 			]);
 
-		// Strategy 1: Try git grep first (fastest in git repos)
+		// Strategy 2: Try system ripgrep if the bundled binary is unavailable/failing
+		if (rgAvailable) {
+			try {
+				const results = await this.systemGrepSearch(
+					pattern,
+					fileGlob,
+					maxResults,
+					'rg',
+					isRegex,
+				);
+				return await this.sortResultsByRecency(results);
+			} catch (error) {
+				logger.info('System ripgrep failed, trying next strategy');
+				// Fall through to git grep, system grep or JavaScript fallback
+			}
+		}
+
+		// Strategy 3: Try git grep in Git repositories
 		if (isGitRepo && gitAvailable) {
 			try {
 				const results = await this.gitGrepSearch(
@@ -1612,23 +1755,7 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 2: Try ripgrep (fast and reliable, with timeout protection)
-		if (rgAvailable) {
-			try {
-				const results = await this.systemGrepSearch(
-					pattern,
-					fileGlob,
-					maxResults,
-					'rg',
-				);
-				return await this.sortResultsByRecency(results);
-			} catch (error) {
-				logger.info('Ripgrep failed, trying next strategy');
-				// Fall through to system grep or JavaScript fallback
-			}
-		}
-
-		// Strategy 3: Try system grep as fallback
+		// Strategy 4: Try system grep as fallback
 		if (grepAvailable) {
 			try {
 				const results = await this.systemGrepSearch(
@@ -1636,6 +1763,7 @@ export class ACECodeSearchService {
 					fileGlob,
 					maxResults,
 					'grep',
+					isRegex,
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
@@ -1644,7 +1772,7 @@ export class ACECodeSearchService {
 			}
 		}
 
-		// Strategy 4: JavaScript fallback (always works)
+		// Strategy 5: JavaScript fallback (always works)
 		logger.info('Using JavaScript fallback for text search');
 		const results = await this.jsTextSearch(
 			pattern,
@@ -1739,6 +1867,40 @@ export class ACECodeSearchService {
 		});
 	}
 
+	private estimateFileOutlinePayloadChars(symbols: CodeSymbol[]): number {
+		return JSON.stringify(symbols).length;
+	}
+
+	private constrainFileOutlinePayload(
+		symbols: CodeSymbol[],
+		includeContext: boolean,
+	): CodeSymbol[] {
+		if (
+			this.estimateFileOutlinePayloadChars(symbols) <=
+			MAX_FILE_OUTLINE_PAYLOAD_CHARS
+		) {
+			return symbols;
+		}
+
+		let constrained = includeContext
+			? symbols.map(symbol => ({...symbol, context: undefined}))
+			: symbols;
+
+		if (
+			this.estimateFileOutlinePayloadChars(constrained) <=
+			MAX_FILE_OUTLINE_PAYLOAD_CHARS
+		) {
+			return constrained;
+		}
+
+		constrained = constrained.map(symbol => ({
+			...symbol,
+			signature: undefined,
+		}));
+
+		return constrained;
+	}
+
 	/**
 	 * Get code outline for a file (all symbols in the file)
 	 * Supports both local files and remote SSH files (ssh://user@host:port/path)
@@ -1770,10 +1932,21 @@ export class ACECodeSearchService {
 				content = await fs.readFile(effectivePath, 'utf-8');
 			}
 
+			const maxResults =
+				options?.maxResults && options.maxResults > 0
+					? Math.min(options.maxResults, MAX_FILE_OUTLINE_SYMBOLS)
+					: MAX_FILE_OUTLINE_SYMBOLS;
+			const includeContext = options?.includeContext !== false;
+
 			let symbols = await parseFileSymbols(
 				effectivePath,
 				content,
 				this.basePath,
+				{
+					includeContext,
+					includeSignature: includeContext,
+					maxSymbols: maxResults,
+				},
 			);
 
 			// Filter by symbol types if specified
@@ -1796,17 +1969,16 @@ export class ACECodeSearchService {
 				return 0;
 			});
 
-			// Limit results
-			if (options?.maxResults && options.maxResults > 0) {
-				symbols = symbols.slice(0, options.maxResults);
-			}
+			// Limit results. file_outline used to be unlimited by default, which could
+			// produce huge tool results and race with terminal teardown.
+			symbols = symbols.slice(0, maxResults);
 
-			// Remove context if not needed
-			if (options?.includeContext === false) {
+			// Remove or trim context before the global token limiter sees the result.
+			if (!includeContext) {
 				symbols = symbols.map(s => ({...s, context: undefined}));
 			}
 
-			return symbols;
+			return this.constrainFileOutlinePayload(symbols, includeContext);
 		} catch (error) {
 			throw new Error(
 				`Failed to get outline for ${filePath}: ${
@@ -1827,6 +1999,19 @@ export class ACECodeSearchService {
 		maxResults: number = 50,
 	): Promise<SemanticSearchResult> {
 		this.markActivity();
+
+		// Remote workspaces use a one-shot ctags dump (or pattern grep fallback) and
+		// run FZF in memory on the small symbol-name list returned. No on-disk index.
+		if (this.basePath.startsWith('ssh://')) {
+			return this.remoteSemanticSearch(
+				query,
+				searchType,
+				language,
+				symbolType,
+				maxResults,
+			);
+		}
+
 		const startTime = Date.now();
 
 		// Get symbol search results
@@ -1873,80 +2058,476 @@ export class ACECodeSearchService {
 			searchTime,
 		};
 	}
+
+	// =========================================================================
+	// Remote (ssh://) implementations
+	// =========================================================================
+	//
+	// Design rules for the remote path:
+	// - All "scan the workspace" work runs on the remote host via SSHClient.exec().
+	// - We never build a symbol index on the local machine. Per-call results may be
+	//   cached on the remote side for REMOTE_CACHE_TTL_MS (see remote.utils.ts).
+	// - Each method gracefully degrades if a preferred remote tool is missing.
+	// - If even the bare minimum (grep) is unavailable, the method throws a
+	//   RemoteToolUnavailableError carrying an actionable message — this surfaces
+	//   to the model as a tool error but does NOT break the agent loop.
+
+	private async remoteTextSearch(
+		pattern: string,
+		fileGlob: string | undefined,
+		isRegex: boolean,
+		maxResults: number,
+	): Promise<
+		Array<{filePath: string; line: number; column: number; content: string}>
+	> {
+		// Local-side ReDoS guard mirrors the local executeTextSearch behavior.
+		if (isRegex) {
+			const safe = isSafeRegexPattern(pattern, MAX_REGEX_COMPLEXITY_SCORE);
+			if (!safe.isSafe) {
+				throw new Error(`Unsafe regex pattern: ${safe.reason}`);
+			}
+		}
+
+		const ctx = await this.getRemoteBaseContext();
+		return sshConnectionPool.withClient(ctx.sshConfig, async client => {
+			const toolset = await detectRemoteTools(client, ctx.root, ctx.remoteKey);
+			const built = buildRemoteTextSearchCommand({
+				remoteRoot: ctx.root,
+				pattern,
+				fileGlob,
+				isRegex,
+				maxResults,
+				toolset,
+			});
+			if (!built) {
+				throw new RemoteToolUnavailableError(
+					'Remote text search is unavailable: none of git grep / ripgrep / grep is installed on the remote host.',
+				);
+			}
+			const exec = await client.exec(built.command, {
+				timeout: TEXT_SEARCH_TIMEOUT_MS,
+			});
+			// `grep`-family tools return exit code 1 to mean "no matches", which we
+			// must not treat as an error. Any other non-zero with empty stdout we
+			// surface so the caller knows something went wrong (but don't throw to
+			// avoid breaking the agent loop — return an empty array instead).
+			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
+				logger.warn(
+					`Remote ${built.tool} exited with code ${
+						exec.code
+					}: ${exec.stderr?.slice(0, 200)}`,
+				);
+				return [];
+			}
+			const hits = parseRemoteGrepOutput(exec.stdout);
+			return hits.slice(0, maxResults).map(hit => ({
+				filePath: toSshUrl(
+					this.basePath,
+					resolveRemotePath(ctx.root, hit.filePath),
+				),
+				line: hit.line,
+				column: hit.column,
+				content: hit.content,
+			}));
+		});
+	}
+
+	private async remoteFindReferences(
+		symbolName: string,
+		maxResults: number,
+	): Promise<CodeReference[]> {
+		const ctx = await this.getRemoteBaseContext();
+		return sshConnectionPool.withClient(ctx.sshConfig, async client => {
+			const toolset = await detectRemoteTools(client, ctx.root, ctx.remoteKey);
+			const built = buildRemoteReferencesCommand({
+				remoteRoot: ctx.root,
+				symbolName,
+				maxResults,
+				toolset,
+			});
+			if (!built) {
+				throw new RemoteToolUnavailableError(
+					'Remote find_references is unavailable: none of git grep / ripgrep / grep is installed on the remote host.',
+				);
+			}
+			const exec = await client.exec(built.command, {
+				timeout: TEXT_SEARCH_TIMEOUT_MS,
+			});
+			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
+				logger.warn(
+					`Remote find_references grep exited with code ${
+						exec.code
+					}: ${exec.stderr?.slice(0, 200)}`,
+				);
+				return [];
+			}
+			const hits = parseRemoteGrepOutput(exec.stdout).slice(0, maxResults);
+			return hits.map<CodeReference>(hit => {
+				const lineContent = hit.content;
+				let referenceType: CodeReference['referenceType'] = 'usage';
+				if (/\bimport\b/.test(lineContent)) {
+					referenceType = 'import';
+				} else if (
+					new RegExp(
+						`(?:function|class|interface|const|let|var|def|func|type|enum|struct|trait|impl|fn)\\s+${symbolName.replace(
+							/[.*+?^${}()|[\]\\]/g,
+							'\\$&',
+						)}\\b`,
+					).test(lineContent)
+				) {
+					referenceType = 'definition';
+				} else if (
+					/[:<]/.test(lineContent) &&
+					lineContent.includes(symbolName)
+				) {
+					referenceType = 'type';
+				}
+				return {
+					symbol: symbolName,
+					filePath: toSshUrl(
+						this.basePath,
+						resolveRemotePath(ctx.root, hit.filePath),
+					),
+					line: hit.line,
+					column: hit.column,
+					context: lineContent,
+					referenceType,
+				};
+			});
+		});
+	}
+
+	private async remoteFindDefinition(
+		symbolName: string,
+		_contextFile?: string,
+	): Promise<CodeSymbol | null> {
+		const ctx = await this.getRemoteBaseContext();
+		return sshConnectionPool.withClient(ctx.sshConfig, async client => {
+			const toolset = await detectRemoteTools(client, ctx.root, ctx.remoteKey);
+
+			// Strategy 1: ctags — accurate kind/scope, single round-trip thanks to cache.
+			if (toolset.hasCtags) {
+				try {
+					const ndjson = await runRemoteCtags(client, ctx.root, ctx.remoteKey);
+					const symbols = parseCtagsJsonOutput(ndjson, {
+						remoteRoot: ctx.root,
+					});
+					const candidates = symbols.filter(s => s.name === symbolName);
+					const preferred =
+						candidates.find(
+							s =>
+								s.type === 'function' ||
+								s.type === 'class' ||
+								s.type === 'interface' ||
+								s.type === 'method',
+						) || candidates[0];
+					if (preferred) {
+						return {
+							...preferred,
+							filePath: toSshUrl(
+								this.basePath,
+								resolveRemotePath(ctx.root, preferred.filePath),
+							),
+						};
+					}
+				} catch (err) {
+					logger.warn(
+						'remoteFindDefinition: ctags failed, falling back to grep',
+						err,
+					);
+				}
+			}
+
+			// Strategy 2: grep pattern matching definition shapes.
+			const built = buildRemoteDefinitionGrepCommand({
+				remoteRoot: ctx.root,
+				symbolName,
+				toolset,
+				maxResults: 10,
+			});
+			if (!built) {
+				throw new RemoteToolUnavailableError(
+					'Remote find_definition is unavailable: ctags and grep are both missing on the remote host.',
+				);
+			}
+			const exec = await client.exec(built.command, {
+				timeout: TEXT_SEARCH_TIMEOUT_MS,
+			});
+			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
+				logger.warn(
+					`Remote find_definition grep exited with code ${
+						exec.code
+					}: ${exec.stderr?.slice(0, 200)}`,
+				);
+				return null;
+			}
+			const hit = parseRemoteGrepOutput(exec.stdout)[0];
+			if (!hit) return null;
+			const fullPath = resolveRemotePath(ctx.root, hit.filePath);
+			const sshUrl = toSshUrl(this.basePath, fullPath);
+			const language = detectLanguage(hit.filePath) || 'plaintext';
+			return {
+				name: symbolName,
+				type: 'function',
+				filePath: sshUrl,
+				line: hit.line,
+				column: hit.column,
+				signature: hit.content,
+				language,
+			} satisfies CodeSymbol;
+		});
+	}
+
+	private async remoteSemanticSearch(
+		query: string,
+		searchType: 'definition' | 'usage' | 'implementation' | 'all',
+		language: string | undefined,
+		symbolType: CodeSymbol['type'] | undefined,
+		maxResults: number,
+	): Promise<SemanticSearchResult> {
+		const startTime = Date.now();
+		const ctx = await this.getRemoteBaseContext();
+		const indexed: CodeSymbol[] = await sshConnectionPool.withClient(
+			ctx.sshConfig,
+			async client => {
+				const toolset = await detectRemoteTools(
+					client,
+					ctx.root,
+					ctx.remoteKey,
+				);
+
+				// Strategy 1: ctags one-shot. Cached for REMOTE_CACHE_TTL_MS, so repeated
+				// semantic_search calls don't re-run ctags on the remote.
+				if (toolset.hasCtags) {
+					try {
+						const ndjson = await runRemoteCtags(
+							client,
+							ctx.root,
+							ctx.remoteKey,
+						);
+						return parseCtagsJsonOutput(ndjson, {
+							remoteRoot: ctx.root,
+							maxSymbols: MAX_FZF_SYMBOL_NAMES,
+						});
+					} catch (err) {
+						logger.warn(
+							'remoteSemanticSearch: ctags failed, falling back to grep heuristic',
+							err,
+						);
+					}
+				}
+
+				// Strategy 2: degrade to pattern grep. We grep for common definition
+				// shapes across the workspace and treat each hit as a symbol with the
+				// matched word. Precision is lower than ctags but still useful.
+				if (!toolset.hasGrep && !toolset.hasRg && !toolset.hasGit) {
+					throw new RemoteToolUnavailableError(
+						'Remote semantic_search is unavailable: ctags and all grep variants are missing on the remote host.',
+					);
+				}
+				const built = buildRemoteDefinitionGrepCommand({
+					remoteRoot: ctx.root,
+					// Use a generic pattern that captures any of the definition keywords
+					// followed by an identifier; the parser below extracts the name.
+					symbolName: '[A-Za-z_][A-Za-z0-9_]*',
+					toolset,
+					maxResults: MAX_FZF_SYMBOL_NAMES,
+				});
+				if (!built) {
+					throw new RemoteToolUnavailableError(
+						'Remote semantic_search fallback failed to construct a grep command.',
+					);
+				}
+				const exec = await client.exec(built.command, {
+					timeout: TEXT_SEARCH_TIMEOUT_MS,
+				});
+				if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
+					logger.warn(
+						`Remote semantic_search grep fallback exited with code ${
+							exec.code
+						}: ${exec.stderr?.slice(0, 200)}`,
+					);
+					return [];
+				}
+				const hits = parseRemoteGrepOutput(exec.stdout);
+				const out: CodeSymbol[] = [];
+				const nameExtractor =
+					/(?:function|class|interface|def|func|const|let|var|type|enum|struct|trait|impl|fn)\s+([A-Za-z_][A-Za-z0-9_]*)/;
+				for (const hit of hits) {
+					const m = hit.content.match(nameExtractor);
+					if (!m || !m[1]) continue;
+					out.push({
+						name: m[1],
+						type: 'function',
+						filePath: hit.filePath,
+						line: hit.line,
+						column: hit.column,
+						signature: hit.content,
+						language: detectLanguage(hit.filePath) || 'plaintext',
+					});
+					if (out.length >= MAX_FZF_SYMBOL_NAMES) break;
+				}
+				return out;
+			},
+		);
+
+		// Apply filters (mirror the local semanticSearch behavior).
+		let candidates = indexed;
+		if (symbolType) {
+			candidates = candidates.filter(s => s.type === symbolType);
+		}
+		if (language) {
+			candidates = candidates.filter(s => s.language === language);
+		}
+
+		// Build a one-shot FZF over the candidate symbol names. The instance is
+		// scoped to this call — we never persist it on the service.
+		const uniqueNames = Array.from(new Set(candidates.map(s => s.name)));
+		let matchedSet: Set<string>;
+		try {
+			const fzf = new Fzf(uniqueNames, {
+				selector: (item: string) => item,
+				casing: 'case-insensitive',
+				limit: maxResults,
+			});
+			const matched = fzf.find(query);
+			matchedSet = new Set(matched.map((r: FzfResultItem<string>) => r.item));
+		} catch (err) {
+			logger.info(
+				`Remote semantic_search FZF failed (${
+					err instanceof Error ? err.message : String(err)
+				}), falling back to substring match`,
+			);
+			const q = query.toLowerCase();
+			matchedSet = new Set(
+				uniqueNames.filter(n => n.toLowerCase().includes(q)),
+			);
+		}
+
+		let symbols = candidates
+			.filter(s => matchedSet.has(s.name))
+			.slice(0, maxResults)
+			.map(s => ({
+				...s,
+				filePath: toSshUrl(
+					this.basePath,
+					resolveRemotePath(ctx.root, s.filePath),
+				),
+			}));
+
+		// Filter by searchType (mirrors the local implementation).
+		if (searchType === 'definition') {
+			symbols = symbols.filter(
+				s =>
+					s.type === 'function' || s.type === 'class' || s.type === 'interface',
+			);
+		} else if (searchType === 'usage') {
+			symbols = [];
+		} else if (searchType === 'implementation') {
+			symbols = symbols.filter(
+				s => s.type === 'function' || s.type === 'method' || s.type === 'class',
+			);
+		}
+
+		// References for the top matches (mirrors local behavior). These reuse the
+		// remoteFindReferences pipeline, which is itself grep-backed and cheap.
+		let references: CodeReference[] = [];
+		if (searchType === 'usage' || searchType === 'all') {
+			const top = symbols.slice(0, 5);
+			for (const sym of top) {
+				try {
+					const refs = await this.remoteFindReferences(sym.name, maxResults);
+					references.push(...refs);
+				} catch (err) {
+					logger.warn(
+						`remoteSemanticSearch: gathering references for "${sym.name}" failed`,
+						err,
+					);
+				}
+			}
+		}
+
+		return {
+			query,
+			symbols,
+			references,
+			totalResults: symbols.length + references.length,
+			searchTime: Date.now() - startTime,
+		};
+	}
 }
 
-// Export a default instance
-export const aceCodeSearchService = new ACECodeSearchService();
-
 // MCP Tool definitions for integration
+// 聚合后的统一 ACE 工具：使用 action 字段分发到对应能力
 export const mcpTools = [
 	{
-		name: 'ace-find_definition',
-		description:
-			'ACE Code Search: Find the definition of a symbol (Go to Definition). Locates where a function, class, or variable is defined in the codebase. Returns precise location with full signature and context.',
+		name: 'ace-search',
+		description: `ACE Code Search: Unified code search tool. Use required field "action" — one of find_definition | find_references | semantic_search | file_outline | text_search.
+
+REMOTE SSH SUPPORT: All five actions support remote workspaces registered via /add-dir (paths like ssh://user@host:port/...). When the workspace is remote, searches run on the remote host via grep/ripgrep/git grep (and ctags when available); results are returned as ssh:// URLs. The remote host must have at least \`grep\` installed; if it does not, the action returns a tool error explaining the missing dependency but does NOT crash the agent loop.
+
+PARALLEL CALLS ONLY: MUST pair with other tools (ace-search + filesystem-read/terminal-execute/etc).
+
+ACTIONS:
+- find_definition: Find the definition of a symbol (Go to Definition). Required: "symbolName". Optional: "contextFile", "line", "column" (0-indexed; useful for OmniSharp/LSP precision).
+- find_references: Find all references to a symbol (definition / usage / import / type). Required: "symbolName". Optional: "maxResults" (default 100).
+- semantic_search: Intelligent symbol search with fuzzy matching. Required: "query". Optional: "searchType" (definition|usage|implementation|all, default all), "symbolType", "language", "maxResults" (default 50). Tip: prefer action=file_outline if you only need a single file's outline.
+- file_outline: Get complete symbol outline for a file (function/class/variable/...). Required: "filePath". Optional: "maxResults", "includeContext" (default true), "symbolTypes". Set includeContext=false to reduce output size significantly.
+- text_search: Literal text or regex pattern matching (grep-style). Best for TODOs, comments, exact error strings. Required: "pattern". Optional: "fileGlob" (e.g. "*.ts", "**/*.{js,ts}"), "isRegex" (default true; set false for literal), "maxResults" (default 100).
+
+EXAMPLES:
+- ace-search({action:"find_definition", symbolName:"getFileContent"})
+- ace-search({action:"find_references", symbolName:"TodoService", maxResults:50})
+- ace-search({action:"semantic_search", query:"gfc", searchType:"definition"})
+- ace-search({action:"file_outline", filePath:"source/mcp/todo.ts", includeContext:false})
+- ace-search({action:"text_search", pattern:"TODO:", fileGlob:"**/*.ts", isRegex:false})`,
 		inputSchema: {
 			type: 'object',
 			properties: {
+				action: {
+					type: 'string',
+					enum: [
+						'find_definition',
+						'find_references',
+						'semantic_search',
+						'file_outline',
+						'text_search',
+					],
+					description:
+						'Which ACE search operation to run. Determines which other parameters are required.',
+				},
+				// find_definition / find_references
 				symbolName: {
 					type: 'string',
-					description: 'Name of the symbol to find definition for',
+					description:
+						'For action=find_definition or find_references: name of the symbol to look up.',
 				},
 				contextFile: {
 					type: 'string',
 					description:
-						'Current file path for context-aware search (optional, searches current file first)',
+						'For action=find_definition only: current file path for context-aware search (optional, searches current file first).',
 				},
 				line: {
 					type: 'number',
 					description:
-						'Line number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+						'For action=find_definition only: 0-indexed line number where the symbol appears in contextFile (optional; required by some LSP servers like OmniSharp).',
 				},
 				column: {
 					type: 'number',
 					description:
-						'Column number where the symbol appears in contextFile (0-indexed, optional). Required by some LSP servers like OmniSharp for accurate definition lookup.',
+						'For action=find_definition only: 0-indexed column number where the symbol appears in contextFile (optional; required by some LSP servers like OmniSharp).',
 				},
-			},
-			required: ['symbolName'],
-		},
-	},
-	{
-		name: 'ace-find_references',
-		description:
-			'ACE Code Search: Find all references to a symbol (Find All References). Shows where a function, class, or variable is used throughout the codebase. Categorizes references as definition, usage, import, or type reference.',
-		inputSchema: {
-			type: 'object',
-			properties: {
-				symbolName: {
-					type: 'string',
-					description: 'Name of the symbol to find references for',
-				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of references to return (default: 100)',
-					default: 100,
-				},
-			},
-			required: ['symbolName'],
-		},
-	},
-	{
-		name: 'ace-semantic_search',
-		description:
-			'ACE Code Search: Intelligent symbol search and semantic analysis. Supports multiple search modes: (1) definition - find symbol definitions (functions/classes/interfaces); (2) usage - find symbol reference locations; (3) implementation - find specific implementations; (4) all - comprehensive search. Supports fuzzy matching and filtering by language and symbol type. 💡 Tip: If you only need to view the symbol outline of a single file, use ace-file_outline for faster access.',
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// semantic_search
 				query: {
 					type: 'string',
 					description:
-						'Search Query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent")',
+						'For action=semantic_search: search query (symbol name or pattern, supports fuzzy matching such as "gfc" matching "getFileContent").',
 				},
 				searchType: {
 					type: 'string',
 					enum: ['definition', 'usage', 'implementation', 'all'],
 					description:
-						'Search Types: definition (search for declarations), usage (search for usages), implementation (search for implementations), all (full search)',
+						'For action=semantic_search only: definition (declarations), usage (reference locations), implementation (specific implementations), all (full search). Default: all.',
 					default: 'all',
 				},
 				symbolType: {
@@ -1964,7 +2545,7 @@ export const mcpTools = [
 						'export',
 					],
 					description:
-						'Optionally, filter by symbol type (function, class, variable, etc.).',
+						'For action=semantic_search only: optional filter by symbol type.',
 				},
 				language: {
 					type: 'string',
@@ -1977,38 +2558,19 @@ export const mcpTools = [
 						'java',
 						'csharp',
 					],
-					description: 'Optional: Filter by programming language',
+					description:
+						'For action=semantic_search only: optional filter by programming language.',
 				},
-				maxResults: {
-					type: 'number',
-					description: 'Maximum number of returned results (default: 50)',
-					default: 50,
-				},
-			},
-			required: ['query'],
-		},
-	},
-	{
-		name: 'ace-file_outline',
-		description:
-			"ACE Code Search: Get complete code outline for a file. Shows all functions, classes, variables, and other symbols defined in the file with their locations. Similar to VS Code's outline view.",
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// file_outline
 				filePath: {
 					type: 'string',
 					description:
-						'Path to the file to get outline for (relative to workspace root)',
-				},
-				maxResults: {
-					type: 'number',
-					description:
-						'Maximum number of symbols to return (default: unlimited). Important symbols (function, class, interface, method) are prioritized.',
+						'For action=file_outline: path to the file to get outline for (relative to workspace root, or ssh:// URL). Remote files (ssh://...) are supported transparently.',
 				},
 				includeContext: {
 					type: 'boolean',
 					description:
-						'Whether to include surrounding code context (default: true). Set to false to reduce output size significantly.',
+						'For action=file_outline only: include surrounding code context (default true). Set false to reduce output size significantly.',
 					default: true,
 				},
 				symbolTypes: {
@@ -2029,42 +2591,36 @@ export const mcpTools = [
 						],
 					},
 					description:
-						'Filter by specific symbol types (optional). If not specified, all symbol types are returned.',
+						'For action=file_outline only: filter by specific symbol types (optional).',
 				},
-			},
-			required: ['filePath', 'maxResults', 'includeContext'],
-		},
-	},
-	{
-		name: 'ace-text_search',
-		description:
-			'ACE Code Search: Literal text/regex pattern matching (grep-style search). Best for finding exact strings: TODOs, comments, log messages, error strings, string constants. NOT recommended for code understanding or exploring functionality - use semantic search tools for that. Use when you know the exact text pattern you are looking for.',
-		inputSchema: {
-			type: 'object',
-			properties: {
+				// text_search
 				pattern: {
 					type: 'string',
 					description:
-						'Text pattern or regex to search for. Examples: "TODO:" (literal), "import.*from" (regex), "tool_call|toolCall" (regex with OR). By default, pattern is treated as regex. Set isRegex to false for literal string search.',
+						'For action=text_search: text pattern or regex to search for. Examples: "TODO:" (literal), "import.*from" (regex), "tool_call|toolCall" (regex with OR).',
 				},
 				fileGlob: {
 					type: 'string',
 					description:
-						'Glob pattern to filter files (e.g., "*.ts" for TypeScript only, "**/*.{js,ts}" for JS and TS, "src/**/*.py" for Python in src)',
+						'For action=text_search only: glob pattern to filter files (e.g. "*.ts", "**/*.{js,ts}", "src/**/*.py").',
 				},
 				isRegex: {
 					type: 'boolean',
 					description:
-						'Whether to force regex mode. If not specified, the tool defaults to regex mode. Set to false to use literal string search.',
+						'For action=text_search only: whether to use regex mode. Default true. Set false for literal string search.',
 					default: true,
 				},
+				// shared
 				maxResults: {
 					type: 'number',
-					description: 'Maximum number of results to return (default: 100)',
-					default: 100,
+					description:
+						'Optional max results. Defaults: find_references=100, semantic_search=50, text_search=100, file_outline=200 (hard cap).',
 				},
 			},
-			required: ['pattern'],
+			required: ['action'],
 		},
 	},
 ];
+
+// Export a default instance
+export const aceCodeSearchService = new ACECodeSearchService();

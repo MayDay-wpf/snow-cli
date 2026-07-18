@@ -13,6 +13,7 @@ import {
 } from '../themes/index.js';
 import {saveCustomColors} from '../../utils/config/themeConfig.js';
 import {useI18n} from '../../i18n/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: (nextSelectedTheme?: ThemeType) => void;
@@ -27,6 +28,8 @@ const colorKeys: ColorKey[] = [
 	'diffAdded',
 	'diffRemoved',
 	'diffModified',
+	'diffAddedForeground',
+	'diffRemovedForeground',
 	'lineNumber',
 	'lineNumberBorder',
 	'menuSelected',
@@ -38,6 +41,7 @@ const colorKeys: ColorKey[] = [
 	'success',
 	'logoGradient',
 	'userMessageBackground',
+	'userMessageText',
 	'diffOpacity',
 ];
 
@@ -54,6 +58,9 @@ export default function CustomThemeScreen({onBack}: Props) {
 	const {setThemeType, refreshCustomTheme} = useTheme();
 
 	const {t} = useI18n();
+	useTerminalTitle(
+		`Snow CLI - ${t.customTheme?.title || 'Custom Theme Editor'}`,
+	);
 	const [colors, setColors] = useState<ThemeColors>(() => {
 		const custom = getCustomTheme();
 		return custom.colors;
@@ -234,7 +241,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 						<UserMessagePreview
 							content={
 								t.customTheme?.userMessageSample ||
-								'这个预览用于检查 userMessageBackground 是否合适'
+								'这个预览用于检查用户消息左侧强调条（userMessageBackground）是否合适'
 							}
 						/>
 					</Box>

@@ -1,7 +1,11 @@
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {SubAgentMessage} from '../../../utils/execution/subAgentExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
-import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
+import {
+	extractFilesystemEditDiffDataForPersistence,
+	isToolNeedTwoStepDisplay,
+} from '../../../utils/config/toolDisplayConfig.js';
+import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -19,15 +23,42 @@ export interface TeammateStreamInfo {
 	ctxUsage?: TeammateCtxUsage;
 }
 
+export interface SubAgentStreamInfo {
+	agentId: string;
+	agentName: string;
+	tokenCount: number;
+	isReasoning: boolean;
+	ctxUsage?: TeammateCtxUsage;
+}
+
 const _teammateStreamMap = new Map<string, TeammateStreamInfo>();
 const _teammateStreamListeners = new Set<() => void>();
 let _teammateStreamSnapshot: TeammateStreamInfo[] = [];
 let _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 const _NOTIFY_THROTTLE_MS = 200;
 
+const _subAgentStreamMap = new Map<string, SubAgentStreamInfo>();
+const _subAgentStreamListeners = new Set<() => void>();
+let _subAgentStreamSnapshot: SubAgentStreamInfo[] = [];
+let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+
 function notifyTeammateStreamListeners(): void {
 	for (const listener of _teammateStreamListeners) {
-		try { listener(); } catch { /* noop */ }
+		try {
+			listener();
+		} catch {
+			/* noop */
+		}
+	}
+}
+
+function notifySubAgentStreamListeners(): void {
+	for (const listener of _subAgentStreamListeners) {
+		try {
+			listener();
+		} catch {
+			/* noop */
+		}
 	}
 }
 
@@ -41,10 +72,38 @@ function rebuildTeammateSnapshot(): void {
 	}
 }
 
-function setTeammateStreamEntry(agentId: string, agentName: string, tokenCount: number, isReasoning: boolean, ctxUsage?: TeammateCtxUsage): void {
+function rebuildSubAgentSnapshot(): void {
+	_subAgentStreamSnapshot = Array.from(_subAgentStreamMap.values());
+	if (!_subAgentNotifyTimer) {
+		_subAgentNotifyTimer = setTimeout(() => {
+			_subAgentNotifyTimer = null;
+			notifySubAgentStreamListeners();
+		}, _NOTIFY_THROTTLE_MS);
+	}
+}
+
+function setTeammateStreamEntry(
+	agentId: string,
+	agentName: string,
+	tokenCount: number,
+	isReasoning: boolean,
+	ctxUsage?: TeammateCtxUsage,
+): void {
 	const prev = _teammateStreamMap.get(agentId);
-	if (prev && prev.tokenCount === tokenCount && prev.isReasoning === isReasoning && prev.ctxUsage?.percentage === ctxUsage?.percentage) return;
-	_teammateStreamMap.set(agentId, {agentId, agentName, tokenCount, isReasoning, ctxUsage});
+	if (
+		prev &&
+		prev.tokenCount === tokenCount &&
+		prev.isReasoning === isReasoning &&
+		prev.ctxUsage?.percentage === ctxUsage?.percentage
+	)
+		return;
+	_teammateStreamMap.set(agentId, {
+		agentId,
+		agentName,
+		tokenCount,
+		isReasoning,
+		ctxUsage,
+	});
 	rebuildTeammateSnapshot();
 }
 
@@ -54,13 +113,58 @@ function removeTeammateStreamEntry(agentId: string): void {
 	}
 }
 
+function setSubAgentStreamEntry(
+	agentId: string,
+	agentName: string,
+	tokenCount: number,
+	isReasoning: boolean,
+	ctxUsage?: TeammateCtxUsage,
+): void {
+	const prev = _subAgentStreamMap.get(agentId);
+	if (
+		prev &&
+		prev.tokenCount === tokenCount &&
+		prev.isReasoning === isReasoning &&
+		prev.ctxUsage?.percentage === ctxUsage?.percentage
+	) {
+		return;
+	}
+	_subAgentStreamMap.set(agentId, {
+		agentId,
+		agentName,
+		tokenCount,
+		isReasoning,
+		ctxUsage,
+	});
+	rebuildSubAgentSnapshot();
+}
+
+function removeSubAgentStreamEntry(agentId: string): void {
+	if (_subAgentStreamMap.delete(agentId)) {
+		rebuildSubAgentSnapshot();
+	}
+}
+
 export function subscribeTeammateStream(listener: () => void): () => void {
 	_teammateStreamListeners.add(listener);
-	return () => { _teammateStreamListeners.delete(listener); };
+	return () => {
+		_teammateStreamListeners.delete(listener);
+	};
 }
 
 export function getTeammateStreamSnapshot(): TeammateStreamInfo[] {
 	return _teammateStreamSnapshot;
+}
+
+export function subscribeSubAgentStream(listener: () => void): () => void {
+	_subAgentStreamListeners.add(listener);
+	return () => {
+		_subAgentStreamListeners.delete(listener);
+	};
+}
+
+export function getSubAgentStreamSnapshot(): SubAgentStreamInfo[] {
+	return _subAgentStreamSnapshot;
 }
 
 export function clearAllTeammateStreamEntries(): void {
@@ -68,6 +172,13 @@ export function clearAllTeammateStreamEntries(): void {
 	_teammateStreamMap.clear();
 	_teammateStreamSnapshot = [];
 	notifyTeammateStreamListeners();
+}
+
+export function clearAllSubAgentStreamEntries(): void {
+	if (_subAgentStreamMap.size === 0) return;
+	_subAgentStreamMap.clear();
+	_subAgentStreamSnapshot = [];
+	notifySubAgentStreamListeners();
 }
 
 // ── Types ──
@@ -128,7 +239,6 @@ export class SubAgentUIHandler {
 
 	constructor(
 		private encoder: any,
-		private setStreamTokenCount: (count: number) => void,
 		private saveMessage: (msg: any) => Promise<void>,
 		private setIsReasoning?: (isReasoning: boolean) => void,
 		private streamingEnabled: boolean = true,
@@ -150,6 +260,8 @@ export class SubAgentUIHandler {
 				return this.handleContextUsage(prev, subAgentMessage);
 			case 'context_compressing':
 				return this.handleContextCompressing(prev, subAgentMessage);
+			case 'context_compress_retrying':
+				return this.handleContextCompressRetrying(prev, subAgentMessage);
 			case 'context_compressed':
 				return this.handleContextCompressed(prev, subAgentMessage);
 			case 'inter_agent_sent':
@@ -209,10 +321,10 @@ export class SubAgentUIHandler {
 		delete this.streamStates[agentId];
 		this.updateGlobalTokenCount();
 		removeTeammateStreamEntry(agentId);
+		removeSubAgentStreamEntry(agentId);
 	}
 
 	private updateGlobalTokenCount(): void {
-		let leadTotal = 0;
 		for (const [agentId, state] of Object.entries(this.streamStates)) {
 			if (agentId.startsWith('teammate-')) {
 				setTeammateStreamEntry(
@@ -223,10 +335,15 @@ export class SubAgentUIHandler {
 					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
 				);
 			} else {
-				leadTotal += state.tokenCount;
+				setSubAgentStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					this.activeReasoningAgents.has(agentId),
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
+				);
 			}
 		}
-		this.setStreamTokenCount(leadTotal);
 	}
 
 	private setAgentReasoning(agentId: string, isReasoning: boolean): void {
@@ -241,6 +358,17 @@ export class SubAgentUIHandler {
 			const state = this.streamStates[agentId];
 			if (state) {
 				setTeammateStreamEntry(
+					agentId,
+					this.agentNameMap[agentId] || agentId,
+					state.tokenCount,
+					isReasoning,
+					this.latestCtxUsage[agentId] as TeammateCtxUsage | undefined,
+				);
+			}
+		} else {
+			const state = this.streamStates[agentId];
+			if (state) {
+				setSubAgentStreamEntry(
 					agentId,
 					this.agentNameMap[agentId] || agentId,
 					state.tokenCount,
@@ -272,66 +400,15 @@ export class SubAgentUIHandler {
 	}
 
 	private emitStreamLine(
-		lines: Message[],
-		state: StreamState,
-		subAgentMessage: SubAgentMessage,
-		content: string,
-		isThinking: boolean,
+		_lines: Message[],
+		_state: StreamState,
+		_subAgentMessage: SubAgentMessage,
+		_content: string,
+		_isThinking: boolean,
 	): void {
 		if (!this.streamingEnabled) return;
-
-		const isFirst = state.isFirstStreamLine;
-		const isFirstContent = !isThinking && !state.hasStartedContent;
-		if (isFirst) state.isFirstStreamLine = false;
-		if (isFirstContent) state.hasStartedContent = true;
-		state.hasEmittedStreamLine = true;
-
-		const msg: Message = {
-			role: 'assistant' as const,
-			content,
-			streamingLine: true,
-			isThinkingLine: isThinking,
-			isFirstStreamLine: isFirst,
-			isFirstContentLine: isFirstContent,
-			subAgent: {
-				agentId: subAgentMessage.agentId,
-				agentName: subAgentMessage.agentName,
-				isComplete: false,
-			},
-			subAgentInternal: true,
-		};
-
-		const agentId = subAgentMessage.agentId;
-
-		if (this.activeDisplayAgentId === null) {
-			this.activeDisplayAgentId = agentId;
-			this.emitAgentTitle(lines, subAgentMessage);
-			lines.push(msg);
-		} else if (agentId === this.activeDisplayAgentId) {
-			lines.push(msg);
-		} else {
-			if (!this.displayQueue.includes(agentId)) {
-				this.displayQueue.push(agentId);
-			}
-			const buf = this.bufferedStreamLines.get(agentId) || [];
-			buf.push(msg);
-			this.bufferedStreamLines.set(agentId, buf);
-		}
-	}
-
-	private emitAgentTitle(lines: Message[], subAgentMessage: SubAgentMessage): void {
-		const name = subAgentMessage.agentName;
-		lines.push({
-			role: 'subagent' as const,
-			content: `\x1b[36m⚇ ${name}\x1b[0m`,
-			streaming: false,
-			subAgent: {
-				agentId: subAgentMessage.agentId,
-				agentName: name,
-				isComplete: false,
-			},
-			subAgentInternal: true,
-		});
+		// Sub-agent content/thinking is not displayed, only show tools and diffs
+		return;
 	}
 
 	/**
@@ -362,9 +439,11 @@ export class SubAgentUIHandler {
 			if (this.streamStates[nextId]) break;
 		}
 
-		if (this.displayQueue.length === 0 &&
+		if (
+			this.displayQueue.length === 0 &&
 			this.activeDisplayAgentId &&
-			!this.streamStates[this.activeDisplayAgentId]) {
+			!this.streamStates[this.activeDisplayAgentId]
+		) {
 			this.activeDisplayAgentId = null;
 		}
 
@@ -633,18 +712,8 @@ export class SubAgentUIHandler {
 		if (state.hasReceivedContentChunk || !this.streamingEnabled) {
 			return prev;
 		}
-
-		const newLines: Message[] = [];
-		state.thinkingLineBuffer += incomingDelta;
-		const thinkLines = state.thinkingLineBuffer.split('\n');
-		for (let i = 0; i < thinkLines.length - 1; i++) {
-			const cleaned = this.cleanThinkingContent(thinkLines[i] ?? '');
-			if (cleaned || state.hasEmittedStreamLine) {
-				this.emitStreamLine(newLines, state, subAgentMessage, cleaned, true);
-			}
-		}
-		state.thinkingLineBuffer = thinkLines[thinkLines.length - 1] ?? '';
-		return newLines.length > 0 ? [...prev, ...newLines] : prev;
+		// Sub-agent: skip thinking stream lines (fullThinkingContent still accumulated above)
+		return prev;
 	}
 
 	private handleToolCallDelta(
@@ -686,6 +755,15 @@ export class SubAgentUIHandler {
 				this.activeReasoningAgents.has(subAgentMessage.agentId),
 				ctxData,
 			);
+		} else {
+			const state = this.streamStates[subAgentMessage.agentId];
+			setSubAgentStreamEntry(
+				subAgentMessage.agentId,
+				this.agentNameMap[subAgentMessage.agentId] || subAgentMessage.agentName,
+				state?.tokenCount ?? 0,
+				this.activeReasoningAgents.has(subAgentMessage.agentId),
+				ctxData,
+			);
 		}
 
 		let targetIndex = -1;
@@ -720,6 +798,31 @@ export class SubAgentUIHandler {
 			{
 				role: 'subagent' as const,
 				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m \x1b[33m✵ Auto-compressing context (${subAgentMessage.message.percentage}%)...\x1b[0m`,
+				streaming: false,
+				subAgent: {
+					agentId: subAgentMessage.agentId,
+					agentName: subAgentMessage.agentName,
+					isComplete: false,
+				},
+				subAgentInternal: true,
+			},
+		];
+	}
+
+	private handleContextCompressRetrying(
+		prev: Message[],
+		subAgentMessage: SubAgentMessage,
+	): Message[] {
+		const msg = subAgentMessage.message as any;
+		return [
+			...prev,
+			{
+				role: 'subagent' as const,
+				content: `\x1b[36m⚇ ${
+					subAgentMessage.agentName
+				}\x1b[0m \x1b[33m⟳ Compression retry (${msg.attempt}/${
+					msg.maxRetries
+				})...\x1b[0m${msg.error ? ` \x1b[90m${msg.error}\x1b[0m` : ''}`,
 				streaming: false,
 				subAgent: {
 					agentId: subAgentMessage.agentId,
@@ -906,6 +1009,13 @@ export class SubAgentUIHandler {
 				toolArgs = {};
 			}
 
+			// Enrich filesystem edit/create args with diff preview data so
+			// DiffViewer can render during pending (single-file + batch).
+			const enrichedArgs = enrichPendingEditArgs(
+				toolCall.function.name,
+				toolArgs,
+			);
+
 			let paramDisplay = '';
 			if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
 				paramDisplay = ` "${toolArgs.command}"`;
@@ -920,7 +1030,7 @@ export class SubAgentUIHandler {
 				role: 'subagent' as const,
 				content: `\x1b[38;2;184;122;206m⚇⚡ ${toolDisplay.toolName}${paramDisplay}\x1b[0m`,
 				streaming: false,
-				toolCall: {name: toolCall.function.name, arguments: toolArgs},
+				toolCall: {name: toolCall.function.name, arguments: enrichedArgs},
 				toolCallId: toolCall.id,
 				toolPending: true,
 				messageStatus: 'pending',
@@ -1003,6 +1113,16 @@ export class SubAgentUIHandler {
 			? msg.rejection_reason || extractRejectionReason(msg.content)
 			: undefined;
 
+		const editDiffData =
+			!isError && msg.editDiffData
+				? msg.editDiffData
+				: extractFilesystemEditDiffDataForPersistence(
+						msg.tool_name,
+						msg.content,
+				  );
+		const displayMsg =
+			editDiffData && !msg.editDiffData ? {...msg, editDiffData} : msg;
+
 		// Fire-and-forget save
 		const sessionMsg = {
 			role: 'tool' as const,
@@ -1010,6 +1130,7 @@ export class SubAgentUIHandler {
 			content: msg.content,
 			messageStatus: isError ? 'error' : 'success',
 			subAgentInternal: true,
+			...(editDiffData ? {editDiffData} : {}),
 		};
 		this.saveMessage(sessionMsg).catch(err =>
 			console.error('Failed to save sub-agent tool result:', err),
@@ -1019,7 +1140,7 @@ export class SubAgentUIHandler {
 			return this.handleTimeConsumingToolResult(
 				prev,
 				subAgentMessage,
-				msg,
+				displayMsg,
 				isError,
 			);
 		}
@@ -1107,8 +1228,20 @@ export class SubAgentUIHandler {
 		if (
 			!isError &&
 			(msg.tool_name === 'filesystem-create' ||
-				msg.tool_name === 'filesystem-edit')
+				msg.tool_name === 'filesystem-edit' ||
+				msg.tool_name === 'filesystem-replaceedit')
 		) {
+			if (
+				msg.editDiffData &&
+				(typeof msg.editDiffData.oldContent === 'string' ||
+					typeof msg.editDiffData.content === 'string' ||
+					Array.isArray(msg.editDiffData.batchResults))
+			) {
+				fileToolData = {
+					name: msg.tool_name,
+					arguments: msg.editDiffData,
+				};
+			}
 			try {
 				const resultData = JSON.parse(msg.content);
 				if (resultData.content) {
@@ -1133,6 +1266,7 @@ export class SubAgentUIHandler {
 						},
 					};
 				} else if (
+					!fileToolData &&
 					resultData.results &&
 					Array.isArray(resultData.results)
 				) {
@@ -1141,6 +1275,18 @@ export class SubAgentUIHandler {
 						arguments: {
 							isBatch: true,
 							batchResults: resultData.results,
+						},
+					};
+				} else if (
+					!fileToolData &&
+					resultData.batchResults &&
+					Array.isArray(resultData.batchResults)
+				) {
+					fileToolData = {
+						name: msg.tool_name,
+						arguments: {
+							isBatch: true,
+							batchResults: resultData.batchResults,
 						},
 					};
 				}
@@ -1193,29 +1339,12 @@ export class SubAgentUIHandler {
 			this.flushTokenCount(subAgentMessage.agentId, now);
 		}
 
-		const isFirstContentChunk = !state.hasReceivedContentChunk;
 		state.hasReceivedContentChunk = true;
 		if (!this.streamingEnabled) {
 			return prev;
 		}
-
-		const newLines: Message[] = [];
-		if (isFirstContentChunk) {
-			this.flushThinkingBuffer(state, newLines, subAgentMessage);
-		}
-
-		state.contentLineBuffer += incomingContent;
-		const contentLines = state.contentLineBuffer.split('\n');
-		for (let i = 0; i < contentLines.length - 1; i++) {
-			this.processContentLine(
-				state,
-				newLines,
-				contentLines[i] ?? '',
-				subAgentMessage,
-			);
-		}
-		state.contentLineBuffer = contentLines[contentLines.length - 1] ?? '';
-		return newLines.length > 0 ? [...prev, ...newLines] : prev;
+		// Sub-agent: skip content stream lines (fullContent still accumulated above)
+		return prev;
 	}
 
 	private handleDone(

@@ -47,6 +47,7 @@ type TerminalConfig = {
 	fontSize: number;
 	fontWeight: string;
 	lineHeight: number;
+	backgroundColor: string;
 };
 
 type NormalizedFontConfig = Omit<TerminalConfig, 'shellProfile'>;
@@ -79,15 +80,48 @@ type RendererHealthStatField = {
 const RENDERER_HEALTH_STAT_FIELDS: readonly RendererHealthStatField[] = [
 	{key: 'activeRendererMode', valueType: 'string', detailLabel: 'mode'},
 	{key: 'rendererRecoveryCycleId', valueType: 'number', detailLabel: 'cycle'},
-	{key: 'rendererRecoveryAttemptId', valueType: 'number', detailLabel: 'attempt'},
+	{
+		key: 'rendererRecoveryAttemptId',
+		valueType: 'number',
+		detailLabel: 'attempt',
+	},
 	{key: 'sinceLastRenderMs', valueType: 'number', detailLabel: 'sinceRenderMs'},
 	{key: 'sinceLastOutputMs', valueType: 'number', detailLabel: 'sinceOutputMs'},
-	{key: 'sinceLastWriteParsedMs', valueType: 'number', detailLabel: 'sinceWriteParsedMs'},
-	{key: 'sinceLastWriteCallbackMs', valueType: 'number', detailLabel: 'sinceWriteCbMs'},
-	{key: 'rendererHealthSuspendedForMs', valueType: 'number', detailLabel: 'suspendedMs'},
-	{key: 'scheduledRecoveryDelayMs', valueType: 'number', detailLabel: 'retryDelayMs'},
-	{key: 'lastWebglFailureReason', valueType: 'string', detailLabel: 'lastFailure'},
+	{
+		key: 'sinceLastWriteParsedMs',
+		valueType: 'number',
+		detailLabel: 'sinceWriteParsedMs',
+	},
+	{
+		key: 'sinceLastWriteCallbackMs',
+		valueType: 'number',
+		detailLabel: 'sinceWriteCbMs',
+	},
+	{
+		key: 'rendererHealthSuspendedForMs',
+		valueType: 'number',
+		detailLabel: 'suspendedMs',
+	},
+	{
+		key: 'scheduledRecoveryDelayMs',
+		valueType: 'number',
+		detailLabel: 'retryDelayMs',
+	},
+	{
+		key: 'lastWebglFailureReason',
+		valueType: 'string',
+		detailLabel: 'lastFailure',
+	},
 ];
+
+type BellSound = 'beep' | 'ding' | 'chime' | 'pluck' | 'blip' | 'none';
+
+type BellConfig = {
+	enabled: boolean;
+	volume: number;
+	sound: BellSound;
+	visualFlash: boolean;
+};
 
 type ExtensionToWebviewMessage =
 	| {type: 'output'; tabId: string; data: string}
@@ -102,7 +136,9 @@ type ExtensionToWebviewMessage =
 			fontSize: number;
 			fontWeight: string;
 			lineHeight: number;
+			backgroundColor: string;
 	  }
+	| ({type: 'updateBell'} & BellConfig)
 	| {type: 'exit'; tabId: string; code: number};
 
 type WebviewToExtensionMessage =
@@ -208,7 +244,6 @@ const TRIGGER_ACTIONS: Record<Trigger, LifecycleActionTemplate> = {
 	},
 };
 
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
@@ -249,7 +284,8 @@ function describeWebviewMessage(rawMessage: unknown): string {
 		return `non-object:${typeof rawMessage}`;
 	}
 
-	const type = typeof rawMessage.type === 'string' ? rawMessage.type : 'unknown';
+	const type =
+		typeof rawMessage.type === 'string' ? rawMessage.type : 'unknown';
 	const summary = [`type=${type}`];
 	const message = asOptionalNonEmptyString(rawMessage.message);
 	const data = asOptionalNonEmptyString(rawMessage.data);
@@ -274,7 +310,9 @@ function formatUnknownError(error: unknown): string {
 }
 
 function asOptionalFiniteNumber(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+	return typeof value === 'number' && Number.isFinite(value)
+		? value
+		: undefined;
 }
 
 function normalizeRendererHealthStage(
@@ -300,7 +338,9 @@ function parseRendererHealthStatValue(
 		: asOptionalFiniteNumber(value);
 }
 
-function parseRendererHealthStats(value: unknown): RendererHealthStats | undefined {
+function parseRendererHealthStats(
+	value: unknown,
+): RendererHealthStats | undefined {
 	if (!isRecord(value)) {
 		return undefined;
 	}
@@ -317,7 +357,9 @@ function parseRendererHealthStats(value: unknown): RendererHealthStats | undefin
 	return Object.keys(stats).length > 0 ? stats : undefined;
 }
 
-function parseWebviewMessage(rawMessage: unknown): WebviewToExtensionMessage | undefined {
+function parseWebviewMessage(
+	rawMessage: unknown,
+): WebviewToExtensionMessage | undefined {
 	if (!isRecord(rawMessage) || typeof rawMessage.type !== 'string') {
 		return undefined;
 	}
@@ -411,8 +453,8 @@ function mergeActions(
 		incoming.policy === 'restart'
 			? incoming.trigger
 			: base.policy === 'restart'
-				? base.trigger
-				: incoming.trigger;
+			? base.trigger
+			: incoming.trigger;
 
 	return {
 		trigger,
@@ -552,6 +594,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			fontSize: cfg.get<number>('fontSize', 14),
 			fontWeight: cfg.get<string>('fontWeight', 'normal'),
 			lineHeight: cfg.get<number>('lineHeight', 1.0),
+			backgroundColor: cfg.get<string>('backgroundColor', '#181818'),
 		};
 	}
 
@@ -565,6 +608,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				LINE_HEIGHT_MIN,
 				LINE_HEIGHT_MAX,
 			),
+			backgroundColor: config.backgroundColor || '#181818',
 		};
 	}
 
@@ -579,6 +623,32 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private sendFontConfig(): void {
 		const normalized = this.normalizeFontConfig(this.getTerminalConfig());
 		this.postWebviewMessage({type: 'updateFont', ...normalized});
+	}
+
+	private getBellConfig(): BellConfig {
+		const cfg = vscode.workspace.getConfiguration('snow-cli.bell');
+		const rawSound = cfg.get<string>('sound', 'beep');
+		const allowed: ReadonlySet<BellSound> = new Set([
+			'beep',
+			'ding',
+			'chime',
+			'pluck',
+			'blip',
+			'none',
+		]);
+		const sound: BellSound = (allowed as Set<string>).has(rawSound)
+			? (rawSound as BellSound)
+			: 'beep';
+		return {
+			enabled: cfg.get<boolean>('enabled', true),
+			volume: clampNumber(cfg.get<number>('volume', 0.5), 0, 1),
+			sound,
+			visualFlash: cfg.get<boolean>('visualFlash', true),
+		};
+	}
+
+	public sendBellConfig(): void {
+		this.postWebviewMessage({type: 'updateBell', ...this.getBellConfig()});
 	}
 
 	private updateRendererRecoveryState(
@@ -619,7 +689,6 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		return (
 			folder?.uri.fsPath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 		);
-
 	}
 
 	public createTab(options?: EnsureOptions): void {
@@ -666,7 +735,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			outputBufferMaxBytes: OUTPUT_BUFFER_MAX_BYTES,
 			outputTruncationNotice: OUTPUT_TRUNCATION_NOTICE,
 		});
-		session.setResolvedShell(resolveShellProfile(this.getTerminalConfig().shellProfile));
+		session.setResolvedShell(
+			resolveShellProfile(this.getTerminalConfig().shellProfile),
+		);
 		this.sessions.set(session.id, session);
 		this.sessionOrder.push(session.id);
 		this.activeSessionId = session.id;
@@ -797,7 +868,10 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			nextActiveSession = this.createSession();
 			createdReplacement = true;
 		} else if (wasActive) {
-			const fallbackIndex = Math.min(sessionIndex, this.sessionOrder.length - 1);
+			const fallbackIndex = Math.min(
+				sessionIndex,
+				this.sessionOrder.length - 1,
+			);
 			nextActiveSession = this.getSessionById(this.sessionOrder[fallbackIndex]);
 		} else {
 			nextActiveSession = this.getActiveSession();
@@ -811,7 +885,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 
 		this.logSidebarInfo(
 			'Closed terminal tab.',
-			`tabId=${session.id}, title=${session.title}, replacementTabId=${nextActiveSession?.id ?? 'none'}, remainingTabs=${this.sessionOrder.length}`,
+			`tabId=${session.id}, title=${session.title}, replacementTabId=${
+				nextActiveSession?.id ?? 'none'
+			}, remainingTabs=${this.sessionOrder.length}`,
 		);
 
 		if (createdReplacement && nextActiveSession) {
@@ -881,6 +957,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.finishRestart(false);
 		this.runLifecycleAction('viewReady');
 		this.sendFontConfig();
+		this.sendBellConfig();
 		this.syncActiveSessionToWebview({fit: true});
 		if (this.pendingFocusAfterFrontendReload) {
 			this.pendingFocusAfterFrontendReload = false;
@@ -1024,16 +1101,16 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 						);
 					}
 					return;
-			case 'dropPaths':
-				this.handleDropPaths(message.uris);
-				return;
-			case 'rendererHealth':
-				this.handleRendererHealthMessage(
-					message.stage,
-					message.reason,
-					message.stats,
-				);
-				return;
+				case 'dropPaths':
+					this.handleDropPaths(message.uris);
+					return;
+				case 'rendererHealth':
+					this.handleRendererHealthMessage(
+						message.stage,
+						message.reason,
+						message.stats,
+					);
+					return;
 				case 'frontendLog':
 					this.writeOutputLog(
 						message.level,
@@ -1080,7 +1157,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				if (now - this.lastRendererStallNoticeAt >= 5000) {
 					this.lastRendererStallNoticeAt = now;
 					void vscode.window.setStatusBarMessage(
-						`Snow CLI: WebGL renderer degraded${reason ? ` (${reason})` : ''}; retrying locally.`,
+						`Snow CLI: WebGL renderer degraded${
+							reason ? ` (${reason})` : ''
+						}; retrying locally.`,
 						3000,
 					);
 				}
@@ -1120,7 +1199,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 						this.lastRendererStallNoticeAt = now;
 						this.logSidebarWarn('Renderer recovery throttled.', detailText);
 						void vscode.window.setStatusBarMessage(
-							`Snow CLI: renderer recovery throttled${reason ? ` (${reason})` : ''}. Use Restart Terminal if needed.`,
+							`Snow CLI: renderer recovery throttled${
+								reason ? ` (${reason})` : ''
+							}. Use Restart Terminal if needed.`,
 							3000,
 						);
 					}
@@ -1135,7 +1216,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				if (now - this.lastRendererStallNoticeAt >= 10000) {
 					this.lastRendererStallNoticeAt = now;
 					void vscode.window.setStatusBarMessage(
-						`Snow CLI: reloading terminal renderer${reason ? ` (${reason})` : ''}.`,
+						`Snow CLI: reloading terminal renderer${
+							reason ? ` (${reason})` : ''
+						}.`,
 						3000,
 					);
 				}
@@ -1390,6 +1473,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.startTerminal(activeSession.id);
 		if (!action.resetFrontend) {
 			this.sendFontConfig();
+			this.sendBellConfig();
 			this.postWebviewMessage({type: 'fit'});
 		}
 		this.scheduleRestartCompletion(
@@ -1412,7 +1496,9 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.webviewReady = false;
 		this.logSidebarInfo(
 			'Reloading webview frontend.',
-			`focusAfterReady=${Boolean(options?.focusAfterReady)}, nextHtmlVersion=${this.webviewHtmlVersion + 1}`,
+			`focusAfterReady=${Boolean(options?.focusAfterReady)}, nextHtmlVersion=${
+				this.webviewHtmlVersion + 1
+			}`,
 		);
 		this.configureWebview(this.view);
 	}
@@ -1476,9 +1562,13 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			webview,
 			SIDEBAR_SCRIPT_SEGMENTS,
 		);
+		const isRemoteSsh = vscode.env.remoteName === 'ssh-remote';
 		const scriptTags = XTERM_SCRIPT_SEGMENTS.map(
 			segments =>
-				`<script src="${this.getWebviewResourceUri(webview, segments)}"></script>`,
+				`<script src="${this.getWebviewResourceUri(
+					webview,
+					segments,
+				)}"></script>`,
 		).join('\n  ');
 
 		const rendererTestControls = SHOW_RENDERER_TEST_CONTROLS
@@ -1504,7 +1594,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
   <link rel="stylesheet" href="${xtermCssUri}">
   <link rel="stylesheet" href="${sidebarCssUri}">
 </head>
-<body>
+<body data-remote-ssh="${isRemoteSsh ? 'true' : 'false'}">
   <div id="terminal-root">
     <div id="terminal-tab-strip" role="tablist" aria-label="Terminal tabs"></div>
     ${rendererTestControls}
@@ -1568,4 +1658,3 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 		this.outputChannel.dispose();
 	}
 }
-

@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import {Select} from '@inkjs/ui';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
+import {ResponsesReasoningModeSelect} from './ConfigSubViews.js';
 import {stripFocusArtifacts, type ConfigField} from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -17,12 +18,20 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		theme,
 		currentField,
 		isEditing,
+		// Group expansion
+		apiConnectionExpanded,
+		promptHeadersExpanded,
+		displayCompressExpanded,
+		reasoningExpanded,
+		modelExpanded,
+		tokenTimeoutExpanded,
 		// Profile
 		profiles,
 		activeProfile,
 		// API settings
 		baseUrl,
 		setBaseUrl,
+		baseUrlMode,
 		apiKey,
 		setApiKey,
 		requestMethod,
@@ -50,17 +59,31 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		responsesReasoningEnabled,
 		responsesReasoningEffort,
 		setResponsesReasoningEffort,
+		responsesReasoningMode,
+		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
 		responsesFastMode,
+		chatThinkingEnabled,
+		chatReasoningEffort,
 		supportsXHigh,
 		// Model settings
 		advancedModel,
 		basicModel,
+		supportsVision,
+		visionBaseUrl,
+		setVisionBaseUrl,
+		visionBaseUrlMode,
+		visionApiKey,
+		setVisionApiKey,
+		visionRequestMethod,
+		visionModel,
 		maxContextTokens,
 		maxTokens,
 		streamIdleTimeoutSec,
 		toolResultTokenLimit,
+		maxRetries,
+		retryDelayMs,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -75,6 +98,14 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		: theme.colors.menuNormal;
 
 	switch (field) {
+		case 'apiConnectionGroup':
+		case 'promptHeadersGroup':
+		case 'displayCompressGroup':
+		case 'reasoningGroup':
+		case 'modelGroup':
+		case 'tokenTimeoutGroup':
+			return renderGroupHeader(field);
+
 		case 'profile':
 			return (
 				<Box key={field} flexDirection="column">
@@ -113,6 +144,27 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{baseUrl || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'baseUrlMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.baseUrlMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{baseUrlMode === 'base'
+									? t.configScreen.baseUrlModeBase
+									: baseUrlMode === 'endpoint'
+									? t.configScreen.baseUrlModeEndpoint
+									: t.configScreen.baseUrlModeAuto}
 							</Text>
 						</Box>
 					)}
@@ -559,9 +611,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									{label: 'HIGH', value: 'high'},
 								]}
 								onChange={value => {
-									setGeminiThinkingLevel(
-										value as 'minimal' | 'low' | 'medium' | 'high',
-									);
+									setGeminiThinkingLevel(value);
 									state.setIsEditing(false);
 								}}
 							/>
@@ -620,9 +670,37 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 									...(supportsXHigh ? [{label: 'XHIGH', value: 'xhigh'}] : []),
 								]}
 								onChange={value => {
-									setResponsesReasoningEffort(
-										value as 'none' | 'low' | 'medium' | 'high' | 'xhigh',
-									);
+									setResponsesReasoningEffort(value);
+									state.setIsEditing(false);
+								}}
+							/>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'responsesReasoningMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.responsesReasoningMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{responsesReasoningMode ??
+									t.configScreen.responsesReasoningModeNone}
+							</Text>
+						</Box>
+					)}
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<ResponsesReasoningModeSelect
+								value={responsesReasoningMode}
+								noneLabel={t.configScreen.responsesReasoningModeNone}
+								onChange={value => {
+									setResponsesReasoningMode(value);
 									state.setIsEditing(false);
 								}}
 							/>
@@ -681,6 +759,41 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				</Box>
 			);
 
+		case 'chatThinkingEnabled':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.chatThinkingEnabled}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{chatThinkingEnabled
+								? t.configScreen.enabled
+								: t.configScreen.disabled}{' '}
+							{t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'chatReasoningEffort':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.chatReasoningEffort}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{chatReasoningEffort.toUpperCase()}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
 		case 'advancedModel':
 			return (
 				<Box key={field} flexDirection="column">
@@ -709,6 +822,156 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{basicModel || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'supportsVision':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.supportsVision}
+					</Text>
+					<Box marginLeft={3}>
+						<Text color={theme.colors.menuSecondary}>
+							{supportsVision
+								? t.configScreen.supportsVisionYes
+								: t.configScreen.supportsVisionNo}{' '}
+							{t.configScreen.toggleHint}
+						</Text>
+					</Box>
+				</Box>
+			);
+
+		case 'visionConfig':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionConfig}
+					</Text>
+					<Box marginLeft={3} flexDirection="column">
+						<Text color={theme.colors.menuSecondary}>
+							{t.configScreen.visionConfigSubtitle}
+						</Text>
+						{isActive && (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.configScreen.visionConfigOpenHint}
+							</Text>
+						)}
+					</Box>
+				</Box>
+			);
+
+		case 'visionBaseUrl':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionBaseUrl}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={visionBaseUrl}
+								onChange={value => setVisionBaseUrl(stripFocusArtifacts(value))}
+								placeholder="https://api.openai.com/v1"
+							/>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionBaseUrl || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionBaseUrlMode':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionBaseUrlMode}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionBaseUrlMode === 'base'
+									? t.configScreen.baseUrlModeBase
+									: visionBaseUrlMode === 'endpoint'
+									? t.configScreen.baseUrlModeEndpoint
+									: t.configScreen.baseUrlModeAuto}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionApiKey':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionApiKey}
+					</Text>
+					{isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<TextInput
+								value={visionApiKey}
+								onChange={value => setVisionApiKey(stripFocusArtifacts(value))}
+								placeholder="sk-..."
+								mask="*"
+							/>
+						</Box>
+					)}
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionApiKey
+									? '*'.repeat(Math.min(visionApiKey.length, 20))
+									: t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionRequestMethod':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionRequestMethod}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{requestMethodOptions.find(
+									opt => opt.value === visionRequestMethod,
+								)?.label || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'visionModel':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen.visionModel}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{visionModel || t.configScreen.notSet}
 							</Text>
 						</Box>
 					)}
@@ -771,8 +1034,68 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 			);
 		}
 
+		case 'maxRetries':
+			return renderNumericField(field, t.configScreen.maxRetries, maxRetries);
+
+		case 'retryDelayMs':
+			return renderNumericField(
+				field,
+				t.configScreen.retryDelayMs,
+				retryDelayMs,
+			);
+
 		default:
 			return null;
+	}
+
+	function renderGroupHeader(groupField: ConfigField) {
+		let label: string;
+		let expanded: boolean;
+		switch (groupField) {
+			case 'apiConnectionGroup':
+				label = t.configScreen.apiConnectionGroup;
+				expanded = apiConnectionExpanded;
+				break;
+			case 'promptHeadersGroup':
+				label = t.configScreen.promptHeadersGroup;
+				expanded = promptHeadersExpanded;
+				break;
+			case 'displayCompressGroup':
+				label = t.configScreen.displayCompressGroup;
+				expanded = displayCompressExpanded;
+				break;
+			case 'reasoningGroup':
+				label = t.configScreen.reasoningGroup;
+				expanded = reasoningExpanded;
+				break;
+			case 'modelGroup':
+				label = t.configScreen.modelGroup;
+				expanded = modelExpanded;
+				break;
+			case 'tokenTimeoutGroup':
+				label = t.configScreen.tokenTimeoutGroup;
+				expanded = tokenTimeoutExpanded;
+				break;
+			default:
+				return null;
+		}
+		const groupColor = isActive
+			? theme.colors.menuSelected
+			: theme.colors.menuInfo;
+		return (
+			<Box key={groupField} flexDirection="column">
+				<Text color={groupColor} bold>
+					{activeIndicator}
+					{expanded ? '▼ ' : '▶ '}
+					{label}
+				</Text>
+				<Box marginLeft={3}>
+					<Text color={theme.colors.menuSecondary}>
+						{t.configScreen.groupExpandHint}
+					</Text>
+				</Box>
+			</Box>
+		);
 	}
 
 	function renderNumericField(

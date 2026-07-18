@@ -3,6 +3,8 @@ import {Box, Text} from 'ink';
 import Gradient from 'ink-gradient';
 import {Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
+import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
+import type {ResponsesReasoningMode} from '../../../utils/config/apiConfig.js';
 import {stripFocusArtifacts} from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -247,6 +249,14 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 				<Text color={theme.colors.menuInfo}>
 					{currentField === 'advancedModel' && t.configScreen.advancedModel}
 					{currentField === 'basicModel' && t.configScreen.basicModel}
+					{currentField === 'visionModel' && t.configScreen.visionModel}
+					{currentField === 'thinkingEffort' && t.configScreen.thinkingEffort}
+					{currentField === 'geminiThinkingLevel' &&
+						t.configScreen.geminiThinkingLevel}
+					{currentField === 'responsesReasoningEffort' &&
+						t.configScreen.responsesReasoningEffort}
+					{currentField === 'chatReasoningEffort' &&
+						t.configScreen.chatReasoningEffort}
 				</Text>
 				<Box marginLeft={2}>
 					<Text color={theme.colors.menuSelected}>
@@ -260,5 +270,40 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 				<Alert variant="info">{t.configScreen.manualInputHint}</Alert>
 			</Box>
 		</Box>
+	);
+}
+
+type ResponsesReasoningModeSelectProps = {
+	value: ResponsesReasoningMode | undefined;
+	noneLabel: string;
+	onChange: (value: ResponsesReasoningMode | undefined) => void;
+	isFocused?: boolean;
+};
+
+export function ResponsesReasoningModeSelect({
+	value,
+	noneLabel,
+	onChange,
+	isFocused = true,
+}: ResponsesReasoningModeSelectProps) {
+	const options = [
+		{label: noneLabel, value: 'none'},
+		{label: 'standard', value: 'standard'},
+		{label: 'pro', value: 'pro'},
+	] as const;
+	const selectedValue = value ?? 'none';
+
+	return (
+		<ScrollableSelectInput
+			items={options}
+			initialIndex={Math.max(
+				0,
+				options.findIndex(option => option.value === selectedValue),
+			)}
+			isFocused={isFocused}
+			onSelect={item => {
+				onChange(item.value === 'none' ? undefined : item.value);
+			}}
+		/>
 	);
 }

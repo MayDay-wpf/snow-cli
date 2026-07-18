@@ -1,8 +1,10 @@
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomSystemPromptForConfig,
 	getCustomHeadersForConfig,
+	type ApiConfig,
 } from '../utils/config/apiConfig.js';
+import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
@@ -21,6 +23,13 @@ import type {
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
+import {
+	endChatSpan,
+	recordChatContent,
+	recordChatUsage,
+	startChatSpan,
+} from '../utils/telemetry/otel.js';
 export interface ResponseOptions {
 	model: string;
 	messages: ChatMessage[];
@@ -32,8 +41,10 @@ export interface ResponseOptions {
 	reasoning?: {
 		summary?: 'auto' | 'none';
 		effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+		mode?: 'standard' | 'pro';
 	} | null; // null means don't pass reasoning parameter (for small models)
 	prompt_cache_key?: string;
+	sessionId?: string; // Session ID for telemetry and correlation
 	store?: boolean;
 	include?: string[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
@@ -46,6 +57,8 @@ export interface ResponseOptions {
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 instructions，其余系统提示词降级为 user
+	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
 /**
@@ -153,28 +166,35 @@ export interface ResponseStreamChunk {
 }
 
 function getResponsesReasoningConfig(): {
-	effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+	effort?: string;
 	summary?: 'auto' | 'none';
+	mode?: 'standard' | 'pro';
 } | null {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const reasoningConfig = config.responsesReasoning;
 
 	if (!reasoningConfig || !reasoningConfig.enabled) {
 		return null;
 	}
 
+	const mode =
+		reasoningConfig.mode === 'standard' || reasoningConfig.mode === 'pro'
+			? reasoningConfig.mode
+			: undefined;
+
 	return {
 		effort: reasoningConfig.effort || 'high',
 		summary: 'auto',
+		...(mode && {mode}),
 	};
 }
 
 function getResponsesVerbosityConfig(): 'low' | 'medium' | 'high' {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	return config.responsesVerbosity || 'medium';
 }
 
-export function resetOpenAIClient(): void {
+export function resetApiClient(): void {
 	// No-op: kept for backward compatibility
 }
 
@@ -199,18 +219,22 @@ function convertToResponseInput(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): {
 	input: any[];
 	systemInstructions: string;
 } {
 	const customSystemPrompts = customSystemPromptOverride;
+	const explicitSystemPrompts: string[] = [];
 	const result: any[] = [];
 
 	for (const msg of messages) {
 		if (!msg) continue;
 
-		// 跳过 system 消息（不放入 input，也不放入 instructions）
+		// system 消息应进入 Responses API instructions；否则 includeBuiltinSystemPrompt=false
+		// 时会退回 "You are a helpful assistant."，导致内部专用提示词被覆盖。
 		if (msg.role === 'system') {
+			explicitSystemPrompts.push(msg.content);
 			continue;
 		}
 
@@ -332,43 +356,98 @@ function convertToResponseInput(
 		}
 	}
 
-	// 确定系统提示词：参考 anthropic.ts 的逻辑
+	// 确定系统提示词：显式 system 消息优先，其次自定义提示词，再按需使用内置提示词。
 	let systemInstructions: string;
-	// 如果配置了自定义系统提示词（最高优先级，始终添加）
-	if (customSystemPrompts && customSystemPrompts.length > 0) {
-		// 有自定义系统提示词：拼接多条作为 instructions
+	// 预先计算内置系统提示词。默认会话流程中 sessionInitializer 已将内置提示词作为
+	// system 消息注入，此时它会进入 explicitSystemPrompts 并成为 instructions 的一部分，
+	// 因此需要据此判断是否还要再次作为 <environment_context> 用户消息注入，避免重复。
+	const builtinPrompt = includeBuiltinSystemPrompt
+		? getSystemPromptForMode(
+				planMode,
+				vulnerabilityHuntingMode,
+				toolSearchDisabled,
+				teamMode,
+		  )
+		: '';
+
+	// 子代理配置了自定义系统提示词时，instructions 只允许保留用户配置。
+	// 消息中已有的 system 内容与内置提示词全部降级到 input 的 user 消息。
+	if (
+		isSubAgentRequest &&
+		customSystemPrompts &&
+		customSystemPrompts.length > 0
+	) {
 		systemInstructions = customSystemPrompts.join('\n\n');
-		if (includeBuiltinSystemPrompt) {
-			// 默认系统提示词作为第一条用户消息
+		const hasBuiltinInExplicitSystem =
+			builtinPrompt.length > 0 &&
+			explicitSystemPrompts.some(prompt => prompt.includes(builtinPrompt));
+		const downgradedSystemMessages = explicitSystemPrompts.map(prompt => ({
+			type: 'message',
+			role: 'user',
+			content: [{type: 'input_text', text: prompt}],
+		}));
+		const downgradedBuiltinMessages =
+			builtinPrompt && !hasBuiltinInExplicitSystem
+				? [
+						{
+							type: 'message',
+							role: 'user',
+							content: [
+								{
+									type: 'input_text',
+									text: `<environment_context>${builtinPrompt}</environment_context>`,
+								},
+							],
+						},
+				  ]
+				: [];
+
+		result.unshift(...downgradedSystemMessages, ...downgradedBuiltinMessages);
+		return {input: result, systemInstructions};
+	}
+
+	if (explicitSystemPrompts.length > 0) {
+		systemInstructions = explicitSystemPrompts.join('\n\n');
+		if (customSystemPrompts && customSystemPrompts.length > 0) {
+			systemInstructions = `${customSystemPrompts.join(
+				'\n\n',
+			)}\n\n${systemInstructions}`;
+		}
+		// 仅当内置提示词尚未包含在 instructions 中时才作为用户消息注入，
+		// 避免默认流程下内置提示词同时出现在 instructions 与 user 消息中。
+		if (builtinPrompt && !systemInstructions.includes(builtinPrompt)) {
 			result.unshift({
 				type: 'message',
 				role: 'user',
 				content: [
 					{
 						type: 'input_text',
-						text:
-							'<environment_context>' +
-							getSystemPromptForMode(
-								planMode,
-								vulnerabilityHuntingMode,
-								toolSearchDisabled,
-								teamMode,
-							) +
-							'</environment_context>',
+						text: `<environment_context>${builtinPrompt}</environment_context>`,
+					},
+				],
+			});
+		}
+	} else if (customSystemPrompts && customSystemPrompts.length > 0) {
+		// 有自定义系统提示词：拼接多条作为 instructions
+		systemInstructions = customSystemPrompts.join('\n\n');
+		// 默认系统提示词作为第一条用户消息（仅在尚未包含于 instructions 时）
+		if (builtinPrompt && !systemInstructions.includes(builtinPrompt)) {
+			result.unshift({
+				type: 'message',
+				role: 'user',
+				content: [
+					{
+						type: 'input_text',
+						text: `<environment_context>${builtinPrompt}</environment_context>`,
 					},
 				],
 			});
 		}
 	} else if (includeBuiltinSystemPrompt) {
 		// 没有自定义系统提示词，但需要添加默认系统提示词
-		systemInstructions = getSystemPromptForMode(
-			planMode,
-			vulnerabilityHuntingMode,
-			toolSearchDisabled,
-			teamMode,
-		);
+		systemInstructions = builtinPrompt;
 	} else {
-		// 既没有自定义系统提示词，也不需要添加默认系统提示词
+		// 没有任何系统提示时才使用通用兜底，避免覆盖内部专用 system 消息。
 		systemInstructions = 'You are a helpful assistant.';
 	}
 
@@ -504,7 +583,7 @@ export async function* createStreamingResponse(
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<ResponseStreamChunk, void, unknown> {
 	// Load configuration: if configProfile is specified, load it; otherwise use main config
-	let config: ReturnType<typeof getOpenAiConfig>;
+	let config: ReturnType<typeof getSnowConfig>;
 	if (options.configProfile) {
 		try {
 			const {loadProfile} = await import('../utils/config/configManager.js');
@@ -513,7 +592,7 @@ export async function* createStreamingResponse(
 				config = profileConfig.snowcfg;
 			} else {
 				// Profile not found, fallback to main config
-				config = getOpenAiConfig();
+				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
 				logger.warn(
 					`Profile ${options.configProfile} not found, using main config`,
@@ -521,7 +600,7 @@ export async function* createStreamingResponse(
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
-			config = getOpenAiConfig();
+			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
 			logger.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
@@ -530,7 +609,10 @@ export async function* createStreamingResponse(
 		}
 	} else {
 		// No configProfile specified, use main config
-		config = getOpenAiConfig();
+		config = getSnowConfig();
+	}
+	if (options.configOverride) {
+		config = {...config, ...options.configOverride};
 	}
 
 	// Get system prompt (with custom override support)
@@ -560,6 +642,7 @@ export async function* createStreamingResponse(
 		options.vulnerabilityHuntingMode || false,
 		options.toolSearchDisabled || false,
 		options.teamMode || false,
+		options.isSubAgentRequest || false,
 	);
 
 	// 获取配置的 reasoning 设置
@@ -567,273 +650,328 @@ export async function* createStreamingResponse(
 	const configuredVerbosity = getResponsesVerbosityConfig();
 
 	// 使用重试包装生成器
-	yield* withRetryGenerator(
-		async function* () {
-			const requestPayload: any = {
-				model: options.model || config.advancedModel,
-				instructions: systemInstructions,
-				input: requestInput,
-				tools: convertToolsForResponses(options.tools),
-				tool_choice: options.tool_choice,
-				parallel_tool_calls: true,
-				// 只有当 reasoning 启用且未禁用思考功能时才添加 reasoning 字段
-				...(configuredReasoning &&
-					!options.disableThinking && {
-						reasoning: configuredReasoning,
+	const telemetry = startChatSpan({
+		provider: 'openai-responses',
+		model: options.model || config.advancedModel,
+		streaming: true,
+		conversationId: options.prompt_cache_key,
+		sessionId: options.sessionId ?? options.prompt_cache_key,
+	});
+
+	try {
+		yield* withRetryGenerator(
+			async function* () {
+				const requestPayload: any = {
+					model: options.model || config.advancedModel,
+					instructions: systemInstructions,
+					input: requestInput,
+					tools: convertToolsForResponses(options.tools),
+					tool_choice: options.tool_choice,
+					parallel_tool_calls: true,
+					// 只有当 reasoning 启用且未禁用思考功能时才添加 reasoning 字段
+					...(configuredReasoning &&
+						!options.disableThinking && {
+							reasoning: configuredReasoning,
+						}),
+					...(config.responsesFastMode && {
+						service_tier: 'priority',
 					}),
-				...(config.responsesFastMode && {
-					service_tier: 'priority',
-				}),
-				text: {
-					verbosity: configuredVerbosity,
-				},
-				store: false,
-				stream: true,
-				include: ['reasoning.encrypted_content'],
-				prompt_cache_key: options.prompt_cache_key,
-			};
+					text: {
+						verbosity: configuredVerbosity,
+					},
+					store: false,
+					stream: true,
+					include: ['reasoning.encrypted_content'],
+					prompt_cache_key: options.prompt_cache_key,
+				};
 
-			const url = `${config.baseUrl}/responses`;
-
-			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
-			const customHeaders =
-				options.customHeaders || getCustomHeadersForConfig(config);
-
-			const fetchOptions = addProxyToFetchOptions(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': getVersionHeader(),
-					...(options.prompt_cache_key && {
-						conversation_id: options.prompt_cache_key,
-						session_id: options.prompt_cache_key,
-					}),
-					...customHeaders,
-				},
-				body: JSON.stringify(requestPayload),
-				signal: abortSignal,
-			});
-
-			let response: Response;
-			try {
-				response = await fetch(url, fetchOptions);
-			} catch (error) {
-				// 捕获 fetch 底层错误（网络错误、连接超时等）
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				throw new Error(
-					`OpenAI Responses API fetch failed: ${errorMessage}\n` +
-						`URL: ${url}\n` +
-						`Model: ${requestPayload.model}\n` +
-						`Error type: ${
-							error instanceof TypeError
-								? 'Network/Connection Error'
-								: 'Unknown Error'
-						}\n` +
-						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
+				recordChatContent(
+					telemetry.span,
+					'request',
+					requestPayload,
+					telemetry.metricAttributes,
 				);
-			}
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
+				const url = resolveApiEndpoint(
+					config.baseUrl,
+					'responses',
+					config.baseUrlMode,
 				);
-			}
 
-			if (!response.body) {
-				throw new Error('No response body from OpenAI Responses API');
-			}
+				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+				// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
+				const rawCustomHeaders =
+					options.customHeaders || getCustomHeadersForConfig(config);
+				const customHeaders = await resolveCustomHeaderPlaceholders(
+					rawCustomHeaders,
+				);
 
-			let contentBuffer = '';
-			let toolCallsBuffer: {[call_id: string]: any} = {};
-			let hasToolCalls = false;
-			let currentFunctionCallId: string | null = null;
-			let usageData: UsageInfo | undefined;
-			let reasoningData:
-				| {
-						summary?: Array<{text: string; type: 'summary_text'}>;
-						content?: any;
-						encrypted_content?: string;
-				  }
-				| undefined;
-			const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
+				const fetchOptions = addProxyToFetchOptions(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${config.apiKey}`,
+						'x-snow': getVersionHeader(),
+						...(options.prompt_cache_key && {
+							conversation_id: options.prompt_cache_key,
+							session_id: options.prompt_cache_key,
+						}),
+						...customHeaders,
+					},
+					body: JSON.stringify(requestPayload),
+					signal: abortSignal,
+				});
 
-			for await (const chunk of parseSSEStream(
-				response.body.getReader(),
-				abortSignal,
-				idleTimeoutMs,
-			)) {
-				// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
-
-				// Responses API 使用 SSE 事件格式
-				const eventType = chunk.type;
-
-				// 根据事件类型处理
-				if (
-					eventType === 'response.created' ||
-					eventType === 'response.in_progress'
-				) {
-					// 响应创建/进行中 - 忽略
-					continue;
-				} else if (eventType === 'response.output_item.added') {
-					// 新输出项添加
-					const item = chunk.item;
-					if (item?.type === 'reasoning') {
-						// 推理摘要开始 - 发送 reasoning_started 事件
-						yield {
-							type: 'reasoning_started',
-						};
-						continue;
-					} else if (item?.type === 'message') {
-						// 消息开始 - 忽略
-						continue;
-					} else if (item?.type === 'function_call') {
-						// 工具调用开始
-						hasToolCalls = true;
-						const callId = item.call_id || item.id;
-						currentFunctionCallId = callId;
-						toolCallsBuffer[callId] = {
-							id: callId,
-							type: 'function',
-							function: {
-								name: item.name || '',
-								arguments: '',
-							},
-						};
-						continue;
-					}
-					continue;
-				} else if (eventType === 'response.function_call_arguments.delta') {
-					// 工具调用参数增量
-					const delta = chunk.delta;
-					if (delta && currentFunctionCallId) {
-						toolCallsBuffer[currentFunctionCallId].function.arguments += delta;
-						// 发送 delta 用于 token 计数
-						yield {
-							type: 'tool_call_delta',
-							delta: delta,
-						};
-					}
-				} else if (eventType === 'response.function_call_arguments.done') {
-					// 工具调用参数完成
-					const itemId = chunk.item_id;
-					const args = chunk.arguments;
-					if (itemId && toolCallsBuffer[itemId]) {
-						toolCallsBuffer[itemId].function.arguments = args;
-					}
-					currentFunctionCallId = null;
-					continue;
-				} else if (eventType === 'response.output_item.done') {
-					// 输出项完成
-					const item = chunk.item;
-					if (item?.type === 'function_call') {
-						// 确保工具调用信息完整
-						const callId = item.call_id || item.id;
-						if (toolCallsBuffer[callId]) {
-							toolCallsBuffer[callId].function.name = item.name;
-							toolCallsBuffer[callId].function.arguments = item.arguments;
-						}
-					} else if (item?.type === 'reasoning') {
-						// 捕获完整的 reasoning 对象（包括 encrypted_content）
-						reasoningData = {
-							summary: item.summary,
-							content: item.content,
-							encrypted_content: item.encrypted_content,
-						};
-					}
-					continue;
-				} else if (eventType === 'response.content_part.added') {
-					// 内容部分添加 - 忽略
-					continue;
-				} else if (eventType === 'response.reasoning_summary_text.delta') {
-					// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
-					const delta = chunk.delta;
-					if (delta) {
-						yield {
-							type: 'reasoning_delta',
-							delta: delta,
-						};
-					}
-				} else if (eventType === 'response.output_text.delta') {
-					// 文本增量更新
-					const delta = chunk.delta;
-					if (delta) {
-						contentBuffer += delta;
-						yield {
-							type: 'content',
-							content: delta,
-						};
-					}
-				} else if (eventType === 'response.output_text.done') {
-					// 文本输出完成 - 忽略
-					continue;
-				} else if (eventType === 'response.content_part.done') {
-					// 内容部分完成 - 忽略
-					continue;
-				} else if (eventType === 'response.completed') {
-					// 响应完全完成 - 从 response 对象中提取 usage
-					if (chunk.response && chunk.response.usage) {
-						usageData = {
-							prompt_tokens: chunk.response.usage.input_tokens || 0,
-							completion_tokens: chunk.response.usage.output_tokens || 0,
-							total_tokens: chunk.response.usage.total_tokens || 0,
-							// OpenAI Responses API: cached_tokens in input_tokens_details (note: tokenS)
-							cached_tokens: (chunk.response.usage as any).input_tokens_details
-								?.cached_tokens,
-						};
-					}
-					break;
-				} else if (
-					eventType === 'response.failed' ||
-					eventType === 'response.cancelled'
-				) {
-					// 响应失败或取消
-					const error = chunk.error;
-					if (error) {
-						const responseErrorMessage = error.message || 'Unknown error';
-						throw new Error(`Response failed: ${responseErrorMessage}`);
-					}
-					break;
+				let response: Response;
+				try {
+					response = await fetch(url, fetchOptions);
+				} catch (error) {
+					// 捕获 fetch 底层错误（网络错误、连接超时等）
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					throw new Error(
+						`OpenAI Responses API fetch failed: ${errorMessage}\n` +
+							`URL: ${url}\n` +
+							`Model: ${requestPayload.model}\n` +
+							`Error type: ${
+								error instanceof TypeError
+									? 'Network/Connection Error'
+									: 'Unknown Error'
+							}\n` +
+							`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
+					);
 				}
-			}
 
-			// 如果有工具调用，返回它们
-			if (hasToolCalls) {
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`OpenAI Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
+					);
+				}
+
+				if (!response.body) {
+					throw new Error('No response body from OpenAI Responses API');
+				}
+
+				let contentBuffer = '';
+				let toolCallsBuffer: {[call_id: string]: any} = {};
+				let hasToolCalls = false;
+				let currentFunctionCallId: string | null = null;
+				let usageData: UsageInfo | undefined;
+				let reasoningData:
+					| {
+							summary?: Array<{text: string; type: 'summary_text'}>;
+							content?: any;
+							encrypted_content?: string;
+					  }
+					| undefined;
+				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
+
+				for await (const chunk of parseSSEStream(
+					response.body.getReader(),
+					abortSignal,
+					idleTimeoutMs,
+				)) {
+					// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
+
+					// Responses API 使用 SSE 事件格式
+					const eventType = chunk.type;
+
+					// 根据事件类型处理
+					if (
+						eventType === 'response.created' ||
+						eventType === 'response.in_progress'
+					) {
+						// 响应创建/进行中 - 忽略
+						continue;
+					} else if (eventType === 'response.output_item.added') {
+						// 新输出项添加
+						const item = chunk.item;
+						if (item?.type === 'reasoning') {
+							// 推理摘要开始 - 发送 reasoning_started 事件
+							yield {
+								type: 'reasoning_started',
+							};
+							continue;
+						} else if (item?.type === 'message') {
+							// 消息开始 - 忽略
+							continue;
+						} else if (item?.type === 'function_call') {
+							// 工具调用开始
+							hasToolCalls = true;
+							const callId = item.call_id || item.id;
+							currentFunctionCallId = callId;
+							toolCallsBuffer[callId] = {
+								id: callId,
+								type: 'function',
+								function: {
+									name: item.name || '',
+									arguments: '',
+								},
+							};
+							continue;
+						}
+						continue;
+					} else if (eventType === 'response.function_call_arguments.delta') {
+						// 工具调用参数增量
+						const delta = chunk.delta;
+						if (delta && currentFunctionCallId) {
+							toolCallsBuffer[currentFunctionCallId].function.arguments +=
+								delta;
+							// 发送 delta 用于 token 计数
+							yield {
+								type: 'tool_call_delta',
+								delta: delta,
+							};
+						}
+					} else if (eventType === 'response.function_call_arguments.done') {
+						// 工具调用参数完成
+						const itemId = chunk.item_id;
+						const args = chunk.arguments;
+						if (itemId && toolCallsBuffer[itemId]) {
+							toolCallsBuffer[itemId].function.arguments = args;
+						}
+						currentFunctionCallId = null;
+						continue;
+					} else if (eventType === 'response.output_item.done') {
+						// 输出项完成
+						const item = chunk.item;
+						if (item?.type === 'function_call') {
+							// 确保工具调用信息完整
+							const callId = item.call_id || item.id;
+							if (toolCallsBuffer[callId]) {
+								toolCallsBuffer[callId].function.name = item.name;
+								toolCallsBuffer[callId].function.arguments = item.arguments;
+							}
+						} else if (item?.type === 'reasoning') {
+							// 捕获完整的 reasoning 对象（包括 encrypted_content）
+							reasoningData = {
+								summary: item.summary,
+								content: item.content,
+								encrypted_content: item.encrypted_content,
+							};
+						}
+						continue;
+					} else if (eventType === 'response.content_part.added') {
+						// 内容部分添加 - 忽略
+						continue;
+					} else if (eventType === 'response.reasoning_summary_text.delta') {
+						// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
+						const delta = chunk.delta;
+						if (delta) {
+							yield {
+								type: 'reasoning_delta',
+								delta: delta,
+							};
+						}
+					} else if (eventType === 'response.output_text.delta') {
+						// 文本增量更新
+						const delta = chunk.delta;
+						if (delta) {
+							contentBuffer += delta;
+							yield {
+								type: 'content',
+								content: delta,
+							};
+						}
+					} else if (eventType === 'response.output_text.done') {
+						// 文本输出完成 - 忽略
+						continue;
+					} else if (eventType === 'response.content_part.done') {
+						// 内容部分完成 - 忽略
+						continue;
+					} else if (eventType === 'response.completed') {
+						// 响应完全完成 - 从 response 对象中提取 usage
+						if (chunk.response && chunk.response.usage) {
+							usageData = {
+								prompt_tokens: chunk.response.usage.input_tokens || 0,
+								completion_tokens: chunk.response.usage.output_tokens || 0,
+								total_tokens: chunk.response.usage.total_tokens || 0,
+								// OpenAI Responses API: cached_tokens in input_tokens_details (note: tokenS)
+								cached_tokens: (chunk.response.usage as any)
+									.input_tokens_details?.cached_tokens,
+							};
+						}
+						break;
+					} else if (
+						eventType === 'response.failed' ||
+						eventType === 'response.cancelled'
+					) {
+						// 响应失败或取消
+						const error = chunk.error;
+						if (error) {
+							const responseErrorMessage = error.message || 'Unknown error';
+							throw new Error(`Response failed: ${responseErrorMessage}`);
+						}
+						break;
+					}
+				}
+
+				// 如果有工具调用，返回它们
+				if (hasToolCalls) {
+					yield {
+						type: 'tool_calls',
+						tool_calls: Object.values(toolCallsBuffer),
+					};
+				}
+
+				// Yield reasoning data if available
+				if (reasoningData) {
+					yield {
+						type: 'reasoning_data',
+						reasoning: reasoningData,
+					};
+				}
+
+				// Yield usage information if available
+				if (usageData) {
+					// Save usage to file system at API layer
+					saveUsageToFile(options.model, usageData);
+					recordChatUsage(
+						usageData,
+						telemetry.metricAttributes,
+						telemetry.span,
+					);
+
+					yield {
+						type: 'usage',
+						usage: usageData,
+					};
+				}
+
+				if (contentBuffer) {
+					recordChatContent(
+						telemetry.span,
+						'response',
+						contentBuffer,
+						telemetry.metricAttributes,
+					);
+				}
+
+				// 发送完成信号 - For Responses API, thinking content is in reasoning object, not separate thinking field
 				yield {
-					type: 'tool_calls',
-					tool_calls: Object.values(toolCallsBuffer),
+					type: 'done',
 				};
-			}
-
-			// Yield reasoning data if available
-			if (reasoningData) {
-				yield {
-					type: 'reasoning_data',
-					reasoning: reasoningData,
-				};
-			}
-
-			// Yield usage information if available
-			if (usageData) {
-				// Save usage to file system at API layer
-				saveUsageToFile(options.model, usageData);
-
-				yield {
-					type: 'usage',
-					usage: usageData,
-				};
-			}
-
-			// 发送完成信号 - For Responses API, thinking content is in reasoning object, not separate thinking field
-			yield {
-				type: 'done',
-			};
-		},
-		{
-			abortSignal,
-			onRetry,
-		},
-	);
+			},
+			{
+				abortSignal,
+				onRetry,
+				maxRetries: config.maxRetries,
+				baseDelay: config.retryDelayMs,
+			},
+		);
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+		);
+	} catch (error) {
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+			error,
+		);
+		throw error;
+	}
 }

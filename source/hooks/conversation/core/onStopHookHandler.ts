@@ -1,5 +1,6 @@
 import type {ChatMessage} from '../../../api/chat.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
+import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
 import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
 
@@ -21,13 +22,21 @@ export async function handleOnStopHooks(
 ): Promise<OnStopHookResult> {
 	const {conversationMessages, saveMessage, setMessages} = options;
 
+	// 无启用的 onStop action 时直接返回，避免无谓的配置加载/执行开销。
+	if (!hasEnabledHookActions('onStop')) {
+		return {shouldContinue: false};
+	}
+
 	try {
 		const hookResult = await unifiedHooksExecutor.executeHooks('onStop', {
 			messages: conversationMessages,
 		});
 		const interpreted = interpretHookResult('onStop', hookResult);
 
-		if (!interpreted.injectedMessages || interpreted.injectedMessages.length === 0) {
+		if (
+			!interpreted.injectedMessages ||
+			interpreted.injectedMessages.length === 0
+		) {
 			return {shouldContinue: interpreted.shouldContinueConversation || false};
 		}
 

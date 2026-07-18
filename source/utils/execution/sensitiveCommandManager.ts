@@ -1,9 +1,8 @@
-import {homedir} from 'os';
-import {join} from 'path';
-import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
-
-const GLOBAL_CONFIG_DIR = join(homedir(), '.snow');
-const GLOBAL_SENSITIVE_FILE = join(GLOBAL_CONFIG_DIR, 'sensitive-commands.json');
+import {
+	readSettings,
+	updateSettings,
+	type SettingsScope,
+} from '../config/unifiedSettings.js';
 
 export type SensitiveCommandScope = 'global' | 'project';
 
@@ -242,76 +241,125 @@ export const PRESET_SENSITIVE_COMMANDS: StoredSensitiveCommand[] = [
 		enabled: true,
 		isPreset: true,
 	},
+	// SQL / Database operations
+	{
+		id: 'mysql',
+		pattern: 'mysql ',
+		description: 'MySQL CLI client (direct database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'psql',
+		pattern: 'psql ',
+		description: 'PostgreSQL CLI client (direct database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'sqlite3',
+		pattern: 'sqlite3 ',
+		description: 'SQLite3 CLI (direct database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'mongosh',
+		pattern: 'mongosh ',
+		description: 'MongoDB Shell (direct database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'redis-cli',
+		pattern: 'redis-cli ',
+		description: 'Redis CLI client (direct cache/database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'sqlcmd',
+		pattern: 'sqlcmd ',
+		description: 'SQL Server CLI client (direct database access)',
+		enabled: false,
+		isPreset: true,
+	},
+	{
+		id: 'sql-drop-table',
+		pattern: 'DROP TABLE',
+		description: 'SQL DROP TABLE statement (destroys table and all data)',
+		enabled: true,
+		isPreset: true,
+	},
+	{
+		id: 'sql-drop-database',
+		pattern: 'DROP DATABASE',
+		description: 'SQL DROP DATABASE statement (destroys entire database)',
+		enabled: true,
+		isPreset: true,
+	},
+	{
+		id: 'sql-truncate',
+		pattern: 'TRUNCATE ',
+		description: 'SQL TRUNCATE statement (removes all rows from table)',
+		enabled: true,
+		isPreset: true,
+	},
+	{
+		id: 'sql-delete',
+		pattern: 'DELETE FROM',
+		description: 'SQL DELETE statement (removes rows from table)',
+		enabled: false,
+		isPreset: true,
+	},
 ];
 
-function getProjectConfigDir(): string {
-	return join(process.cwd(), '.snow');
+function toSettingsScope(scope: SensitiveCommandScope): SettingsScope {
+	return scope;
 }
 
-function getProjectConfigPath(): string {
-	return join(getProjectConfigDir(), 'sensitive-commands.json');
-}
+function loadScopedConfig(
+	scope: SensitiveCommandScope,
+): SensitiveCommandsConfig {
+	const settings = readSettings(toSettingsScope(scope));
+	const stored = settings.sensitiveCommands;
 
-function ensureDirectory(dir: string): void {
-	if (!existsSync(dir)) {
-		mkdirSync(dir, {recursive: true});
-	}
-}
-
-function loadScopedConfig(scope: SensitiveCommandScope): SensitiveCommandsConfig {
-	const dir = scope === 'project' ? getProjectConfigDir() : GLOBAL_CONFIG_DIR;
-	const file = scope === 'project' ? getProjectConfigPath() : GLOBAL_SENSITIVE_FILE;
-
-	ensureDirectory(dir);
-
-	if (!existsSync(file)) {
+	if (Array.isArray(stored)) {
+		// For global scope: backfill any newly-added preset commands so existing
+		// installs pick them up after upgrades.
 		if (scope === 'global') {
-			const defaultConfig: SensitiveCommandsConfig = {
-				commands: [...PRESET_SENSITIVE_COMMANDS],
-			};
-			saveScopedConfig('global', defaultConfig);
-			return defaultConfig;
-		}
-		return {commands: []};
-	}
-
-	try {
-		const configData = readFileSync(file, 'utf8');
-		const config = JSON.parse(configData) as SensitiveCommandsConfig;
-
-		if (scope === 'global') {
-			const existingIds = new Set(config.commands.map(cmd => cmd.id));
+			const existingIds = new Set(stored.map(cmd => cmd.id));
 			const newPresets = PRESET_SENSITIVE_COMMANDS.filter(
 				preset => !existingIds.has(preset.id),
 			);
-
 			if (newPresets.length > 0) {
-				config.commands = [...config.commands, ...newPresets];
-				saveScopedConfig('global', config);
+				const merged = [...stored, ...newPresets];
+				saveScopedConfig('global', {commands: merged});
+				return {commands: merged};
 			}
 		}
-
-		return config;
-	} catch {
-		if (scope === 'global') {
-			return {commands: [...PRESET_SENSITIVE_COMMANDS]};
-		}
-		return {commands: []};
+		return {commands: stored};
 	}
+
+	// Nothing stored yet → seed global with presets, project with empty list.
+	if (scope === 'global') {
+		const defaultConfig: SensitiveCommandsConfig = {
+			commands: [...PRESET_SENSITIVE_COMMANDS],
+		};
+		saveScopedConfig('global', defaultConfig);
+		return defaultConfig;
+	}
+	return {commands: []};
 }
 
 function saveScopedConfig(
 	scope: SensitiveCommandScope,
 	config: SensitiveCommandsConfig,
 ): void {
-	const dir = scope === 'project' ? getProjectConfigDir() : GLOBAL_CONFIG_DIR;
-	const file = scope === 'project' ? getProjectConfigPath() : GLOBAL_SENSITIVE_FILE;
-
-	ensureDirectory(dir);
-
 	try {
-		const configData = JSON.stringify(config, null, 2);
-		writeFileSync(file, configData, 'utf8');
+		updateSettings(toSettingsScope(scope), settings => {
+			settings.sensitiveCommands = config.commands;
+		});
 	} catch (error) {
 		throw new Error(`Failed to save sensitive commands config: ${error}`);
 	}
@@ -332,11 +380,22 @@ export function saveSensitiveCommands(config: SensitiveCommandsConfig): void {
 }
 
 /**
+ * Save sensitive commands configuration for a specific scope.
+ */
+export function saveSensitiveCommandsForScope(
+	scope: SensitiveCommandScope,
+	config: SensitiveCommandsConfig,
+): void {
+	saveScopedConfig(scope, config);
+}
+
+/**
  * Check if a pattern already exists in any scope
  */
-export function isDuplicatePattern(
-	pattern: string,
-): {isDuplicate: boolean; existingScope?: SensitiveCommandScope} {
+export function isDuplicatePattern(pattern: string): {
+	isDuplicate: boolean;
+	existingScope?: SensitiveCommandScope;
+} {
 	const allCommands = getAllSensitiveCommands();
 	const duplicate = allCommands.find(
 		cmd => cmd.pattern.trim() === pattern.trim(),
@@ -513,12 +572,10 @@ export function getAllSensitiveCommands(): SensitiveCommand[] {
 	const globalConfig = loadScopedConfig('global');
 	const projectConfig = loadScopedConfig('project');
 
-	const globalCommands: SensitiveCommand[] = globalConfig.commands.map(
-		cmd => ({
-			...cmd,
-			scope: 'global' as const,
-		}),
-	);
+	const globalCommands: SensitiveCommand[] = globalConfig.commands.map(cmd => ({
+		...cmd,
+		scope: 'global' as const,
+	}));
 	const projectCommands: SensitiveCommand[] = projectConfig.commands.map(
 		cmd => ({
 			...cmd,

@@ -1,8 +1,6 @@
 import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-import {useCursorHide} from './hooks/ui/useCursorHide.js';
-
 // Lazy load all page components to improve startup time
 // Only load components when they are actually needed
 const WelcomeScreen = React.lazy(() => import('./ui/pages/WelcomeScreen.js'));
@@ -37,6 +35,7 @@ type Props = {
 	version?: string;
 	skipWelcome?: boolean;
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	headlessPrompt?: string;
 	headlessSessionId?: string;
 	showTaskList?: boolean;
@@ -57,9 +56,6 @@ function ShowTaskListWrapper() {
 		});
 	const {columns: terminalWidth} = useTerminalSize();
 	const loadingFallback = null;
-
-	// Hide terminal cursor to prevent flickering during page transitions
-	useCursorHide();
 
 	// Global exit handler
 	useGlobalExit(setExitNotification);
@@ -131,12 +127,14 @@ function AppContent({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	enableYolo,
 	enablePlan,
 }: {
 	version?: string;
 	skipWelcome?: boolean;
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
 }) {
@@ -158,8 +156,10 @@ function AppContent({
 	// Track the welcome menu index to preserve selection when returning
 	const [welcomeMenuIndex, setWelcomeMenuIndex] = useState(0);
 
-	// Track whether to auto-resume last session (from resume-last menu option)
-	const [shouldAutoResume, setShouldAutoResume] = useState(false);
+	// Explicit welcome menu choices must override CLI auto-resume defaults.
+	const [welcomeChatAutoResume, setWelcomeChatAutoResume] = useState<
+		boolean | null
+	>(null);
 
 	const [exitNotification, setExitNotification] =
 		useState<ExitNotificationType>({
@@ -169,9 +169,6 @@ function AppContent({
 
 	// Get terminal size for proper width calculation
 	const {columns: terminalWidth} = useTerminalSize();
-
-	// Hide terminal cursor to prevent flickering during page transitions
-	useCursorHide();
 
 	// Global exit handler (must be inside I18nProvider)
 	useGlobalExit(setExitNotification);
@@ -184,11 +181,14 @@ function AppContent({
 			if (event.destination === 'welcome' && currentView === 'chat') {
 				setChatScreenKey(prev => prev + 1);
 			}
-			// Reset auto-resume flag when leaving chat
+			// Reset the welcome choice override after leaving chat.
 			if (event.destination !== 'chat' && currentView === 'chat') {
-				setShouldAutoResume(false);
+				setWelcomeChatAutoResume(null);
 			}
-			setCurrentView(event.destination);
+			// 'pixel' handled as a panel inside chat, ignore direct navigation
+			if (event.destination !== 'pixel') {
+				setCurrentView(event.destination);
+			}
 		});
 		return unsubscribe;
 	}, [currentView]);
@@ -211,8 +211,8 @@ function AppContent({
 				// 初始化配置缓存，避免进入对话页后频繁读取硬盘
 				loadConfig();
 			}
-			// Set auto-resume flag for resume-last option
-			setShouldAutoResume(value === 'resume-last');
+			// Start Chat must force a fresh session; Resume Last Chat opts into auto-resume.
+			setWelcomeChatAutoResume(value === 'resume-last');
 			// Both 'chat' and 'resume-last' go to chat view
 			setCurrentView(value === 'resume-last' ? 'chat' : value);
 		} else if (value === 'exit') {
@@ -240,7 +240,8 @@ function AppContent({
 					<Suspense fallback={loadingFallback}>
 						<ChatScreen
 							key={chatScreenKey}
-							autoResume={autoResume || shouldAutoResume}
+							autoResume={welcomeChatAutoResume ?? autoResume}
+							resumeSessionId={resumeSessionId}
 							enableYolo={enableYolo}
 							enablePlan={enablePlan}
 						/>
@@ -325,6 +326,7 @@ export default function App({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	headlessPrompt,
 	headlessSessionId,
 	showTaskList,
@@ -369,6 +371,7 @@ export default function App({
 					version={version}
 					skipWelcome={skipWelcome}
 					autoResume={autoResume}
+					resumeSessionId={resumeSessionId}
 					enableYolo={enableYolo}
 					enablePlan={enablePlan}
 				/>

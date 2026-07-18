@@ -145,9 +145,10 @@ function Menu({
 					<Box key={option.value}>
 						<Text
 							color={
-								actualIndex === selectedIndex
+								option.color ||
+								(actualIndex === selectedIndex
 									? theme.colors.menuSelected
-									: option.color || theme.colors.menuNormal
+									: theme.colors.menuNormal)
 							}
 							bold
 						>

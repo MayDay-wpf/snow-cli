@@ -5,6 +5,7 @@
 import type {
 	BatchOperationResult,
 	BatchResultItem,
+	EditBySearchConfig,
 } from '../../types/filesystem.types.js';
 
 /**
@@ -27,6 +28,42 @@ export function extractFilePath<T extends {path: string}>(
 	fileItem: string | T,
 ): string {
 	return typeof fileItem === 'string' ? fileItem : fileItem.path;
+}
+
+/**
+ * Parse edit-by-search parameters (single path, string batch, or per-file config batch)
+ */
+export function parseEditBySearchParams(
+	fileItem: string | EditBySearchConfig,
+	globalSearchContent?: string,
+	globalReplaceContent?: string,
+	globalOccurrence?: number,
+): {
+	path: string;
+	searchContent: string;
+	replaceContent: string;
+	occurrence: number;
+} {
+	if (typeof fileItem === 'string') {
+		if (!globalSearchContent || !globalReplaceContent) {
+			throw new Error(
+				'searchContent and replaceContent are required for string array format',
+			);
+		}
+		return {
+			path: fileItem,
+			searchContent: globalSearchContent,
+			replaceContent: globalReplaceContent,
+			occurrence: globalOccurrence ?? 1,
+		};
+	}
+
+	return {
+		path: fileItem.path,
+		searchContent: fileItem.searchContent,
+		replaceContent: fileItem.replaceContent,
+		occurrence: fileItem.occurrence ?? globalOccurrence ?? 1,
+	};
 }
 
 /**

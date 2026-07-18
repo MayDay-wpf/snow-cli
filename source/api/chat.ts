@@ -1,8 +1,10 @@
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	getCustomHeadersForConfig,
 	getCustomSystemPromptForConfig,
+	type ApiConfig,
 } from '../utils/config/apiConfig.js';
+import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
@@ -22,6 +24,13 @@ import type {
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
+import {
+	endChatSpan,
+	recordChatContent,
+	recordChatUsage,
+	startChatSpan,
+} from '../utils/telemetry/otel.js';
 
 export type {
 	ChatMessage,
@@ -49,10 +58,13 @@ export interface ChatCompletionOptions {
 	vulnerabilityHuntingMode?: boolean; // 启用漏洞狩猎模式（使用漏洞狩猎模式系统提示词）
 	teamMode?: boolean; // 启用 Team 模式（使用 Team 模式系统提示词）
 	toolSearchDisabled?: boolean; // 工具搜索已关闭（全量加载工具）
+	sessionId?: string; // Session ID for telemetry and correlation
 	// Sub-agent configuration overrides
 	configProfile?: string; // 子代理配置文件名（覆盖模型等设置）
 	customSystemPromptId?: string; // 自定义系统提示词 ID
 	customHeaders?: Record<string, string>; // 自定义请求头
+	isSubAgentRequest?: boolean; // 子代理请求：用户自定义提示词独占 system，其余系统提示词降级为 user
+	configOverride?: Partial<ApiConfig>; // 请求级配置覆盖，用于内部视觉模型等场景
 }
 
 export interface ChatCompletionChunk {
@@ -110,6 +122,8 @@ function convertToOpenAIMessages(
 	vulnerabilityHuntingMode: boolean = false,
 	toolSearchDisabled: boolean = false,
 	teamMode: boolean = false,
+	thinkingEnabled: boolean = false,
+	isSubAgentRequest: boolean = false,
 ): ChatCompletionMessageParam[] {
 	const customSystemPrompts = customSystemPromptOverride;
 
@@ -156,9 +170,11 @@ function convertToOpenAIMessages(
 				...baseMessage,
 				tool_calls: msg.tool_calls,
 			};
-			// Include reasoning_content for DeepSeek R1 models
-			if ((msg as any).reasoning_content) {
-				result.reasoning_content = (msg as any).reasoning_content;
+			const rc = (msg as any).reasoning_content;
+			if (rc !== undefined && rc !== null) {
+				result.reasoning_content = rc;
+			} else if (thinkingEnabled) {
+				result.reasoning_content = '';
 			}
 			return result as ChatCompletionMessageParam;
 		}
@@ -208,19 +224,93 @@ function convertToOpenAIMessages(
 			} as ChatCompletionMessageParam;
 		}
 
-		// Include reasoning_content for assistant messages (DeepSeek R1)
-		if (msg.role === 'assistant' && (msg as any).reasoning_content) {
-			return {
-				...baseMessage,
-				reasoning_content: (msg as any).reasoning_content,
-			} as any;
+		if (msg.role === 'assistant') {
+			const rc = (msg as any).reasoning_content;
+			if (rc !== undefined && rc !== null) {
+				return {
+					...baseMessage,
+					reasoning_content: rc,
+				} as any;
+			}
+			if (thinkingEnabled) {
+				return {
+					...baseMessage,
+					reasoning_content: '',
+				} as any;
+			}
 		}
 
 		return baseMessage as ChatCompletionMessageParam;
 	});
 
-	// 如果第一条消息已经是 system 消息，跳过
+	// 子代理配置了自定义系统提示词时，该提示词必须独占 system 角色。
+	// 消息中已有的 system 内容与内置提示词全部降级为 user，避免污染用户配置。
+	if (
+		isSubAgentRequest &&
+		customSystemPrompts &&
+		customSystemPrompts.length > 0
+	) {
+		const builtinPrompt = includeBuiltinSystemPrompt
+			? getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+			  )
+			: '';
+		const explicitSystemMessages = messages.filter(
+			msg => msg.role === 'system',
+		);
+		const hasBuiltinInExplicitSystem =
+			builtinPrompt.length > 0 &&
+			explicitSystemMessages.some(msg => msg.content.includes(builtinPrompt));
+		const downgradedSystemMessages = explicitSystemMessages.map(
+			msg =>
+				({
+					role: 'user',
+					content: msg.content,
+				} as ChatCompletionMessageParam),
+		);
+		const downgradedBuiltinMessage =
+			builtinPrompt && !hasBuiltinInExplicitSystem
+				? [
+						{
+							role: 'user',
+							content: builtinPrompt,
+						} as ChatCompletionMessageParam,
+				  ]
+				: [];
+
+		return [
+			{
+				role: 'system',
+				content: customSystemPrompts.map(text => ({
+					type: 'text' as const,
+					text,
+				})),
+			} as ChatCompletionMessageParam,
+			...downgradedSystemMessages,
+			...downgradedBuiltinMessage,
+			...result.filter(message => message.role !== 'system'),
+		];
+	}
+
+	// 如果第一条消息已经是 system 消息（默认会话流程中 sessionInitializer
+	// 已将内置系统提示词作为 messages[0] 注入），则不再重复添加内置提示词；
+	// 但仍需前置自定义系统提示词，否则 customSystemPrompts 会被静默丢弃。
 	if (result.length > 0 && result[0]?.role === 'system') {
+		if (customSystemPrompts && customSystemPrompts.length > 0) {
+			result = [
+				{
+					role: 'system',
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		}
 		return result;
 	}
 
@@ -236,40 +326,50 @@ function convertToOpenAIMessages(
 						text,
 					})),
 				} as ChatCompletionMessageParam,
-			{
-				role: 'user',
-				content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
-			} as ChatCompletionMessageParam,
-			...result,
-		];
-	} else {
-		// 只添加自定义系统提示词
+				{
+					role: 'user',
+					content: getSystemPromptForMode(
+						planMode,
+						vulnerabilityHuntingMode,
+						toolSearchDisabled,
+						teamMode,
+					),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		} else {
+			// 只添加自定义系统提示词
+			result = [
+				{
+					role: 'system',
+					content: customSystemPrompts.map(text => ({
+						type: 'text' as const,
+						text,
+					})),
+				} as ChatCompletionMessageParam,
+				...result,
+			];
+		}
+	} else if (includeBuiltinSystemPrompt) {
+		// 没有自定义系统提示词，但需要添加默认系统提示词
 		result = [
 			{
 				role: 'system',
-				content: customSystemPrompts.map(text => ({
-					type: 'text' as const,
-					text,
-				})),
+				content: getSystemPromptForMode(
+					planMode,
+					vulnerabilityHuntingMode,
+					toolSearchDisabled,
+					teamMode,
+				),
 			} as ChatCompletionMessageParam,
 			...result,
 		];
-	}
-} else if (includeBuiltinSystemPrompt) {
-	// 没有自定义系统提示词，但需要添加默认系统提示词
-	result = [
-		{
-			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
-		} as ChatCompletionMessageParam,
-		...result,
-	];
 	}
 
 	return result;
 }
 
-export function resetOpenAIClient(): void {
+export function resetApiClient(): void {
 	// No-op: kept for backward compatibility
 }
 
@@ -446,7 +546,7 @@ export async function* createStreamingChatCompletion(
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void,
 ): AsyncGenerator<StreamChunk, void, unknown> {
 	// Load configuration: if configProfile is specified, load it; otherwise use main config
-	let config: ReturnType<typeof getOpenAiConfig>;
+	let config: ReturnType<typeof getSnowConfig>;
 	if (options.configProfile) {
 		try {
 			const {loadProfile} = await import('../utils/config/configManager.js');
@@ -455,7 +555,7 @@ export async function* createStreamingChatCompletion(
 				config = profileConfig.snowcfg;
 			} else {
 				// Profile not found, fallback to main config
-				config = getOpenAiConfig();
+				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
 				logger.warn(
 					`Profile ${options.configProfile} not found, using main config`,
@@ -463,7 +563,7 @@ export async function* createStreamingChatCompletion(
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
-			config = getOpenAiConfig();
+			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
 			logger.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
@@ -472,7 +572,10 @@ export async function* createStreamingChatCompletion(
 		}
 	} else {
 		// No configProfile specified, use main config
-		config = getOpenAiConfig();
+		config = getSnowConfig();
+	}
+	if (options.configOverride) {
+		config = {...config, ...options.configOverride};
 	}
 
 	// Get system prompt (with custom override support)
@@ -494,225 +597,291 @@ export async function* createStreamingChatCompletion(
 	customSystemPromptContent ||= getCustomSystemPromptForConfig(config);
 
 	// 使用重试包装生成器
-	yield* withRetryGenerator(
-		async function* () {
-			const requestBody = {
-				model: options.model || config.advancedModel,
-			messages: convertToOpenAIMessages(
-				options.messages,
-				options.includeBuiltinSystemPrompt !== false, // 默认为 true
-				customSystemPromptContent,
-				options.planMode || false,
-				options.vulnerabilityHuntingMode || false,
-				options.toolSearchDisabled || false,
-				options.teamMode || false,
-			),
-				stream: true,
-				stream_options: {include_usage: true},
-				temperature: options.temperature || 0.7,
-				max_tokens: options.max_tokens,
-				tools: options.tools,
-				tool_choice: options.tool_choice,
-			};
+	const thinkingEnabled = !!(
+		config.chatThinking?.enabled && !options.disableThinking
+	);
+	const telemetry = startChatSpan({
+		provider: 'openai-compatible',
+		model: options.model || config.advancedModel,
+		streaming: true,
+		sessionId: options.sessionId,
+	});
 
-			const url = `${config.baseUrl}/chat/completions`;
+	try {
+		yield* withRetryGenerator(
+			async function* () {
+				const requestBody: Record<string, any> = {
+					model: options.model || config.advancedModel,
+					messages: convertToOpenAIMessages(
+						options.messages,
+						options.includeBuiltinSystemPrompt !== false, // 默认为 true
+						customSystemPromptContent,
+						options.planMode || false,
+						options.vulnerabilityHuntingMode || false,
+						options.toolSearchDisabled || false,
+						options.teamMode || false,
+						thinkingEnabled,
+						options.isSubAgentRequest || false,
+					),
+					stream: true,
+					stream_options: {include_usage: true},
+					temperature: options.temperature || 0.7,
+					max_tokens: options.max_tokens,
+					tools: options.tools,
+					tool_choice: options.tool_choice,
+				};
 
-			// Use custom headers from options if provided, otherwise get from current config (supports profile override)
-			const customHeaders =
-				options.customHeaders || getCustomHeadersForConfig(config);
-
-			const fetchOptions = addProxyToFetchOptions(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': getVersionHeader(),
-					...customHeaders,
-				},
-				body: JSON.stringify(requestBody),
-				signal: abortSignal,
-			});
-
-			let response: Response;
-			try {
-				response = await fetch(url, fetchOptions);
-			} catch (error) {
-				// 捕获 fetch 底层错误（网络错误、连接超时等）
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				throw new Error(
-					`OpenAI API fetch failed: ${errorMessage}\n` +
-						`URL: ${url}\n` +
-						`Model: ${requestBody.model}\n` +
-						`Error type: ${
-							error instanceof TypeError
-								? 'Network/Connection Error'
-								: 'Unknown Error'
-						}\n` +
-						`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
-				);
-			}
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`,
-				);
-			}
-
-			if (!response.body) {
-				throw new Error('No response body from OpenAI API');
-			}
-
-			let contentBuffer = '';
-			let toolCallsBuffer: {[index: number]: any} = {};
-			let hasToolCalls = false;
-			let usageData: UsageInfo | undefined;
-			let reasoningStarted = false; // Track if reasoning has started
-			let reasoningContentBuffer = ''; // Accumulate complete reasoning content for saving
-			const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
-			for await (const chunk of parseSSEStream(
-				response.body.getReader(),
-				abortSignal,
-				idleTimeoutMs,
-			)) {
-				// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
-
-				// Capture usage information if available (usually in the last chunk)
-				const usageValue = (chunk as any).usage;
-				if (usageValue !== null && usageValue !== undefined) {
-					usageData = {
-						prompt_tokens: usageValue.prompt_tokens || 0,
-						completion_tokens: usageValue.completion_tokens || 0,
-						total_tokens: usageValue.total_tokens || 0,
-						// OpenAI Chat API: cached_tokens in prompt_tokens_details
-						cached_tokens: usageValue.prompt_tokens_details?.cached_tokens,
-					};
-				}
-
-				// Skip content processing if no choices (but usage is already captured above)
-				const choice = chunk.choices?.[0];
-				if (!choice) {
-					// If this chunk has usage but no choices, it's the final usage-only chunk
-					// Some APIs send this as the last chunk after finish_reason
-					if ((chunk as any).usage) {
-						// Final chunk with usage, exit the loop
-						break;
+				if (thinkingEnabled) {
+					requestBody['thinking'] = {type: 'enabled'};
+					if (config.chatThinking?.reasoning_effort) {
+						requestBody['reasoning_effort'] =
+							config.chatThinking.reasoning_effort;
 					}
-					continue;
 				}
 
-				// Stream content chunks
-				const content = choice.delta?.content;
-				if (content) {
-					contentBuffer += content;
-					yield {
-						type: 'content',
-						content,
-					};
+				recordChatContent(
+					telemetry.span,
+					'request',
+					requestBody,
+					telemetry.metricAttributes,
+				);
+
+				const url = resolveApiEndpoint(
+					config.baseUrl,
+					'chat',
+					config.baseUrlMode,
+				);
+
+				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
+				// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
+				const rawCustomHeaders =
+					options.customHeaders || getCustomHeadersForConfig(config);
+				const customHeaders = await resolveCustomHeaderPlaceholders(
+					rawCustomHeaders,
+				);
+
+				const fetchOptions = addProxyToFetchOptions(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${config.apiKey}`,
+						'x-snow': getVersionHeader(),
+						...customHeaders,
+					},
+					body: JSON.stringify(requestBody),
+					signal: abortSignal,
+				});
+
+				let response: Response;
+				try {
+					response = await fetch(url, fetchOptions);
+				} catch (error) {
+					// 捕获 fetch 底层错误（网络错误、连接超时等）
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					throw new Error(
+						`OpenAI API fetch failed: ${errorMessage}\n` +
+							`URL: ${url}\n` +
+							`Model: ${requestBody['model']}\n` +
+							`Error type: ${
+								error instanceof TypeError
+									? 'Network/Connection Error'
+									: 'Unknown Error'
+							}\n` +
+							`Possible causes: Network unavailable, DNS resolution failed, proxy issues, or server unreachable`,
+					);
 				}
 
-				// Stream reasoning content (for o1 models, etc.)
-				// Note: reasoning_content is NOT included in the response, only counted for tokens
-				const reasoningContent = (choice.delta as any)?.reasoning_content;
-				if (reasoningContent) {
-					// Accumulate reasoning content for saving to message
-					reasoningContentBuffer += reasoningContent;
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`,
+					);
+				}
 
-					// Emit reasoning_started event on first reasoning content
-					if (!reasoningStarted) {
-						reasoningStarted = true;
-						yield {
-							type: 'reasoning_started',
+				if (!response.body) {
+					throw new Error('No response body from OpenAI API');
+				}
+
+				let contentBuffer = '';
+				let toolCallsBuffer: {[index: number]: any} = {};
+				let hasToolCalls = false;
+				let usageData: UsageInfo | undefined;
+				let reasoningStarted = false; // Track if reasoning has started
+				let reasoningContentBuffer = ''; // Accumulate complete reasoning content for saving
+				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
+				for await (const chunk of parseSSEStream(
+					response.body.getReader(),
+					abortSignal,
+					idleTimeoutMs,
+				)) {
+					// abort 由 parseSSEStream 统一处理,避免重复分支导致行为漂移
+
+					// Capture usage information if available (usually in the last chunk)
+					const usageValue = (chunk as any).usage;
+					if (usageValue !== null && usageValue !== undefined) {
+						usageData = {
+							prompt_tokens: usageValue.prompt_tokens || 0,
+							completion_tokens: usageValue.completion_tokens || 0,
+							total_tokens: usageValue.total_tokens || 0,
+							// OpenAI Chat API: cached_tokens in prompt_tokens_details
+							cached_tokens: usageValue.prompt_tokens_details?.cached_tokens,
 						};
 					}
-					yield {
-						type: 'reasoning_delta',
-						delta: reasoningContent,
-					};
-				}
-				// Accumulate tool calls and stream deltas
-				const deltaToolCalls = choice.delta?.tool_calls;
-				if (deltaToolCalls) {
-					hasToolCalls = true;
-					for (const deltaCall of deltaToolCalls) {
-						const index = deltaCall.index ?? 0;
 
-						if (!toolCallsBuffer[index]) {
-							toolCallsBuffer[index] = {
-								id: '',
-								type: 'function',
-								function: {
-									name: '',
-									arguments: '',
-								},
-							};
+					// Skip content processing if no choices (but usage is already captured above)
+					const choice = chunk.choices?.[0];
+					if (!choice) {
+						// If this chunk has usage but no choices, it's the final usage-only chunk
+						// Some APIs send this as the last chunk after finish_reason
+						if ((chunk as any).usage) {
+							// Final chunk with usage, exit the loop
+							break;
 						}
+						continue;
+					}
 
-						if (deltaCall.id) {
-							toolCallsBuffer[index].id = deltaCall.id;
-						}
+					// Stream content chunks
+					const content = choice.delta?.content;
+					if (content) {
+						contentBuffer += content;
+						yield {
+							type: 'content',
+							content,
+						};
+					}
 
-						// Yield tool call deltas for token counting
-						let deltaText = '';
-						if (deltaCall.function?.name) {
-							toolCallsBuffer[index].function.name += deltaCall.function.name;
-							deltaText += deltaCall.function.name;
-						}
-						if (deltaCall.function?.arguments) {
-							toolCallsBuffer[index].function.arguments +=
-								deltaCall.function.arguments;
-							deltaText += deltaCall.function.arguments;
-						}
+					// Stream reasoning content (for o1 models, etc.)
+					// Note: reasoning_content is NOT included in the response, only counted for tokens
+					const reasoningContent = (choice.delta as any)?.reasoning_content;
+					if (reasoningContent) {
+						// Accumulate reasoning content for saving to message
+						reasoningContentBuffer += reasoningContent;
 
-						// Stream the delta to frontend for real-time token counting
-						if (deltaText) {
+						// Emit reasoning_started event on first reasoning content
+						if (!reasoningStarted) {
+							reasoningStarted = true;
 							yield {
-								type: 'tool_call_delta',
-								delta: deltaText,
+								type: 'reasoning_started',
 							};
 						}
+						yield {
+							type: 'reasoning_delta',
+							delta: reasoningContent,
+						};
+					}
+					// Accumulate tool calls and stream deltas
+					const deltaToolCalls = choice.delta?.tool_calls;
+					if (deltaToolCalls) {
+						hasToolCalls = true;
+						for (const deltaCall of deltaToolCalls) {
+							const index = deltaCall.index ?? 0;
+
+							if (!toolCallsBuffer[index]) {
+								toolCallsBuffer[index] = {
+									id: '',
+									type: 'function',
+									function: {
+										name: '',
+										arguments: '',
+									},
+								};
+							}
+
+							if (deltaCall.id) {
+								toolCallsBuffer[index].id = deltaCall.id;
+							}
+
+							// Yield tool call deltas for token counting
+							let deltaText = '';
+							if (deltaCall.function?.name) {
+								toolCallsBuffer[index].function.name += deltaCall.function.name;
+								deltaText += deltaCall.function.name;
+							}
+							if (deltaCall.function?.arguments) {
+								toolCallsBuffer[index].function.arguments +=
+									deltaCall.function.arguments;
+								deltaText += deltaCall.function.arguments;
+							}
+
+							// Stream the delta to frontend for real-time token counting
+							if (deltaText) {
+								yield {
+									type: 'tool_call_delta',
+									delta: deltaText,
+								};
+							}
+						}
+					}
+
+					if (choice.finish_reason) {
+						// Continue to wait for the final usage chunk.
+						// Some APIs send finish_reason first, then usage-only chunk.
+						// Don't break immediately as some APIs stream usage in each chunk.
+						continue;
 					}
 				}
 
-				if (choice.finish_reason) {
-					// Continue to wait for the final usage chunk.
-					// Some APIs send finish_reason first, then usage-only chunk.
-					// Don't break immediately as some APIs stream usage in each chunk.
-					continue;
+				// If there are tool calls, yield them
+				if (hasToolCalls) {
+					yield {
+						type: 'tool_calls',
+						tool_calls: Object.values(toolCallsBuffer),
+					};
 				}
-			}
 
-			// If there are tool calls, yield them
-			if (hasToolCalls) {
+				// Yield usage information if available
+				if (usageData) {
+					// Save usage to file system at API layer
+					saveUsageToFile(options.model, usageData);
+					recordChatUsage(
+						usageData,
+						telemetry.metricAttributes,
+						telemetry.span,
+					);
+
+					yield {
+						type: 'usage',
+						usage: usageData,
+					};
+				}
+
+				if (contentBuffer) {
+					recordChatContent(
+						telemetry.span,
+						'response',
+						contentBuffer,
+						telemetry.metricAttributes,
+					);
+				}
+
+				// Signal completion with reasoning content (for DeepSeek R1, etc.)
 				yield {
-					type: 'tool_calls',
-					tool_calls: Object.values(toolCallsBuffer),
+					type: 'done',
+					reasoning_content: reasoningContentBuffer || undefined,
 				};
-			}
-
-			// Yield usage information if available
-			if (usageData) {
-				// Save usage to file system at API layer
-				saveUsageToFile(options.model, usageData);
-
-				yield {
-					type: 'usage',
-					usage: usageData,
-				};
-			}
-
-			// Signal completion with reasoning content (for DeepSeek R1, etc.)
-			yield {
-				type: 'done',
-				reasoning_content: reasoningContentBuffer || undefined,
-			};
-		},
-		{
-			abortSignal,
-			onRetry,
-		},
-	);
+			},
+			{
+				abortSignal,
+				onRetry,
+				maxRetries: config.maxRetries,
+				baseDelay: config.retryDelayMs,
+			},
+		);
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+		);
+	} catch (error) {
+		endChatSpan(
+			telemetry.span,
+			telemetry.startTime,
+			telemetry.metricAttributes,
+			error,
+		);
+		throw error;
+	}
 }
 
 export function validateChatOptions(options: ChatCompletionOptions): string[] {

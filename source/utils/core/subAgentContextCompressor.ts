@@ -17,6 +17,7 @@ import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {ChatMessage} from '../../api/types.js';
 import type {RequestMethod} from '../config/apiConfig.js';
+import {cleanOrphanedToolCalls} from './contextCompressor.js';
 
 /** Threshold percentage to trigger compression */
 const COMPRESS_THRESHOLD = 80;
@@ -66,7 +67,7 @@ You are creating a technical handover document for a tool-using AI agent. Extrac
 
 **EXECUTE NOW — Output the handover document immediately.**`;
 
-// ── Singleton tiktoken encoder (lazy-initialized) ──
+// ── Singleton tiktoken encoder (lazy-initialized, with cleanup support) ──
 let _encoder: any = null;
 
 function getEncoder() {
@@ -80,12 +81,31 @@ function getEncoder() {
 	return _encoder;
 }
 
+/**
+ * Free the module-level tiktoken encoder to reclaim WASM memory.
+ * Called during /clear or session teardown.
+ */
+export function freeSubAgentEncoder(): void {
+	if (_encoder) {
+		try {
+			_encoder.free();
+		} catch {
+			// already freed or unavailable
+		}
+		_encoder = null;
+	}
+}
+
 export interface SubAgentCompressionResult {
 	compressed: boolean;
 	messages: ChatMessage[];
 	beforeTokens?: number;
 	afterTokensEstimate?: number;
-	compressionApiUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+	compressionApiUsage?: {
+		prompt_tokens: number;
+		completion_tokens: number;
+		total_tokens: number;
+	};
 }
 
 /**
@@ -119,7 +139,10 @@ export function countMessagesTokens(messages: ChatMessage[]): number {
 	} catch (error) {
 		console.error('[SubAgentCompressor] tiktoken counting failed:', error);
 		// Rough fallback: ~4 chars per token
-		const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+		const totalChars = messages.reduce(
+			(sum, m) => sum + (m.content?.length || 0),
+			0,
+		);
 		return Math.round(totalChars / 4);
 	}
 }
@@ -143,7 +166,9 @@ export function shouldCompressSubAgentContext(
 	totalTokens: number,
 	maxContextTokens: number,
 ): boolean {
-	return getContextPercentage(totalTokens, maxContextTokens) >= COMPRESS_THRESHOLD;
+	return (
+		getContextPercentage(totalTokens, maxContextTokens) >= COMPRESS_THRESHOLD
+	);
 }
 
 /**
@@ -168,16 +193,39 @@ function findRecentRoundsStartIndex(
 	let roundCount = 0;
 	let i = messages.length - 1;
 
+	// Only count main-agent rounds. subAgentInternal messages are nested inside a
+	// main-agent tool call (subagent-agent_*) and must NOT be counted as separate
+	// rounds — otherwise the cut may land in the middle of a sub-agent block and
+	// orphan the parent main-agent tool_calls/tool results.
 	while (i >= 0 && roundCount < keepRounds) {
 		const msg = messages[i];
+		if (!msg) {
+			i--;
+			continue;
+		}
 
-		if (msg?.role === 'tool') {
-			// Skip all consecutive tool messages (they belong to the same round)
-			while (i >= 0 && messages[i]?.role === 'tool') {
+		// Skip sub-agent internal messages entirely (they belong to a wrapping main round)
+		if ((msg as any).subAgentInternal) {
+			i--;
+			continue;
+		}
+
+		if (msg.role === 'tool') {
+			// Skip all consecutive tool messages (they belong to the same round).
+			// Tolerate interleaved subAgentInternal messages.
+			while (
+				i >= 0 &&
+				(messages[i]?.role === 'tool' || (messages[i] as any)?.subAgentInternal)
+			) {
 				i--;
 			}
-			// Now i points to the assistant message with tool_calls
-			if (i >= 0 && messages[i]?.role === 'assistant' && messages[i]?.tool_calls?.length) {
+			// Now i should point to the main-agent assistant message with tool_calls
+			if (
+				i >= 0 &&
+				messages[i]?.role === 'assistant' &&
+				messages[i]?.tool_calls?.length &&
+				!(messages[i] as any).subAgentInternal
+			) {
 				roundCount++;
 				i--;
 			}
@@ -186,7 +234,56 @@ function findRecentRoundsStartIndex(
 		}
 	}
 
-	return Math.max(0, i + 1);
+	let cut = Math.max(0, i + 1);
+
+	// Defensive: never cut into the middle of an orphaned tool / subAgentInternal block.
+	// Advance forward past leading tool / subAgentInternal messages that have no
+	// corresponding main-agent assistant.tool_calls in the preserved region.
+	while (cut < messages.length) {
+		const m = messages[cut];
+		if (!m) break;
+		const isOrphanTool =
+			m.role === 'tool' &&
+			!hasPrecedingAssistantWithToolCall(messages, cut, m.tool_call_id);
+		const isLeadingSubAgent = (m as any).subAgentInternal === true;
+		if (isOrphanTool || isLeadingSubAgent) {
+			cut++;
+			continue;
+		}
+		break;
+	}
+
+	return cut;
+}
+
+/**
+ * Check whether `messages[idx]` (a tool message) has a preceding main-agent
+ * assistant message with a matching tool_call id within the slice
+ * `messages[start..idx]` (where start is determined by walking backwards
+ * through tool/subAgentInternal messages).
+ *
+ * Used by findRecentRoundsStartIndex to detect orphaned tool results that
+ * would otherwise be sent to the API and trigger a 400 error.
+ */
+function hasPrecedingAssistantWithToolCall(
+	messages: ChatMessage[],
+	idx: number,
+	toolCallId?: string,
+): boolean {
+	if (!toolCallId) return false;
+	for (let j = idx - 1; j >= 0; j--) {
+		const m = messages[j];
+		if (!m) continue;
+		if (
+			m.role === 'assistant' &&
+			m.tool_calls?.some(tc => tc.id === toolCallId)
+		) {
+			return true;
+		}
+		// Stop searching if we hit a user message (round boundary)
+		if (m.role === 'user') return false;
+	}
+	return false;
 }
 
 /**
@@ -251,7 +348,7 @@ function prepareMessagesForAICompression(
 	messages.push({
 		role: 'system',
 		content:
-			'You are a technical summarization assistant. Your job is to compress a tool-using AI agent\'s conversation history into a concise but complete handover document.',
+			"You are a technical summarization assistant. Your job is to compress a tool-using AI agent's conversation history into a concise but complete handover document.",
 	});
 
 	// Build transcript (excluding tool results)
@@ -279,7 +376,19 @@ function prepareMessagesForAICompression(
 
 interface AISummaryResult {
 	messages: ChatMessage[];
-	apiUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+	apiUsage?: {
+		prompt_tokens: number;
+		completion_tokens: number;
+		total_tokens: number;
+	};
+}
+
+interface HybridCompressionConfig {
+	model: string;
+	requestMethod: RequestMethod;
+	maxTokens?: number;
+	configProfile?: string;
+	onStreamStart?: (content: string) => void;
 }
 
 /**
@@ -294,7 +403,7 @@ interface AISummaryResult {
 async function aiSummaryCompress(
 	messages: ChatMessage[],
 	keepRounds: number,
-	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
+	config: HybridCompressionConfig,
 ): Promise<AISummaryResult> {
 	const preserveStartIndex = findRecentRoundsStartIndex(messages, keepRounds);
 
@@ -306,8 +415,17 @@ async function aiSummaryCompress(
 	const messagesToCompress = messages.slice(0, preserveStartIndex);
 	const preservedMessages = messages.slice(preserveStartIndex);
 
+	// CRITICAL: Clean orphaned tool_calls / tool results from preserved messages.
+	// Without this, an assistant.tool_calls cut off from its tool results (or a
+	// tool result with no parent assistant) would be persisted into the new
+	// compressed session, causing the next API call to fail with errors like:
+	//   "No tool call found for function call output with call_id ..."
+	// (OpenAI Responses API) or 400 from Anthropic tool_use/tool_result mismatch.
+	cleanOrphanedToolCalls(preservedMessages);
+
 	// Generate summary using the appropriate API
-	const compressionMessages = prepareMessagesForAICompression(messagesToCompress);
+	const compressionMessages =
+		prepareMessagesForAICompression(messagesToCompress);
 	let summary = '';
 	let apiUsage: AISummaryResult['apiUsage'];
 
@@ -320,6 +438,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -341,6 +460,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -360,6 +480,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -381,6 +502,7 @@ async function aiSummaryCompress(
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
+						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
 					}
 					if (chunk.type === 'usage' && chunk.usage) {
@@ -419,7 +541,11 @@ async function aiSummaryCompress(
 /**
  * Find the tool name for a tool message by searching preceding assistant messages.
  */
-function findToolName(messages: ChatMessage[], idx: number, toolCallId?: string): string {
+function findToolName(
+	messages: ChatMessage[],
+	idx: number,
+	toolCallId?: string,
+): string {
 	for (let j = idx - 1; j >= 0; j--) {
 		const prev = messages[j];
 		if (prev?.role === 'assistant' && prev.tool_calls) {
@@ -492,7 +618,11 @@ function truncateToolResults(
 
 		// OLD messages: aggressive truncation (placeholders only)
 		if (i < preserveStartIndex) {
-			if (msg.role === 'tool' && msg.content && msg.content.length > MIN_TRUNCATION_LENGTH) {
+			if (
+				msg.role === 'tool' &&
+				msg.content &&
+				msg.content.length > MIN_TRUNCATION_LENGTH
+			) {
 				const toolName = findToolName(messages, i, msg.tool_call_id);
 				result.push({
 					...msg,
@@ -526,7 +656,7 @@ export async function compressSubAgentContext(
 	messages: ChatMessage[],
 	totalTokens: number,
 	maxContextTokens: number,
-	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
+	config: HybridCompressionConfig,
 ): Promise<SubAgentCompressionResult> {
 	const percentage = getContextPercentage(totalTokens, maxContextTokens);
 
@@ -547,7 +677,11 @@ export async function compressSubAgentContext(
 	const beforeTokens = countMessagesTokens(messages);
 
 	// Primary: AI summary compression (same pattern as main flow)
-	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(messages, keepRounds, config);
+	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(
+		messages,
+		keepRounds,
+		config,
+	);
 
 	// If AI compression succeeded (returned different messages), use it
 	if (compressedMessages !== messages) {
@@ -567,7 +701,9 @@ export async function compressSubAgentContext(
 
 	// Fallback: AI compression returned original messages (failed or nothing to compress).
 	// Try smart truncation as a last resort to free some context space.
-	console.warn(`[SubAgentCompressor] AI compression ineffective, falling back to truncation`);
+	console.warn(
+		`[SubAgentCompressor] AI compression ineffective, falling back to truncation`,
+	);
 	const truncatedMessages = truncateToolResults(messages, keepRounds);
 	const afterTokens = countMessagesTokens(truncatedMessages);
 
@@ -599,7 +735,7 @@ export async function compressSubAgentContext(
  */
 export async function performHybridCompression(
 	messages: ChatMessage[],
-	config: {model: string; requestMethod: RequestMethod; maxTokens?: number; configProfile?: string},
+	config: HybridCompressionConfig,
 	keepRounds: number = DEFAULT_KEEP_RECENT_ROUNDS,
 ): Promise<SubAgentCompressionResult> {
 	if (messages.length === 0) {
@@ -608,7 +744,11 @@ export async function performHybridCompression(
 
 	const beforeTokens = countMessagesTokens(messages);
 
-	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(messages, keepRounds, config);
+	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(
+		messages,
+		keepRounds,
+		config,
+	);
 
 	if (compressedMessages !== messages) {
 		const optimizedMessages = truncateOversizedToolResults(compressedMessages);

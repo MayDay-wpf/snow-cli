@@ -36,12 +36,14 @@ interface Props {
 		generated?: GeneratedSkillContent,
 	) => Promise<void>;
 	onCancel: () => void;
+	onInstall?: () => void;
 	projectRoot?: string;
 }
 
 export const SkillsCreationPanel: React.FC<Props> = ({
 	onSave,
 	onCancel,
+	onInstall,
 	projectRoot,
 }) => {
 	const {theme} = useTheme();
@@ -261,6 +263,8 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 					setDescription('');
 					setGenerated(undefined);
 					setStep('ai-requirement');
+				} else if (input.toLowerCase() === 'i' && onInstall) {
+					onInstall();
 				}
 				return;
 			}
@@ -353,6 +357,17 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 								{t.skillsCreation.modeManual}
 							</Text>
 						</Box>
+						{onInstall && (
+							<Box>
+								<Text color={theme.colors.menuInfo} bold>
+									[I]
+								</Text>
+								<Text color={theme.colors.text}>
+									{' '}
+									{t.skillsCreation.modeInstall}
+								</Text>
+							</Box>
+						)}
 					</Box>
 					<Box marginTop={1}>
 						<Text dimColor>{t.skillsCreation.escCancel}</Text>

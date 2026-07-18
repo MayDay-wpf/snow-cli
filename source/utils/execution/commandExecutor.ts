@@ -3,11 +3,15 @@ export interface CommandResult {
 	message?: string;
 	action?:
 		| 'clear'
+		| 'deleteCurrentSession'
 		| 'resume'
 		| 'info'
 		| 'showMcpInfo'
 		| 'toggleYolo'
 		| 'togglePlan'
+		| 'toggleSimple'
+		| 'toggleToolDisplay'
+		| 'toggleThinkDisplay'
 		| 'toggleVulnerabilityHunting'
 		| 'toggleToolSearch'
 		| 'initProject'
@@ -21,6 +25,8 @@ export interface CommandResult {
 		| 'review'
 		| 'showReviewCommitPanel'
 		| 'exportChat'
+		| 'exportConfig'
+		| 'importConfig'
 		| 'showAgentPicker'
 		| 'showTodoPicker'
 		| 'showTodoListPanel'
@@ -30,11 +36,15 @@ export interface CommandResult {
 		| 'showSkillsPicker'
 		| 'showGitLinePicker'
 		| 'help'
+		| 'pixel'
 		| 'showCustomCommandConfig'
 		| 'executeCustomCommand'
 		| 'executeTerminalCommand'
 		| 'deleteCustomCommand'
+		| 'showAnyPanel'
 		| 'showSkillsCreation'
+		| 'showSkillsListPanel'
+		| 'showSkillsInstall'
 		| 'showRoleCreation'
 		| 'showRoleDeletion'
 		| 'showRoleList'
@@ -46,21 +56,35 @@ export interface CommandResult {
 		| 'copyLastMessage'
 		| 'toggleCodebase'
 		| 'toggleHybridCompress'
+		| 'toggleImageCompress'
 		| 'toggleTeam'
+		| 'toggleUltraTodo'
+		| 'toggleSpeedometer'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
 		| 'showConnectionPanel'
+		| 'showTelemetryPanel'
+		| 'showIdeSelectPanel'
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
+		| 'forkSession'
 		| 'btw'
-		| 'quit';
+		| 'interruptAndSend'
+		| 'deepResearch'
+		| 'startGoalLoop'
+		// /goal resume 无参数 -> 打开 goal 会话列表面板
+		| 'showGoalSessionPanel'
+		| 'showGamesPanel'
+		| 'quit'
+		| 'disconnect';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading
 	location?: 'global' | 'project'; // For custom commands to specify location
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 	forceReindex?: boolean; // For /reindex -force to delete existing database and rebuild
 	apiUrl?: string; // For /connect command to pass API URL
+	exportFormat?: 'txt' | 'md' | 'html' | 'json'; // For /export command to choose output format
 }
 
 export interface CommandHandler {

@@ -104,6 +104,50 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 	return (originalEmitWarning as any).apply(process, [warning, ...args]);
 };
 
+// Global safety net: suppress known non-fatal stream errors (e.g. from LSP
+// processes exiting while vscode-jsonrpc still has queued writes) so they
+// don't crash the main CLI process.
+function isStreamDestroyedError(err: unknown): boolean {
+	if (!(err instanceof Error)) return false;
+	const code = (err as NodeJS.ErrnoException).code;
+	if (code === 'ERR_STREAM_DESTROYED' || code === 'EPIPE') return true;
+	const msg = err.message || '';
+	return (
+		msg.includes('stream was destroyed') ||
+		msg.includes('ERR_STREAM_DESTROYED') ||
+		msg.includes('write after end') ||
+		msg.includes('Cannot call write after a stream was destroyed')
+	);
+}
+
+// Fatal-exit cleanup is wired after cleanupAsync is defined (see below).
+// Placeholders so early throws still get a best-effort path once registered.
+let runFatalExitCleanup: ((err: unknown, code: number) => void) | null = null;
+
+process.on('uncaughtException', (err: Error) => {
+	if (isStreamDestroyedError(err)) {
+		// Silently ignore — these are expected when an LSP child process
+		// exits while vscode-jsonrpc still has pending writes.
+		return;
+	}
+	// Prefer full cleanup (MCP / browser / OTEL / Ink) before exit — especially
+	// on Windows where process.exit(1) can leave orphaned child handles.
+	if (runFatalExitCleanup) {
+		runFatalExitCleanup(err, 1);
+		return;
+	}
+	console.error('Uncaught Exception:', err);
+	process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+	if (isStreamDestroyedError(reason)) {
+		return;
+	}
+	// Log but don't exit — unhandled rejections are not necessarily fatal.
+	console.error('Unhandled Rejection:', reason);
+});
+
 // Check if this is a quick command that doesn't need loading indicator
 const args = process.argv.slice(2);
 const isQuickCommand = args.some(
@@ -112,9 +156,13 @@ const isQuickCommand = args.some(
 		arg === '-v' ||
 		arg === '--help' ||
 		arg === '-h' ||
+		arg === '--doctor' ||
+		arg === '--update-check' ||
 		arg === '--acp' ||
 		arg === '--sse' ||
-		arg === '--sse-daemon',
+		arg === '--sse-daemon' ||
+		arg === '--loop-daemon-execute' ||
+		arg === '--snow-agent-child-worker',
 );
 
 // Show loading indicator only for non-quick commands
@@ -130,9 +178,29 @@ import {setUpdateNotice} from './utils/ui/updateNotice.js';
 import Spinner from 'ink-spinner';
 import meow from 'meow';
 import {spawn} from 'child_process';
+import {runUpdateCheckAndExit} from './utils/core/updateCheck.js';
+import {runDoctorAndExit} from './utils/core/doctor.js';
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import {fileURLToPath} from 'url';
+import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
+import {shutdownTelemetry} from './utils/telemetry/otel.js';
+
+if (args.includes('--snow-agent-child-worker')) {
+	const {runAgentChildProcessWorker} = await import(
+		'./utils/execution/agentChildProcessWorker.js'
+	);
+	await runAgentChildProcessWorker();
+	process.exit(0);
+}
+
+// Migrate legacy split .snow/*.json files into the unified settings.json before
+// anything else touches config. Safe no-op when nothing legacy is present.
+try {
+	runLegacyConfigMigration();
+} catch {
+	// Migration failures should never block startup.
+}
 
 // Read version from package.json
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -215,22 +283,35 @@ const cli = meow(
 	`
 Usage
   $ snow
-  $ snow --ask \"your prompt\"
-  $ snow --ask \"your prompt\" <sessionId>
-  $ snow --task \"your task description\"
+  $ snow --ask "your prompt"
+  $ snow --ask "your prompt" <sessionId>
+  $ snow cmd buddy status --json
+  $ snow cmd tool-display compact --json
+  $ snow cmd yolo on --yes --json
+  $ snow --task "your task description"
   $ snow --task-list
+  $ snow --doctor
+  $ snow --loop-daemon-execute <base64-loop-state>
 
 Options
 		--help        Show help
 		--version     Show version
+		--doctor      Run environment diagnostics
 		--update      Update to latest version
-		-c            Skip welcome screen and resume last conversation
+		--update-check Check whether the environment is suitable for updating
+		-c            Skip welcome screen and resume last conversation (optionally specify sessionId)
 		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
 		--task        Create a background AI task (headless mode, saves session)
+		--task-list   Show background AI task list
+		--loop-daemon-execute Start or continue a detached loop daemon from encoded state (internal)
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
 		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
+
+		cmd           Run allowlisted session/slash control commands headlessly
+		              Example: snow cmd buddy hatch name --species=fox --json
+		              Flags: --json (machine output), --yes (confirm medium/high risk)
 
 		--sse         Start SSE server mode for external integration (foreground)
 		--sse-daemon  Start SSE server as background daemon
@@ -249,6 +330,15 @@ Options
 				type: 'boolean',
 				default: false,
 			},
+			doctor: {
+				type: 'boolean',
+				default: false,
+			},
+			updateCheck: {
+				type: 'boolean',
+				default: false,
+				alias: 'update-check',
+			},
 			c: {
 				type: 'boolean',
 				default: false,
@@ -264,6 +354,10 @@ Options
 			taskExecute: {
 				type: 'string',
 				alias: 'task-execute',
+			},
+			loopDaemonExecute: {
+				type: 'string',
+				alias: 'loop-daemon-execute',
 			},
 			yolo: {
 				type: 'boolean',
@@ -329,6 +423,24 @@ Options
 		},
 	},
 );
+// Handle session/slash control plane: snow cmd <command> [args...] [--json] [--yes]
+if (args[0] === 'cmd') {
+	const {runCliSessionCommand} = await import(
+		'./utils/execution/sessionCommandPlane.js'
+	);
+	const exitCode = await runCliSessionCommand(args.slice(1));
+	process.exit(exitCode);
+}
+
+// Handle doctor flag
+if (cli.flags.doctor) {
+	runDoctorAndExit(VERSION, packageJson);
+}
+
+// Handle update check flag
+if (cli.flags.updateCheck) {
+	runUpdateCheckAndExit(VERSION);
+}
 
 // Handle update flag
 if (cli.flags.update) {
@@ -520,6 +632,21 @@ if (cli.flags.task) {
 	process.exit(0);
 }
 
+// Handle loop daemon execution (internal use by detached loop daemon)
+if (cli.flags.loopDaemonExecute) {
+	const {loopManager} = await import('./utils/task/loopManager.js');
+	const payload = Buffer.from(cli.flags.loopDaemonExecute, 'base64').toString(
+		'utf-8',
+	);
+	const state = JSON.parse(payload);
+	if (state.cwd) {
+		process.chdir(state.cwd);
+	}
+
+	await loopManager.runDaemonLoop(state);
+	process.exit(0);
+}
+
 // Handle task execution (internal use by background process)
 if (cli.flags.taskExecute) {
 	const {executeTask} = await import('./utils/task/taskExecutor.js');
@@ -546,6 +673,7 @@ const Startup = ({
 	version,
 	skipWelcome,
 	autoResume,
+	resumeSessionId,
 	headlessPrompt,
 	headlessSessionId,
 	showTaskList,
@@ -556,6 +684,7 @@ const Startup = ({
 	version: string | undefined;
 	skipWelcome: boolean;
 	autoResume: boolean;
+	resumeSessionId?: string;
 	headlessPrompt?: string;
 	headlessSessionId?: string;
 	showTaskList?: boolean;
@@ -607,20 +736,19 @@ const Startup = ({
 			// Store for cleanup
 			(global as any).__deps = deps;
 
-			// Check for updates with timeout
-			const updateCheckPromise = VERSION
-				? checkForUpdates(VERSION)
-				: Promise.resolve();
-
-			// Race between update check and 3-second timeout
-			await Promise.race([
-				updateCheckPromise,
-				new Promise(resolve => setTimeout(resolve, 3000)),
-			]);
-
+			// Render the app immediately once dependencies are ready.
+			// The update check runs in the background to avoid blocking startup
+			// when the network is slow/unreachable. WelcomeScreen subscribes to
+			// onUpdateNotice and will render the notification UI once a result
+			// is available.
 			if (mounted) {
 				setAppComponent(() => deps.App);
 				setAppReady(true);
+			}
+
+			// Fire-and-forget update check — never block app entry on network IO.
+			if (VERSION) {
+				void checkForUpdates(VERSION);
 			}
 		};
 
@@ -649,6 +777,7 @@ const Startup = ({
 			version={version}
 			skipWelcome={skipWelcome}
 			autoResume={autoResume}
+			resumeSessionId={resumeSessionId}
 			headlessPrompt={headlessPrompt}
 			headlessSessionId={headlessSessionId}
 			showTaskList={showTaskList}
@@ -665,18 +794,24 @@ process.stdout.write('\x1b[2K\r');
 
 // Track cleanup state to prevent multiple cleanup calls
 let isCleaningUp = false;
+// Shared promise so concurrent SIGINT/SIGTERM handlers await the same cleanup
+let cleanupPromise: Promise<void> | null = null;
 
 // Synchronous cleanup for 'exit' event (cannot be async)
 const cleanupSync = () => {
 	process.stdout.write('\x1b[?2004l');
 	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
 	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
-	const deps = (global as any).__deps;
-	if (deps) {
-		// Kill all child processes synchronously
-		deps.processManager.killAll();
-		deps.resourceMonitor.stopMonitoring();
-		deps.vscodeConnection.stop();
+	// If async cleanup is already running/done, skip deps to avoid double-close of
+	// libuv handles (causes UV_HANDLE_CLOSING assertion failure on Windows)
+	if (!isCleaningUp) {
+		const deps = (global as any).__deps;
+		if (deps) {
+			// Kill all child processes synchronously
+			deps.processManager.killAll();
+			deps.resourceMonitor.stopMonitoring();
+			deps.vscodeConnection.stop();
+		}
 	}
 };
 
@@ -684,6 +819,39 @@ const cleanupSync = () => {
 const cleanupAsync = async () => {
 	if (isCleaningUp) return;
 	isCleaningUp = true;
+
+	// Close the chokidar file watcher BEFORE Ink unmount, calling the agent
+	// directly to avoid triggering React state updates that cause Ink to
+	// re-render on handles that are about to be closed.
+	// React effect cleanups are synchronous and cannot await chokidar's async
+	// close(), which leaves libuv handles in a half-closed state.
+	try {
+		const codebaseAgent = (global as any).__codebaseAgent;
+		if (codebaseAgent) {
+			codebaseAgent.stopWatching();
+			await Promise.race([
+				codebaseAgent.waitForWatcherClose(),
+				new Promise(resolve => setTimeout(resolve, 1000)),
+			]);
+		}
+	} catch {
+		// Ignore codebase watcher close errors
+	}
+
+	// Unmount Ink so React effects cleanup (timers, stdin listeners, raw mode)
+	// can release libuv handles before we start closing deps.
+	try {
+		mainInk?.unmount();
+	} catch {
+		// Ignore unmount errors - already unmounted or in bad state
+	}
+
+	// On Windows, Ink unmount restores stdin raw mode and releases TTY handles.
+	// The console reader thread needs time to stop before process.exit() can
+	// safely close all remaining libuv handles. A single setImmediate is not
+	// enough — use setTimeout to span multiple event loop iterations so
+	// pending uv_close callbacks (stdin reader, chokidar IOCP) can complete.
+	await new Promise(resolve => setTimeout(resolve, 50));
 
 	process.stdout.write('\x1b[?2004l');
 	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
@@ -697,6 +865,29 @@ const cleanupAsync = async () => {
 		commandUsageManager.dispose(),
 		new Promise(resolve => setTimeout(resolve, 500)), // 500ms timeout for saving usage data
 	]);
+
+	// Flush OpenTelemetry spans before process.exit(); process.exit() bypasses beforeExit.
+	try {
+		await Promise.race([
+			shutdownTelemetry(),
+			new Promise(resolve => setTimeout(resolve, 5000)),
+		]);
+	} catch {
+		// Ignore telemetry shutdown errors during exit
+	}
+
+	// Cleanup global singleton resources (close browser, free encoders, etc.)
+	try {
+		const {cleanupGlobalResources} = await import(
+			'./utils/core/globalCleanup.js'
+		);
+		await Promise.race([
+			cleanupGlobalResources(),
+			new Promise(resolve => setTimeout(resolve, 2000)),
+		]);
+	} catch {
+		// Ignore cleanup errors during exit
+	}
 
 	const deps = (global as any).__deps;
 	if (deps) {
@@ -718,26 +909,65 @@ const cleanupAsync = async () => {
 
 process.on('exit', cleanupSync);
 process.on('SIGINT', async () => {
-	await cleanupAsync();
-	process.exit(0);
+	// Reuse the same promise so a rapid second Ctrl+C waits for the first cleanup
+	// instead of calling process.exit() while handles are still being torn down
+	if (!cleanupPromise) {
+		cleanupPromise = cleanupAsync();
+	}
+	await cleanupPromise;
+	// Don't call process.exit() synchronously — on Windows the stdin reader
+	// thread and chokidar IOCP may still be signalling their uv_async handles.
+	// A short delay lets libuv finish processing pending close callbacks,
+	// preventing "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)".
+	setTimeout(() => process.exit(0), 50);
 });
 process.on('SIGTERM', async () => {
-	await cleanupAsync();
-	process.exit(0);
+	if (!cleanupPromise) {
+		cleanupPromise = cleanupAsync();
+	}
+	await cleanupPromise;
+	setTimeout(() => process.exit(0), 50);
 });
-render(
+
+// Wire fatal uncaughtException to the same graceful path as SIGINT (MCP/browser/OTEL/Ink).
+// Defined here so cleanupAsync is in scope; early crashes still use the simple exit path.
+runFatalExitCleanup = (err: unknown, code: number) => {
+	const message =
+		err instanceof Error
+			? err.stack || err.message
+			: typeof err === 'string'
+			? err
+			: String(err);
+	console.error('Uncaught Exception:', message);
+
+	// Reuse cleanupPromise so concurrent fatals / signals share one teardown.
+	if (!cleanupPromise) {
+		cleanupPromise = cleanupAsync().catch(() => {
+			// best-effort
+		});
+	}
+	void cleanupPromise.finally(() => {
+		// Short delay so Windows libuv can finish closing handles.
+		setTimeout(() => process.exit(code), 50);
+	});
+};
+const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
+const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
+
+const mainInk = render(
 	<Startup
 		version={VERSION}
 		skipWelcome={Boolean(
 			cli.flags.c || cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo,
 		)}
-		autoResume={Boolean(cli.flags.c || cli.flags.cYolo)}
+		autoResume={isResumeMode}
+		resumeSessionId={resumeSessionId}
 		headlessPrompt={
 			typeof cli.flags['ask'] === 'string'
 				? (cli.flags['ask'] as string)
 				: undefined
 		}
-		headlessSessionId={cli.input[0]}
+		headlessSessionId={isResumeMode ? undefined : cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
 		enableYolo={
@@ -750,3 +980,8 @@ render(
 		patchConsole: true,
 	},
 );
+
+// Expose the Ink render handle so non-component code (e.g. the in-app
+// "Update Now" action in WelcomeScreen) can unmount Ink before handing the
+// terminal over to a child process such as `npm i -g snow-ai`.
+(global as any).__mainInk = mainInk;

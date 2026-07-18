@@ -5,6 +5,7 @@ import {
 	createMessageConnection,
 	StreamMessageReader,
 	StreamMessageWriter,
+	type Message,
 	type MessageConnection,
 } from 'vscode-jsonrpc/node.js';
 import type {
@@ -29,6 +30,35 @@ import type {LSPServerConfig} from './LSPServerRegistry.js';
 export interface LSPClientConfig extends LSPServerConfig {
 	language: string;
 	rootPath: string;
+}
+
+function isExpectedTransportWriteError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	const code = (error as NodeJS.ErrnoException).code;
+	return (
+		code === 'EPIPE' ||
+		code === 'ERR_STREAM_DESTROYED' ||
+		code === 'ERR_STREAM_WRITE_AFTER_END' ||
+		error.message.includes('stream was destroyed') ||
+		error.message.includes('write after end')
+	);
+}
+
+class SafeStreamMessageWriter extends StreamMessageWriter {
+	override async write(message: Message): Promise<void> {
+		try {
+			await super.write(message);
+		} catch (error) {
+			if (isExpectedTransportWriteError(error)) {
+				return;
+			}
+
+			throw error;
+		}
+	}
 }
 
 export class LSPClient {
@@ -58,8 +88,23 @@ export class LSPClient {
 	}
 
 	private markTransportClosed(): void {
+		if (!this.isProcessAlive && !this.isInitialized) {
+			return;
+		}
+
 		this.isInitialized = false;
 		this.isProcessAlive = false;
+
+		// Immediately dispose the connection to prevent vscode-jsonrpc from
+		// attempting further writes (e.g. responses to server-initiated requests)
+		// on the now-destroyed stdin stream.
+		if (this.connection) {
+			try {
+				this.connection.dispose();
+			} catch {
+				// Connection may already be disposed
+			}
+		}
 	}
 
 	constructor(private config: LSPClientConfig) {}
@@ -142,9 +187,13 @@ export class LSPClient {
 				this.markTransportClosed();
 			});
 
-			// 子进程退出后，stdin 可能先于上层状态同步被销毁；这里要吞掉 error 事件，
-			// 并把连接状态标记为关闭，避免后续继续写入触发未捕获异常导致 CLI 闪退。
 			this.process.stdin?.on('error', () => {
+				this.markTransportClosed();
+			});
+			this.process.stdout?.on('error', () => {
+				this.markTransportClosed();
+			});
+			this.process.stderr?.on('error', () => {
 				this.markTransportClosed();
 			});
 
@@ -152,12 +201,18 @@ export class LSPClient {
 
 			this.connection = createMessageConnection(
 				new StreamMessageReader(this.process.stdout!),
-				new StreamMessageWriter(this.process.stdin!),
+				new SafeStreamMessageWriter(this.process.stdin!),
 			);
 
-			// Handle connection-level errors and closure
+			// Handle connection-level errors and closure.
+			// Suppress expected write failures when the child process exits while a
+			// vscode-jsonrpc write is still in flight.
 			this.connection.onError(([error]) => {
 				this.markTransportClosed();
+				if (isExpectedTransportWriteError(error)) {
+					return;
+				}
+
 				console.debug('LSP connection error:', error?.message || error);
 			});
 			this.connection.onClose(() => {
@@ -381,8 +436,8 @@ export class LSPClient {
 	}
 
 	async gotoDefinition(uri: string, position: Position): Promise<Location[]> {
-		if (!this.connection || !this.isInitialized) {
-			throw new Error('LSP client not initialized');
+		if (!this.canSendMessages()) {
+			return [];
 		}
 
 		if (this.config.language === 'csharp' && this.csharpSolutionLoadPromise) {
@@ -402,7 +457,7 @@ export class LSPClient {
 		};
 
 		try {
-			const result = await this.connection.sendRequest<
+			const result = await this.connection!.sendRequest<
 				Location | Location[] | null
 			>('textDocument/definition', params);
 
@@ -412,7 +467,7 @@ export class LSPClient {
 
 			return Array.isArray(result) ? result : [result];
 		} catch (error) {
-			console.debug('LSP gotoDefinition error:', error);
+			this.markTransportClosed();
 			return [];
 		}
 	}
@@ -422,8 +477,8 @@ export class LSPClient {
 		position: Position,
 		includeDeclaration = false,
 	): Promise<Location[]> {
-		if (!this.connection || !this.isInitialized) {
-			throw new Error('LSP client not initialized');
+		if (!this.canSendMessages()) {
+			return [];
 		}
 
 		if (!this.capabilities?.referencesProvider) {
@@ -437,21 +492,21 @@ export class LSPClient {
 		};
 
 		try {
-			const result = await this.connection.sendRequest<Location[] | null>(
+			const result = await this.connection!.sendRequest<Location[] | null>(
 				'textDocument/references',
 				params,
 			);
 
 			return result || [];
 		} catch (error) {
-			console.debug('LSP findReferences failed:', error);
+			this.markTransportClosed();
 			return [];
 		}
 	}
 
 	async hover(uri: string, position: Position): Promise<Hover | null> {
-		if (!this.connection || !this.isInitialized) {
-			throw new Error('LSP client not initialized');
+		if (!this.canSendMessages()) {
+			return null;
 		}
 
 		if (!this.capabilities?.hoverProvider) {
@@ -464,21 +519,21 @@ export class LSPClient {
 		};
 
 		try {
-			const result = await this.connection.sendRequest<Hover | null>(
+			const result = await this.connection!.sendRequest<Hover | null>(
 				'textDocument/hover',
 				params,
 			);
 
 			return result;
 		} catch (error) {
-			console.debug('LSP hover failed:', error);
+			this.markTransportClosed();
 			return null;
 		}
 	}
 
 	async completion(uri: string, position: Position): Promise<CompletionItem[]> {
-		if (!this.connection || !this.isInitialized) {
-			throw new Error('LSP client not initialized');
+		if (!this.canSendMessages()) {
+			return [];
 		}
 
 		if (!this.capabilities?.completionProvider) {
@@ -491,7 +546,7 @@ export class LSPClient {
 		};
 
 		try {
-			const result = await this.connection.sendRequest<
+			const result = await this.connection!.sendRequest<
 				CompletionItem[] | {items: CompletionItem[]} | null
 			>('textDocument/completion', params);
 
@@ -501,7 +556,7 @@ export class LSPClient {
 
 			return Array.isArray(result) ? result : result.items || [];
 		} catch (error) {
-			console.debug('LSP completion failed:', error);
+			this.markTransportClosed();
 			return [];
 		}
 	}
@@ -509,8 +564,8 @@ export class LSPClient {
 	async documentSymbol(
 		uri: string,
 	): Promise<DocumentSymbol[] | SymbolInformation[]> {
-		if (!this.connection || !this.isInitialized) {
-			throw new Error('LSP client not initialized');
+		if (!this.canSendMessages()) {
+			return [];
 		}
 
 		if (!this.capabilities?.documentSymbolProvider) {
@@ -522,13 +577,13 @@ export class LSPClient {
 		};
 
 		try {
-			const result = await this.connection.sendRequest<
+			const result = await this.connection!.sendRequest<
 				DocumentSymbol[] | SymbolInformation[] | null
 			>('textDocument/documentSymbol', params);
 
 			return result || [];
 		} catch (error) {
-			console.debug('LSP documentSymbol failed:', error);
+			this.markTransportClosed();
 			return [];
 		}
 	}

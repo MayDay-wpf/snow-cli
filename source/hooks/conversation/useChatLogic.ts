@@ -8,7 +8,11 @@ import {useChatHandlers} from './chatLogic/useChatHandlers.js';
 import {useRemoteEvents} from './chatLogic/useRemoteEvents.js';
 import {useI18n} from '../../i18n/index.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
-import {clearAllTeammateStreamEntries} from './core/subAgentMessageHandler.js';
+import {
+	clearAllTeammateStreamEntries,
+	clearAllSubAgentStreamEntries,
+} from './core/subAgentMessageHandler.js';
+import {goalManager} from '../../utils/task/goalManager.js';
 
 export type {UseChatLogicProps};
 
@@ -20,6 +24,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 		setPendingMessages,
 		setRestoreInputContent,
 		userInterruptedRef,
+		isCompressing,
 		vscodeState,
 		commandsLoaded,
 		terminalExecutionState,
@@ -79,6 +84,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 		hasAttemptedAutoVscodeConnect.current = true;
 
+		// Skip auto-connect if no matching workspace (like Claude Code)
+		if (!vscodeConnection.hasMatchingWorkspace()) {
+			return;
+		}
+
 		const timer = setTimeout(() => {
 			(async () => {
 				try {
@@ -94,7 +104,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 					vscodeState.setVscodeConnectionStatus('connecting');
 					await vscodeConnection.start();
 				} catch (error) {
-					vscodeState.setVscodeConnectionStatus('error');
+					// Workspace mismatch or connection failure — stay disconnected quietly
+					vscodeState.setVscodeConnectionStatus('disconnected');
 				}
 			})();
 		}, 0);
@@ -168,8 +179,19 @@ export function useChatLogic(props: UseChatLogicProps) {
 		streamingState.abortController.abort();
 		teamTracker.abortAllTeammates();
 		clearAllTeammateStreamEntries();
+		clearAllSubAgentStreamEntries();
 		setMessages(prev => prev.filter(msg => !msg.toolPending));
 		setPendingMessages([]);
+
+		// /goal Ralph Loop: 用户按 ESC 中断时，把当前 goal 置为 paused，
+		// 这样 useMessageProcessing finally 块即使因 ref reset 误判也不会重启循环。
+		// 后续可用 /goal resume 恢复，符合 Codex CLI "pause/resume 仅用户可控" 的设计。
+		void goalManager
+			.pauseGoal()
+			.catch(err =>
+				console.error('[goal] pauseGoal on interrupt failed:', err),
+			);
+
 		return true;
 	}, [streamingState, setMessages, setPendingMessages, t]);
 
@@ -211,6 +233,14 @@ export function useChatLogic(props: UseChatLogicProps) {
 				return true;
 			}
 
+			// Block ESC during /compact command compression
+			if (isCompressing) {
+				streamingState.setCompressBlockToast(
+					t.chatScreen.compressionBlockToast,
+				);
+				return true;
+			}
+
 			// Handle scheduler task interruption
 			if (schedulerExecutionState?.state.isRunning) {
 				schedulerExecutionState.resetTask();
@@ -222,6 +252,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 				}
 				teamTracker.abortAllTeammates();
 				clearAllTeammateStreamEntries();
+				clearAllSubAgentStreamEntries();
 				return true;
 			}
 
@@ -234,6 +265,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			if (!streamingState.isStreaming && teamTracker.getCount() > 0) {
 				teamTracker.abortAllTeammates();
 				clearAllTeammateStreamEntries();
+				clearAllSubAgentStreamEntries();
 				return true;
 			}
 
@@ -273,6 +305,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			backgroundProcesses,
 			terminalExecutionState,
 			streamingState,
+			isCompressing,
 			hasFocus,
 			pendingMessages,
 			handleInterrupt,

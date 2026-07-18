@@ -349,7 +349,7 @@ export async function createEmbeddings(
 			requestBody.output_dimensionality = dimensions;
 		}
 	} else {
-		// OpenAI-compatible format (Jina, Ollama, etc.)
+		// OpenAI-compatible format (Jina, Ollama, Mistral, etc.)
 		requestBody = {
 			model,
 			input,
@@ -360,7 +360,11 @@ export async function createEmbeddings(
 		}
 
 		if (dimensions) {
-			requestBody.dimensions = dimensions;
+			if (embeddingType === 'mistral') {
+				requestBody.output_dimension = dimensions;
+			} else {
+				requestBody.dimensions = dimensions;
+			}
 		}
 	}
 	let url: string;

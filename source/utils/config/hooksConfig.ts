@@ -20,12 +20,13 @@ export type HookType =
 	| 'onSubAgentComplete' // 当子代理任务完成时运行
 	| 'beforeCompress' // 在即将运行压缩操作之前运行
 	| 'onSessionStart' // 当启动新会话或恢复现有会话时运行
-	| 'onStop'; // Stop AI流程结束前运行
+	| 'onStop' // Stop AI流程结束前运行
+	| 'beforeSubAgentStart'; // 子代理 buildInitialMessages 前运行
 
 /**
  * Hook 执行类型
  */
-export type HookActionType = 'command' | 'prompt';
+export type HookActionType = 'command' | 'prompt' | 'context';
 
 /**
  * Hook 执行动作
@@ -34,8 +35,10 @@ export interface HookAction {
 	type: HookActionType;
 	command?: string; // type=command 时使用
 	prompt?: string; // type=prompt 时使用
+	/** type=context: static additionalContext text (no shell side effects) */
+	content?: string;
 	timeout?: number; // 超时时间（毫秒）
-	enabled?: boolean; // 是否启用（默认为 true）
+	enabled?: boolean; // 是否启用
 }
 
 /**
@@ -61,6 +64,10 @@ export interface OnUserMessageContext {
 	message: string;
 	imageCount: number;
 	source: 'normal' | 'pending';
+	/** Optional session metadata for harness hooks */
+	sessionId?: string;
+	cwd?: string;
+	messageCount?: number;
 }
 
 export interface BeforeToolCallContext {
@@ -96,14 +103,25 @@ export interface BeforeCompressContext {
 	messages: any[];
 	conversationJson: string;
 }
-
 export interface OnSessionStartContext {
 	messages: any[];
 	messageCount: number;
+	sessionId?: string;
+	cwd?: string;
+	/** true when resuming an existing session (non-empty history) */
+	isResume?: boolean;
 }
 
 export interface OnStopContext {
 	messages: any[];
+}
+
+export interface BeforeSubAgentStartContext {
+	agentId: string;
+	agentName: string;
+	prompt: string;
+	cwd: string;
+	sessionId?: string;
 }
 
 export type HookContextMap = {
@@ -115,6 +133,7 @@ export type HookContextMap = {
 	beforeCompress: BeforeCompressContext;
 	onSessionStart: OnSessionStartContext;
 	onStop: OnStopContext;
+	beforeSubAgentStart: BeforeSubAgentStartContext;
 };
 
 /**
@@ -195,6 +214,51 @@ export function loadHookConfig(
 	}
 }
 
+function isExecutableHookAction(action: HookAction): boolean {
+	if (action.enabled !== true) {
+		return false;
+	}
+
+	if (action.type === 'command') {
+		return Boolean(action.command?.trim());
+	}
+
+	if (action.type === 'prompt') {
+		return Boolean(action.prompt?.trim());
+	}
+
+	if (action.type === 'context') {
+		return Boolean(action.content?.trim());
+	}
+
+	return false;
+}
+
+export function hasEnabledHookActionsInRules(rules: HookRule[]): boolean {
+	return rules.some(rule => rule.hooks.some(isExecutableHookAction));
+}
+
+export function loadHookConfigWithFallback(hookType: HookType): HookRule[] {
+	const projectRules = loadHookConfig(hookType, 'project');
+
+	if (projectRules.length > 0) {
+		return projectRules;
+	}
+
+	return loadHookConfig(hookType, 'global');
+}
+
+export function hasEnabledHookActions(
+	hookType: HookType,
+	scope?: HookScope,
+): boolean {
+	const rules = scope
+		? loadHookConfig(hookType, scope)
+		: loadHookConfigWithFallback(hookType);
+
+	return hasEnabledHookActionsInRules(rules);
+}
+
 /**
  * 保存 hook 配置
  */
@@ -258,6 +322,7 @@ export function getAllHookTypes(): HookType[] {
 		'beforeCompress',
 		'onSessionStart',
 		'onStop',
+		'beforeSubAgentStart',
 	];
 }
 
@@ -271,6 +336,14 @@ export function isActionTypeAllowed(
 	// prompt 类型只能在 onSubAgentComplete 和 onStop 中使用
 	if (actionType === 'prompt') {
 		return hookType === 'onSubAgentComplete' || hookType === 'onStop';
+	}
+	// context 类型：仅注入型 hooks（与副作用 command 显式分离）
+	if (actionType === 'context') {
+		return (
+			hookType === 'onSessionStart' ||
+			hookType === 'onUserMessage' ||
+			hookType === 'beforeSubAgentStart'
+		);
 	}
 	// command 类型在所有 Hook 中都可以使用
 	return true;

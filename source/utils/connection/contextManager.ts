@@ -24,12 +24,10 @@ export class ContextManager {
 
 	// 不截断的工具列表 - 这些工具的消息内容不会被截断
 	private readonly NON_TRUNCATED_TOOLS = [
-		'todo-get',
-		'todo-add',
-		'todo-update',
-		'todo-delete',
+		'todo-manage',
 		'filesystem-create',
 		'filesystem-edit',
+		'filesystem-replaceedit',
 	];
 
 	constructor(stateManager: StateManager) {

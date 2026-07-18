@@ -1,8 +1,9 @@
 import {spawn} from 'child_process';
-import {taskManager} from './taskManager.js';
 import {writeFileSync, appendFileSync, existsSync, mkdirSync} from 'fs';
 import {join} from 'path';
 import {homedir} from 'os';
+import {notifyTaskFinished} from '../platform/notification.js';
+import {taskManager} from './taskManager.js';
 
 const TASK_LOG_DIR = join(homedir(), '.snow', 'task-logs');
 
@@ -24,6 +25,26 @@ function writeLog(taskId: string, message: string) {
 		appendFileSync(logPath, `[${timestamp}] ${message}\n`, 'utf-8');
 	} catch (error) {
 		// Fail silently - don't break task execution
+	}
+}
+
+async function notifyTaskExitFromParent(taskId: string): Promise<void> {
+	try {
+		const task = await taskManager.loadTask(taskId);
+		if (!task || (task.status !== 'completed' && task.status !== 'failed')) {
+			return;
+		}
+
+		notifyTaskFinished(
+			{
+				taskTitle: task.title,
+				status: task.status,
+				errorMessage: task.error,
+			},
+			{toast: false},
+		);
+	} catch {
+		// Parent-side terminal fallback is best-effort.
 	}
 }
 
@@ -81,6 +102,7 @@ export async function executeTaskInBackground(
 			taskId,
 			`[EXIT] Process exited with code ${code}, signal ${signal}`,
 		);
+		void notifyTaskExitFromParent(taskId);
 	});
 
 	// Save the PID to the task for process management
@@ -364,6 +386,10 @@ export async function executeTask(
 		if (completedTask) {
 			delete completedTask.pid;
 			await taskManager.saveTask(completedTask);
+			notifyTaskFinished({
+				taskTitle: completedTask.title,
+				status: 'completed',
+			});
 		}
 
 		log('Task execution finished successfully');
@@ -384,6 +410,11 @@ export async function executeTask(
 		if (failedTask) {
 			delete failedTask.pid;
 			await taskManager.saveTask(failedTask);
+			notifyTaskFinished({
+				taskTitle: failedTask.title,
+				status: 'failed',
+				errorMessage,
+			});
 		}
 
 		// Don't use console in detached process - errors already logged to file

@@ -10,6 +10,7 @@
 const TWO_STEP_TOOLS = new Set([
 	// 文件编辑工具 - 耗时较长，需要显示进度
 	'filesystem-edit',
+	'filesystem-replaceedit',
 	'filesystem-create',
 
 	// 终端执行工具 - 执行时间不确定，需要显示进度
@@ -28,6 +29,13 @@ const TWO_STEP_TOOLS = new Set([
 	// 子代理工具 - 执行复杂任务，需要显示进度
 	// 所有以 'subagent-' 开头的工具都需要两步显示
 ]);
+
+/**
+ * 固定列表内的两步显示工具名（不含 `subagent-` 前缀规则）
+ * 供持久化 / teammate 等路径对照检查，避免漏发 `tool_result` 导致会话缺结果
+ */
+export const TWO_STEP_DISPLAY_TOOL_NAMES: readonly string[] =
+	Array.from(TWO_STEP_TOOLS);
 
 /**
  * 判断工具是否需要显示两步状态
@@ -55,4 +63,106 @@ export function isToolNeedTwoStepDisplay(toolName: string): boolean {
  */
 export function isToolOnlyShowCompleted(toolName: string): boolean {
 	return !isToolNeedTwoStepDisplay(toolName);
+}
+
+function isFilesystemEditDiffData(
+	value: unknown,
+): value is Record<string, any> {
+	if (!value || typeof value !== 'object') {
+		return false;
+	}
+	const data = value as Record<string, any>;
+	return (
+		(typeof data['oldContent'] === 'string' &&
+			typeof data['newContent'] === 'string') ||
+		Array.isArray(data['batchResults'])
+	);
+}
+
+/**
+ * 从 MCP 工具原始返回对象中提取 filesystem-edit / replaceedit 的 DiffViewer 元数据。
+ * 须在 token 截断之前调用，避免批量结果被整段 stringify 后丢失 diff 字段。
+ */
+export function extractFilesystemEditDiffFromRawResult(
+	toolName: string,
+	toolResult: unknown,
+): Record<string, any> | undefined {
+	if (
+		toolName !== 'filesystem-edit' &&
+		toolName !== 'filesystem-replaceedit' &&
+		toolName !== 'filesystem-create'
+	) {
+		return undefined;
+	}
+	if (!toolResult || typeof toolResult !== 'object') {
+		return undefined;
+	}
+	const result = toolResult as Record<string, any>;
+	const embeddedEditDiffData = result['editDiffData'];
+	if (isFilesystemEditDiffData(embeddedEditDiffData)) {
+		return embeddedEditDiffData;
+	}
+	if ('__toolResultContent' in result) {
+		const fromWrappedContent = extractFilesystemEditDiffFromRawResult(
+			toolName,
+			result['__toolResultContent'],
+		);
+		if (fromWrappedContent) {
+			return fromWrappedContent;
+		}
+	}
+	if (
+		typeof result['oldContent'] === 'string' &&
+		typeof result['newContent'] === 'string'
+	) {
+		return {
+			oldContent: result['oldContent'],
+			newContent: result['newContent'],
+			filename: result['filePath'] || result['path'] || result['filename'],
+			completeOldContent: result['completeOldContent'],
+			completeNewContent: result['completeNewContent'],
+			contextStartLine: result['contextStartLine'],
+		};
+	}
+	if (Array.isArray(result['results']) && result['results'].length > 0) {
+		return {
+			batchResults: result['results'],
+			isBatch: true,
+		};
+	}
+	if (
+		Array.isArray(result['batchResults']) &&
+		result['batchResults'].length > 0
+	) {
+		return {
+			batchResults: result['batchResults'],
+			isBatch: true,
+		};
+	}
+	return undefined;
+}
+
+/**
+ * 从已写入会话的 tool 消息 content（JSON 字符串）中提取 filesystem-edit 的 diff 元数据，
+ * 便于截断或仅文本 content 时仍能恢复 DiffViewer（与主流程 ToolResult.editDiffData 对齐）
+ */
+export function extractFilesystemEditDiffDataForPersistence(
+	toolName: string,
+	content: string,
+): Record<string, any> | undefined {
+	if (
+		(toolName !== 'filesystem-edit' &&
+			toolName !== 'filesystem-replaceedit' &&
+			toolName !== 'filesystem-create') ||
+		content.startsWith('Error:')
+	) {
+		return undefined;
+	}
+	try {
+		const resultData = JSON.parse(content);
+		return extractFilesystemEditDiffFromRawResult(toolName, resultData);
+	} catch {
+		// ignore
+	}
+	return undefined;
 }

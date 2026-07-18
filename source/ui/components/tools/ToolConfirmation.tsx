@@ -7,7 +7,10 @@ import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
-import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
+import {
+	interpretHookResult,
+	extractHookProvidedConfirmation,
+} from '../../../utils/execution/hookResultInterpreter.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import fs from 'fs';
 
@@ -67,6 +70,10 @@ function formatArgumentsAsTree(
 	}
 	if (toolName === 'filesystem-edit') {
 		excludeFields.add('content');
+	}
+	if (toolName === 'filesystem-replaceedit') {
+		excludeFields.add('searchContent');
+		excludeFields.add('replaceContent');
 	}
 
 	// For ACE tools, exclude large result fields that may contain extensive code
@@ -238,6 +245,8 @@ export default function ToolConfirmation({
 			toolName,
 			args: toolArguments,
 			isSensitive: sensitiveCommandCheck.isSensitive,
+			matchedPattern: sensitiveCommandCheck.matchedCommand?.pattern,
+			matchedReason: sensitiveCommandCheck.matchedCommand?.description,
 			allTools: allTools?.map(t => ({
 				name: t.function.name,
 				arguments: t.function.arguments,
@@ -248,6 +257,16 @@ export default function ToolConfirmation({
 		unifiedHooksExecutor
 			.executeHooks('toolConfirmation', context)
 			.then(hookResult => {
+				// If Hook returned exit code 0 with stdout, attempt to
+				// auto-confirm/reject to skip the interactive UI and let the
+				// AI workflow continue automatically.
+				const autoResult = extractHookProvidedConfirmation(hookResult);
+				if (autoResult) {
+					setHasSelected(true);
+					onConfirm(autoResult);
+					return;
+				}
+
 				const interpreted = interpretHookResult('toolConfirmation', hookResult);
 				if (interpreted.action === 'warn' && interpreted.warningMessage) {
 					console.warn(interpreted.warningMessage);
@@ -262,29 +281,194 @@ export default function ToolConfirmation({
 			.catch(error => {
 				console.error('Failed to execute toolConfirmation hook:', error);
 			});
-	}, [toolName, toolArguments, sensitiveCommandCheck.isSensitive, allTools]);
+	}, [
+		toolName,
+		toolArguments,
+		sensitiveCommandCheck.isSensitive,
+		sensitiveCommandCheck.matchedCommand,
+		allTools,
+	]);
 	useEffect(() => {
 		// Only show diff for filesystem operations and when VSCode is connected
 		if (!vscodeConnection.isConnected()) {
 			return;
 		}
 
-		// Helper function to show diff for a single tool
-		const showDiffForTool = (name: string, args: string): Promise<void>[] => {
-			const promises: Promise<void>[] = [];
+		const computeHashlinePreview = (
+			originalContent: string,
+			operations: any[],
+		): string => {
+			if (!Array.isArray(operations) || operations.length === 0) {
+				return originalContent;
+			}
+			const mutableLines = originalContent.split('\n');
+			const parsed = operations
+				.map((op: any) => {
+					const startMatch = String(op.startAnchor ?? '').match(/^(\d+):/);
+					const endMatch = String(op.endAnchor ?? '').match(/^(\d+):/);
+					return {
+						type: op.type as string,
+						content: (op.content ?? '') as string,
+						startLine: startMatch ? parseInt(startMatch[1]!, 10) : 0,
+						endLine: endMatch ? parseInt(endMatch[1]!, 10) : 0,
+					};
+				})
+				.filter(op => op.startLine > 0 && op.endLine > 0)
+				.sort((a, b) => b.startLine - a.startLine);
+
+			for (const op of parsed) {
+				const newLines = op.content.split('\n');
+				switch (op.type) {
+					case 'replace':
+						mutableLines.splice(
+							op.startLine - 1,
+							op.endLine - op.startLine + 1,
+							...newLines,
+						);
+						break;
+					case 'insert_after':
+						mutableLines.splice(op.startLine, 0, ...newLines);
+						break;
+					case 'delete':
+						mutableLines.splice(
+							op.startLine - 1,
+							op.endLine - op.startLine + 1,
+						);
+						break;
+				}
+			}
+			return mutableLines.join('\n');
+		};
+
+		const computeReplaceEditPreview = (
+			originalContent: string,
+			searchContent: string,
+			replaceContent: string,
+		): string => {
+			const idx = originalContent.indexOf(searchContent);
+			if (idx !== -1) {
+				return (
+					originalContent.substring(0, idx) +
+					replaceContent +
+					originalContent.substring(idx + searchContent.length)
+				);
+			}
+			return originalContent;
+		};
+
+		// Helper: collect diff entries for a single tool (supports batch filePath arrays)
+		type DiffEntry = {
+			filePath: string;
+			originalContent: string;
+			newContent: string;
+			label: string;
+		};
+
+		const readOriginal = (filePath: string): string | null => {
+			try {
+				if (!filePath || !fs.existsSync(filePath)) return null;
+				return fs.readFileSync(filePath, 'utf-8');
+			} catch {
+				return null;
+			}
+		};
+
+		const collectHashlineEntries = (
+			filePath: string,
+			operations: any[],
+			label: string,
+		): DiffEntry | null => {
+			const originalContent = readOriginal(filePath);
+			if (originalContent === null) return null;
+			const newContent = computeHashlinePreview(originalContent, operations);
+			return {filePath, originalContent, newContent, label};
+		};
+
+		const collectReplaceEntry = (
+			filePath: string,
+			searchContent: string | undefined,
+			replaceContent: string | undefined,
+			label: string,
+		): DiffEntry | null => {
+			const originalContent = readOriginal(filePath);
+			if (originalContent === null) return null;
+			const newContent =
+				searchContent && replaceContent !== undefined
+					? computeReplaceEditPreview(
+							originalContent,
+							searchContent,
+							replaceContent,
+					  )
+					: originalContent;
+			return {filePath, originalContent, newContent, label};
+		};
+
+		const collectDiffsForTool = (name: string, args: string): DiffEntry[] => {
+			const entries: DiffEntry[] = [];
 			try {
 				const parsed = JSON.parse(args);
 
-				// Handle filesystem-edit (hashline-anchored editing)
 				if (name === 'filesystem-edit' && parsed.filePath) {
-					const filePath = typeof parsed.filePath === 'string' ? parsed.filePath : null;
-					if (filePath && fs.existsSync(filePath)) {
-						const originalContent = fs.readFileSync(filePath, 'utf-8');
-						promises.push(
-							vscodeConnection
-								.showDiff(filePath, originalContent, originalContent, 'Hashline Edit')
-								.catch(() => {}),
+					if (typeof parsed.filePath === 'string') {
+						const e = collectHashlineEntries(
+							parsed.filePath,
+							parsed.operations,
+							'Hashline Edit',
 						);
+						if (e) entries.push(e);
+					} else if (Array.isArray(parsed.filePath)) {
+						// Batch: array of {path, operations}
+						for (const item of parsed.filePath) {
+							if (
+								item &&
+								typeof item === 'object' &&
+								typeof item.path === 'string'
+							) {
+								const e = collectHashlineEntries(
+									item.path,
+									item.operations,
+									'Hashline Edit',
+								);
+								if (e) entries.push(e);
+							}
+						}
+					}
+				}
+
+				if (name === 'filesystem-replaceedit' && parsed.filePath) {
+					if (typeof parsed.filePath === 'string') {
+						const e = collectReplaceEntry(
+							parsed.filePath,
+							parsed.searchContent,
+							parsed.replaceContent,
+							'Replace Edit',
+						);
+						if (e) entries.push(e);
+					} else if (Array.isArray(parsed.filePath)) {
+						// Batch: string[] (uses top-level search/replace) or array of {path, searchContent, replaceContent}
+						for (const item of parsed.filePath) {
+							if (typeof item === 'string') {
+								const e = collectReplaceEntry(
+									item,
+									parsed.searchContent,
+									parsed.replaceContent,
+									'Replace Edit',
+								);
+								if (e) entries.push(e);
+							} else if (
+								item &&
+								typeof item === 'object' &&
+								typeof item.path === 'string'
+							) {
+								const e = collectReplaceEntry(
+									item.path,
+									item.searchContent ?? parsed.searchContent,
+									item.replaceContent ?? parsed.replaceContent,
+									'Replace Edit',
+								);
+								if (e) entries.push(e);
+							}
+						}
 					}
 				}
 
@@ -292,38 +476,51 @@ export default function ToolConfirmation({
 				if (name === 'filesystem-create' && parsed.filePath && parsed.content) {
 					const filePath = parsed.filePath;
 					if (typeof filePath === 'string') {
-						promises.push(
-							vscodeConnection
-								.showDiff(filePath, '', parsed.content, 'Create')
-								.catch(() => {
-									// Silently fail if diff cannot be shown
-								}),
-						);
+						const originalContent = readOriginal(filePath) ?? '';
+						entries.push({
+							filePath,
+							originalContent,
+							newContent: parsed.content,
+							label: 'Create',
+						});
 					}
 				}
 			} catch {
 				// Ignore parse errors
 			}
-			return promises;
+			return entries;
+		};
+
+		const dispatchDiffs = (entries: DiffEntry[]) => {
+			if (entries.length === 0) return;
+			if (entries.length === 1) {
+				const e = entries[0]!;
+				vscodeConnection
+					.showDiff(e.filePath, e.originalContent, e.newContent, e.label)
+					.catch(() => {});
+				return;
+			}
+			// Multi-file: use showDiffReview to display all diffs at once
+			vscodeConnection
+				.showDiffReview(
+					entries.map(e => ({
+						filePath: e.filePath,
+						originalContent: e.originalContent,
+						newContent: e.newContent,
+					})),
+				)
+				.catch(() => {});
 		};
 
 		// Handle parallel tools
 		if (allTools && allTools.length > 0) {
-			// Show diff for all filesystem operations in parallel tools
-			const diffPromises = allTools.flatMap(tool =>
-				showDiffForTool(tool.function.name, tool.function.arguments),
+			const allEntries = allTools.flatMap(tool =>
+				collectDiffsForTool(tool.function.name, tool.function.arguments),
 			);
-
-			// Wait for all diffs to be shown
-			Promise.all(diffPromises).catch(() => {
-				// Silently fail
-			});
+			dispatchDiffs(allEntries);
 		} else if (toolArguments) {
-			// Handle single tool
-			const promises = showDiffForTool(toolName, toolArguments);
-			Promise.all(promises).catch(() => {
-				// Silently fail
-			});
+			const entries = collectDiffsForTool(toolName, toolArguments);
+			dispatchDiffs(entries);
 		}
 
 		// Cleanup: close diff when component unmounts

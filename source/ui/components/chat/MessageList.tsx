@@ -9,6 +9,8 @@ export interface Message {
 	content: string;
 	streaming?: boolean;
 	discontinued?: boolean;
+	aiCompletionTime?: Date | string;
+	aiCompletionDurationMs?: number;
 	messageStatus?: 'pending' | 'success' | 'error';
 	commandName?: string;
 	hideCommandName?: boolean; // Don't show command name prefix for output chunks
@@ -99,10 +101,84 @@ interface Props {
 }
 const STREAM_COLORS = ['#FF6EBF', 'green', 'blue', 'cyan', '#B588F8'] as const;
 
-function formatCommandResultLines(content: string): string[] {
+type CommandResultSegment = {
+	text: string;
+	color?: string;
+};
+
+function removeAnsiCodes(text: string): string {
+	return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function parseAnsiCommandLine(line: string): CommandResultSegment[] {
+	const segments: CommandResultSegment[] = [];
+	const ansiPattern = /\x1b\[([0-9;]*)m/g;
+	let cursor = 0;
+	let activeColor: string | undefined;
+	let match: RegExpExecArray | null;
+
+	const pushText = (text: string): void => {
+		const cleanText = removeAnsiCodes(text);
+		if (cleanText) {
+			segments.push({text: cleanText, color: activeColor});
+		}
+	};
+
+	while ((match = ansiPattern.exec(line)) !== null) {
+		pushText(line.slice(cursor, match.index));
+		const codes = (match[1] || '0').split(';');
+		if (codes.includes('33') || codes.includes('93')) {
+			activeColor = 'yellow';
+		} else if (codes.includes('0') || codes.includes('39')) {
+			activeColor = undefined;
+		}
+
+		cursor = match.index + match[0].length;
+	}
+
+	pushText(line.slice(cursor));
+	return segments.length > 0 ? segments : [{text: ' '}];
+}
+
+function formatCommandResultLines(content: string): CommandResultSegment[][] {
 	return content
 		.split('\n')
-		.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+		.map((line, index) =>
+			parseAnsiCommandLine(`${index === 0 ? '└─ ' : '   '}${line || ' '}`),
+		);
+}
+
+function formatAiCompletionTime(value: Date | string): string {
+	const date = value instanceof Date ? value : new Date(value);
+
+	if (Number.isNaN(date.getTime())) {
+		return String(value);
+	}
+
+	return date.toLocaleTimeString(undefined, {
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false,
+	});
+}
+
+function formatAiCompletionDuration(ms: number): string {
+	if (!Number.isFinite(ms) || ms < 0) {
+		return '';
+	}
+	const totalSeconds = Math.floor(ms / 1000);
+	if (totalSeconds < 60) {
+		return `${totalSeconds}s`;
+	}
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	if (minutes < 60) {
+		return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+	}
+	const hours = Math.floor(minutes / 60);
+	const remainMinutes = minutes % 60;
+	return `${hours}h${remainMinutes.toString().padStart(2, '0')}m`;
 }
 
 const MessageList = memo(
@@ -115,6 +191,35 @@ const MessageList = memo(
 		return (
 			<Box flexDirection="column" overflow="hidden">
 				{messages.slice(-maxMessages).map((message, index) => {
+					if (message.aiCompletionTime) {
+						const completionTime = formatAiCompletionTime(
+							message.aiCompletionTime,
+						);
+						const durationStr =
+							typeof message.aiCompletionDurationMs === 'number' &&
+							Number.isFinite(message.aiCompletionDurationMs) &&
+							message.aiCompletionDurationMs >= 0
+								? formatAiCompletionDuration(message.aiCompletionDurationMs)
+								: '';
+
+						const displayText = durationStr
+							? t.chatScreen.aiCompletionTimeWithDurationMessage
+									.replace('{time}', completionTime)
+									.replace('{duration}', durationStr)
+							: t.chatScreen.aiCompletionTimeMessage.replace(
+									'{time}',
+									completionTime,
+							  );
+
+						return (
+							<Box key={index}>
+								<Text color="gray" dimColor>
+									{displayText}
+								</Text>
+							</Box>
+						);
+					}
+
 					const iconColor =
 						message.role === 'user'
 							? message.subAgentDirected
@@ -177,10 +282,18 @@ const MessageList = memo(
 										)}
 										{message.content &&
 											formatCommandResultLines(message.content).map(
-												(line, lineIndex) => (
-													<Text key={lineIndex} color="gray" dimColor>
-														{line}
-													</Text>
+												(lineSegments, lineIndex) => (
+													<Box key={lineIndex}>
+														{lineSegments.map((segment, segmentIndex) => (
+															<Text
+																key={segmentIndex}
+																color={segment.color ?? 'gray'}
+																dimColor={!segment.color}
+															>
+																{segment.text}
+															</Text>
+														))}
+													</Box>
 												),
 											)}
 									</Box>

@@ -7,6 +7,7 @@ import {
 	checkRoleSubagentExists,
 	type RoleSubagentLocation,
 } from '../../../utils/commands/roleSubagent.js';
+import PickerList from '../common/PickerList.js';
 
 type Step = 'location' | 'selectAgent' | 'confirm';
 
@@ -77,12 +78,14 @@ export const RoleSubagentCreationPanel: React.FC<Props> = ({
 
 			if (step === 'selectAgent') {
 				if (key.upArrow) {
-					setSelectedIndex(prev => Math.max(0, prev - 1));
+					setSelectedIndex(prev =>
+						prev > 0 ? prev - 1 : availableAgents.length - 1,
+					);
 					return;
 				}
 				if (key.downArrow) {
 					setSelectedIndex(prev =>
-						Math.min(availableAgents.length - 1, prev + 1),
+						prev < availableAgents.length - 1 ? prev + 1 : 0,
 					);
 					return;
 				}
@@ -178,29 +181,54 @@ export const RoleSubagentCreationPanel: React.FC<Props> = ({
 							</Text>
 						</Box>
 					) : (
-						<Box flexDirection="column" marginBottom={1}>
-							{availableAgents.map((agent, index) => (
-								<Box key={agent.id}>
-									<Text
-										color={
-											index === selectedIndex
-												? theme.colors.menuSelected
-												: theme.colors.menuNormal
-										}
-										bold={index === selectedIndex}
-									>
-										{index === selectedIndex ? '> ' : '  '}
-										{agent.name}
-									</Text>
-								</Box>
-							))}
-						</Box>
+						<PickerList
+							items={availableAgents}
+							selectedIndex={selectedIndex}
+							visible={true}
+							itemHeight={1}
+							getItemKey={agent => agent.id}
+							renderItem={(agent, isSelected) => (
+								<Text
+									color={
+										isSelected
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									bold={isSelected}
+								>
+									{isSelected ? '❯ ' : '  '}
+									{agent.name}
+								</Text>
+							)}
+							scrollHintFormat={(above, below) => (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{(t as any).agentPickerPanel?.scrollHint || '↑↓ to scroll'}
+									{above > 0 && (
+										<>
+											{' · '}
+											{(
+												(t as any).agentPickerPanel?.moreAbove ||
+												'{count} more above'
+											).replace('{count}', above.toString())}
+										</>
+									)}
+									{below > 0 && (
+										<>
+											{' · '}
+											{(
+												(t as any).agentPickerPanel?.moreBelow ||
+												'{count} more below'
+											).replace('{count}', below.toString())}
+										</>
+									)}
+								</Text>
+							)}
+						/>
 					)}
 
 					<Box marginTop={1}>
 						<Text dimColor>
-							{rs.selectAgentHint ||
-								'↑↓: Navigate | Enter: Select | ESC: Back'}
+							{rs.selectAgentHint || '↑↓: Navigate | Enter: Select | ESC: Back'}
 						</Text>
 					</Box>
 				</Box>

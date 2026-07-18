@@ -14,15 +14,21 @@ export type CommandLocation = 'global' | 'project';
 export interface CustomCommand {
 	name: string;
 	command: string;
-	type: 'execute' | 'prompt'; // execute: run in terminal, prompt: send to AI
+	type: 'execute' | 'prompt' | 'panel'; // execute: run in terminal, prompt: send to AI, panel: show AnyPanel plugin
 	description?: string;
 	location?: CommandLocation; // 新增，可选以兼容旧数据
+	argsHint?: string; // 参数提示文本，在输入框中显示可用参数组合
+	argsOptions?: string[]; // 参数可选值列表，用于 Tab 弹出参数选择面板
 }
 
 type CommandFileEntry = {
 	filePath: string;
 	inferredCommandName: string;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function isValidSlashCommandName(name: string): boolean {
 	const trimmed = name.trim();
@@ -119,6 +125,14 @@ async function listJsonCommandsRecursively(
 		const entryPath = join(dir, entry.name);
 
 		if (entry.isDirectory()) {
+			// Skip hidden directories (e.g., `.omc/`, `.git/`) so runtime state
+			// files written under them are never treated as commands. Aligns
+			// behavior with skills.ts loader; without this, `.json` state
+			// files under `~/.snow/commands/<ns>/.omc/state/sessions/` get loaded
+			// as commands with undefined name/description and crash the panel.
+			if (entry.name.startsWith('.')) {
+				continue;
+			}
 			const childPrefix = prefixPath
 				? `${prefixPath}/${entry.name}`
 				: entry.name;
@@ -158,9 +172,29 @@ async function loadCustomCommandFromFile(
 		const content = await readFile(entry.filePath, 'utf-8');
 		const cmd = JSON.parse(content) as CustomCommand;
 
+		// Reject non-command JSON files (e.g., runtime state files accidentally
+		// written under the commands directory). A valid command needs a string
+		// `command` field and a known `type`; without these, loading it would
+		// inject an object with undefined name/description into the panel and
+		// crash `command.description.toLowerCase()` during render.
+		if (typeof cmd.command !== 'string' || cmd.command.length === 0) {
+			return null;
+		}
+		if (
+			cmd.type !== 'execute' &&
+			cmd.type !== 'prompt' &&
+			cmd.type !== 'panel'
+		) {
+			return null;
+		}
+
 		// Use file path to infer command name for stability and namespace support
 		cmd.name = entry.inferredCommandName;
-		cmd.description = cmd.description || cmd.command;
+		// Coerce description to a string: fallback to `command` (the prompt/
+		// terminal text), then empty string, so callers can always call
+		// `.toLowerCase()` / `.includes()` safely.
+		const rawDesc = cmd.description ?? cmd.command;
+		cmd.description = typeof rawDesc === 'string' ? rawDesc : '';
 
 		// Fill default location for backward compatibility
 		if (!cmd.location) {
@@ -254,6 +288,14 @@ export async function loadCustomCommands(
 	return commands;
 }
 
+export async function loadCustomCommandsForLocation(
+	location: CommandLocation,
+	projectRoot?: string,
+): Promise<CustomCommand[]> {
+	const dir = getCustomCommandsDir(location, projectRoot);
+	return loadCommandsFromDir(dir, location);
+}
+
 // Check if command name conflicts with built-in or existing custom commands
 export function isCommandNameConflict(name: string): boolean {
 	const allCommands = getAvailableCommands();
@@ -279,10 +321,12 @@ export function checkCommandExists(
 export async function saveCustomCommand(
 	name: string,
 	command: string,
-	type: 'execute' | 'prompt',
+	type: 'execute' | 'prompt' | 'panel',
 	description?: string,
 	location: CommandLocation = 'global',
 	projectRoot?: string,
+	argsHint?: string,
+	argsOptions?: string[],
 ): Promise<void> {
 	// Check for command name conflicts with built-in commands
 	if (isCommandNameConflict(name)) {
@@ -298,7 +342,15 @@ export async function saveCustomCommand(
 	// Ensure parent directory exists (for namespaced commands)
 	await mkdir(dirname(filePath), {recursive: true});
 
-	const data: CustomCommand = {name, command, type, description, location};
+	const data: CustomCommand = {
+		name,
+		command,
+		type,
+		description,
+		location,
+		...(argsHint !== undefined ? {argsHint} : {}),
+		...(argsOptions !== undefined ? {argsOptions} : {}),
+	};
 	await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -321,6 +373,81 @@ export function getCustomCommands(): CustomCommand[] {
 // Cache for custom commands
 let customCommandsCache: CustomCommand[] = [];
 
+function isBuiltInCommandNameConflict(name: string): boolean {
+	const existingCustomNames = new Set(customCommandsCache.map(cmd => cmd.name));
+	const allCommands = getAvailableCommands();
+	return allCommands.includes(name) && !existingCustomNames.has(name);
+}
+
+function normalizeImportedCustomCommand(
+	value: unknown,
+	location: CommandLocation,
+): CustomCommand | null {
+	if (!isRecord(value)) {
+		return null;
+	}
+
+	const {name, command, type, description, argsHint, argsOptions} = value;
+	if (
+		typeof name !== 'string' ||
+		typeof command !== 'string' ||
+		(type !== 'execute' && type !== 'prompt' && type !== 'panel')
+	) {
+		return null;
+	}
+
+	const trimmedName = name.trim();
+	if (trimmedName.length === 0) {
+		return null;
+	}
+
+	return {
+		name: trimmedName,
+		command,
+		type,
+		...(typeof description === 'string' ? {description} : {}),
+		...(typeof argsHint === 'string' ? {argsHint} : {}),
+		...(Array.isArray(argsOptions)
+			? {
+					argsOptions: argsOptions.filter(
+						(v): v is string => typeof v === 'string',
+					),
+			  }
+			: {}),
+		location,
+	};
+}
+
+export async function importCustomCommandsForLocation(
+	commands: unknown,
+	location: CommandLocation,
+	projectRoot?: string,
+): Promise<void> {
+	if (!Array.isArray(commands)) {
+		throw new TypeError(`customCommands.${location} must be an array`);
+	}
+
+	await ensureCommandsDir(location, projectRoot);
+	const dir = getCustomCommandsDir(location, projectRoot);
+
+	for (const item of commands) {
+		const command = normalizeImportedCustomCommand(item, location);
+		if (!command) {
+			continue;
+		}
+
+		if (isBuiltInCommandNameConflict(command.name)) {
+			throw new Error(
+				`Command name "${command.name}" conflicts with an existing built-in command`,
+			);
+		}
+
+		const filePath = getCommandJsonFilePath(dir, command.name);
+		await mkdir(dirname(filePath), {recursive: true});
+		await writeFile(filePath, JSON.stringify(command, null, 2), 'utf-8');
+	}
+}
+
 // Delete a custom command
 export async function deleteCustomCommand(
 	name: string,
@@ -337,6 +464,28 @@ export async function deleteCustomCommand(
 
 	// Update cache
 	customCommandsCache = customCommandsCache.filter(cmd => cmd.name !== name);
+}
+
+// Substitute user-supplied args into a command template. If the template
+// contains a `$ARGUMENTS` placeholder, the args replace it in-place — this
+// matches the convention used by the skill path in useSkillsPicker.ts and
+// Claude Code's slash commands, letting command authors control exactly
+// where user input lands. When no placeholder is present, fall back to the
+// legacy behavior of appending args to the end, so existing commands that
+// don't use `$ARGUMENTS` keep working unchanged.
+function applyArgsToCommand(command: string, args?: string): string {
+	const trimmedArgs = args?.trim();
+	if (command.includes('$ARGUMENTS')) {
+		// Even when args is empty, replace the placeholder with an empty
+		// string so the literal `$ARGUMENTS` text never leaks into the
+		// prompt or terminal command. This matches the skill path in
+		// useSkillsPicker.ts which always replaces, regardless of append.
+		return command.split('$ARGUMENTS').join(trimmedArgs ?? '');
+	}
+	if (!trimmedArgs) {
+		return command;
+	}
+	return `${command} ${trimmedArgs}`;
 }
 
 // Register dynamic custom commands
@@ -361,8 +510,7 @@ export async function registerCustomCommands(
 				}
 
 				if (cmd.type === 'execute') {
-					// 支持补充输入：将args叠加到命令后面
-					const finalCommand = args ? `${cmd.command} ${args}` : cmd.command;
+					const finalCommand = applyArgsToCommand(cmd.command, args);
 					return {
 						success: true,
 						message: `Executing: ${finalCommand}`,
@@ -371,8 +519,19 @@ export async function registerCustomCommands(
 					};
 				}
 
-				// 支持补充输入：将args叠加到prompt后面
-				const finalPrompt = args ? `${cmd.command} ${args}` : cmd.command;
+				if (cmd.type === 'panel') {
+					// panel 类型：加载 ~/.snow/plugin/anypanel/ 中的插件并显示面板
+					// cmd.command 字段存储的是 AnyPanel 插件的 id
+					return {
+						success: true,
+						message: `Opening panel: ${cmd.command}`,
+						action: 'showAnyPanel',
+						prompt: cmd.command,
+					};
+				}
+
+				// 支持补充输入：有 $ARGUMENTS 占位符则原地替换，否则追加到末尾
+				const finalPrompt = applyArgsToCommand(cmd.command, args);
 				return {
 					success: true,
 					message: `Sending to AI: ${finalPrompt}`,

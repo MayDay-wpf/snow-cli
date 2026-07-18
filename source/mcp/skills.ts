@@ -4,6 +4,7 @@ import {readFile} from 'fs/promises';
 import {homedir} from 'os';
 import matter from 'gray-matter';
 import {getDisabledSkills} from '../utils/config/disabledSkills.js';
+import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
 
 export interface SkillMetadata {
 	name: string;
@@ -11,11 +12,14 @@ export interface SkillMetadata {
 	allowedTools?: string[];
 }
 
+export type SkillSource = 'snow' | 'agents' | 'builtin';
+
 export interface Skill {
 	id: string;
 	name: string;
 	description: string;
-	location: 'project' | 'global';
+	location: 'project' | 'global' | 'builtin';
+	source: SkillSource;
 	path: string;
 	content: string;
 	allowedTools?: string[];
@@ -63,10 +67,19 @@ async function readSkillFile(skillPath: string): Promise<{
 			}
 		}
 
+		// Defensive coercion: gray-matter may parse unquoted placeholders like
+		// `{{NAME}}` as YAML flow mappings (objects), which would crash React
+		// when later rendered as text. Force string types here.
+		const rawName = parsed.data['name'];
+		const rawDescription = parsed.data['description'];
+		const safeName = typeof rawName === 'string' ? rawName : '';
+		const safeDescription =
+			typeof rawDescription === 'string' ? rawDescription : '';
+
 		return {
 			metadata: {
-				name: parsed.data['name'] || '',
-				description: parsed.data['description'] || '',
+				name: safeName,
+				description: safeDescription,
 				allowedTools,
 			},
 			content,
@@ -85,6 +98,7 @@ async function loadSkillsFromDirectory(
 	skills: Map<string, Skill>,
 	baseSkillsDir: string,
 	location: Skill['location'],
+	source: SkillSource = 'snow',
 ): Promise<void> {
 	if (!existsSync(baseSkillsDir)) {
 		return;
@@ -107,6 +121,18 @@ async function loadSkillsFromDirectory(
 
 			for (const entry of entries) {
 				if (entry.isDirectory()) {
+					// Skip template/example directories that ship inside skills
+					// (e.g. skill-based-architecture-main/templates/**) — their
+					// SKILL.md files contain placeholders like `{{NAME}}` and
+					// must not be treated as real skills.
+					if (
+						entry.name === 'templates' ||
+						entry.name === 'examples' ||
+						entry.name === 'node_modules' ||
+						entry.name.startsWith('.')
+					) {
+						continue;
+					}
 					pendingDirs.push(join(currentDir, entry.name));
 					continue;
 				}
@@ -137,6 +163,7 @@ async function loadSkillsFromDirectory(
 					name: skillData.metadata.name || fallbackName,
 					description: skillData.metadata.description || '',
 					location,
+					source,
 					path: skillDir,
 					content: skillData.content,
 					allowedTools: skillData.metadata.allowedTools,
@@ -149,22 +176,68 @@ async function loadSkillsFromDirectory(
 }
 
 /**
- * Scan and load all available skills
- * Project skills have priority over global skills
+ * Scan and load all available skills.
+ *
+ * Sources scanned (in priority order from LOWEST to HIGHEST — later loads
+ * override earlier ones because Map.set replaces existing entries):
+ *   0. CLI bundled skills        (builtin, source=builtin) — e.g. snow-docs
+ *   1. ~/.agents/skills          (global,  source=agents)
+ *   2. ~/.snow/skills            (global,  source=snow)
+ *   3. <project>/.agents/skills  (project, source=agents)
+ *   4. <project>/.snow/skills    (project, source=snow)
+ *
+ * Rationale: project > global > builtin, and within the same scope .snow
+ * (native CLI directory) takes precedence over .agents (compatibility
+ * directory). When two skills share the same id across these locations, the
+ * higher-priority one wins and the lower-priority one is silently shadowed.
  */
 async function loadAvailableSkills(
 	projectRoot?: string,
 ): Promise<Map<string, Skill>> {
 	const skills = new Map<string, Skill>();
-	const globalSkillsDir = join(homedir(), '.snow', 'skills');
-	const projectSkillsDir = projectRoot
+	const home = homedir();
+	const globalAgentsSkillsDir = join(home, '.agents', 'skills');
+	const globalSnowSkillsDir = join(home, '.snow', 'skills');
+	const projectAgentsSkillsDir = projectRoot
+		? join(projectRoot, '.agents', 'skills')
+		: null;
+	const projectSnowSkillsDir = projectRoot
 		? join(projectRoot, '.snow', 'skills')
 		: null;
 
-	// Load global skills first, then project skills override global skills
-	await loadSkillsFromDirectory(skills, globalSkillsDir, 'global');
-	if (projectSkillsDir) {
-		await loadSkillsFromDirectory(skills, projectSkillsDir, 'project');
+	// Order matters: load lowest-priority first so higher-priority entries
+	// overwrite via Map.set.
+	const builtInSkillsDir = resolveBuiltInSkillsRoot();
+	if (builtInSkillsDir) {
+		await loadSkillsFromDirectory(
+			skills,
+			builtInSkillsDir,
+			'builtin',
+			'builtin',
+		);
+	}
+	await loadSkillsFromDirectory(
+		skills,
+		globalAgentsSkillsDir,
+		'global',
+		'agents',
+	);
+	await loadSkillsFromDirectory(skills, globalSnowSkillsDir, 'global', 'snow');
+	if (projectAgentsSkillsDir) {
+		await loadSkillsFromDirectory(
+			skills,
+			projectAgentsSkillsDir,
+			'project',
+			'agents',
+		);
+	}
+	if (projectSnowSkillsDir) {
+		await loadSkillsFromDirectory(
+			skills,
+			projectSnowSkillsDir,
+			'project',
+			'snow',
+		);
 	}
 
 	return skills;

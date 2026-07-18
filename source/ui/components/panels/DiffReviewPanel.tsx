@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
@@ -18,6 +18,7 @@ type Props = {
 	}>;
 	snapshotFileCount: Map<number, number>;
 	onClose: () => void;
+	terminalWidth?: number;
 };
 
 type MessageItem = {
@@ -32,18 +33,31 @@ export default function DiffReviewPanel({
 	messages,
 	snapshotFileCount,
 	onClose,
+	terminalWidth,
 }: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [busy, setBusy] = useState(false);
+	// When true, the unmount cleanup will NOT send closeDiff to VSCode,
+	// so the multi-file diff review opened via showDiffReview can stay visible.
+	const skipCloseOnUnmountRef = useRef(false);
+	// Real (deduplicated) file count per snapshot index. snapshotFileCount
+	// from props sums per-snapshot file counts which double-counts the same
+	// file modified across multiple snapshots; getFilesToRollback returns a
+	// deduplicated list of relative paths and is the source of truth.
+	const [dedupedFileCount, setDedupedFileCount] = useState<Map<number, number>>(
+		new Map(),
+	);
 
 	// File list mode state
 	const [viewMode, setViewMode] = useState<ViewMode>('messages');
 	const [filePaths, setFilePaths] = useState<string[]>([]);
 	const [fileHighlightIndex, setFileHighlightIndex] = useState(0);
 	const [fileScrollIndex, setFileScrollIndex] = useState(0);
-	const [activeMessageIndex, setActiveMessageIndex] = useState<number | null>(null);
+	const [activeMessageIndex, setActiveMessageIndex] = useState<number | null>(
+		null,
+	);
 
 	const VISIBLE_ITEMS = 5;
 	const MAX_VISIBLE_FILES = 10;
@@ -91,15 +105,26 @@ export default function DiffReviewPanel({
 					}
 				}
 
-				let totalFileCount = 0;
-				for (const [idx, count] of snapshotFileCount.entries()) {
-					if (idx >= snapshotIdx) {
-						totalFileCount += count;
+				// Prefer the real deduplicated count (computed via
+				// getFilesToRollback in the effect below). Fall back to the
+				// summed prop value while the async dedupe is still loading
+				// so the UI doesn't flash empty.
+				let totalFileCount: number;
+				if (dedupedFileCount.has(snapshotIdx)) {
+					totalFileCount = dedupedFileCount.get(snapshotIdx) ?? 0;
+				} else {
+					totalFileCount = 0;
+					for (const [idx, count] of snapshotFileCount.entries()) {
+						if (idx >= snapshotIdx) {
+							totalFileCount += count;
+						}
 					}
 				}
 
 				items.push({
-					label: `${userMsgIndex + 1}. ${cleanContent.slice(0, 60)}${cleanContent.length > 60 ? '...' : ''}`,
+					label: `${userMsgIndex + 1}. ${cleanContent.slice(0, 60)}${
+						cleanContent.length > 60 ? '...' : ''
+					}`,
 					originalIndex: i,
 					fileCount: totalFileCount,
 				});
@@ -107,7 +132,10 @@ export default function DiffReviewPanel({
 			}
 		}
 		return items;
-	}, [messages, snapshotFileCount]);
+	}, [messages, snapshotFileCount, dedupedFileCount]);
+
+	// (resolveSnapshotIdx is defined further below; the dedupe effect lives
+	// after that definition so we can reuse it.)
 
 	useEffect(() => {
 		if (userMessages.length > 0) {
@@ -123,6 +151,7 @@ export default function DiffReviewPanel({
 
 	useEffect(() => {
 		return () => {
+			if (skipCloseOnUnmountRef.current) return;
 			closeDiffPreview();
 		};
 	}, [closeDiffPreview]);
@@ -139,8 +168,12 @@ export default function DiffReviewPanel({
 		const timeoutId = setTimeout(() => {
 			closeDiffPreview();
 			hashBasedSnapshotManager
-				.getRollbackPreviewForFile(currentSession.id, activeMessageIndex, filePath)
-				.then(async (preview) => {
+				.getRollbackPreviewForFile(
+					currentSession.id,
+					activeMessageIndex,
+					filePath,
+				)
+				.then(async preview => {
 					let currentContent = '';
 					try {
 						currentContent = await fs.readFile(preview.absolutePath, 'utf-8');
@@ -160,7 +193,13 @@ export default function DiffReviewPanel({
 		return () => {
 			clearTimeout(timeoutId);
 		};
-	}, [fileHighlightIndex, viewMode, filePaths, activeMessageIndex, closeDiffPreview]);
+	}, [
+		fileHighlightIndex,
+		viewMode,
+		filePaths,
+		activeMessageIndex,
+		closeDiffPreview,
+	]);
 
 	const resolveSnapshotIdx = useCallback(
 		(liveIndex: number): number => {
@@ -188,22 +227,76 @@ export default function DiffReviewPanel({
 		[messages],
 	);
 
-	// Load file list when Tab is pressed on a message
-	const loadFileList = useCallback(async (messageIndex: number) => {
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) return;
+	// Asynchronously compute deduplicated file counts via getFilesToRollback
+	// for every visible user message. snapshotFileCount sums per-snapshot
+	// file counts which double-counts the same file modified across multiple
+	// snapshots; getFilesToRollback returns a deduplicated relative-path list
+	// and is the authoritative count we want to display.
+	useEffect(() => {
+		const session = sessionManager.getCurrentSession();
+		if (!session) return;
+		let cancelled = false;
 
-		const sIdx = resolveSnapshotIdx(messageIndex);
-		const files = await hashBasedSnapshotManager.getFilesToRollback(
-			currentSession.id,
-			sIdx,
-		);
-		setFilePaths(files);
-		setFileHighlightIndex(0);
-		setFileScrollIndex(0);
-		setActiveMessageIndex(sIdx);
-		setViewMode('files');
-	}, [resolveSnapshotIdx]);
+		const targets: number[] = [];
+		const seen = new Set<number>();
+		for (let i = 0; i < messages.length; i++) {
+			const msg = messages[i];
+			if (
+				msg &&
+				msg.role === 'user' &&
+				msg.content.trim() &&
+				!msg.subAgentDirected
+			) {
+				const sIdx = resolveSnapshotIdx(i);
+				if (!seen.has(sIdx)) {
+					seen.add(sIdx);
+					targets.push(sIdx);
+				}
+			}
+		}
+
+		(async () => {
+			const next = new Map<number, number>();
+			for (const sIdx of targets) {
+				try {
+					const files = await hashBasedSnapshotManager.getFilesToRollback(
+						session.id,
+						sIdx,
+					);
+					next.set(sIdx, files.length);
+				} catch {
+					next.set(sIdx, 0);
+				}
+				if (cancelled) return;
+			}
+			if (cancelled) return;
+			setDedupedFileCount(next);
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [messages, snapshotFileCount, resolveSnapshotIdx]);
+
+	// Load file list when Tab is pressed on a message
+	const loadFileList = useCallback(
+		async (messageIndex: number) => {
+			const currentSession = sessionManager.getCurrentSession();
+			if (!currentSession) return;
+
+			const sIdx = resolveSnapshotIdx(messageIndex);
+			const files = await hashBasedSnapshotManager.getFilesToRollback(
+				currentSession.id,
+				sIdx,
+			);
+			setFilePaths(files);
+			setFileHighlightIndex(0);
+			setFileScrollIndex(0);
+			setActiveMessageIndex(sIdx);
+			setViewMode('files');
+		},
+		[resolveSnapshotIdx],
+	);
 
 	// Send all diffs to IDE (snapshotIdx is already in snapshot coordinate space)
 	const handleSelectSnapshot = useCallback(
@@ -259,6 +352,9 @@ export default function DiffReviewPanel({
 				}
 
 				if (diffFiles.length > 0) {
+					// Mark before sending so the unmount cleanup triggered by
+					// onClose() below will NOT close the diffs we just opened.
+					skipCloseOnUnmountRef.current = true;
 					await vscodeConnection.showDiffReview(diffFiles);
 				}
 			} catch {
@@ -316,7 +412,9 @@ export default function DiffReviewPanel({
 				setFileHighlightIndex(prev => {
 					const newIdx = Math.min(filePaths.length - 1, prev + 1);
 					if (newIdx >= fileScrollIndex + MAX_VISIBLE_FILES) {
-						setFileScrollIndex(Math.min(maxScroll, newIdx - MAX_VISIBLE_FILES + 1));
+						setFileScrollIndex(
+							Math.min(maxScroll, newIdx - MAX_VISIBLE_FILES + 1),
+						);
 					}
 					return newIdx;
 				});
@@ -325,7 +423,11 @@ export default function DiffReviewPanel({
 
 			// Enter in file mode: send all diffs (activeMessageIndex is already snapshot-space)
 			if (key.return && activeMessageIndex !== null) {
-				closeDiffPreview();
+				// Do NOT call closeDiffPreview here — it would close the
+				// multi-file diffs that handleSelectSnapshot is about to open
+				// (showDiff and closeDiff share the same activeDiffEditors list
+				// on the VSCode side, so a close right before showDiffReview
+				// races with the editors being created).
 				void handleSelectSnapshot(activeMessageIndex);
 				return;
 			}
@@ -334,16 +436,12 @@ export default function DiffReviewPanel({
 
 		// Message list navigation
 		if (key.upArrow) {
-			setSelectedIndex(prev =>
-				prev > 0 ? prev - 1 : userMessages.length - 1,
-			);
+			setSelectedIndex(prev => (prev > 0 ? prev - 1 : userMessages.length - 1));
 			return;
 		}
 
 		if (key.downArrow) {
-			setSelectedIndex(prev =>
-				prev < userMessages.length - 1 ? prev + 1 : 0,
-			);
+			setSelectedIndex(prev => (prev < userMessages.length - 1 ? prev + 1 : 0));
 			return;
 		}
 
@@ -356,15 +454,21 @@ export default function DiffReviewPanel({
 		}
 	});
 
+	const dividerWidth = Math.max(1, (terminalWidth ?? 80) - 2);
+	const divider = '─'.repeat(dividerWidth);
+
 	if (userMessages.length === 0) {
 		return (
-			<Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
-				<Text color="magenta">
-					{t.diffReviewPanel?.title || 'Diff Review'}
-				</Text>
-				<Text color="gray" dimColor>
-					{t.diffReviewPanel?.noSnapshots || 'No file changes found in this session'}
-				</Text>
+			<Box flexDirection="column">
+				<Text dimColor>{divider}</Text>
+				<Box flexDirection="column" paddingX={1}>
+					<Text color={theme.colors.menuSelected}>
+						{t.diffReviewPanel.title}
+					</Text>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.diffReviewPanel.noSnapshots}
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -379,46 +483,61 @@ export default function DiffReviewPanel({
 		const hasMoreBelow = fileScrollIndex + MAX_VISIBLE_FILES < filePaths.length;
 
 		return (
-			<Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
-				<Text color="magenta">
-					{t.diffReviewPanel?.title || 'Diff Review'} - {filePaths.length} files
-				</Text>
-				<Text color="gray" dimColor>
-					↑↓ navigate · Tab back · Enter open all · ESC close
-				</Text>
+			<Box flexDirection="column">
+				<Text dimColor>{divider}</Text>
+				<Box flexDirection="column" paddingX={1}>
+					<Text color={theme.colors.menuSelected}>
+						{t.diffReviewPanel.title} -{' '}
+						{t.diffReviewPanel.filesSuffix.replace(
+							'{count}',
+							String(filePaths.length),
+						)}
+					</Text>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{t.diffReviewPanel.filesViewNavigationHint}
+					</Text>
 
-				{hasMoreAbove && (
-					<Text color="gray" dimColor>
-						↑ {fileScrollIndex} more above
-					</Text>
-				)}
-				{displayFiles.map((file, idx) => {
-					const actualIdx = fileScrollIndex + idx;
-					const isHighlighted = actualIdx === fileHighlightIndex;
-					return (
-						<Box key={file} height={1}>
-							<Text
-								color={isHighlighted ? 'green' : 'gray'}
-								bold={isHighlighted}
-								dimColor={!isHighlighted}
-								wrap="truncate"
-							>
-								{isHighlighted ? '❯ ' : '  '}
-								{file}
-							</Text>
-						</Box>
-					);
-				})}
-				{hasMoreBelow && (
-					<Text color="gray" dimColor>
-						↓ {filePaths.length - fileScrollIndex - MAX_VISIBLE_FILES} more below
-					</Text>
-				)}
+					{hasMoreAbove && (
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.diffReviewPanel.moreAbove.replace(
+								'{count}',
+								String(fileScrollIndex),
+							)}
+						</Text>
+					)}
+					{displayFiles.map((file, idx) => {
+						const actualIdx = fileScrollIndex + idx;
+						const isHighlighted = actualIdx === fileHighlightIndex;
+						return (
+							<Box key={file} height={1}>
+								<Text
+									color={
+										isHighlighted
+											? theme.colors.menuSelected
+											: theme.colors.menuNormal
+									}
+									bold={isHighlighted}
+									dimColor={!isHighlighted}
+									wrap="truncate"
+								>
+									{isHighlighted ? '❯ ' : '  '}
+									{file}
+								</Text>
+							</Box>
+						);
+					})}
+					{hasMoreBelow && (
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.diffReviewPanel.moreBelow.replace(
+								'{count}',
+								String(filePaths.length - fileScrollIndex - MAX_VISIBLE_FILES),
+							)}
+						</Text>
+					)}
+				</Box>
 			</Box>
 		);
 	}
-
-	// Message list view
 	let startIndex = 0;
 	if (userMessages.length > VISIBLE_ITEMS) {
 		startIndex = Math.max(0, selectedIndex - Math.floor(VISIBLE_ITEMS / 2));
@@ -430,48 +549,70 @@ export default function DiffReviewPanel({
 	const hasMoreBelow = endIndex < userMessages.length;
 
 	return (
-		<Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
-			<Text color="magenta">
-				{t.diffReviewPanel?.title || 'Diff Review'} ({selectedIndex + 1}/
-				{userMessages.length})
-			</Text>
-			<Text color="gray" dimColor>
-				{t.diffReviewPanel?.navigationHint || '↑↓ navigate • Tab view files • Enter open all • ESC close'}
-			</Text>
+		<Box flexDirection="column">
+			<Text dimColor>{divider}</Text>
+			<Box flexDirection="column" paddingX={1}>
+				<Text color={theme.colors.menuSelected}>
+					{t.diffReviewPanel.title} ({selectedIndex + 1}/{userMessages.length})
+				</Text>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{t.diffReviewPanel.navigationHint}
+				</Text>
 
-			{hasMoreAbove && (
-				<Box height={1}>
-					<Text color="gray" dimColor>↑ {startIndex} more above</Text>
-				</Box>
-			)}
-
-			{visibleMessages.map((item, displayIndex) => {
-				const actualIndex = startIndex + displayIndex;
-				const isSelected = actualIndex === selectedIndex;
-				return (
-					<Box key={item.originalIndex} height={1}>
-						<Text
-							color={isSelected ? theme.colors.menuSelected : theme.colors.menuNormal}
-							bold={isSelected}
-							wrap="truncate"
-						>
-							{isSelected ? '❯ ' : '  '}
-							{item.label}
+				{hasMoreAbove && (
+					<Box height={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.diffReviewPanel.moreAbove.replace(
+								'{count}',
+								String(startIndex),
+							)}
 						</Text>
-						{item.fileCount > 0 && (
-							<Text color="yellow" dimColor>
-								{' '}[{item.fileCount} files]
-							</Text>
-						)}
 					</Box>
-				);
-			})}
+				)}
 
-			{hasMoreBelow && (
-				<Box height={1}>
-					<Text color="gray" dimColor>↓ {userMessages.length - endIndex} more below</Text>
-				</Box>
-			)}
+				{visibleMessages.map((item, displayIndex) => {
+					const actualIndex = startIndex + displayIndex;
+					const isSelected = actualIndex === selectedIndex;
+					return (
+						<Box key={item.originalIndex} height={1}>
+							<Text
+								color={
+									isSelected
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+								bold={isSelected}
+								wrap="truncate"
+							>
+								{isSelected ? '❯ ' : '  '}
+								{item.label}
+							</Text>
+							{item.fileCount > 0 && (
+								<Text color={theme.colors.warning} dimColor>
+									{' '}
+									[
+									{t.diffReviewPanel.filesSuffix.replace(
+										'{count}',
+										String(item.fileCount),
+									)}
+									]
+								</Text>
+							)}
+						</Box>
+					);
+				})}
+
+				{hasMoreBelow && (
+					<Box height={1}>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.diffReviewPanel.moreBelow.replace(
+								'{count}',
+								String(userMessages.length - endIndex),
+							)}
+						</Text>
+					</Box>
+				)}
+			</Box>
 		</Box>
 	);
 }

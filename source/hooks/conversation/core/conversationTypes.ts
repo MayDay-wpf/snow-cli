@@ -1,5 +1,6 @@
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import type {CompressionStatus} from '../../../ui/components/compression/CompressionStatus.js';
+import type {ThinkingStatus} from '../../../ui/components/chat/ThinkingStatus.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
 
@@ -15,6 +16,16 @@ export type ConversationUsage = {
 	cache_creation_input_tokens?: number;
 	cache_read_input_tokens?: number;
 	cached_tokens?: number;
+};
+
+export type BuddyProgressEvent = {
+	stage:
+		| 'thinking_started'
+		| 'answer_started'
+		| 'tool_calls_ready'
+		| 'tool_execution_started'
+		| 'tool_results_ready';
+	summary?: string;
 };
 
 export type ConversationHandlerOptions = {
@@ -77,7 +88,9 @@ export type ConversationHandlerOptions = {
 	getCurrentContextPercentage?: () => number;
 	setCurrentModel?: React.Dispatch<React.SetStateAction<string | null>>;
 	onCompressionStatus?: (status: CompressionStatus | null) => void;
+	onThinkingStatus?: (status: ThinkingStatus | null) => void;
 	setIsAutoCompressing?: (value: boolean) => void;
+	onBuddyProgress?: (event: BuddyProgressEvent) => void;
 };
 
 export type TokenEncoder = {

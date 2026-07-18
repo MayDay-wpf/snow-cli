@@ -8,8 +8,7 @@ import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
 import {
-	getProjectId,
-	getProjectPath,
+	resolveProjectIdentity,
 	formatDateCompact,
 	isDateFolder,
 	isProjectFolder,
@@ -19,6 +18,29 @@ export interface ChatMessage extends APIChatMessage {
 	timestamp: number;
 	// 存储用户的原始消息(在提示词优化之前),仅用于显示,不影响API请求
 	originalContent?: string;
+}
+
+export function buildInitialUserPromptBlock(initialUserPrompt: string): string {
+	return [
+		'[INITIAL USER REQUEST - VERBATIM, MUST NOT BE PARAPHRASED]',
+		'',
+		initialUserPrompt,
+		'',
+		"The exact text above is the user's initial request and remains authoritative throughout this conversation. Do NOT rephrase it. If later summaries conflict with it, the verbatim request wins.",
+	].join('\n');
+}
+
+export function buildSessionStartHookContext(
+	messages: ChatMessage[],
+	sessionId: string,
+) {
+	return {
+		messages,
+		messageCount: messages.length,
+		sessionId,
+		cwd: process.cwd(),
+		isResume: messages.length > 0,
+	};
 }
 
 export interface Session {
@@ -35,7 +57,18 @@ export interface Session {
 	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
 	compressedAt?: number; // 压缩时间戳
 	originalMessageIndex?: number; // 压缩点在原会话中的消息索引
+	// 用户启动提示词原文。压缩会话继承该字段，防止摘要反复压缩后遗漏初始需求。
+	initialUserPrompt?: string;
+	// 图片压缩的本地文本归档：后续压缩从此文本重新渲染，不嵌套历史图片。
+	imageContextArchive?: string;
+	branchedFrom?: string; // 如果是 fork 产生的会话，记录来源会话ID
+	branchName?: string; // 用户指定的分支名称
 	contextUsage?: UsageInfo; // 最近一次 API 响应的上下文 token 使用信息（可选，向下兼容）
+	// /goal 相关：标记本会话当前是否绑定了一个未完结的 Ralph Loop 目标。
+	// - true：goal- MCP 工具应该注册供模型调用
+	// - false / undefined：普通会话，goal- 工具不会注册
+	// 由 goalManager 在 createGoal / resumeGoal / clearGoal / modelUpdateGoal 中同步维护
+	hasGoal?: boolean;
 }
 
 export interface SessionListItem {
@@ -49,6 +82,12 @@ export interface SessionListItem {
 	projectId?: string; // 项目ID
 	compressedFrom?: string; // 如果是压缩产生的会话，记录来源会话ID
 	compressedAt?: number; // 压缩时间戳
+	// /goal 相关元数据（仅 listGoalResumableSessions 填充，普通列表不返回）
+	hasGoal?: boolean;
+	goalStatus?: 'pursuing' | 'paused' | 'budget-limited' | 'achieved' | 'unmet';
+	goalObjective?: string;
+	goalTokensUsed?: number;
+	goalTokenBudget?: number;
 }
 
 export interface PaginatedSessionList {
@@ -62,6 +101,7 @@ class SessionManager {
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
 	private readonly currentProjectPath: string;
+	private readonly projectAliasIds: string[];
 	// 会话列表缓存
 	private sessionListCache: SessionListItem[] | null = null;
 	private cacheTimestamp: number = 0;
@@ -73,8 +113,10 @@ class SessionManager {
 
 	constructor() {
 		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
-		this.currentProjectId = getProjectId();
-		this.currentProjectPath = getProjectPath();
+		const identity = resolveProjectIdentity();
+		this.currentProjectId = identity.projectId;
+		this.currentProjectPath = identity.projectPath;
+		this.projectAliasIds = identity.projectAliasIds;
 	}
 
 	/**
@@ -144,16 +186,20 @@ class SessionManager {
 			.trim(); // Remove leading/trailing spaces
 	}
 
+	createSessionId(): string {
+		return randomUUID();
+	}
+
 	async createNewSession(
 		isTemporary = false,
 		skipEmptyTodo = false,
 	): Promise<Session> {
 		await this.ensureSessionsDir(new Date());
 
-		// 使用 UUID v4 生成唯一会话 ID，避免并发冲突
-		const sessionId = randomUUID();
+		const effectiveSessionId =
+			this.consumePendingNewSessionId() || this.createSessionId();
 		const session: Session = {
-			id: sessionId,
+			id: effectiveSessionId,
 			title: 'New Chat',
 			summary: '',
 			createdAt: Date.now(),
@@ -174,7 +220,7 @@ class SessionManager {
 
 		// 自动创建空TODO（压缩流程会跳过，因为需要继承原会话的TODO）
 		if (!skipEmptyTodo) {
-			await this.createEmptyTodoForSession(sessionId);
+			await this.createEmptyTodoForSession(effectiveSessionId);
 		}
 
 		return session;
@@ -202,11 +248,9 @@ class SessionManager {
 			return;
 		}
 
-		// 确保会话有项目信息（向后兼容：补充旧会话的项目信息）
-		if (!session.projectId) {
-			session.projectId = this.currentProjectId;
-			session.projectPath = this.currentProjectPath;
-		}
+		// 新版本统一写入稳定项目 ID；旧路径项目 ID 作为只读别名自动兼容。
+		session.projectId = this.currentProjectId;
+		session.projectPath = this.currentProjectPath;
 
 		const sessionDate = new Date(session.createdAt);
 		await this.ensureSessionsDir(sessionDate);
@@ -301,6 +345,64 @@ class SessionManager {
 	};
 	lastLoadHookWarning?: string;
 
+	/**
+	 * Pending model-visible context from onSessionStart additionalContext.
+	 * Consumed once on the next user message sent to the API.
+	 */
+	private pendingAdditionalContext?: string;
+	private pendingDisplayMessage?: string;
+	private pendingNewSessionId?: string;
+
+	setPendingNewSessionId(sessionId: string): void {
+		this.pendingNewSessionId = sessionId;
+	}
+
+	reserveNewSessionId(): string {
+		if (!this.pendingNewSessionId) {
+			this.pendingNewSessionId = this.createSessionId();
+		}
+		return this.pendingNewSessionId;
+	}
+
+	private consumePendingNewSessionId(): string | undefined {
+		const sessionId = this.pendingNewSessionId;
+		this.pendingNewSessionId = undefined;
+		return sessionId;
+	}
+
+	setPendingAdditionalContext(context?: string, displayMessage?: string): void {
+		this.pendingAdditionalContext =
+			context && context.trim() ? context : undefined;
+		this.pendingDisplayMessage =
+			displayMessage && displayMessage.trim() ? displayMessage : undefined;
+	}
+
+	/**
+	 * Read and clear pending session-start additionalContext (one-shot).
+	 */
+	consumePendingAdditionalContext(): {
+		context?: string;
+		displayMessage?: string;
+	} {
+		const context = this.pendingAdditionalContext;
+		const displayMessage = this.pendingDisplayMessage;
+		this.pendingAdditionalContext = undefined;
+		this.pendingDisplayMessage = undefined;
+		return {
+			...(context ? {context} : {}),
+			...(displayMessage ? {displayMessage} : {}),
+		};
+	}
+
+	peekPendingAdditionalContext(): string | undefined {
+		return this.pendingAdditionalContext;
+	}
+
+	clearPendingAdditionalContext(): void {
+		this.pendingAdditionalContext = undefined;
+		this.pendingDisplayMessage = undefined;
+	}
+
 	private async loadSessionFromDisk(
 		sessionId: string,
 	): Promise<Session | null> {
@@ -357,8 +459,11 @@ class SessionManager {
 		// 清理未完成的 tool_calls（防止强制退出时留下无效会话）
 		this.cleanIncompleteToolCalls(session);
 
-		// Execute onSessionStart hook before setting current session
-		const hookResult = await this.executeSessionStartHook(session.messages);
+		// Execute onSessionStart with the identity of the session being resumed.
+		const hookResult = await this.executeSessionStartHook(
+			session.messages,
+			session.id,
+		);
 		if (!hookResult.shouldContinue) {
 			// Hook failed, store error details and abort loading
 			this.lastLoadHookError = hookResult.errorDetails;
@@ -370,42 +475,140 @@ class SessionManager {
 			this.lastLoadHookWarning = hookResult.warningMessage;
 		}
 
+		// Queue additionalContext for the next API user turn (one-shot)
+		this.setPendingAdditionalContext(
+			hookResult.additionalContext,
+			hookResult.displayMessage,
+		);
+
 		this.setCurrentSession(session);
 		return session;
 	}
+
+	async getInitialUserPrompt(session: Session): Promise<string | null> {
+		const sessionChain: Session[] = [];
+		const seenSessionIds = new Set<string>();
+		let currentSession: Session | null = session;
+
+		while (currentSession && !seenSessionIds.has(currentSession.id)) {
+			sessionChain.push(currentSession);
+			seenSessionIds.add(currentSession.id);
+
+			if (!currentSession.compressedFrom) {
+				break;
+			}
+
+			currentSession = await this.loadSessionFromDisk(
+				currentSession.compressedFrom,
+			);
+		}
+
+		for (const historicalSession of sessionChain.reverse()) {
+			const storedPrompt = historicalSession.initialUserPrompt?.trim();
+			if (storedPrompt) {
+				return storedPrompt;
+			}
+
+			const firstUserMessage = historicalSession.messages.find(
+				message => message.role === 'user' && Boolean(message.content?.trim()),
+			);
+			const prompt = firstUserMessage?.content?.trim();
+			if (prompt) {
+				return prompt;
+			}
+		}
+
+		return null;
+	}
+	/**
+	 * 获取可用于当前项目读取的项目目录。
+	 * 第一个始终是稳定项目目录，后续是旧路径项目目录别名。
+	 */
+	private getProjectSessionDirsToRead(): Array<{
+		projectId: string;
+		dir: string;
+	}> {
+		const projectIds = new Set<string>([
+			this.currentProjectId,
+			...this.projectAliasIds,
+		]);
+
+		return [...projectIds].map(projectId => ({
+			projectId,
+			dir: path.join(this.sessionsDir, projectId),
+		}));
+	}
+
+	private isCurrentProjectSession(session: Session): boolean {
+		if (!session.projectId && !session.projectPath) {
+			return true;
+		}
+
+		if (session.projectId) {
+			return (
+				session.projectId === this.currentProjectId ||
+				this.projectAliasIds.includes(session.projectId)
+			);
+		}
+
+		return session.projectPath === this.currentProjectPath;
+	}
+
+	private toSessionListItem(session: Session): SessionListItem {
+		return {
+			id: session.id,
+			title: this.cleanTitle(session.title),
+			summary: session.summary,
+			createdAt: session.createdAt,
+			updatedAt: session.updatedAt,
+			messageCount: session.messageCount,
+			projectPath: session.projectPath,
+			projectId: session.projectId,
+			compressedFrom: session.compressedFrom,
+			compressedAt: session.compressedAt,
+			hasGoal: session.hasGoal, // 透传给 /goal resume 列表过滤
+		};
+	}
+
+	private addSessionListItem(
+		sessions: SessionListItem[],
+		seenIds: Set<string>,
+		session: Session,
+	): void {
+		if (seenIds.has(session.id) || !this.isCurrentProjectSession(session)) {
+			return;
+		}
+
+		sessions.push(this.toSessionListItem(session));
+		seenIds.add(session.id);
+	}
+
 	/**
 	 * 在项目文件夹和日期文件夹中查找会话
 	 * 搜索顺序:
-
-	 * 1. 当前项目的日期文件夹（新格式）
-	 * 2. 其他项目的日期文件夹（跨项目兼容）
-	 * 3. 旧格式的日期文件夹（向后兼容）
+	 * 1. 稳定项目目录
+	 * 2. 当前项目的旧路径别名目录
+	 * 3. 其他项目目录和旧格式日期目录（向后兼容）
 	 */
 	private async findSessionInDateFolders(
 		sessionId: string,
 	): Promise<Session | null> {
 		try {
-			const files = await fs.readdir(this.sessionsDir);
+			const preferredProjectIds = new Set<string>();
 
-			// 1. 首先在当前项目中查找
-			const currentProjectDir = this.getProjectSessionsDir();
-			const sessionFromCurrentProject = await this.findSessionInProjectDir(
-				currentProjectDir,
-				sessionId,
-			);
-			if (sessionFromCurrentProject) {
-				return sessionFromCurrentProject;
+			for (const {projectId, dir} of this.getProjectSessionDirsToRead()) {
+				preferredProjectIds.add(projectId);
+				const session = await this.findSessionInProjectDir(dir, sessionId);
+				if (session) return session;
 			}
 
-			// 2. 在所有项目文件夹中查找（跨项目和向后兼容）
+			const files = await fs.readdir(this.sessionsDir);
 			for (const file of files) {
 				const filePath = path.join(this.sessionsDir, file);
 				const stat = await fs.stat(filePath);
 
 				if (!stat.isDirectory()) continue;
-
-				// 跳过当前项目（已经搜索过了）
-				if (file === this.currentProjectId) continue;
+				if (preferredProjectIds.has(file)) continue;
 
 				// 新格式：项目文件夹（项目名-哈希）
 				if (isProjectFolder(file)) {
@@ -472,8 +675,7 @@ class SessionManager {
 
 	/**
 	 * 列出当前项目的所有会话
-	 * 只返回与当前项目关联的会话，实现项目级别的会话隔离
-	 * 旧格式数据作为只读备用显示，不迁移到新格式
+	 * 自动合并稳定项目目录、旧路径项目目录和旧格式数据，用户移动工作目录后无需手动迁移。
 	 */
 	async listSessions(): Promise<SessionListItem[]> {
 		await this.ensureSessionsDir();
@@ -481,49 +683,44 @@ class SessionManager {
 		const seenIds = new Set<string>(); // 用于去重
 
 		try {
-			// 1. 从当前项目目录读取会话（新格式，优先）
-			const projectDir = this.getProjectSessionsDir();
-			try {
-				const dateFolders = await fs.readdir(projectDir);
-				for (const dateFolder of dateFolders) {
-					if (!isDateFolder(dateFolder)) continue;
-					const datePath = path.join(projectDir, dateFolder);
-					await this.readSessionsFromDir(datePath, sessions);
-				}
-				// 记录新格式中的会话ID
-				for (const s of sessions) {
-					seenIds.add(s.id);
-				}
-			} catch (error) {
-				// 项目目录不存在，继续处理旧格式
-			}
-
-			// 2. 只有当新格式目录为空时，才读取旧格式作为只读备用
-			if (sessions.length === 0) {
+			// 1. 读取稳定项目目录和旧路径别名目录
+			for (const {dir} of this.getProjectSessionDirsToRead()) {
 				try {
-					const files = await fs.readdir(this.sessionsDir);
-
-					for (const file of files) {
-						const filePath = path.join(this.sessionsDir, file);
-						const stat = await fs.stat(filePath);
-
-						// 旧格式：直接在 sessions 目录下的日期文件夹（不是项目文件夹）
-						if (
-							stat.isDirectory() &&
-							isDateFolder(file) &&
-							!isProjectFolder(file)
-						) {
-							await this.readLegacySessionsFromDir(filePath, sessions, seenIds);
-						}
-
-						// 旧格式：直接在 sessions 目录下的 JSON 文件
-						if (file.endsWith('.json')) {
-							await this.readLegacySessionFile(filePath, sessions, seenIds);
-						}
+					const dateFolders = await fs.readdir(dir);
+					for (const dateFolder of dateFolders) {
+						if (!isDateFolder(dateFolder)) continue;
+						const datePath = path.join(dir, dateFolder);
+						await this.readSessionsFromDir(datePath, sessions, seenIds);
 					}
 				} catch (error) {
-					// 读取旧格式失败不影响主流程
+					// 项目目录不存在，继续读取其他兼容来源
 				}
+			}
+
+			// 2. 读取旧格式作为备用（全程合并，而不是只在新目录为空时读取）
+			try {
+				const files = await fs.readdir(this.sessionsDir);
+
+				for (const file of files) {
+					const filePath = path.join(this.sessionsDir, file);
+					const stat = await fs.stat(filePath);
+
+					// 旧格式：直接在 sessions 目录下的日期文件夹（不是项目文件夹）
+					if (
+						stat.isDirectory() &&
+						isDateFolder(file) &&
+						!isProjectFolder(file)
+					) {
+						await this.readLegacySessionsFromDir(filePath, sessions, seenIds);
+					}
+
+					// 旧格式：直接在 sessions 目录下的 JSON 文件
+					if (file.endsWith('.json')) {
+						await this.readLegacySessionFile(filePath, sessions, seenIds);
+					}
+				}
+			} catch (error) {
+				// 读取旧格式失败不影响主流程
 			}
 
 			// Sort by updatedAt (newest first)
@@ -570,36 +767,7 @@ class SessionManager {
 		try {
 			const data = await fs.readFile(filePath, 'utf-8');
 			const session: Session = JSON.parse(data);
-
-			// 跳过已在新格式中存在的会话
-			if (seenIds.has(session.id)) {
-				return;
-			}
-
-			// 项目过滤：只显示匹配当前项目或没有项目标识的会话
-			if (
-				session.projectPath &&
-				session.projectPath !== this.currentProjectPath
-			) {
-				return;
-			}
-			if (session.projectId && session.projectId !== this.currentProjectId) {
-				return;
-			}
-
-			sessions.push({
-				id: session.id,
-				title: this.cleanTitle(session.title),
-				summary: session.summary,
-				createdAt: session.createdAt,
-				updatedAt: session.updatedAt,
-				messageCount: session.messageCount,
-				projectPath: session.projectPath,
-				projectId: session.projectId,
-				compressedFrom: session.compressedFrom,
-				compressedAt: session.compressedAt,
-			});
-			seenIds.add(session.id);
+			this.addSessionListItem(sessions, seenIds, session);
 		} catch (error) {
 			// Skip invalid session files
 		}
@@ -661,33 +829,22 @@ class SessionManager {
 	private async readSessionsFromDir(
 		dirPath: string,
 		sessions: SessionListItem[],
+		seenIds: Set<string>,
 	): Promise<void> {
 		try {
 			const files = await fs.readdir(dirPath);
 
 			for (const file of files) {
-				if (file.endsWith('.json')) {
-					try {
-						const sessionPath = path.join(dirPath, file);
-						const data = await fs.readFile(sessionPath, 'utf-8');
-						const session: Session = JSON.parse(data);
+				if (!file.endsWith('.json')) continue;
 
-						sessions.push({
-							id: session.id,
-							title: this.cleanTitle(session.title),
-							summary: session.summary,
-							createdAt: session.createdAt,
-							updatedAt: session.updatedAt,
-							messageCount: session.messageCount,
-							projectPath: session.projectPath,
-							projectId: session.projectId,
-							compressedFrom: session.compressedFrom,
-							compressedAt: session.compressedAt,
-						});
-					} catch (error) {
-						// Skip invalid session files
-						continue;
-					}
+				try {
+					const sessionPath = path.join(dirPath, file);
+					const data = await fs.readFile(sessionPath, 'utf-8');
+					const session: Session = JSON.parse(data);
+					this.addSessionListItem(sessions, seenIds, session);
+				} catch (error) {
+					// Skip invalid session files
+					continue;
 				}
 			}
 		} catch (error) {
@@ -750,11 +907,14 @@ class SessionManager {
 
 		// 通知监听器有新消息
 		this.notifyMessageListeners(message);
-		// 通知消息列表已变化
-		this.notifyMessagesChanged();
 
 		// Generate simple title and summary from first user message
 		if (this.currentSession.messageCount === 1 && message.role === 'user') {
+			const initialUserPrompt = message.content.trim();
+			if (initialUserPrompt) {
+				this.currentSession.initialUserPrompt = initialUserPrompt;
+			}
+
 			// Use first 50 chars as title, first 100 chars as summary
 			const title =
 				message.content.slice(0, 50) +
@@ -766,6 +926,9 @@ class SessionManager {
 			this.currentSession.title = this.cleanTitle(title);
 			this.currentSession.summary = this.cleanTitle(summary);
 		}
+
+		// 通知消息列表已变化，也同步标题/摘要等会话元数据
+		this.notifyMessagesChanged();
 
 		// After the first complete conversation exchange (user + assistant), generate AI summary
 		// Only run once when messageCount becomes 2 and the second message is from assistant
@@ -841,6 +1004,7 @@ class SessionManager {
 				targetSession.title = result.title;
 				targetSession.summary = result.summary;
 				await this.saveSession(targetSession);
+				this.notifyMessagesChanged();
 
 				logger.info('Summary agent: Successfully updated session summary', {
 					sessionId: targetSessionId,
@@ -872,14 +1036,120 @@ class SessionManager {
 		return this.currentSession;
 	}
 
+	/**
+	 * Load a session purely from disk for read-only purposes (e.g. /export).
+	 *
+	 * Unlike `loadSession`, this does not mutate `currentSession`, does not run
+	 * the onSessionStart hook, and does not touch the session list cache. Returns
+	 * null if the session file cannot be found.
+	 */
+	async getSessionForExport(sessionId: string): Promise<Session | null> {
+		const session = await this.loadSessionFromDisk(sessionId);
+		if (!session) return null;
+		this.cleanIncompleteToolCalls(session);
+		return session;
+	}
+
 	setCurrentSession(session: Session): void {
 		this.currentSession = session;
+		this.pendingNewSessionId = undefined;
 		this.notifyMessagesChanged();
 	}
 
 	clearCurrentSession(): void {
 		this.currentSession = null;
+		this.pendingNewSessionId = undefined;
+		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
+	}
+
+	/**
+	 * /goal 专用：把指定会话的 hasGoal 标记落盘。
+	 *
+	 * 使用方式：
+	 * - goalManager.createGoal / resumeGoal 设置 true（让 mcpToolsManager 注册 goal- 工具）
+	 * - goalManager.clearGoal / modelUpdateGoal(achieved|unmet) 设置 false（撤销 goal- 工具）
+	 *
+	 * 为什么必须落盘（而不是只改内存）：用户通过 /resume <id> 切换到一个旧的 goal 会话时，
+	 * sessionManager 会 loadSessionFromDisk 重新读取，如果 hasGoal 没写入磁盘，
+	 * 切换回来后 mcpToolsManager 拿不到 hasGoal=true，模型就无法调用 goal-update_goal
+	 * 来停止 Ralph Loop —— 整个机制会失效。
+	 *
+	 * 如果会话已经在内存中（getCurrentSession），同步更新内存对象，
+	 * 避免后续 saveMessage 用旧引用把 hasGoal 又抹掉。
+	 */
+	async setSessionGoalFlag(sessionId: string, hasGoal: boolean): Promise<void> {
+		// 先更新内存中的当前会话（如果命中），避免读盘
+		const isCurrent = this.currentSession?.id === sessionId;
+		if (isCurrent) {
+			this.currentSession!.hasGoal = hasGoal;
+		}
+
+		// 落盘：通过 findSessionInDateFolders 找到文件，改字段，再 saveSession。
+		// saveSession 内部会按 createdAt 计算文件夹路径，保证写到正确位置。
+		try {
+			let session: Session | null = isCurrent
+				? this.currentSession
+				: await this.loadSessionFromDisk(sessionId);
+			if (!session) {
+				// 会话不存在（可能刚被删除），静默忽略。goal 文件本身仍可独立存在，
+				// 但失去 session 后 goal- 工具反正也用不上。
+				return;
+			}
+			session.hasGoal = hasGoal;
+			await this.saveSession(session);
+		} catch (error) {
+			logger.warn('Failed to persist hasGoal flag:', {
+				sessionId,
+				hasGoal,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	/**
+	 * /goal resume 专用：列出本项目下所有 goal 可恢复的会话。
+	 *
+	 * 筛选规则（与 /goal resume 的语义保持一致）：
+	 * - 必须 session.hasGoal === true
+	 * - 必须 goal 状态在 ['paused', 'pursuing', 'budget-limited'] 中（已完成 achieved / 已放弃 unmet 不可恢复）
+	 *
+	 * 为什么不直接复用 listSessions：普通列表不需要 goal 元数据，避免把 goalManager
+	 * 引入热路径增加 IO。/goal resume 这种低频路径才扫描每个 goal 文件。
+	 *
+	 * 返回的 SessionListItem 会额外携带 goalStatus / goalObjective / tokens 字段
+	 * 供 SessionListPanel 在 goalOnly 模式下展示。
+	 */
+	async listGoalResumableSessions(): Promise<SessionListItem[]> {
+		const all = await this.listSessions();
+		const result: SessionListItem[] = [];
+		// 延迟 import 避免循环依赖（goalManager 内部已经反过来 import sessionManager）
+		const {goalManager} = await import('../task/goalManager.js');
+		for (const item of all) {
+			if (!item.hasGoal) continue;
+			try {
+				const goal = await goalManager.loadGoalForSession(item.id);
+				if (!goal) continue;
+				if (
+					goal.status !== 'paused' &&
+					goal.status !== 'pursuing' &&
+					goal.status !== 'budget-limited'
+				) {
+					continue;
+				}
+				result.push({
+					...item,
+					hasGoal: true,
+					goalStatus: goal.status,
+					goalObjective: goal.objective,
+					goalTokensUsed: goal.tokensUsed,
+					goalTokenBudget: goal.tokenBudget,
+				});
+			} catch {
+				// 单个 goal 读失败不影响整体列表
+			}
+		}
+		return result;
 	}
 
 	/**
@@ -990,18 +1260,22 @@ class SessionManager {
 			// 旧格式不存在，继续搜索
 		}
 
-		// 2. 在当前项目的日期文件夹中查找
+		// 2. 优先删除稳定项目目录和旧路径别名目录
 		if (!sessionDeleted) {
-			sessionDeleted = await this.deleteSessionFromProjectDir(
-				this.getProjectSessionsDir(),
-				sessionId,
-			);
+			for (const {dir} of this.getProjectSessionDirsToRead()) {
+				sessionDeleted = await this.deleteSessionFromProjectDir(dir, sessionId);
+				if (sessionDeleted) break;
+			}
 		}
 
 		// 3. 在所有项目文件夹和旧格式日期文件夹中查找
 		if (!sessionDeleted) {
 			try {
 				const files = await fs.readdir(this.sessionsDir);
+				const preferredProjectIds = new Set([
+					this.currentProjectId,
+					...this.projectAliasIds,
+				]);
 
 				for (const file of files) {
 					if (sessionDeleted) break;
@@ -1010,9 +1284,7 @@ class SessionManager {
 					const stat = await fs.stat(filePath);
 
 					if (!stat.isDirectory()) continue;
-
-					// 跳过当前项目（已经搜索过了）
-					if (file === this.currentProjectId) continue;
+					if (preferredProjectIds.has(file)) continue;
 
 					// 新格式：项目文件夹
 					if (isProjectFolder(file)) {
@@ -1104,7 +1376,10 @@ class SessionManager {
 	 * @param messages - Chat messages from the session (empty array for new sessions)
 	 * @returns {shouldContinue: boolean, errorDetails?: HookErrorDetails}
 	 */
-	private async executeSessionStartHook(messages: ChatMessage[]): Promise<{
+	private async executeSessionStartHook(
+		messages: ChatMessage[],
+		sessionId: string,
+	): Promise<{
 		shouldContinue: boolean;
 		errorDetails?: {
 			type: 'warning' | 'error';
@@ -1114,6 +1389,8 @@ class SessionManager {
 			error?: string;
 		};
 		warningMessage?: string;
+		additionalContext?: string;
+		displayMessage?: string;
 	}> {
 		try {
 			const {unifiedHooksExecutor} = await import(
@@ -1125,19 +1402,31 @@ class SessionManager {
 
 			const hookResult = await unifiedHooksExecutor.executeHooks(
 				'onSessionStart',
-				{messages, messageCount: messages.length},
+				buildSessionStartHookContext(messages, sessionId),
 			);
 			const interpreted = interpretHookResult('onSessionStart', hookResult);
-
 			if (interpreted.action === 'warn') {
 				logger.warn(interpreted.warningMessage || '');
-				return {shouldContinue: true, warningMessage: interpreted.warningMessage};
+				return {
+					shouldContinue: true,
+					warningMessage: interpreted.warningMessage,
+					additionalContext: interpreted.additionalContext,
+					displayMessage: interpreted.displayMessage,
+				};
 			}
 			if (interpreted.action === 'block') {
-				logger.error(`onSessionStart hook failed: ${JSON.stringify(interpreted.errorDetails)}`);
+				logger.error(
+					`onSessionStart hook failed: ${JSON.stringify(
+						interpreted.errorDetails,
+					)}`,
+				);
 				return {shouldContinue: false, errorDetails: interpreted.errorDetails};
 			}
-			return {shouldContinue: true};
+			return {
+				shouldContinue: true,
+				additionalContext: interpreted.additionalContext,
+				displayMessage: interpreted.displayMessage,
+			};
 		} catch (error) {
 			logger.error('Failed to execute onSessionStart hook:', error);
 			return {shouldContinue: true};

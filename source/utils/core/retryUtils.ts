@@ -2,7 +2,7 @@
  * 重试工具函数
  * 提供统一的重试机制用于所有 AI 请求
  * - 支持5次重试
- * - 延时递增策略 (1s, 2s, 4s, 8s, 16s)
+ * - 定长延时策略 (固定 baseDelay)
  * - 支持 AbortSignal 中断
  */
 
@@ -10,7 +10,7 @@ import {logger} from './logger.js';
 
 export interface RetryOptions {
 	maxRetries?: number; // 最大重试次数，默认5次
-	baseDelay?: number; // 基础延迟时间(ms)，默认1000ms
+	baseDelay?: number; // 基础延迟时间(ms)，默认3000ms
 	onRetry?: (error: Error, attempt: number, nextDelay: number) => void; // 重试回调函数
 	abortSignal?: AbortSignal; // 中断信号
 }
@@ -204,7 +204,7 @@ export async function withRetry<T>(
 	fn: () => Promise<T>,
 	options: RetryOptions = {},
 ): Promise<T> {
-	const {maxRetries = 5, baseDelay = 1000, onRetry, abortSignal} = options;
+	const {maxRetries = 5, baseDelay = 3000, onRetry, abortSignal} = options;
 
 	let lastError: Error | null = null;
 	let attempt = 0;
@@ -236,8 +236,8 @@ export async function withRetry<T>(
 				throw lastError;
 			}
 
-			// 计算下次重试的延时（指数退避：1s, 2s, 4s, 8s, 16s）
-			const nextDelay = baseDelay * Math.pow(2, attempt);
+			// 计算下次重试的延时（定长策略：固定 baseDelay）
+			const nextDelay = baseDelay;
 
 			// 调用重试回调
 			if (onRetry) {
@@ -268,7 +268,7 @@ export async function* withRetryGenerator<T>(
 	fn: () => AsyncGenerator<T, void, unknown>,
 	options: RetryOptions = {},
 ): AsyncGenerator<T, void, unknown> {
-	const {maxRetries = 5, baseDelay = 1000, onRetry, abortSignal} = options;
+	const {maxRetries = 5, baseDelay = 3000, onRetry, abortSignal} = options;
 
 	let lastError: Error | null = null;
 	let attempt = 0;
@@ -321,8 +321,8 @@ export async function* withRetryGenerator<T>(
 				throw lastError;
 			}
 
-			// 计算下次重试的延时（指数退避：1s, 2s, 4s, 8s, 16s）
-			const nextDelay = baseDelay * Math.pow(2, attempt);
+			// 计算下次重试的延时（定长策略：固定 baseDelay）
+			const nextDelay = baseDelay;
 
 			// 调用重试回调
 			if (onRetry) {

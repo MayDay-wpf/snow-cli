@@ -117,7 +117,12 @@ class HashBasedSnapshotManager {
 		for (const snapshotFile of snapshotFiles) {
 			const content = await fs.readFile(snapshotFile.path, 'utf-8');
 			const metadata: SnapshotMetadata = JSON.parse(content);
-			const backup = metadata.backups.find(b => b.path === relativePath);
+			// Normalize stored backup path separators because legacy snapshots
+			// on Windows persisted backslashes via path.relative(), while new
+			// callers pass forward-slash relative paths.
+			const backup = metadata.backups.find(
+				b => b.path.replace(/\\/g, '/') === relativePath,
+			);
 			if (!backup) {
 				continue;
 			}
@@ -218,16 +223,20 @@ class HashBasedSnapshotManager {
 		const releaseLock = await this.acquireLock(snapshotPath);
 
 		try {
-			logger.info(
-				`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
-			);
+			// logger.info(
+			// 	`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
+			// );
 			await this.ensureSnapshotsDir();
-			logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
+			// logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
 
-			// Calculate relative path
-			const relativePath = path.isAbsolute(filePath)
-				? path.relative(workspaceRoot, filePath)
-				: filePath;
+			// Calculate relative path (always store with forward slashes
+			// to keep cross-platform consistency, especially for later
+			// equality comparisons during rollback/diff preview).
+			const relativePath = (
+				path.isAbsolute(filePath)
+					? path.relative(workspaceRoot, filePath)
+					: filePath
+			).replace(/\\/g, '/');
 
 			// Create backup entry
 			const backup: FileBackup = {
@@ -257,7 +266,7 @@ class HashBasedSnapshotManager {
 
 			// Check if this file already has a backup in this snapshot
 			const existingBackupIndex = metadata.backups.findIndex(
-				b => b.path === relativePath,
+				b => b.path.replace(/\\/g, '/') === relativePath,
 			);
 
 			if (existingBackupIndex === -1) {
@@ -300,15 +309,18 @@ class HashBasedSnapshotManager {
 				const content = await fs.readFile(snapshotPath, 'utf-8');
 				const metadata: SnapshotMetadata = JSON.parse(content);
 
-				// Calculate relative path
-				const relativePath = path.isAbsolute(filePath)
-					? path.relative(workspaceRoot, filePath)
-					: filePath;
+				// Calculate relative path (forward slashes for consistency
+				// with stored backup paths).
+				const relativePath = (
+					path.isAbsolute(filePath)
+						? path.relative(workspaceRoot, filePath)
+						: filePath
+				).replace(/\\/g, '/');
 
 				// Remove backup for this file
 				const originalLength = metadata.backups.length;
 				metadata.backups = metadata.backups.filter(
-					b => b.path !== relativePath,
+					b => b.path.replace(/\\/g, '/') !== relativePath,
 				);
 
 				if (metadata.backups.length < originalLength) {
@@ -412,7 +424,10 @@ class HashBasedSnapshotManager {
 
 					if (metadata.messageIndex >= targetMessageIndex) {
 						for (const backup of metadata.backups) {
-							filesToRollback.add(backup.path);
+							// Normalize so consumers always receive forward-slash
+							// relative paths regardless of how legacy snapshots
+							// were stored.
+							filesToRollback.add(backup.path.replace(/\\/g, '/'));
 						}
 					}
 				}
@@ -472,16 +487,22 @@ class HashBasedSnapshotManager {
 
 				// Process each backup file
 				for (const backup of metadata.backups) {
+					const normalizedBackupPath = backup.path.replace(/\\/g, '/');
 					// If selectedFiles is provided, only rollback selected files
 					if (
 						selectedFiles &&
 						selectedFiles.length > 0 &&
-						!selectedFiles.includes(backup.path)
+						!selectedFiles.some(
+							f => f.replace(/\\/g, '/') === normalizedBackupPath,
+						)
 					) {
 						continue;
 					}
 
-					const fullPath = path.join(metadata.workspaceRoot, backup.path);
+					const fullPath = path.join(
+						metadata.workspaceRoot,
+						normalizedBackupPath,
+					);
 
 					try {
 						if (backup.existed && backup.content !== null) {

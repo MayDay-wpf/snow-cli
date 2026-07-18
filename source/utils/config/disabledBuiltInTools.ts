@@ -1,29 +1,14 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import {readSettings, updateSettings} from './unifiedSettings.js';
 
 /**
  * 管理系统内置 MCP 工具的禁用状态
- * 持久化到项目根目录 .snow/disabled-builtin-tools.json
+ * 现已统一持久化到 `<cwd>/.snow/settings.json` 的 `disabledBuiltInServices` 字段
+ * （历史上单独存放于 `disabled-builtin-tools.json`，已自动迁移）。
  * 优先级：项目配置 > 全局配置 > 默认配置
  */
 
-const CONFIG_FILE = 'disabled-builtin-tools.json';
-
 // 默认禁用的内置服务列表
 const DEFAULT_DISABLED_SERVICES: string[] = ['scheduler'];
-
-function getProjectConfigPath(): string {
-	return path.join(process.cwd(), '.snow', CONFIG_FILE);
-}
-
-function getGlobalConfigPath(): string {
-	return path.join(os.homedir(), '.snow', CONFIG_FILE);
-}
-
-function getConfigPath(): string {
-	return getProjectConfigPath();
-}
 
 /**
  * 读取被禁用的内置服务列表
@@ -31,22 +16,16 @@ function getConfigPath(): string {
  */
 export function getDisabledBuiltInServices(): string[] {
 	try {
-		const projectConfigPath = getProjectConfigPath();
-		const globalConfigPath = getGlobalConfigPath();
-
-		// 优先读取项目配置
-		if (fs.existsSync(projectConfigPath)) {
-			const data = JSON.parse(fs.readFileSync(projectConfigPath, 'utf-8'));
-			return Array.isArray(data.disabledServices) ? data.disabledServices : [];
+		const project = readSettings('project');
+		if (Array.isArray(project.disabledBuiltInServices)) {
+			return project.disabledBuiltInServices;
 		}
 
-		// 如果项目配置不存在，读取全局配置
-		if (fs.existsSync(globalConfigPath)) {
-			const data = JSON.parse(fs.readFileSync(globalConfigPath, 'utf-8'));
-			return Array.isArray(data.disabledServices) ? data.disabledServices : [];
+		const global = readSettings('global');
+		if (Array.isArray(global.disabledBuiltInServices)) {
+			return global.disabledBuiltInServices;
 		}
 
-		// 返回默认禁用列表
 		return [...DEFAULT_DISABLED_SERVICES];
 	} catch {
 		return [...DEFAULT_DISABLED_SERVICES];
@@ -61,7 +40,7 @@ export function isBuiltInServiceEnabled(serviceName: string): boolean {
 }
 
 /**
- * 切换内置服务的启用/禁用状态
+ * 切换内置服务的启用/禁用状态（写入项目级 settings.json）
  */
 export function toggleBuiltInService(serviceName: string): boolean {
 	const disabled = getDisabledBuiltInServices();
@@ -76,16 +55,9 @@ export function toggleBuiltInService(serviceName: string): boolean {
 		newEnabled = false;
 	}
 
-	const configPath = getConfigPath();
-	const dir = path.dirname(configPath);
-	if (!fs.existsSync(dir)) {
-		fs.mkdirSync(dir, {recursive: true});
-	}
-	fs.writeFileSync(
-		configPath,
-		JSON.stringify({disabledServices: disabled}, null, 2),
-		'utf-8',
-	);
+	updateSettings('project', settings => {
+		settings.disabledBuiltInServices = disabled;
+	});
 
 	return newEnabled;
 }

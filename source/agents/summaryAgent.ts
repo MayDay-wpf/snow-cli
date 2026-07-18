@@ -1,10 +1,11 @@
-import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
 import type {RequestMethod} from '../utils/config/apiConfig.js';
+import {setTerminalTitle} from '../utils/ui/terminalTitle.js';
 
 /**
  * Summary Agent Service
@@ -30,7 +31,7 @@ export class SummaryAgent {
 	 */
 	private async initialize(): Promise<boolean> {
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			// Use basicModel first, fallback to advancedModel if not configured
 			const basicModel = config.basicModel?.trim();
@@ -94,7 +95,7 @@ export class SummaryAgent {
 					{
 						model: this.modelName,
 						messages,
-						max_tokens: 500, // Limited tokens for summary generation
+						max_tokens: 4096, // Limited tokens for summary generation
 						includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 						disableThinking: true, // Agents 不使用 Extended Thinking
 					},
@@ -152,17 +153,9 @@ export class SummaryAgent {
 					throw new Error('Request aborted');
 				}
 
-				// Handle different chunk formats based on request method
-				if (this.requestMethod === 'chat') {
-					// Chat API uses standard OpenAI format
-					if (chunk.choices && chunk.choices[0]?.delta?.content) {
-						completeContent += chunk.choices[0].delta.content;
-					}
-				} else {
-					// Responses, Gemini, and Anthropic APIs use unified format
-					if (chunk.type === 'content' && chunk.content) {
-						completeContent += chunk.content;
-					}
+				// All streaming APIs yield the unified StreamChunk format
+				if (chunk.type === 'content' && chunk.content) {
+					completeContent += chunk.content;
 				}
 			}
 		} catch (streamError) {
@@ -182,6 +175,29 @@ export class SummaryAgent {
 	 * @returns Object containing title and summary, or null if generation fails
 	 */
 	async generateSummary(
+		userMessage: string,
+		assistantMessage: string,
+		abortSignal?: AbortSignal,
+	): Promise<{title: string; summary: string} | null> {
+		const result = await this.generateSummaryInternal(
+			userMessage,
+			assistantMessage,
+			abortSignal,
+		);
+		// 无论生成成功或回退，都优先用摘要更新终端标题
+		this.applyTerminalTitle(result?.summary);
+		return result;
+	}
+
+	/**
+	 * 把 conversation summary 设置为终端窗口/标签标题，失败时静默忽略
+	 */
+	private applyTerminalTitle(summary: string | undefined): void {
+		if (!summary) return;
+		setTerminalTitle(`Snow CLI - ${summary}`);
+	}
+
+	private async generateSummaryInternal(
 		userMessage: string,
 		assistantMessage: string,
 		abortSignal?: AbortSignal,

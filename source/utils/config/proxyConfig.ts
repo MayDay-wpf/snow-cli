@@ -2,17 +2,33 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 
+/**
+ * Supported search engine identifiers. Keep in sync with
+ * `source/mcp/engines/websearch/types.ts` (SearchEngineId).
+ *
+ * Built-in engines are 'duckduckgo' and 'bing', but the id space is open:
+ * users can drop additional engine plugins into
+ * `~/.snow/plugin/search_engines/` and reference their ids here.
+ */
+export type SearchEngineId = string;
+
 export interface ProxyConfig {
 	enabled: boolean;
 	port: number;
 	browserPath?: string; // Custom browser executable path
 	browserDebugPort?: number; // Remote debugging port for WSL mode (default: 9222)
+	/**
+	 * Search engine used by the web-search MCP tool. Defaults to 'duckduckgo'.
+	 * Both engines are scraped via a headless browser (no public API used).
+	 */
+	searchEngine?: SearchEngineId;
 }
 
 const DEFAULT_PROXY_CONFIG: ProxyConfig = {
 	enabled: false,
 	port: 7890,
 	browserDebugPort: 9222,
+	searchEngine: 'duckduckgo',
 };
 
 const CONFIG_DIR = join(homedir(), '.snow');

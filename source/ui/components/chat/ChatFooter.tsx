@@ -12,11 +12,16 @@ import TodoTree from '../special/TodoTree.js';
 import type {TodoItem} from '../../../mcp/types/todo.types.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
+import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
+import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
+import {IdeSelectPanel} from '../panels/IdeSelectPanel.js';
 const BtwPanel = lazy(() => import('../panels/BtwPanel.js'));
+const DiffReviewPanel = lazy(() => import('../panels/DiffReviewPanel.js'));
+const SkillsListPanel = lazy(() => import('../panels/SkillsListPanel.js'));
 
 type ChatFooterProps = {
 	onSubmit: (
@@ -31,6 +36,8 @@ type ChatFooterProps = {
 	) => Promise<void>;
 	onSwitchProfile: () => void;
 	handleProfileSelect: (profileName: string) => void;
+	/** 在 ProfilePanel 中按右方向键时进入 ProfileEditPanel 编辑该 profile */
+	handleProfileEdit?: (profileName: string) => void;
 	handleHistorySelect: (
 		selectedIndex: number,
 		message: string,
@@ -45,6 +52,17 @@ type ChatFooterProps = {
 		notes: string,
 	) => void | Promise<void>;
 
+	// Diff review panel props
+	showDiffReviewPanel: boolean;
+	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	diffReviewMessages: Array<{
+		role: string;
+		content: string;
+		images?: Array<{type: 'image'; data: string; mimeType: string}>;
+		subAgentDirected?: unknown;
+	}>;
+	diffReviewSnapshotFileCount: Map<number, number>;
+
 	disabled: boolean;
 	isStopping: boolean;
 	isProcessing: boolean;
@@ -57,7 +75,10 @@ type ChatFooterProps = {
 	setVulnerabilityHuntingMode: (value: boolean) => void;
 	toolSearchDisabled: boolean;
 	hybridCompressEnabled: boolean;
+	imageCompressEnabled: boolean;
 	teamMode: boolean;
+	ultraTodoEnabled: boolean;
+	telemetryEnabled: boolean;
 	setTeamMode: (value: boolean) => void;
 	contextUsage?: {
 		inputTokens: number;
@@ -82,6 +103,7 @@ type ChatFooterProps = {
 		} | null,
 	) => void;
 	onContextPercentageChange: (percentage: number) => void;
+	onInitialContentConsumed: () => void;
 	showProfilePicker: boolean;
 	setShowProfilePicker: (value: boolean | ((prev: boolean) => boolean)) => void;
 	profileSelectedIndex: number;
@@ -110,6 +132,7 @@ type ChatFooterProps = {
 	fileUpdateNotification: {file: string; timestamp: number} | null;
 	currentProfileName: string;
 	isCompressing: boolean;
+	isAutoCompressing?: boolean;
 	compressionError: string | null;
 	copyStatusMessage?: {
 		text: string;
@@ -122,6 +145,19 @@ type ChatFooterProps = {
 	showBackgroundPanel: boolean;
 	selectedProcessIndex: number;
 	terminalWidth: number;
+
+	// IDE select panel props
+	showIdeSelectPanel: boolean;
+	setShowIdeSelectPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	onIdeConnectionChange: (
+		status: 'connected' | 'disconnected',
+		message?: string,
+	) => void;
+	onIdeWorkingDirectoryChanged?: (newCwd: string) => void;
+
+	// Skills list panel props
+	showSkillsListPanel: boolean;
+	setShowSkillsListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 
 	// BTW panel props
 	btwPrompt: string | null;
@@ -185,18 +221,52 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		return unsubscribe;
 	}, []);
 
-	// 使用事件监听 TODO 更新，替代轮询
+	// 使用事件监听 TODO 更新，替代轮询；同时监听当前会话切换，避免压缩后仍绑定旧会话 ID。
 	useEffect(() => {
-		const currentSession = sessionManager.getCurrentSession();
-		if (!currentSession) {
-			setShowTodos(false);
-			setTodos([]);
-			return;
-		}
+		let disposed = false;
+		let observedSessionId = sessionManager.getCurrentSession()?.id ?? null;
+
+		const loadTodosForCurrentSession = async (force = false) => {
+			const currentSession = sessionManager.getCurrentSession();
+			const nextSessionId = currentSession?.id ?? null;
+
+			if (!force && nextSessionId === observedSessionId) {
+				return;
+			}
+
+			observedSessionId = nextSessionId;
+
+			if (!currentSession) {
+				if (!disposed) {
+					setShowTodos(false);
+					setTodos([]);
+				}
+				return;
+			}
+
+			try {
+				const todoList = await getTodoService().getTodoList(currentSession.id);
+				if (
+					disposed ||
+					sessionManager.getCurrentSession()?.id !== currentSession.id
+				) {
+					return;
+				}
+
+				setTodos(todoList?.todos ?? []);
+			} catch (error) {
+				console.error('Failed to load current session TODO list:', error);
+				if (!disposed) {
+					setTodos([]);
+				}
+			}
+		};
 
 		const handleTodoUpdate = (data: {sessionId: string; todos: TodoItem[]}) => {
-			// 只处理当前会话的 TODO 更新
-			if (data.sessionId === currentSession.id) {
+			// 始终按事件发生时的当前会话判断，避免压缩切换会话后闭包仍引用旧会话。
+			const currentSession = sessionManager.getCurrentSession();
+			if (currentSession && data.sessionId === currentSession.id) {
+				observedSessionId = currentSession.id;
 				setTodos(data.todos);
 				if (data.todos.length > 0 && props.isProcessing) {
 					setShowTodos(true);
@@ -204,11 +274,16 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 			}
 		};
 
-		// 监听 TODO 更新事件
+		const unsubscribeSessionChanges = sessionManager.onMessagesChanged(() => {
+			void loadTodosForCurrentSession(false);
+		});
+
+		void loadTodosForCurrentSession(true);
 		todoEvents.onTodoUpdate(handleTodoUpdate);
 
-		// 清理监听器
 		return () => {
+			disposed = true;
+			unsubscribeSessionChanges();
 			todoEvents.offTodoUpdate(handleTodoUpdate);
 		};
 	}, [props.isProcessing]);
@@ -238,146 +313,158 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 		};
 	}, [copyStatusMessage]);
 
+	// 统一处理：ChatFooter 内部会把 ChatInput 替换为 ReviewCommitPanel / IdeSelectPanel
+	// 这两类面板（见下方条件渲染）。这些面板打开时 footer 整体仍在渲染，
+	// ChatScreen 的 shouldShowFooter 侧通用逻辑覆盖不到，需要在此清空 draft，
+	// 避免面板关闭后 ChatInput 重新挂载时把旧文本恢复进输入框。
+	useEffect(() => {
+		if (
+			props.showReviewCommitPanel ||
+			props.showIdeSelectPanel ||
+			props.showDiffReviewPanel ||
+			props.showSkillsListPanel
+		) {
+			props.onDraftChange(null);
+		}
+	}, [props.showReviewCommitPanel, props.showIdeSelectPanel, props.showDiffReviewPanel, props.showSkillsListPanel]);
+
 	return (
 		<>
-		{!props.showReviewCommitPanel && (
-			<>
-				<LoadingIndicator
-					isStreaming={props.isStreaming}
-					isStopping={props.isStopping}
-					isSaving={props.isSaving}
-					hasPendingToolConfirmation={props.hasPendingToolConfirmation}
-					hasPendingUserQuestion={props.hasPendingUserQuestion}
-					hasBlockingOverlay={props.hasBlockingOverlay}
-					terminalWidth={props.terminalWidth}
-					animationFrame={props.animationFrame}
-					retryStatus={props.retryStatus}
-					codebaseSearchStatus={props.codebaseSearchStatus}
-					isReasoning={props.isReasoning}
-					streamTokenCount={props.streamTokenCount}
-					elapsedSeconds={props.elapsedSeconds}
-					currentModel={props.currentModel}
-					teamMode={props.teamMode}
-				/>
-
-				{props.btwPrompt ? (
-					<Suspense
-						fallback={
-							<Box>
-								<Text>
-									<Spinner type="dots" /> Loading...
-								</Text>
-							</Box>
-						}
-					>
-						<BtwPanel
-							prompt={props.btwPrompt}
-							onClose={props.onBtwClose}
-						/>
-					</Suspense>
-				) : (
-					<ChatInput
-						onSubmit={props.onSubmit}
-						onCommand={props.onCommand}
-						placeholder={t.chatScreen.inputPlaceholder}
-						disabled={props.disabled}
-						disableKeyboardNavigation={props.showBackgroundPanel}
-						isProcessing={props.isProcessing}
-						chatHistory={props.chatHistory}
-						onHistorySelect={props.handleHistorySelect}
-						yoloMode={props.yoloMode}
-						setYoloMode={props.setYoloMode}
-						planMode={props.planMode}
-						setPlanMode={props.setPlanMode}
-						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-						setVulnerabilityHuntingMode={props.setVulnerabilityHuntingMode}
-						teamMode={props.teamMode}
-						setTeamMode={props.setTeamMode}
-						contextUsage={props.contextUsage}
-						initialContent={props.initialContent}
-						draftContent={props.draftContent}
-						onDraftChange={props.onDraftChange}
-						onContextPercentageChange={props.onContextPercentageChange}
-						showProfilePicker={props.showProfilePicker}
-						setShowProfilePicker={props.setShowProfilePicker}
-						profileSelectedIndex={props.profileSelectedIndex}
-						setProfileSelectedIndex={props.setProfileSelectedIndex}
-						getFilteredProfiles={props.getFilteredProfiles}
-						handleProfileSelect={props.handleProfileSelect}
-						profileSearchQuery={props.profileSearchQuery}
-						setProfileSearchQuery={props.setProfileSearchQuery}
-						onSwitchProfile={props.onSwitchProfile}
-						onCopyInputSuccess={() => {
-							setCopyStatusMessage({
-								text: `✔ ${t.chatScreen.inputCopySuccess}`,
-								timestamp: Date.now(),
-							});
-						}}
-						onCopyInputError={errorMessage => {
-							setCopyStatusMessage({
-								text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
-								isError: true,
-								timestamp: Date.now(),
-							});
-						}}
-					/>
-				)}
-
-					{showTodos && todos.length > 0 && (
-						<Box marginTop={1}>
-							<TodoTree todos={todos} />
-						</Box>
-					)}
-
-					<StatusLine
-						yoloMode={props.yoloMode}
-						planMode={props.planMode}
-						vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
-						toolSearchDisabled={props.toolSearchDisabled}
-						hybridCompressEnabled={props.hybridCompressEnabled}
-						teamMode={props.teamMode}
-						vscodeConnectionStatus={props.vscodeConnectionStatus}
-						editorContext={props.editorContext}
-						connectionStatus={connectionStatus}
-						connectionInstanceName={connectionInstanceName}
-						contextUsage={props.contextUsage}
-						codebaseIndexing={props.codebaseIndexing}
-						codebaseProgress={props.codebaseProgress}
-						watcherEnabled={props.watcherEnabled}
-						fileUpdateNotification={props.fileUpdateNotification}
-						copyStatusMessage={copyStatusMessage}
-						currentProfileName={props.currentProfileName}
-						compressBlockToast={props.compressBlockToast}
-					/>
-
-					{props.isCompressing && (
-						<Box marginTop={1}>
-							<Text color="cyan">
-								<Spinner type="dots" /> {t.chatScreen.compressionInProgress}
-							</Text>
-						</Box>
-					)}
-
-					{props.compressionError && (
-						<Box marginTop={1}>
-							<Text color="red">
-								{t.chatScreen.compressionFailed.replace(
-									'{error}',
-									props.compressionError,
-								)}
-							</Text>
-						</Box>
-					)}
-
-					{props.showBackgroundPanel && (
-						<BackgroundProcessPanel
-							processes={props.backgroundProcesses}
-							selectedIndex={props.selectedProcessIndex}
+			{!props.showReviewCommitPanel &&
+				!props.showIdeSelectPanel &&
+				!props.showDiffReviewPanel &&
+				!props.showSkillsListPanel && (
+					<>
+						<LoadingIndicator
+							isStreaming={props.isStreaming}
+							isStopping={props.isStopping}
+							isSaving={props.isSaving}
+							isCompressing={props.isCompressing}
+							isAutoCompressing={props.isAutoCompressing}
+							hasPendingToolConfirmation={props.hasPendingToolConfirmation}
+							hasPendingUserQuestion={props.hasPendingUserQuestion}
+							hasBlockingOverlay={props.hasBlockingOverlay}
 							terminalWidth={props.terminalWidth}
+							animationFrame={props.animationFrame}
+							retryStatus={props.retryStatus}
+							codebaseSearchStatus={props.codebaseSearchStatus}
+							isReasoning={props.isReasoning}
+							streamTokenCount={props.streamTokenCount}
+							elapsedSeconds={props.elapsedSeconds}
+							currentModel={props.currentModel}
+							teamMode={props.teamMode}
 						/>
-					)}
-				</>
-			)}
+
+						{showTodos && todos.length > 0 && (
+							<Box marginTop={1}>
+								<TodoTree todos={todos} />
+							</Box>
+						)}
+
+						{props.btwPrompt ? (
+							<Suspense
+								fallback={
+									<Box>
+										<Text>
+											<Spinner type="dots" /> Loading...
+										</Text>
+									</Box>
+								}
+							>
+								<BtwPanel prompt={props.btwPrompt} onClose={props.onBtwClose} />
+							</Suspense>
+						) : (
+							<>
+								<Box width="100%" paddingRight={1}>
+									<CompanionSprite
+										terminalColumns={Math.max(0, props.terminalWidth - 1)}
+									/>
+								</Box>
+								<ChatInput
+									onSubmit={props.onSubmit}
+									onCommand={props.onCommand}
+									placeholder={t.chatScreen.inputPlaceholder}
+									disabled={props.disabled}
+									disableKeyboardNavigation={props.showBackgroundPanel}
+									isProcessing={props.isProcessing}
+									chatHistory={props.chatHistory}
+									onHistorySelect={props.handleHistorySelect}
+									yoloMode={props.yoloMode}
+									setYoloMode={props.setYoloMode}
+									planMode={props.planMode}
+									setPlanMode={props.setPlanMode}
+									vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+									setVulnerabilityHuntingMode={
+										props.setVulnerabilityHuntingMode
+									}
+									teamMode={props.teamMode}
+									setTeamMode={props.setTeamMode}
+									contextUsage={props.contextUsage}
+									initialContent={props.initialContent}
+									draftContent={props.draftContent}
+									onDraftChange={props.onDraftChange}
+									onContextPercentageChange={props.onContextPercentageChange}
+									onInitialContentConsumed={props.onInitialContentConsumed}
+									showProfilePicker={props.showProfilePicker}
+									setShowProfilePicker={props.setShowProfilePicker}
+									profileSelectedIndex={props.profileSelectedIndex}
+									setProfileSelectedIndex={props.setProfileSelectedIndex}
+									getFilteredProfiles={props.getFilteredProfiles}
+									handleProfileSelect={props.handleProfileSelect}
+									handleProfileEdit={props.handleProfileEdit}
+									profileSearchQuery={props.profileSearchQuery}
+									setProfileSearchQuery={props.setProfileSearchQuery}
+									onSwitchProfile={props.onSwitchProfile}
+									onCopyInputSuccess={() => {
+										setCopyStatusMessage({
+											text: `✔ ${t.chatScreen.inputCopySuccess}`,
+											timestamp: Date.now(),
+										});
+									}}
+									onCopyInputError={errorMessage => {
+										setCopyStatusMessage({
+											text: `✖ ${t.chatScreen.inputCopyFailedPrefix}: ${errorMessage}`,
+											isError: true,
+											timestamp: Date.now(),
+										});
+									}}
+								/>
+							</>
+						)}
+
+						<StatusLine
+							yoloMode={props.yoloMode}
+							planMode={props.planMode}
+							vulnerabilityHuntingMode={props.vulnerabilityHuntingMode}
+							toolSearchDisabled={props.toolSearchDisabled}
+							hybridCompressEnabled={props.hybridCompressEnabled}
+							imageCompressEnabled={props.imageCompressEnabled}
+							teamMode={props.teamMode}
+							ultraTodoEnabled={props.ultraTodoEnabled}
+							telemetryEnabled={props.telemetryEnabled}
+							vscodeConnectionStatus={props.vscodeConnectionStatus}
+							editorContext={props.editorContext}
+							connectionStatus={connectionStatus}
+							connectionInstanceName={connectionInstanceName}
+							contextUsage={props.contextUsage}
+							codebaseIndexing={props.codebaseIndexing}
+							codebaseProgress={props.codebaseProgress}
+							watcherEnabled={props.watcherEnabled}
+							fileUpdateNotification={props.fileUpdateNotification}
+							copyStatusMessage={copyStatusMessage}
+							currentProfileName={props.currentProfileName}
+							compressBlockToast={props.compressBlockToast}
+						/>
+
+						{props.showBackgroundPanel && (
+							<BackgroundProcessPanel
+								processes={props.backgroundProcesses}
+								selectedIndex={props.selectedProcessIndex}
+								terminalWidth={props.terminalWidth}
+							/>
+						)}
+					</>
+				)}
 
 			{props.showReviewCommitPanel && (
 				<Box marginTop={1}>
@@ -398,6 +485,52 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						/>
 					</Suspense>
 				</Box>
+			)}
+
+			{props.showIdeSelectPanel && (
+				<IdeSelectPanel
+					visible={props.showIdeSelectPanel}
+					onClose={() => props.setShowIdeSelectPanel(false)}
+					onConnectionChange={props.onIdeConnectionChange}
+					onWorkingDirectoryChanged={props.onIdeWorkingDirectoryChanged}
+				/>
+			)}
+
+			{props.showSkillsListPanel && (
+				<Box marginTop={1} flexDirection="column">
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<SkillsListPanel
+							onClose={() => props.setShowSkillsListPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{props.showDiffReviewPanel && (
+				<Suspense
+					fallback={
+						<Box>
+							<Text>
+								<Spinner type="dots" /> Loading...
+							</Text>
+						</Box>
+					}
+				>
+					<DiffReviewPanel
+						messages={props.diffReviewMessages}
+						snapshotFileCount={props.diffReviewSnapshotFileCount}
+						onClose={() => props.setShowDiffReviewPanel(false)}
+						terminalWidth={props.terminalWidth}
+					/>
+				</Suspense>
 			)}
 		</>
 	);

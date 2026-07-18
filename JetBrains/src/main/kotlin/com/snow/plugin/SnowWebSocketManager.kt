@@ -6,6 +6,7 @@ import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
@@ -70,6 +71,19 @@ class SnowWebSocketManager private constructor() {
             return
         }
 
+        // Synchronously probe whether the port is actually free before handing it
+        // to Java-WebSocket. Java-WebSocket's start() is asynchronous: when another
+        // process (e.g. another JetBrains IDE) already holds the port, the bind
+        // failure surfaces only inside the server thread via onError, AFTER we have
+        // already cached actualPort and registered the project under the wrong port
+        // in snow-cli-ports.json. That mismatch is what causes the CLI to attach
+        // to the WRONG IDE when two JetBrains IDEs are open simultaneously
+        // (showing one IDE's active file with another IDE's working directory).
+        if (!isPortAvailable(port)) {
+            tryStartServer(port + 1)
+            return
+        }
+
         try {
             val wsServer = WebSocketServerImpl(InetSocketAddress(port))
             server.set(wsServer)
@@ -78,8 +92,12 @@ class SnowWebSocketManager private constructor() {
                 wsServer.start()
                 actualPort = port
 
-                // Write port info to temp file
-                writePortInfo(port)
+                // Server is ready — register all currently open projects
+                for (openProject in com.intellij.openapi.project.ProjectManager.getInstance().openProjects) {
+                    if (!openProject.isDefault) {
+                        writePortInfo(port, openProject)
+                    }
+                }
             } catch (e: Exception) {
                 if (e.message?.contains("Address already in use") == true) {
                     server.set(null)
@@ -96,9 +114,32 @@ class SnowWebSocketManager private constructor() {
     }
 
     /**
-     * Write port information to temp file
+     * Test whether a TCP port can be bound on localhost. Used to avoid the
+     * Java-WebSocket async-bind race: if another IDE already owns the port,
+     * binding here fails immediately and we move on to the next port.
+     *
+     * Note: there is an inherent (microscopic) TOCTOU window between the probe
+     * and the actual WebSocketServer bind. The async catch path above still
+     * handles that fallback for completeness.
      */
-    private fun writePortInfo(port: Int) {
+    private fun isPortAvailable(port: Int): Boolean {
+        return try {
+            ServerSocket().use { socket ->
+                socket.reuseAddress = false
+                socket.bind(InetSocketAddress("0.0.0.0", port))
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Write port information to temp file for a specific project.
+     * Skips writing if the workspace path is empty to avoid
+     * an entry that matches every cwd.
+     */
+    private fun writePortInfo(port: Int, project: com.intellij.openapi.project.Project? = null) {
         try {
             val tmpDir = System.getProperty("java.io.tmpdir")
             val portInfoFile = java.io.File(tmpDir, "snow-cli-ports.json")
@@ -109,15 +150,35 @@ class SnowWebSocketManager private constructor() {
                 org.json.JSONObject()
             }
 
-            // Get workspace folder from first open project - normalize path for Windows compatibility
-            val project = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.firstOrNull()
-            val workspaceFolder = normalizePath(project?.basePath) ?: ""
+            val resolvedProject = project
+                ?: com.intellij.openapi.project.ProjectManager.getInstance().openProjects
+                    .firstOrNull { !it.isDefault }
+            val workspaceFolder = normalizePath(resolvedProject?.basePath)
 
-            portInfo.put(workspaceFolder, port)
+            if (workspaceFolder.isNullOrEmpty()) return
+
+            // Remove stale empty-key entry if present
+            if (portInfo.has("")) {
+                portInfo.remove("")
+            }
+
+            val entry = org.json.JSONObject()
+            entry.put("port", port)
+            entry.put("ide", "JetBrains")
+            portInfo.put(workspaceFolder, entry)
             portInfoFile.writeText(portInfo.toString(2))
         } catch (e: Exception) {
             logger.warn("Failed to write port info", e)
         }
+    }
+
+    /**
+     * Register a project's workspace in the port info file.
+     * Called when a project finishes initialisation.
+     */
+    fun updatePortInfoForProject(project: com.intellij.openapi.project.Project) {
+        if (server.get() == null) return
+        writePortInfo(actualPort, project)
     }
 
     /**
@@ -140,7 +201,7 @@ class SnowWebSocketManager private constructor() {
     /**
      * Clean up port information from temp file
      */
-    private fun cleanupPortInfo() {
+    private fun cleanupPortInfo(project: com.intellij.openapi.project.Project? = null) {
         try {
             val tmpDir = System.getProperty("java.io.tmpdir")
             val portInfoFile = java.io.File(tmpDir, "snow-cli-ports.json")
@@ -148,11 +209,19 @@ class SnowWebSocketManager private constructor() {
             if (portInfoFile.exists()) {
                 val portInfo = org.json.JSONObject(portInfoFile.readText())
 
-                // Get workspace folder from first open project - normalize path for Windows compatibility
-                val project = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.firstOrNull()
-                val workspaceFolder = normalizePath(project?.basePath) ?: ""
+                val resolvedProject = project
+                    ?: com.intellij.openapi.project.ProjectManager.getInstance().openProjects
+                        .firstOrNull { !it.isDefault }
+                val workspaceFolder = normalizePath(resolvedProject?.basePath)
 
-                portInfo.remove(workspaceFolder)
+                // Remove the workspace entry
+                if (!workspaceFolder.isNullOrEmpty()) {
+                    portInfo.remove(workspaceFolder)
+                }
+                // Always remove stale empty-key entry
+                if (portInfo.has("")) {
+                    portInfo.remove("")
+                }
 
                 if (portInfo.length() == 0) {
                     portInfoFile.delete()
@@ -163,6 +232,14 @@ class SnowWebSocketManager private constructor() {
         } catch (e: Exception) {
             logger.warn("Failed to clean up port info", e)
         }
+    }
+
+    /**
+     * Remove a project's workspace from the port info file.
+     * Called when a project is closed.
+     */
+    fun cleanupPortInfoForProject(project: com.intellij.openapi.project.Project) {
+        cleanupPortInfo(project)
     }
 
     /**

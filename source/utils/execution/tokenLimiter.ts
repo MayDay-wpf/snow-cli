@@ -5,7 +5,7 @@
  */
 
 import {
-	getOpenAiConfig,
+	getSnowConfig,
 	DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
 	MAX_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
 	MIN_TOOL_RESULT_TOKEN_LIMIT_PERCENT,
@@ -20,7 +20,7 @@ const DEFAULT_TOOL_RESULT_TOKEN_LIMIT = DEFAULT_TOOL_RESULT_TOKEN_LIMIT_PERCENT;
  */
 export function getToolResultTokenLimit(): number {
 	try {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		const maxContextTokens = config.maxContextTokens || 200000;
 
 		// 获取百分比设置，默认为 30%
@@ -206,6 +206,69 @@ async function truncateToTokenLimit(
 }
 
 /**
+ * 从 filesystem 编辑类工具结果中移除大块 diff 字段，仅用于 token 校验与发给模型的精简载荷。
+ * UI 侧应使用截断前提取的 editDiffData，而非依赖此精简对象中的 diff。
+ */
+export function stripFilesystemDiffPayload(result: any): any {
+	if (!result || typeof result !== 'object') {
+		return result;
+	}
+
+	if (result.oldContent !== undefined || result.newContent !== undefined) {
+		const {
+			oldContent: _oldContent,
+			newContent: _newContent,
+			completeOldContent: _completeOldContent,
+			completeNewContent: _completeNewContent,
+			replacedContent: _replacedContent,
+			...rest
+		} = result;
+		return rest;
+	}
+
+	// For filesystem-create single file result (has content + message)
+	if (result.content !== undefined && result.message !== undefined) {
+		const {content: _content, ...rest} = result;
+		return rest;
+	}
+
+	if (Array.isArray(result.results)) {
+		return {
+			...result,
+			results: result.results.map((item: any) => {
+				if (!item || typeof item !== 'object') {
+					return item;
+				}
+				const {
+					oldContent: _oldContent,
+					newContent: _newContent,
+					completeOldContent: _completeOldContent,
+					completeNewContent: _completeNewContent,
+					replacedContent: _replacedContent,
+					content: _content,
+					...rest
+				} = item;
+				return rest;
+			}),
+		};
+	}
+
+	return result;
+}
+
+function isFilesystemEditToolName(toolName: string): boolean {
+	return (
+		toolName === 'filesystem-edit' ||
+		toolName === 'filesystem-replaceedit' ||
+		toolName === 'filesystem-create'
+	);
+}
+
+function isTokenLimitBypassToolName(toolName: string): boolean {
+	return toolName === 'skill-execute';
+}
+
+/**
  * 包装工具结果，在返回前进行 token 限制检查
  * 如果超限，会截断内容并附加提示信息
  * @param result - 工具的原始返回结果
@@ -218,35 +281,55 @@ export async function wrapToolResultWithTokenLimit(
 	toolName: string,
 	maxTokens?: number,
 ): Promise<any> {
+	if (isTokenLimitBypassToolName(toolName)) {
+		return result;
+	}
+
 	const limit = maxTokens ?? getToolResultTokenLimit();
 	const validation = await validateTokenLimit(result, limit);
 
-	if (!validation.isValid) {
-		// 将结果转换为字符串进行截断
-		let contentStr: string;
-		if (typeof result === 'string') {
-			contentStr = result;
-		} else if (typeof result === 'object') {
-			contentStr = JSON.stringify(result, null, 2);
-		} else {
-			contentStr = String(result);
-		}
-
-		// 预留一些 token 给截断提示信息（约 100 tokens）
-		const reservedTokens = 100;
-		const truncateLimit = Math.max(limit - reservedTokens, limit * 0.9);
-		const truncatedContent = await truncateToTokenLimit(
-			contentStr,
-			truncateLimit,
-		);
-
-		const truncationNotice =
-			`\n\n[TRUNCATED] Tool "${toolName}" output was truncated due to token limit.\n` +
-			`Original: ~${validation.tokenCount} tokens | Limit: ${limit} tokens\n` +
-			`The content above is incomplete. Consider using more specific queries or filters to get smaller results.`;
-
-		return truncatedContent + truncationNotice;
+	if (validation.isValid) {
+		return result;
 	}
 
-	return result;
+	const strippedForModel =
+		isFilesystemEditToolName(toolName) && result && typeof result === 'object'
+			? stripFilesystemDiffPayload(result)
+			: null;
+
+	if (strippedForModel) {
+		const strippedValidation = await validateTokenLimit(
+			strippedForModel,
+			limit,
+		);
+		if (strippedValidation.isValid) {
+			return strippedForModel;
+		}
+	}
+
+	// 将结果转换为字符串进行截断（filesystem 批量优先截断已去掉 diff 的副本）
+	const sourceForTruncation = strippedForModel ?? result;
+	let contentStr: string;
+	if (typeof sourceForTruncation === 'string') {
+		contentStr = sourceForTruncation;
+	} else if (typeof sourceForTruncation === 'object') {
+		contentStr = JSON.stringify(sourceForTruncation, null, 2);
+	} else {
+		contentStr = String(sourceForTruncation);
+	}
+
+	// 预留一些 token 给截断提示信息（约 100 tokens）
+	const reservedTokens = 100;
+	const truncateLimit = Math.max(limit - reservedTokens, limit * 0.9);
+	const truncatedContent = await truncateToTokenLimit(
+		contentStr,
+		truncateLimit,
+	);
+
+	const truncationNotice =
+		`\n\n[TRUNCATED] Tool "${toolName}" output was truncated due to token limit.\n` +
+		`Original: ~${validation.tokenCount} tokens | Limit: ${limit} tokens\n` +
+		`The content above is incomplete. Consider using more specific queries or filters to get smaller results.`;
+
+	return truncatedContent + truncationNotice;
 }

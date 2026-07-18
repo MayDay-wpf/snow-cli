@@ -2,7 +2,9 @@ import type {ChatMessage} from '../../../api/chat.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
+import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
 import {extractThinkingContent} from '../utils/thinkingExtractor.js';
 
 export type ProcessToolCallsOptions = {
@@ -104,13 +106,20 @@ export async function processToolCallsAfterStream(
 		}
 
 		if (isToolNeedTwoStepDisplay(toolCall.function.name)) {
+			// For filesystem-edit/replaceedit/create, compute diff preview data
+			// (oldContent/newContent for single-file, batchResults for batch)
+			// so DiffViewer can render during pending.
+			const enrichedArgs = enrichPendingEditArgs(
+				toolCall.function.name,
+				toolArgs,
+			);
 			pendingDisplayMessages.push({
 				role: 'assistant',
-				content: `⚡ ${toolDisplay.toolName}`,
+				content: formatToolTitleLine(toolCall.function.name, 'pending'),
 				streaming: false,
 				toolCall: {
 					name: toolCall.function.name,
-					arguments: toolArgs,
+					arguments: enrichedArgs,
 				},
 				toolDisplay,
 				toolCallId: toolCall.id,

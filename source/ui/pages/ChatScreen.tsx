@@ -1,10 +1,10 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import ChatFooter from '../components/chat/ChatFooter.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import {getAllProfiles} from '../../utils/config/configManager.js';
 import {useSessionSave} from '../../hooks/session/useSessionSave.js';
 import {useToolConfirmation} from '../../hooks/conversation/useToolConfirmation.js';
@@ -20,42 +20,46 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {useSchedulerExecutionState} from '../../hooks/execution/useSchedulerExecutionState.js';
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
-import {useCursorHide} from '../../hooks/ui/useCursorHide.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
+import {getProjectName} from '../../utils/session/projectUtils.js';
+import {formatTerminalTitle} from '../../utils/ui/terminal-title-formatter.js';
 import ChatScreenConversationView from './chatScreen/ChatScreenConversationView.js';
 import ChatScreenPanels from './chatScreen/ChatScreenPanels.js';
 import {useBackgroundProcessSelection} from './chatScreen/useBackgroundProcessSelection.js';
+import {isTelemetryActive} from '../../utils/telemetry/otel.js';
 import {useChatScreenCommands} from './chatScreen/useChatScreenCommands.js';
 import {useChatScreenInputHandler} from './chatScreen/useChatScreenInputHandler.js';
 import {useChatScreenLocalState} from './chatScreen/useChatScreenLocalState.js';
 import {useChatScreenModes} from './chatScreen/useChatScreenModes.js';
 import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLifecycle.js';
 import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {resetTerminal} from '../../utils/execution/terminal.js';
+import {useBuddyNotification} from '../../buddy/useBuddyNotification.js';
 
 const MIN_TERMINAL_HEIGHT = 10;
 
 type Props = {
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
 };
 
 export default function ChatScreen({
 	autoResume,
+	resumeSessionId,
 	enableYolo,
 	enablePlan,
 }: Props) {
 	const {t} = useI18n();
+	const workingDirectory = process.cwd();
+	const projectName = getProjectName(workingDirectory);
 	const {theme} = useTheme();
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
-	const workingDirectory = process.cwd();
-	const apiConfig = getOpenAiConfig();
-	const advancedModel = apiConfig.advancedModel || '';
-	const basicModel = apiConfig.basicModel || '';
-
-	useCursorHide();
+	useBuddyNotification();
 
 	const {
 		messages,
@@ -65,6 +69,7 @@ export default function ChatScreen({
 		setPendingMessages,
 		pendingMessagesRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		remountKey,
 		setRemountKey,
 		setCurrentContextPercentage,
@@ -91,11 +96,14 @@ export default function ChatScreen({
 		setSuppressLoadingIndicator,
 		hookError,
 		setHookError,
+		hookStatus,
 		pendingUserQuestion,
 		setPendingUserQuestion,
 		requestUserQuestion,
 		compressionStatus,
 		setCompressionStatus,
+		thinkingStatus,
+		setThinkingStatus,
 		isResumingSession,
 		setIsResumingSession,
 		btwPrompt,
@@ -112,10 +120,16 @@ export default function ChatScreen({
 		setToolSearchDisabled,
 		hybridCompressEnabled,
 		setHybridCompressEnabled,
+		imageCompressEnabled,
+		setImageCompressEnabled,
 		teamMode,
 		setTeamMode,
+		ultraTodoEnabled,
+		setUltraTodoEnabled,
 		simpleMode,
 		showThinking,
+		toolDisplayMode,
+		thinkDisplayMode,
 	} = useChatScreenModes({enableYolo, enablePlan});
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
@@ -164,6 +178,7 @@ export default function ChatScreen({
 
 	useChatScreenSessionLifecycle({
 		autoResume,
+		resumeSessionId,
 		terminalWidth,
 		remountKey,
 		setRemountKey,
@@ -172,6 +187,11 @@ export default function ChatScreen({
 		setIsResumingSession,
 		setContextUsage: streamingState.setContextUsage,
 	});
+
+	const [terminalTitleSummary, setTerminalTitleSummary] = useState('');
+	const resetTerminalTitleSummary = useCallback(() => {
+		setTerminalTitleSummary('');
+	}, []);
 
 	const {
 		handleMessageSubmit,
@@ -185,6 +205,7 @@ export default function ChatScreen({
 		handleToggleCodebase,
 		handleReviewCommitConfirm,
 		handleEscKey,
+		handleInterrupt,
 	} = useChatLogic({
 		messages,
 		setMessages,
@@ -207,10 +228,12 @@ export default function ChatScreen({
 		isToolAutoApproved,
 		addMultipleToAlwaysApproved,
 		setRestoreInputContent,
+		isCompressing,
 		setIsCompressing,
 		setCompressionError,
 		currentContextPercentageRef,
 		userInterruptedRef,
+		cutInterruptRef,
 		pendingMessagesRef,
 		setBashSensitiveCommand,
 		pendingUserQuestion,
@@ -239,7 +262,9 @@ export default function ChatScreen({
 		},
 		pendingToolConfirmation,
 		onCompressionStatus: setCompressionStatus,
+		onThinkingStatus: setThinkingStatus,
 		setIsResumingSession,
+		onResetTerminalTitle: resetTerminalTitleSummary,
 	});
 
 	function handleSwitchProfile() {
@@ -252,6 +277,103 @@ export default function ChatScreen({
 	}
 
 	const handleProfileSelect = panelState.handleProfileSelect;
+	const [terminalTitleFrame, setTerminalTitleFrame] = useState(0);
+
+	useEffect(() => {
+		const syncTerminalTitleSummary = () => {
+			const currentSession = sessionManager.getCurrentSession();
+			setTerminalTitleSummary(currentSession?.summary || '');
+		};
+
+		syncTerminalTitleSummary();
+		return sessionManager.onMessagesChanged(syncTerminalTitleSummary);
+	}, []);
+
+	const foregroundTerminalCommand =
+		terminalExecutionState.state.isExecuting &&
+		!terminalExecutionState.state.isBackgrounded &&
+		Boolean(terminalExecutionState.state.command);
+	const backgroundTerminalCommand =
+		terminalExecutionState.state.isExecuting &&
+		terminalExecutionState.state.isBackgrounded;
+	const hasRunningBackgroundProcess = backgroundProcesses.processes.some(
+		backgroundProcess => backgroundProcess.status === 'running',
+	);
+	const hasPendingAction =
+		Boolean(pendingToolConfirmation) ||
+		Boolean(pendingUserQuestion) ||
+		Boolean(bashSensitiveCommand) ||
+		terminalExecutionState.state.needsInput;
+	const hasActiveProgress =
+		streamingState.isStreaming ||
+		isSaving ||
+		isCompressing ||
+		isExecutingTerminalCommand ||
+		bashMode.state.isExecuting ||
+		foregroundTerminalCommand ||
+		backgroundTerminalCommand ||
+		(customCommandExecution?.isRunning ?? false) ||
+		schedulerExecutionState.state.isRunning ||
+		hasRunningBackgroundProcess;
+	const terminalTitleActive = hasPendingAction;
+
+	useEffect(() => {
+		if (!terminalTitleActive) {
+			setTerminalTitleFrame(0);
+			return;
+		}
+
+		const intervalId = setInterval(() => {
+			setTerminalTitleFrame(frame => frame + 1);
+		}, 500);
+
+		return () => {
+			clearInterval(intervalId);
+		};
+	}, [terminalTitleActive]);
+
+	const terminalTitle = formatTerminalTitle({
+		appTitle: t.chatScreen.headerTitle,
+		projectName,
+		summary: terminalTitleSummary,
+		activity: hasActiveProgress,
+		actionRequired: hasPendingAction,
+		animationFrame: terminalTitleFrame,
+	});
+	useTerminalTitle(terminalTitle);
+
+	/**
+	 * /goal resume 面板的选中回调。
+	 *
+	 * 流程（顺序很重要）：
+	 * 1) 关闭 goal session panel
+	 * 2) 复用 handleSessionPanelSelect 恢复会话 UI / 加载消息 / 清屏 / setCurrentSession
+	 * 3) goalManager.resumeGoalForSession 把 goal 状态置回 pursuing + pendingContinuation=true
+	 *    并通过 setSessionGoalFlag(true) 重新点亮 hasGoal 标记（防御性）
+	 * 4) 触发 processMessage('', undefined, false, true) 启动 Ralph Loop 第一轮
+	 *    （hideUserMessage=true 让续接 prompt 作为唯一输入，不在历史里追加可见 user 消息）
+	 *
+	 * 这与 /goal resume（当前会话有 paused goal 时）的差异：
+	 * - /goal resume 在当前会话内复用 goalManager.resumeGoal()，不需要切换 session
+	 * - 本回调先切换到目标会话再恢复，所以必须用 resumeGoalForSession（不依赖 currentSession）
+	 */
+	const handleGoalSessionPanelSelect = async (sessionId: string) => {
+		panelState.setShowGoalSessionPanel(false);
+		await handleSessionPanelSelect(sessionId);
+		try {
+			const {goalManager} = await import('../../utils/task/goalManager.js');
+			const goal = await goalManager.resumeGoalForSession(sessionId);
+			if (!goal) {
+				// goal 文件已被清掉（极端情况），降级为普通 resume，不启动循环
+				return;
+			}
+			// 启动 Ralph Loop 第一轮——与 /goal resume / /goal <objective> 创建即启动保持一致
+			// 等价于 useCommandHandler 处理 startGoalLoop action 的核心两步
+			await processMessage('', undefined, false, true);
+		} catch (err) {
+			console.error('[goal] resume from panel failed:', err);
+		}
+	};
 
 	const {handleCommandExecution} = useCommandHandler({
 		messages,
@@ -264,12 +386,17 @@ export default function ChatScreen({
 		setCompressionError,
 		setShowSessionPanel: panelState.setShowSessionPanel,
 		onResumeSessionById: handleSessionPanelSelect,
+		setShowGoalSessionPanel: panelState.setShowGoalSessionPanel,
+		onResumeGoalSession: handleGoalSessionPanelSelect,
 		setShowMcpPanel: panelState.setShowMcpPanel,
+		setShowHelpPanel: panelState.setShowHelpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
 		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
+		setShowSkillsInstall: panelState.setShowSkillsInstall,
+		setShowSkillsListPanel: panelState.setShowSkillsListPanel,
 		setShowRoleCreation: panelState.setShowRoleCreation,
 		setShowRoleDeletion: panelState.setShowRoleDeletion,
 		setShowRoleList: panelState.setShowRoleList,
@@ -281,10 +408,17 @@ export default function ChatScreen({
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
 		setShowConnectionPanel: panelState.setShowConnectionPanel,
 		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
+		setShowTelemetryPanel: panelState.setShowTelemetryPanel,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
+		setShowIdeSelectPanel: panelState.setShowIdeSelectPanel,
 		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		setShowTodoListPanel: panelState.setShowTodoListPanel,
+		setShowTaskManagerPanel: panelState.setShowTaskManagerPanel,
+		setShowPixelEditor: panelState.setShowPixelEditor,
+		setShowGamesPanel: panelState.setShowGamesPanel,
+		setShowAnyPanel: panelState.setShowAnyPanel,
+		setActiveAnyPanelPluginId: panelState.setActiveAnyPanelPluginId,
 		onSwitchProfile: handleSwitchProfile,
 		setShowBackgroundPanel: backgroundProcesses.enablePanel,
 		setYoloMode,
@@ -292,7 +426,9 @@ export default function ChatScreen({
 		setVulnerabilityHuntingMode,
 		setToolSearchDisabled,
 		setHybridCompressEnabled,
+		setImageCompressEnabled,
 		setTeamMode,
+		setUltraTodoEnabled,
 		setContextUsage: streamingState.setContextUsage,
 		setCurrentContextPercentage,
 		currentContextPercentageRef,
@@ -305,6 +441,10 @@ export default function ChatScreen({
 		onReindexCodebase: handleReindexCodebase,
 		onToggleCodebase: handleToggleCodebase,
 		onCompressionStatus: setCompressionStatus,
+		onThinkingStatus: setThinkingStatus,
+		onResetTerminalTitle: resetTerminalTitleSummary,
+		handleInterrupt,
+		cutInterruptRef,
 	});
 
 	useEffect(() => {
@@ -322,7 +462,7 @@ export default function ChatScreen({
 				cache_read_input_tokens:
 					streamingState.contextUsage.cache_read_input_tokens,
 				cached_tokens: streamingState.contextUsage.cached_tokens,
-				max_tokens: getOpenAiConfig().maxContextTokens || 128000,
+				max_tokens: getSnowConfig().maxContextTokens || 128000,
 			});
 			sessionManager.updateContextUsage(streamingState.contextUsage);
 		} else {
@@ -370,11 +510,15 @@ export default function ChatScreen({
 
 	const hasBlockingPanel =
 		panelState.showSessionPanel ||
+		panelState.showGoalSessionPanel ||
 		panelState.showMcpPanel ||
 		panelState.showUsagePanel ||
+		panelState.showHelpPanel ||
+		panelState.showProfileEditPanel ||
 		panelState.showModelsPanel ||
 		panelState.showCustomCommandConfig ||
 		panelState.showSkillsCreation ||
+		panelState.showSkillsInstall ||
 		panelState.showRoleCreation ||
 		panelState.showRoleDeletion ||
 		panelState.showRoleList ||
@@ -383,10 +527,14 @@ export default function ChatScreen({
 		panelState.showRoleSubagentList ||
 		panelState.showWorkingDirPanel ||
 		panelState.showBranchPanel ||
-		panelState.showDiffReviewPanel ||
 		panelState.showConnectionPanel ||
+		panelState.showTelemetryPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
+		panelState.showTaskManagerPanel ||
+		panelState.showPixelEditor ||
+		panelState.showGamesPanel ||
+		panelState.showAnyPanel ||
 		showPermissionsPanel ||
 		showSubAgentDepthPanel;
 	const shouldShowFooter =
@@ -397,10 +545,39 @@ export default function ChatScreen({
 		!schedulerExecutionState.state.isRunning &&
 		!hasBlockingPanel &&
 		!snapshotState.pendingRollback;
+
+	// 这些场景只是临时替代输入框，交互结束后应恢复草稿。
+	const shouldPreserveInputDraftWhileFooterHidden =
+		panelState.showModelsPanel ||
+		!!pendingToolConfirmation ||
+		!!pendingUserQuestion ||
+		!!bashSensitiveCommand;
+
+	// 其余隐藏输入框的场景需清空草稿，避免恢复旧文本。
+	useEffect(() => {
+		if (!shouldShowFooter && !shouldPreserveInputDraftWhileFooterHidden) {
+			setInputDraftContent(null);
+		}
+	}, [
+		shouldShowFooter,
+		shouldPreserveInputDraftWhileFooterHidden,
+		setInputDraftContent,
+	]);
+
+	// remountKey 变化时清空 draftContent：
+	// /resume、/clear、/compact、/branch 等指令通过 setRemountKey 触发 ChatInput 重挂载，
+	// 但旧组件在销毁前来不及通过 onDraftChange 上报空文本，导致新组件从旧草稿恢复。
+	const remountKeyRef = useRef(remountKey);
+	useEffect(() => {
+		if (remountKey !== remountKeyRef.current) {
+			remountKeyRef.current = remountKey;
+			setInputDraftContent(null);
+		}
+	}, [remountKey, setInputDraftContent]);
 	const footerContextUsage = streamingState.contextUsage
 		? {
 				inputTokens: streamingState.contextUsage.prompt_tokens,
-				maxContextTokens: getOpenAiConfig().maxContextTokens || 4000,
+				maxContextTokens: getSnowConfig().maxContextTokens || 4000,
 				cacheCreationTokens:
 					streamingState.contextUsage.cache_creation_input_tokens,
 				cacheReadTokens: streamingState.contextUsage.cache_read_input_tokens,
@@ -432,8 +609,7 @@ export default function ChatScreen({
 		);
 	}
 
-	// Show loading state when resuming session
-	if (isResumingSession) {
+	if (!commandsLoaded || isResumingSession) {
 		return (
 			<Box
 				flexDirection="column"
@@ -445,7 +621,11 @@ export default function ChatScreen({
 				<Text color="cyan">
 					<Spinner type="dots" />
 				</Text>
-				<Text>{t.chatScreen.sessionLoading}</Text>
+				<Text>
+					{isResumingSession
+						? t.chatScreen.sessionLoading
+						: t.chatScreen.chatInitializing}
+				</Text>
 			</Box>
 		);
 	}
@@ -459,6 +639,8 @@ export default function ChatScreen({
 				simpleMode={simpleMode}
 				messages={messages}
 				showThinking={showThinking}
+				toolDisplayMode={toolDisplayMode}
+				thinkDisplayMode={thinkDisplayMode}
 				pendingMessages={pendingMessages}
 				pendingToolConfirmation={pendingToolConfirmation}
 				pendingUserQuestion={pendingUserQuestion}
@@ -468,24 +650,26 @@ export default function ChatScreen({
 				customCommandExecution={customCommandExecution}
 				bashMode={bashMode}
 				hookError={hookError}
+				hookStatus={hookStatus}
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
 				setHookError={setHookError}
 				compressionStatus={compressionStatus}
+				thinkingStatus={thinkingStatus}
 			/>
 
 			<ChatScreenPanels
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
 				panelState={panelState}
-				messages={messages}
 				snapshotState={snapshotState}
-				advancedModel={advancedModel}
-				basicModel={basicModel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
+				handleGoalSessionPanelSelect={handleGoalSessionPanelSelect}
 				showPermissionsPanel={showPermissionsPanel}
 				setShowPermissionsPanel={setShowPermissionsPanel}
 				showSubAgentDepthPanel={showSubAgentDepthPanel}
 				setShowSubAgentDepthPanel={setShowSubAgentDepthPanel}
+				modelsPanelAdvancedModel={getSnowConfig().advancedModel || ''}
+				modelsPanelBasicModel={getSnowConfig().basicModel || ''}
 				alwaysApprovedTools={alwaysApprovedTools}
 				removeFromAlwaysApproved={removeFromAlwaysApproved}
 				clearAllAlwaysApproved={clearAllAlwaysApproved}
@@ -494,22 +678,58 @@ export default function ChatScreen({
 				onPromptAccept={prompt => {
 					setRestoreInputContent({text: prompt});
 				}}
+				onTaskResume={() => {
+					setRemountKey(prev => prev + 1);
+				}}
 				handleRollbackConfirm={handleRollbackConfirm}
+				showAnyPanel={panelState.showAnyPanel}
+				activeAnyPanelPluginId={panelState.activeAnyPanelPluginId}
+				setShowAnyPanel={panelState.setShowAnyPanel}
+				setActiveAnyPanelPluginId={panelState.setActiveAnyPanelPluginId}
 			/>
 
 			{shouldShowFooter && (
 				<ChatFooter
-				onSubmit={handleMessageSubmit}
-				onCommand={handleCommandExecution}
-				onHistorySelect={handleHistorySelect}
-				onSwitchProfile={handleSwitchProfile}
-				handleProfileSelect={handleProfileSelect}
-				handleHistorySelect={handleHistorySelect}
-				showReviewCommitPanel={panelState.showReviewCommitPanel}
-				setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
-				onReviewCommitConfirm={handleReviewCommitConfirm}
-				btwPrompt={btwPrompt}
-				onBtwClose={() => setBtwPrompt(null)}
+					onSubmit={handleMessageSubmit}
+					onCommand={handleCommandExecution}
+					onHistorySelect={handleHistorySelect}
+					onSwitchProfile={handleSwitchProfile}
+					handleProfileSelect={handleProfileSelect}
+					handleProfileEdit={panelState.openProfileEdit}
+					handleHistorySelect={handleHistorySelect}
+					showReviewCommitPanel={panelState.showReviewCommitPanel}
+					setShowReviewCommitPanel={panelState.setShowReviewCommitPanel}
+					onReviewCommitConfirm={handleReviewCommitConfirm}
+					showDiffReviewPanel={panelState.showDiffReviewPanel}
+					setShowDiffReviewPanel={panelState.setShowDiffReviewPanel}
+					diffReviewMessages={messages}
+					diffReviewSnapshotFileCount={snapshotState.snapshotFileCount}
+					showIdeSelectPanel={panelState.showIdeSelectPanel}
+					setShowIdeSelectPanel={panelState.setShowIdeSelectPanel}
+					showSkillsListPanel={panelState.showSkillsListPanel}
+					setShowSkillsListPanel={panelState.setShowSkillsListPanel}
+					onIdeConnectionChange={(status, message) => {
+						vscodeState.setVscodeConnectionStatus(status);
+						if (message) {
+							const commandMessage = {
+								role: 'command' as const,
+								content: message,
+								commandName: 'ide',
+							};
+							setMessages(prev => [...prev, commandMessage]);
+						}
+					}}
+					onIdeWorkingDirectoryChanged={() => {
+						// Working directory changed via process.chdir().
+						// ChatHeader lives inside <Static>, so we must:
+						// 1. Reset the terminal to clear stale Static output (incl. old cwd line).
+						// 2. Bump remountKey to force <Static> to remount; the next render
+						//    will pick up the new process.cwd() in ChatHeader.
+						resetTerminal();
+						setRemountKey(prev => prev + 1);
+					}}
+					btwPrompt={btwPrompt}
+					onBtwClose={() => setBtwPrompt(null)}
 					disabled={
 						!!pendingToolConfirmation ||
 						!!bashSensitiveCommand ||
@@ -533,13 +753,17 @@ export default function ChatScreen({
 					setVulnerabilityHuntingMode={setVulnerabilityHuntingMode}
 					toolSearchDisabled={toolSearchDisabled}
 					hybridCompressEnabled={hybridCompressEnabled}
+					imageCompressEnabled={imageCompressEnabled}
 					teamMode={teamMode}
+					ultraTodoEnabled={ultraTodoEnabled}
+					telemetryEnabled={isTelemetryActive()}
 					setTeamMode={setTeamMode}
 					contextUsage={footerContextUsage}
 					initialContent={restoreInputContent}
 					draftContent={inputDraftContent}
 					onDraftChange={setInputDraftContent}
 					onContextPercentageChange={setCurrentContextPercentage}
+					onInitialContentConsumed={() => setRestoreInputContent(null)}
 					showProfilePicker={panelState.showProfilePanel}
 					setShowProfilePicker={panelState.setShowProfilePanel}
 					profileSelectedIndex={panelState.profileSelectedIndex}
@@ -555,6 +779,7 @@ export default function ChatScreen({
 					fileUpdateNotification={fileUpdateNotification}
 					currentProfileName={panelState.currentProfileName}
 					isCompressing={isCompressing}
+					isAutoCompressing={streamingState.isAutoCompressing}
 					compressionError={compressionError}
 					backgroundProcesses={backgroundProcesses.processes}
 					showBackgroundPanel={backgroundProcesses.showPanel}

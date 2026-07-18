@@ -1,4 +1,4 @@
-import React, {useSyncExternalStore} from 'react';
+import React, {useRef, useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -8,6 +8,8 @@ import {formatElapsedTime} from '../../../utils/core/textUtils.js';
 import {
 	subscribeTeammateStream,
 	getTeammateStreamSnapshot,
+	subscribeSubAgentStream,
+	getSubAgentStreamSnapshot,
 } from '../../../hooks/conversation/core/subAgentMessageHandler.js';
 
 /**
@@ -28,10 +30,63 @@ function formatTokens(count: number): string {
 	return String(count);
 }
 
+const STREAM_DELAY_STAGE_SECONDS = {
+	warning: 30,
+	critical: 60,
+} as const;
+const STREAM_DELAY_SHIMMER_COLORS = {
+	normal: {
+		base: '#1ACEB0',
+		shimmer: '#00FFFF',
+	},
+	warning: {
+		base: '#ffc857',
+		shimmer: '#ffe7a3',
+	},
+	critical: {
+		base: '#d97706',
+		shimmer: '#ffb347',
+	},
+} as const;
+
+type StreamDelayStage = keyof typeof STREAM_DELAY_SHIMMER_COLORS;
+
+function getStreamDelayStage(waitingSeconds: number): StreamDelayStage {
+	if (waitingSeconds >= STREAM_DELAY_STAGE_SECONDS.critical) {
+		return 'critical';
+	}
+
+	if (waitingSeconds >= STREAM_DELAY_STAGE_SECONDS.warning) {
+		return 'warning';
+	}
+
+	return 'normal';
+}
+
+function getDelayAwareColor(
+	waitingSeconds: number,
+	baseColor: string,
+	criticalColor: string,
+): string {
+	const stage = getStreamDelayStage(waitingSeconds);
+
+	if (stage === 'critical') {
+		return criticalColor;
+	}
+
+	if (stage === 'warning') {
+		return STREAM_DELAY_SHIMMER_COLORS.warning.base;
+	}
+
+	return baseColor;
+}
+
 type LoadingIndicatorProps = {
 	isStreaming: boolean;
 	isStopping: boolean;
 	isSaving: boolean;
+	isCompressing: boolean;
+	isAutoCompressing?: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
 	hasBlockingOverlay: boolean;
@@ -42,6 +97,7 @@ type LoadingIndicatorProps = {
 		errorMessage?: string;
 		remainingSeconds?: number;
 		attempt: number;
+		maxRetries?: number;
 	} | null;
 	codebaseSearchStatus: {
 		isSearching: boolean;
@@ -64,6 +120,8 @@ export default function LoadingIndicator({
 	isStreaming,
 	isStopping,
 	isSaving,
+	isCompressing,
+	isAutoCompressing = false,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
 	hasBlockingOverlay,
@@ -84,6 +142,60 @@ export default function LoadingIndicator({
 		subscribeTeammateStream,
 		getTeammateStreamSnapshot,
 	);
+	const subAgentStream = useSyncExternalStore(
+		subscribeSubAgentStream,
+		getSubAgentStreamSnapshot,
+	);
+
+	const streamActivityMarker = [
+		streamTokenCount,
+		...teammateStream.map(
+			tm => `${tm.agentId}:${tm.tokenCount}:${tm.isReasoning}`,
+		),
+		...subAgentStream.map(
+			tm => `${tm.agentId}:${tm.tokenCount}:${tm.isReasoning}`,
+		),
+	].join('|');
+	const previousStreamActivityMarkerRef = useRef<string | null>(null);
+	const lastStreamActivityElapsedSecondsRef = useRef(elapsedSeconds);
+
+	// 检测新的 streaming 会话启动（从非 streaming 变为 streaming）。
+	// 回滚等操作后 LoadingIndicator 不会被卸载（只要 ChatFooter 仍渲染），
+	// 内部 refs 保留了上一轮的值，导致 lastStreamActivityElapsedSecondsRef
+	// 基于旧 elapsedSeconds 计算，延迟变色阈值失效。
+	// 在新一轮 streaming 开始时重置这两个 ref，确保延迟计时基于当前 elapsedSeconds 重新开始。
+	const wasStreamingRef = useRef(false);
+	const isStreamingStarted = isStreaming && !wasStreamingRef.current;
+	wasStreamingRef.current = isStreaming;
+
+	const shouldIgnoreStreamDelay = isCompressing || isAutoCompressing;
+
+	if (
+		!isStreaming ||
+		shouldIgnoreStreamDelay ||
+		isStreamingStarted ||
+		previousStreamActivityMarkerRef.current !== streamActivityMarker
+	) {
+		previousStreamActivityMarkerRef.current = streamActivityMarker;
+		lastStreamActivityElapsedSecondsRef.current = elapsedSeconds;
+	}
+
+	const waitingForStreamSeconds =
+		isStreaming && !shouldIgnoreStreamDelay
+			? Math.max(
+					0,
+					elapsedSeconds - lastStreamActivityElapsedSecondsRef.current,
+			  )
+			: 0;
+	const streamDelayStage = getStreamDelayStage(waitingForStreamSeconds);
+	const loadingShimmerColors = STREAM_DELAY_SHIMMER_COLORS[streamDelayStage];
+	const loadingIconColor = getDelayAwareColor(
+		waitingForStreamSeconds,
+		[theme.colors.cyan, theme.colors.menuInfo][animationFrame % 2] as string,
+		STREAM_DELAY_SHIMMER_COLORS.critical.base,
+	);
+	const loadingTextColor = loadingShimmerColors.base;
+	const loadingTokenColor = loadingShimmerColors.shimmer;
 
 	if (
 		(!isStreaming && !isSaving && !isStopping) ||
@@ -95,10 +207,123 @@ export default function LoadingIndicator({
 	}
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
+	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+	const isRetryResending =
+		retryStatus?.isRetrying === true &&
+		(retryStatus.remainingSeconds === undefined ||
+			retryStatus.remainingSeconds === 0);
+	const loadingTips = t.chatScreen.loadingTips;
+	const loadingTip =
+		loadingTips.length > 0
+			? loadingTips[Math.floor(elapsedSeconds / 6) % loadingTips.length] ?? null
+			: null;
+
+	const renderLoadingTip = () => {
+		if (!loadingTip || !isStreaming || isStopping) {
+			return null;
+		}
+
+		return (
+			<Text color={theme.colors.menuSecondary} dimColor>
+				<Text color={theme.colors.menuSecondary}>└─ tips: </Text>
+				{loadingTip}
+			</Text>
+		);
+	};
+
+	const renderAgentEntry = (
+		tm: {
+			agentId: string;
+			agentName: string;
+			tokenCount: number;
+			isReasoning: boolean;
+			ctxUsage?: {percentage: number};
+		},
+		isLast: boolean,
+	) => {
+		const branch = isLast ? '└─' : '├─';
+		const status = tm.isReasoning
+			? 'Thinking'
+			: tm.tokenCount > 0
+			? 'Writing'
+			: 'Idle';
+		const statusColor = tm.isReasoning
+			? theme.colors.warning
+			: tm.tokenCount > 0
+			? theme.colors.cyan
+			: theme.colors.menuSecondary;
+		const pct = tm.ctxUsage?.percentage ?? 0;
+		const barWidth = 8;
+		const filled = Math.round((pct / 100) * barWidth);
+		const empty = barWidth - filled;
+		const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+		const barColor =
+			pct >= 80
+				? theme.colors.error
+				: pct >= 65
+				? theme.colors.warning
+				: pct >= 50
+				? theme.colors.cyan
+				: theme.colors.menuSecondary;
+		return (
+			<Text key={tm.agentId} dimColor>
+				<Text color={theme.colors.menuSecondary}>
+					{'  '}
+					{branch}{' '}
+				</Text>
+				<Text color={theme.colors.menuSelected} bold>
+					{tm.agentName}
+				</Text>
+				<Text color={statusColor}>
+					{' '}
+					({status}
+					{tm.tokenCount > 0 && (
+						<>
+							{' · '}
+							<Text color={theme.colors.cyan}>
+								↓ {formatTokens(tm.tokenCount)}
+							</Text>
+						</>
+					)}
+					)
+				</Text>
+				{pct > 0 && (
+					<Text color={barColor} dimColor>
+						{' '}
+						{pct}% {bar}
+					</Text>
+				)}
+			</Text>
+		);
+	};
+
+	const renderAgentTree = (
+		entries: Array<{
+			agentId: string;
+			agentName: string;
+			tokenCount: number;
+			isReasoning: boolean;
+			ctxUsage?: {percentage: number};
+		}>,
+		title: string,
+	) => (
+		<Box flexDirection="column">
+			<Text color={loadingTextColor} dimColor bold>
+				<ShimmerText
+					text={title}
+					baseColor={loadingTextColor}
+					shimmerColor={loadingTokenColor}
+				/>
+			</Text>
+			{entries.map((tm, idx) =>
+				renderAgentEntry(tm, idx === entries.length - 1),
+			)}
+		</Box>
+	);
 
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
-			<Text color={['#00FFFF', '#1ACEB0'][animationFrame % 2] as any} bold>
+			<Text color={loadingIconColor} bold>
 				❆
 			</Text>
 			<Box marginLeft={1} flexDirection="column">
@@ -111,7 +336,7 @@ export default function LoadingIndicator({
 						{retryStatus && retryStatus.isRetrying ? (
 							<Box flexDirection="column">
 								{retryStatus.errorMessage && (
-									<Text color="red" dimColor>
+									<Text color={theme.colors.error} dimColor>
 										{t.chatScreen.retryError.replace(
 											'{message}',
 											truncateErrorMessage(retryStatus.errorMessage),
@@ -120,29 +345,40 @@ export default function LoadingIndicator({
 								)}
 								{retryStatus.remainingSeconds !== undefined &&
 								retryStatus.remainingSeconds > 0 ? (
-									<Text color="yellow" dimColor>
+									<Text color={theme.colors.warning} dimColor>
 										{t.chatScreen.retryAttempt
 											.replace('{current}', String(retryStatus.attempt))
-											.replace('{max}', '5')}{' '}
+											.replace(
+												'{max}',
+												String(retryStatus.maxRetries ?? 5),
+											)}{' '}
 										{t.chatScreen.retryIn.replace(
 											'{seconds}',
 											String(retryStatus.remainingSeconds),
 										)}
 									</Text>
-								) : (
-									<Text color="yellow" dimColor>
-										{t.chatScreen.retryResending
-											.replace('{current}', String(retryStatus.attempt))
-											.replace('{max}', '5')}
+								) : isRetryResending ? (
+									<Text color={theme.colors.warning} dimColor bold>
+										<ShimmerText
+											text={t.chatScreen.retryResending
+												.replace('{current}', String(retryStatus.attempt))
+												.replace('{max}', String(retryStatus.maxRetries ?? 5))}
+											baseColor={theme.colors.warning}
+											shimmerColor={STREAM_DELAY_SHIMMER_COLORS.warning.shimmer}
+										/>
 									</Text>
-								)}
+								) : null}
 							</Box>
 						) : codebaseSearchStatus?.isSearching ? (
 							<CodebaseSearchStatus status={codebaseSearchStatus} />
 						) : showTeamTree ? (
 							<Box flexDirection="column">
-								<Text color={theme.colors.menuSecondary} dimColor bold>
-									<ShimmerText text="⚑ Team Working" />
+								<Text color={loadingTextColor} dimColor bold>
+									<ShimmerText
+										text="⚑ Team Working"
+										baseColor={loadingTextColor}
+										shimmerColor={loadingTokenColor}
+									/>
 									({' '}
 									{currentModel && (
 										<>
@@ -152,61 +388,22 @@ export default function LoadingIndicator({
 									)}
 									{formatElapsedTime(elapsedSeconds)}
 									{' · '}
-									<Text color="cyan">
+									<Text color={loadingTokenColor}>
 										↓ {formatTokens(streamTokenCount)} tokens
 									</Text>
 									{')'}
 								</Text>
-								{teammateStream.map((tm, idx) => {
-									const isLast = idx === teammateStream.length - 1;
-									const branch = isLast ? '└─' : '├─';
-									const status = tm.isReasoning
-										? 'Thinking'
-										: tm.tokenCount > 0
-										? 'Writing'
-										: 'Idle';
-									const statusColor = tm.isReasoning
-										? '#FFD700'
-										: tm.tokenCount > 0
-										? '#00FFFF'
-										: theme.colors.menuSecondary;
-									const pct = tm.ctxUsage?.percentage ?? 0;
-									const barWidth = 8;
-									const filled = Math.round((pct / 100) * barWidth);
-									const empty = barWidth - filled;
-									const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
-									const barColor = pct >= 80 ? 'red' : pct >= 65 ? 'yellow' : pct >= 50 ? 'cyan' : 'gray';
-									return (
-										<Text key={tm.agentId} dimColor>
-											<Text color={theme.colors.menuSecondary}>
-												{'  '}{branch}{' '}
-											</Text>
-											<Text color="#BA7ACE" bold>
-												{tm.agentName}
-											</Text>
-											<Text color={statusColor}>
-												{' '}({status}
-												{tm.tokenCount > 0 && (
-													<>
-														{' · '}
-														<Text color="cyan">
-															↓ {formatTokens(tm.tokenCount)}
-														</Text>
-													</>
-												)}
-												)
-											</Text>
-											{pct > 0 && (
-												<Text color={barColor} dimColor>
-													{' '}{pct}% {bar}
-												</Text>
-											)}
-										</Text>
-									);
-								})}
+								{teammateStream.map((tm, idx) =>
+									renderAgentEntry(tm, idx === teammateStream.length - 1),
+								)}
 							</Box>
+						) : showSubAgentTree ? (
+							renderAgentTree(
+								subAgentStream,
+								`⚑ Sub-Agent Working (${formatElapsedTime(elapsedSeconds)})`,
+							)
 						) : (
-							<Text color={theme.colors.menuSecondary} dimColor bold>
+							<Text color={loadingTextColor} dimColor bold>
 								<ShimmerText
 									text={
 										isReasoning
@@ -215,6 +412,8 @@ export default function LoadingIndicator({
 											? t.chatScreen.statusWriting
 											: t.chatScreen.statusThinking
 									}
+									baseColor={loadingTextColor}
+									shimmerColor={loadingTokenColor}
 								/>
 								({' '}
 								{currentModel && (
@@ -224,17 +423,14 @@ export default function LoadingIndicator({
 									</>
 								)}
 								{formatElapsedTime(elapsedSeconds)}
-								<>
-									{' · '}
-									<Text color="cyan">
-										↓{' '}
-										{formatTokens(streamTokenCount)}{' '}
-										tokens
-									</Text>
-								</>
+								{' · '}
+								<Text color={loadingTokenColor}>
+									↓ {formatTokens(streamTokenCount)} tokens
+								</Text>
 								{')'}
 							</Text>
 						)}
+						{renderLoadingTip()}
 					</>
 				) : (
 					<Text color={theme.colors.menuSecondary} dimColor>

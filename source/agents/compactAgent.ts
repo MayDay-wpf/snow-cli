@@ -1,4 +1,4 @@
-import {getOpenAiConfig} from '../utils/config/apiConfig.js';
+import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -37,7 +37,7 @@ export class CompactAgent {
 	 */
 	private async initialize(): Promise<boolean> {
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			// Check if basic model is configured
 			if (!config.basicModel) {
@@ -87,7 +87,7 @@ export class CompactAgent {
 		abortSignal?: AbortSignal,
 		onTokenUpdate?: (tokenCount: number) => void,
 	): Promise<string> {
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 
 		if (!config.basicModel) {
 			throw new Error('Basic model not configured');
@@ -162,17 +162,17 @@ export class CompactAgent {
 			let chunkCount = 0;
 
 			// Initialize token encoder for token counting
-		let encoder;
-		try {
-			const {encoding_for_model} = await import('tiktoken');
+			let encoder;
 			try {
-				encoder = encoding_for_model('gpt-5');
-			} catch {
-				encoder = encoding_for_model('gpt-3.5-turbo');
+				const {encoding_for_model} = await import('tiktoken');
+				try {
+					encoder = encoding_for_model('gpt-5');
+				} catch {
+					encoder = encoding_for_model('gpt-3.5-turbo');
+				}
+			} catch (e) {
+				// tiktoken unavailable, token counting will be skipped
 			}
-		} catch (e) {
-			// tiktoken unavailable, token counting will be skipped
-		}
 
 			try {
 				for await (const chunk of streamGenerator) {
@@ -183,35 +183,17 @@ export class CompactAgent {
 						throw new Error('Request aborted');
 					}
 
-					// Handle different chunk formats based on request method
-					if (this.requestMethod === 'chat') {
-						// Chat API uses standard OpenAI format: {choices: [{delta: {content}}]}
-						if (chunk.choices && chunk.choices[0]?.delta?.content) {
-							completeContent += chunk.choices[0].delta.content;
+					// All streaming APIs yield the unified StreamChunk format: {type: 'content', content: string}
+					if (chunk.type === 'content' && chunk.content) {
+						completeContent += chunk.content;
 
-							// Update token count if callback provided
-							if (onTokenUpdate && encoder) {
-								try {
-									const tokens = encoder.encode(completeContent);
-									onTokenUpdate(tokens.length);
-								} catch (e) {
-									// Ignore encoding errors
-								}
-							}
-						}
-					} else {
-						// Responses, Gemini, and Anthropic APIs all use: {type: 'content', content: string}
-						if (chunk.type === 'content' && chunk.content) {
-							completeContent += chunk.content;
-
-							// Update token count if callback provided
-							if (onTokenUpdate && encoder) {
-								try {
-									const tokens = encoder.encode(completeContent);
-									onTokenUpdate(tokens.length);
-								} catch (e) {
-									// Ignore encoding errors
-								}
+						// Update token count if callback provided
+						if (onTokenUpdate && encoder) {
+							try {
+								const tokens = encoder.encode(completeContent);
+								onTokenUpdate(tokens.length);
+							} catch (e) {
+								// Ignore encoding errors
 							}
 						}
 					}

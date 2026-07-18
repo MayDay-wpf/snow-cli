@@ -1,9 +1,14 @@
 import React from 'react';
 import {Text, Box} from 'ink';
-import {marked} from 'marked';
+import {marked, type Tokens} from 'marked';
 import {markedTerminal} from 'marked-terminal';
 import {supportsLanguage} from 'cli-highlight';
 import logger from '../../../utils/core/logger.js';
+import {visualWidth} from '../../../utils/core/textUtils.js';
+import {
+	getAvailableTerminalColumns,
+	getTerminalColumns,
+} from '../../../utils/execution/terminal.js';
 import {
 	latexToUnicode,
 	simpleLatexToUnicode,
@@ -15,7 +20,7 @@ import {
 marked.use(
 	markedTerminal(
 		{
-			width: process.stdout.columns || 80,
+			width: getTerminalColumns(),
 			reflowText: true,
 			unescape: true,
 			showSectionPrefix: false,
@@ -39,6 +44,74 @@ marked.use({
 			}
 
 			return token;
+		},
+	},
+});
+
+const VERTICAL_TABLE_SEPARATOR_CHAR = '─';
+// MarkdownRenderer 在不同场景下的实际可用宽度不同：
+// - streaming 消息(MessageRenderer): Box paddingX(1)*2 + 图标列(1) + marginLeft(1) = 4 列，
+//   可用宽度 = terminalWidth - 4
+// - 非流式消息(MessageList): 图标列(1) + marginLeft(1) = 2 列，
+//   可用宽度 = terminalWidth - 2
+// 取最大预留值 4，确保纵向表格分隔线在所有场景下都不会超出可用宽度而溢出换行。
+const VERTICAL_TABLE_RESERVED_COLUMNS = 4;
+
+function renderInlineTokens(parser: any, cell: Tokens.TableCell): string {
+	return cell.tokens ? parser.parseInline(cell.tokens) : cell.text;
+}
+
+function calculateHorizontalTableWidth(
+	headers: string[],
+	rows: string[][],
+): number {
+	const widths = headers.map(header => visualWidth(header));
+
+	for (const row of rows) {
+		row.forEach((cell, index) => {
+			widths[index] = Math.max(widths[index] ?? 0, visualWidth(cell));
+		});
+	}
+
+	// cli-table3 renders tables with left/right padding around every cell,
+	// plus one border per column boundary.
+	return (
+		widths.reduce((total, width) => total + width + 2, 0) + widths.length + 1
+	);
+}
+
+function formatVerticalTableSeparator(width: number): string {
+	return VERTICAL_TABLE_SEPARATOR_CHAR.repeat(Math.max(1, width));
+}
+
+function renderVerticalTable(token: Tokens.Table, parser: any): string {
+	const headers = token.header.map(cell => renderInlineTokens(parser, cell));
+	const rows = token.rows.map(row =>
+		row.map(cell => renderInlineTokens(parser, cell)),
+	);
+	const terminalWidth = getAvailableTerminalColumns(
+		VERTICAL_TABLE_RESERVED_COLUMNS,
+	);
+	const horizontalTableWidth = calculateHorizontalTableWidth(headers, rows);
+
+	if (horizontalTableWidth <= terminalWidth) {
+		return false as any;
+	}
+
+	const separator = formatVerticalTableSeparator(terminalWidth);
+	const blocks = rows.map(row => {
+		return headers
+			.map((header, index) => `${header}: ${row[index] ?? ''}`)
+			.join('\n');
+	});
+
+	return `\n${blocks.join(`\n${separator}\n`)}\n`;
+}
+
+marked.use({
+	renderer: {
+		table(token: Tokens.Table) {
+			return renderVerticalTable(token, (this as any).parser);
 		},
 	},
 });
@@ -180,29 +253,15 @@ export default function MarkdownRenderer({content}: Props) {
 		const rendered = marked.parse(sanitizedContent) as string;
 
 		if (!rendered || typeof rendered !== 'string') {
-			logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
-				renderedType: typeof rendered,
-				renderedValue: rendered,
-			});
+			// logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
+			// 	renderedType: typeof rendered,
+			// 	renderedValue: rendered,
+			// });
 			return renderFallback(content);
 		}
 
 		let lines = rendered.split('\n');
 		lines = trimLines(lines);
-
-		if (lines.length > 500) {
-			logger.warn('[MarkdownRenderer] Rendered output has too many lines', {
-				totalLines: lines.length,
-				truncatedTo: 500,
-			});
-			return (
-				<Box flexDirection="column">
-					{lines.slice(0, 500).map((line: string, index: number) => (
-						<Text key={index}>{line || ' '}</Text>
-					))}
-				</Box>
-			);
-		}
 
 		return (
 			<Box flexDirection="column">

@@ -49,6 +49,67 @@ export function findWindowsBrowserInWSL(): string | null {
 	return null;
 }
 
+/**
+ * Find a usable Windows PowerShell executable path when running inside WSL.
+ *
+ * WSL with `appendWindowsPath=false` (a common configuration) does NOT inject
+ * the Windows PATH into the Linux side, so `powershell.exe` / `pwsh.exe`
+ * cannot be invoked by their bare names — `spawn('powershell.exe', ...)` fails
+ * with `ENOENT`. This function enumerates well-known Windows mount paths
+ * and falls back to a `which` lookup (for `appendWindowsPath=true` users) to
+ * resolve a usable PowerShell binary. The result is cached for the process
+ * lifetime to avoid repeated filesystem probes.
+ *
+ * @returns PowerShell executable path accessible from WSL, or null if none found
+ */
+let cachedPowerShellPath: string | null | undefined;
+
+export function findPowerShellInWSL(): string | null {
+	if (cachedPowerShellPath !== undefined) {
+		return cachedPowerShellPath;
+	}
+
+	// Well-known Windows PowerShell locations (mounted under /mnt/c by WSL).
+	// Prefer Windows PowerShell 5.x first because the Start-Process / clipboard
+	// scripts use features that are stable across 5.1+, then PowerShell 7+.
+	const candidates = [
+		'/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+		'/mnt/c/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell.exe',
+		'/mnt/c/Program Files/PowerShell/7/pwsh.exe',
+		'/mnt/c/Program Files/PowerShell/6/pwsh.exe',
+	];
+
+	for (const candidate of candidates) {
+		try {
+			if (existsSync(candidate)) {
+				cachedPowerShellPath = candidate;
+				return candidate;
+			}
+		} catch {
+			// Ignore permission/IO errors on individual candidates
+		}
+	}
+
+	// Fallback: query PATH via `which` (works when appendWindowsPath=true).
+	for (const bin of ['powershell.exe', 'pwsh.exe', 'powershell', 'pwsh']) {
+		try {
+			const resolved = execSync(`which ${bin}`, {
+				encoding: 'utf8',
+				stdio: ['ignore', 'pipe', 'ignore'],
+			}).trim();
+			if (resolved) {
+				cachedPowerShellPath = resolved;
+				return resolved;
+			}
+		} catch {
+			// Not in PATH, try next candidate
+		}
+	}
+
+	cachedPowerShellPath = null;
+	return null;
+}
+
 // Store reference to spawned browser process for cleanup
 let spawnedBrowserProcess: ChildProcess | null = null;
 
@@ -62,8 +123,9 @@ export async function launchWindowsBrowserFromWSL(
 	browserPath: string,
 	debugPort: number = 9222,
 ): Promise<string | null> {
-	// Convert WSL path to Windows path for the user data directory
-	const userDataDir = 'C:\\\\temp\\\\snow-browser-debug';
+	// Keep one stable Windows-side profile per debug port to avoid profile locks
+	// when different Snow processes use different browserDebugPort values.
+	const userDataDir = `C:\\temp\\snow-browser-debug-${debugPort}`;
 
 	// Build the command to run via PowerShell
 	// Convert /mnt/c/... path to C:\... for PowerShell
@@ -81,14 +143,33 @@ export async function launchWindowsBrowserFromWSL(
 	];
 
 	try {
+		// Resolve a usable PowerShell binary. With WSL `appendWindowsPath=false`,
+		// the bare `powershell.exe` name is NOT on PATH and `spawn` would fail
+		// with ENOENT. findPowerShellInWSL() probes well-known /mnt/c paths.
+		const psExe = findPowerShellInWSL();
+		if (!psExe) {
+			// No Windows PowerShell accessible from WSL — return null so the
+			// caller can fall back to launching a native Linux browser instead.
+			return null;
+		}
+
 		// Use PowerShell to start the browser process on Windows side
 		const psCommand = `Start-Process -FilePath '${windowsPath}' -ArgumentList '${args.join(
 			' ',
 		)}' -PassThru`;
 
-		spawnedBrowserProcess = spawn('powershell.exe', ['-Command', psCommand], {
+		spawnedBrowserProcess = spawn(psExe, ['-Command', psCommand], {
 			detached: true,
 			stdio: 'ignore',
+		});
+
+		// `spawn()` emits the 'error' event asynchronously (e.g. ENOENT when the
+		// binary cannot be executed, or EACCES). Without a listener Node would
+		// crash the process with an uncaught exception; capture the failure so
+		// we can return null and let callers fall back gracefully.
+		let spawnFailed = false;
+		spawnedBrowserProcess.on('error', () => {
+			spawnFailed = true;
 		});
 
 		spawnedBrowserProcess.unref();
@@ -99,6 +180,11 @@ export async function launchWindowsBrowserFromWSL(
 
 		for (let i = 0; i < maxRetries; i++) {
 			await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+			if (spawnFailed) {
+				// PowerShell failed to start (ENOENT / permission / exec format).
+				return null;
+			}
 
 			// Use node:http to check if browser is ready (avoids proxy issues)
 			const wsUrl = await getRunningBrowserWSEndpoint(debugPort);
@@ -161,6 +247,49 @@ export async function getRunningBrowserWSEndpoint(
 }
 
 /**
+ * Check whether a given file path looks like a native executable for the
+ * current operating system. This is used to guard `proxyConfig.browserPath`
+ * before passing it to `puppeteer.launch({ executablePath })`.
+ *
+ * The primary motivation is WSL: a user (or auto-detection) may set
+ * `browserPath` to a Windows .exe path such as
+ * `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`. On the Linux
+ * side of WSL this file *exists* (existsSync returns true) but it is a
+ * Windows PE binary that cannot be exec'd by the Linux kernel, causing
+ * puppeteer.launch() to crash (Issue #176 Bug #2).
+ *
+ * Rules:
+ *  - win32  : only accept paths ending in `.exe` or `.bat` (case-insensitive).
+ *  - darwin : reject `.exe`/`.bat` (those are Windows binaries).
+ *  - linux  : reject `.exe`/`.bat` and reject `/mnt/<drive>/` style WSL
+ *             mount paths (those map to Windows files).
+ *
+ * @param filePath - The browser path to validate
+ * @returns true if the path is a plausible native executable for this OS
+ */
+export function isExecutableForPlatform(filePath: string): boolean {
+	const os = platform();
+	const lower = filePath.toLowerCase();
+
+	if (os === 'win32') {
+		return lower.endsWith('.exe') || lower.endsWith('.bat');
+	}
+
+	// Linux and macOS: a Windows .exe / .bat is never a valid native binary.
+	if (lower.endsWith('.exe') || lower.endsWith('.bat')) {
+		return false;
+	}
+
+	// On Linux (including WSL), /mnt/<drive>/ paths point to the Windows
+	// filesystem — those files are Windows binaries even without a .exe suffix.
+	if (os === 'linux' && /^\/mnt\/[a-z]\//i.test(filePath)) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * Detect system Chrome/Edge browser executable path
  * @returns Browser executable path or null if not found
  */
@@ -170,15 +299,20 @@ export function findBrowserExecutable(): string | null {
 
 	if (os === 'win32') {
 		// Windows: Prioritize Edge (built-in), then Chrome
+		// NOTE: Each path separator must be a single backslash in the runtime
+		// string, which means `\\` (two backslashes) in the source literal.
+		// Using `\\\\` (four) would produce double-backslash paths like
+		// `C:\\Program Files\\...` that puppeteer-core fails to launch
+		// (Issue: browser launch failure on Windows).
 		const edgePaths = [
-			'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe',
-			'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe',
+			'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
 		];
 		const chromePaths = [
-			'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe',
-			'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe',
-			process.env['LOCALAPPDATA'] +
-				'\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe',
+			'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+			'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+			(process.env['LOCALAPPDATA'] ?? '') +
+				'\\Google\\Chrome\\Application\\chrome.exe',
 		];
 		paths.push(...edgePaths, ...chromePaths);
 	} else if (os === 'darwin') {

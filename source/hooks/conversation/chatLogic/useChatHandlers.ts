@@ -312,6 +312,9 @@ Please provide your review in a clear, structured format.`;
 
 			sessionManager.clearCurrentSession();
 			clearSavedMessages();
+			// The review flow starts a fresh Static tree. Clear the terminal before
+			// remounting it so ChatHeader is not appended below the previous header.
+			stdout.write(ansiEscapes.clearTerminal);
 			setMessages([]);
 			setRemountKey(prev => prev + 1);
 			streamingState.setContextUsage(null);

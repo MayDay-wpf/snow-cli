@@ -12,6 +12,7 @@ import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverte
 
 type Options = {
 	autoResume?: boolean;
+	resumeSessionId?: string;
 	terminalWidth: number;
 	remountKey: number;
 	setRemountKey: Dispatch<SetStateAction<number>>;
@@ -23,6 +24,7 @@ type Options = {
 
 export function useChatScreenSessionLifecycle({
 	autoResume,
+	resumeSessionId,
 	terminalWidth,
 	remountKey,
 	setRemountKey,
@@ -43,17 +45,22 @@ export function useChatScreenSessionLifecycle({
 		const resumeSession = async () => {
 			setIsResumingSession?.(true);
 			try {
-				const sessions = await sessionManager.listSessions();
-				if (sessions.length > 0) {
-					const latestSession = sessions[0];
-					if (latestSession) {
-						const session = await sessionManager.loadSession(latestSession.id);
-						if (session) {
-							const uiMessages = convertSessionMessagesToUI(session.messages);
-							setMessages(uiMessages);
-							initializeFromSession(session.messages);
-							setContextUsage?.(session.contextUsage ?? null);
-						}
+				let targetSessionId = resumeSessionId;
+
+				if (!targetSessionId) {
+					const sessions = await sessionManager.listSessions();
+					if (sessions.length > 0) {
+						targetSessionId = sessions[0]?.id;
+					}
+				}
+
+				if (targetSessionId) {
+					const session = await sessionManager.loadSession(targetSessionId);
+					if (session) {
+						const uiMessages = convertSessionMessagesToUI(session.messages);
+						setMessages(uiMessages);
+						initializeFromSession(session.messages);
+						setContextUsage?.(session.contextUsage ?? null);
 					}
 				}
 			} catch (error) {
@@ -64,7 +71,7 @@ export function useChatScreenSessionLifecycle({
 		};
 
 		resumeSession();
-	}, [autoResume, initializeFromSession, setMessages]);
+	}, [autoResume, resumeSessionId, initializeFromSession, setMessages]);
 
 	useEffect(() => {
 		if (isInitialMount.current) {

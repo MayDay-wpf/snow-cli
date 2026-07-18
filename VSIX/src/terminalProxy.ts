@@ -7,12 +7,28 @@ function asOptionalNonEmptyString(value: string | undefined): string | undefined
 	return normalized ? normalized : undefined;
 }
 
-function getConfiguredSnowTerminalProxyUrl(): string | undefined {
-	const configuredProxy = vscode.workspace
+/**
+ * The literal string "null" (case-insensitive) is treated as an explicit
+ * signal to disable the proxy entirely — no inheritance from VS Code and
+ * no proxy environment variables injected.
+ */
+const DISABLE_KEYWORD = 'null';
+
+function getRawConfiguredProxyUrl(): string {
+	return vscode.workspace
 		.getConfiguration('snow-cli.terminal')
 		.get<string>('proxyUrl', '');
+}
 
-	return asOptionalNonEmptyString(configuredProxy);
+function isProxyExplicitlyDisabled(): boolean {
+	return getRawConfiguredProxyUrl().trim().toLowerCase() === DISABLE_KEYWORD;
+}
+
+function getConfiguredSnowTerminalProxyUrl(): string | undefined {
+	if (isProxyExplicitlyDisabled()) {
+		return undefined;
+	}
+	return asOptionalNonEmptyString(getRawConfiguredProxyUrl());
 }
 
 function getVsCodeHttpProxyUrl(): string | undefined {
@@ -20,11 +36,20 @@ function getVsCodeHttpProxyUrl(): string | undefined {
 	return asOptionalNonEmptyString(vscodeProxy);
 }
 
+/**
+ * Returns true when the user has explicitly set `snow-cli.terminal.proxyUrl`
+ * to any non-empty value — including the "null" disable keyword.
+ * This is used to decide whether `http.proxy` changes should trigger a
+ * terminal restart (only when the user is NOT explicitly configured).
+ */
 export function hasExplicitSnowTerminalProxyUrl(): boolean {
-	return typeof getConfiguredSnowTerminalProxyUrl() !== 'undefined';
+	return getRawConfiguredProxyUrl().trim().length > 0;
 }
 
 export function getSnowTerminalProxyUrl(): string | undefined {
+	if (isProxyExplicitlyDisabled()) {
+		return undefined;
+	}
 	return getConfiguredSnowTerminalProxyUrl() ?? getVsCodeHttpProxyUrl();
 }
 

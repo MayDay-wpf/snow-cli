@@ -1,5 +1,12 @@
-import {getOpenAiConfig, getCustomHeaders} from '../utils/config/apiConfig.js';
+import {
+	getSnowConfig,
+	getCustomHeaders,
+	getCustomHeadersForConfig,
+	type ApiConfig,
+} from '../utils/config/apiConfig.js';
+import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {resolveApiEndpoint} from './endpointResolver.js';
 
 export interface Model {
 	id: string;
@@ -37,11 +44,11 @@ interface AnthropicModel {
  * Fetch models from OpenAI-compatible API
  */
 async function fetchOpenAIModels(
-	baseUrl: string,
+	modelsUrl: string,
 	apiKey: string,
 	customHeaders: Record<string, string>,
 ): Promise<Model[]> {
-	const url = `${baseUrl}/models`;
+	const url = modelsUrl;
 
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
@@ -167,8 +174,15 @@ async function fetchAnthropicModels(
 /**
  * Fetch available models based on configured request method
  */
-export async function fetchAvailableModels(): Promise<Model[]> {
-	const config = getOpenAiConfig();
+export async function fetchAvailableModels(
+	overrideConfig?: Partial<ApiConfig>,
+): Promise<Model[]> {
+	// 当传入 overrideConfig 时，使用临时合并的配置（不依赖磁盘上的 active profile / 全局 config.json）
+	// 这样即使在编辑非激活 profile 时调用，也不会污染全局 config 与 active profile 文件。
+	const baseConfig = overrideConfig
+		? ({...getSnowConfig(), ...overrideConfig} as ApiConfig)
+		: getSnowConfig();
+	const config = baseConfig;
 
 	if (!config.baseUrl) {
 		throw new Error(
@@ -176,7 +190,11 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 		);
 	}
 
-	const customHeaders = getCustomHeaders();
+	const rawCustomHeaders = overrideConfig
+		? getCustomHeadersForConfig(config)
+		: getCustomHeaders();
+	// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
+	const customHeaders = await resolveCustomHeaderPlaceholders(rawCustomHeaders);
 
 	try {
 		let models: Model[];
@@ -186,6 +204,14 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 		const isDefaultBaseUrl =
 			!trimmedBaseUrl || trimmedBaseUrl === defaultOpenAiBaseUrl;
 
+		// 以 OpenAI 兼容方式获取模型列表（用作非 OpenAI 请求失败或为空时的回退）
+		const fetchOpenAICompat = async (): Promise<Model[]> =>
+			fetchOpenAIModels(
+				resolveApiEndpoint(config.baseUrl, 'models', config.baseUrlMode),
+				config.apiKey,
+				customHeaders,
+			);
+
 		switch (config.requestMethod) {
 			case 'gemini': {
 				if (!config.apiKey) {
@@ -194,7 +220,15 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 				const geminiBaseUrl = isDefaultBaseUrl
 					? 'https://generativelanguage.googleapis.com/v1beta'
 					: trimmedBaseUrl;
-				models = await fetchGeminiModels(geminiBaseUrl, config.apiKey);
+				// 获取失败或为空时回退为 OpenAI 兼容方式重新尝试获取
+				try {
+					models = await fetchGeminiModels(geminiBaseUrl, config.apiKey);
+				} catch {
+					models = [];
+				}
+				if (models.length === 0) {
+					models = await fetchOpenAICompat();
+				}
 				break;
 			}
 
@@ -205,11 +239,19 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 				const anthropicBaseUrl = isDefaultBaseUrl
 					? 'https://api.anthropic.com/v1'
 					: trimmedBaseUrl;
-				models = await fetchAnthropicModels(
-					anthropicBaseUrl,
-					config.apiKey,
-					customHeaders,
-				);
+				// 获取失败或为空时回退为 OpenAI 兼容方式重新尝试获取
+				try {
+					models = await fetchAnthropicModels(
+						anthropicBaseUrl,
+						config.apiKey,
+						customHeaders,
+					);
+				} catch {
+					models = [];
+				}
+				if (models.length === 0) {
+					models = await fetchOpenAICompat();
+				}
 				break;
 			}
 
@@ -217,11 +259,7 @@ export async function fetchAvailableModels(): Promise<Model[]> {
 			case 'responses':
 			default:
 				// OpenAI-compatible API
-				models = await fetchOpenAIModels(
-					config.baseUrl.replace(/\/$/, ''),
-					config.apiKey,
-					customHeaders,
-				);
+				models = await fetchOpenAICompat();
 				break;
 		}
 

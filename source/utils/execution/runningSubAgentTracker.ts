@@ -154,12 +154,12 @@ class RunningSubAgentTracker {
 	/**
 	 * Wait for all spawned agents to complete, with a timeout.
 	 * Resolves when all spawned agents finish or the timeout is reached.
-	 * @param timeoutMs Maximum time to wait in milliseconds (default: 5 minutes)
+	 * @param timeoutMs Maximum time to wait in milliseconds (default: 20 minutes)
 	 * @param abortSignal Optional abort signal to cancel waiting early
 	 * @returns true if all spawned agents completed, false if timed out or aborted
 	 */
 	waitForSpawnedAgents(
-		timeoutMs = 300_000,
+		timeoutMs = 1_200_000,
 		abortSignal?: AbortSignal,
 	): Promise<boolean> {
 		return new Promise<boolean>(resolve => {
@@ -204,10 +204,14 @@ class RunningSubAgentTracker {
 
 			// Also handle abort signal
 			if (abortSignal) {
-				abortSignal.addEventListener('abort', () => {
-					cleanup();
-					resolve(false);
-				}, {once: true});
+				abortSignal.addEventListener(
+					'abort',
+					() => {
+						cleanup();
+						resolve(false);
+					},
+					{once: true},
+				);
 			}
 
 			// Initial check (in case they all finished between our first check and subscribe)
@@ -297,6 +301,29 @@ class RunningSubAgentTracker {
 		const messages = [...queue];
 		queue.length = 0;
 		return messages;
+	}
+
+	enqueueExternalInterAgentMessage(
+		targetInstanceId: string,
+		message: InterAgentMessage,
+	): boolean {
+		const queue = this.interAgentQueues.get(targetInstanceId);
+		if (!queue) {
+			return false;
+		}
+
+		queue.push(message);
+		const fromAgent =
+			this.agents.get(message.fromInstanceId) ||
+			({
+				instanceId: message.fromInstanceId,
+				agentId: message.fromAgentId,
+				agentName: message.fromAgentName,
+				prompt: '',
+				startedAt: message.sentAt,
+			} as RunningSubAgent);
+		this.notifyInterAgentListeners(fromAgent, targetInstanceId, message);
+		return true;
 	}
 
 	/**

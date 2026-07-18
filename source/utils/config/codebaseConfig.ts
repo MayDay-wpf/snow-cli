@@ -1,12 +1,22 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import {readSettings, updateSettings} from './unifiedSettings.js';
 
+/**
+ * Codebase configuration.
+ *
+ * Storage layout (now unified into `settings.json`):
+ *   - Project-level fields (enabled / batch / chunking / enableAgentReview /
+ *     enableReranking) live in `<cwd>/.snow/settings.json` under
+ *     `settings.codebase`.
+ *   - Embedding & reranking provider settings are shared across projects and
+ *     live in `~/.snow/settings.json` under `settings.codebase.embedding` /
+ *     `settings.codebase.reranking`.
+ */
 export interface CodebaseConfig {
 	enabled: boolean;
 	enableAgentReview: boolean;
+	enableReranking: boolean;
 	embedding: {
-		type?: 'jina' | 'ollama' | 'gemini'; // 请求类型，默认为jina
+		type?: 'jina' | 'ollama' | 'gemini' | 'mistral'; // 请求类型，默认为jina
 		modelName: string;
 		baseUrl: string;
 		apiKey: string;
@@ -22,11 +32,19 @@ export interface CodebaseConfig {
 		minCharsPerChunk: number;
 		overlapLines: number;
 	};
+	reranking: {
+		modelName: string;
+		baseUrl: string;
+		apiKey: string;
+		contextLength: number;
+		topN: number;
+	};
 }
 
 const DEFAULT_CONFIG: CodebaseConfig = {
 	enabled: false,
 	enableAgentReview: true,
+	enableReranking: false,
 	embedding: {
 		type: 'jina', // 默认使用jina
 		modelName: '',
@@ -44,59 +62,13 @@ const DEFAULT_CONFIG: CodebaseConfig = {
 		minCharsPerChunk: 20,
 		overlapLines: 20,
 	},
-};
-
-// Get global config directory (~/.snow)
-const getGlobalConfigDir = (): string => {
-	const homeDir = os.homedir();
-	const configDir = path.join(homeDir, '.snow');
-	if (!fs.existsSync(configDir)) {
-		fs.mkdirSync(configDir, {recursive: true});
-	}
-	return configDir;
-};
-
-// Get project config directory (.snow in current working directory)
-const getProjectConfigDir = (workingDirectory?: string): string => {
-	const baseDir = workingDirectory || process.cwd();
-	const configDir = path.join(baseDir, '.snow');
-	if (!fs.existsSync(configDir)) {
-		fs.mkdirSync(configDir, {recursive: true});
-	}
-	return configDir;
-};
-
-// Get project-level config path
-const getProjectConfigPath = (workingDirectory?: string): string => {
-	return path.join(getProjectConfigDir(workingDirectory), 'codebase.json');
-};
-
-// Get global config path (for embedding settings only)
-const getGlobalConfigPath = (): string => {
-	return path.join(getGlobalConfigDir(), 'codebase.json');
-};
-
-// Load global embedding config (shared across projects)
-const loadGlobalEmbeddingConfig = (): CodebaseConfig['embedding'] => {
-	try {
-		const configPath = getGlobalConfigPath();
-		if (!fs.existsSync(configPath)) {
-			return {...DEFAULT_CONFIG.embedding};
-		}
-		const configContent = fs.readFileSync(configPath, 'utf-8');
-		const config = JSON.parse(configContent);
-		return {
-			type: config.embedding?.type ?? DEFAULT_CONFIG.embedding.type,
-			modelName:
-				config.embedding?.modelName ?? DEFAULT_CONFIG.embedding.modelName,
-			baseUrl: config.embedding?.baseUrl ?? DEFAULT_CONFIG.embedding.baseUrl,
-			apiKey: config.embedding?.apiKey ?? DEFAULT_CONFIG.embedding.apiKey,
-			dimensions:
-				config.embedding?.dimensions ?? DEFAULT_CONFIG.embedding.dimensions,
-		};
-	} catch {
-		return {...DEFAULT_CONFIG.embedding};
-	}
+	reranking: {
+		modelName: '',
+		baseUrl: '',
+		apiKey: '',
+		contextLength: 4096,
+		topN: 5,
+	},
 };
 
 // Load codebase config - project-level enabled/disabled, global embedding settings
@@ -104,42 +76,59 @@ export const loadCodebaseConfig = (
 	workingDirectory?: string,
 ): CodebaseConfig => {
 	try {
-		const projectConfigPath = getProjectConfigPath(workingDirectory);
-		const globalEmbedding = loadGlobalEmbeddingConfig();
+		const globalSettings = readSettings('global');
+		const projectSettings = readSettings('project', workingDirectory);
+		const globalCb = globalSettings.codebase ?? {};
+		const projectCb = projectSettings.codebase ?? {};
 
-		// Check project-level config for enabled status
-		let projectConfig: Partial<CodebaseConfig> = {};
-		if (fs.existsSync(projectConfigPath)) {
-			const configContent = fs.readFileSync(projectConfigPath, 'utf-8');
-			projectConfig = JSON.parse(configContent);
-		}
+		const embedding = {
+			type: globalCb.embedding?.type ?? DEFAULT_CONFIG.embedding.type,
+			modelName:
+				globalCb.embedding?.modelName ?? DEFAULT_CONFIG.embedding.modelName,
+			baseUrl: globalCb.embedding?.baseUrl ?? DEFAULT_CONFIG.embedding.baseUrl,
+			apiKey: globalCb.embedding?.apiKey ?? DEFAULT_CONFIG.embedding.apiKey,
+			dimensions:
+				globalCb.embedding?.dimensions ?? DEFAULT_CONFIG.embedding.dimensions,
+		};
 
-		// Merge: project-level enabled/settings + global embedding
+		const reranking = {
+			modelName:
+				globalCb.reranking?.modelName ?? DEFAULT_CONFIG.reranking.modelName,
+			baseUrl: globalCb.reranking?.baseUrl ?? DEFAULT_CONFIG.reranking.baseUrl,
+			apiKey: globalCb.reranking?.apiKey ?? DEFAULT_CONFIG.reranking.apiKey,
+			contextLength:
+				globalCb.reranking?.contextLength ??
+				DEFAULT_CONFIG.reranking.contextLength,
+			topN: globalCb.reranking?.topN ?? DEFAULT_CONFIG.reranking.topN,
+		};
+
 		return {
-			enabled: projectConfig.enabled ?? DEFAULT_CONFIG.enabled,
+			enabled: projectCb.enabled ?? DEFAULT_CONFIG.enabled,
 			enableAgentReview:
-				projectConfig.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
-			embedding: globalEmbedding,
+				projectCb.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
+			enableReranking:
+				projectCb.enableReranking ?? DEFAULT_CONFIG.enableReranking,
+			embedding,
 			batch: {
-				maxLines:
-					projectConfig.batch?.maxLines ?? DEFAULT_CONFIG.batch.maxLines,
+				maxLines: projectCb.batch?.maxLines ?? DEFAULT_CONFIG.batch.maxLines,
 				concurrency:
-					projectConfig.batch?.concurrency ?? DEFAULT_CONFIG.batch.concurrency,
+					projectCb.batch?.concurrency ?? DEFAULT_CONFIG.batch.concurrency,
 			},
 			chunking: {
 				maxLinesPerChunk:
-					projectConfig.chunking?.maxLinesPerChunk ??
+					projectCb.chunking?.maxLinesPerChunk ??
 					DEFAULT_CONFIG.chunking.maxLinesPerChunk,
 				minLinesPerChunk:
-					projectConfig.chunking?.minLinesPerChunk ??
+					projectCb.chunking?.minLinesPerChunk ??
 					DEFAULT_CONFIG.chunking.minLinesPerChunk,
 				minCharsPerChunk:
-					projectConfig.chunking?.minCharsPerChunk ??
+					projectCb.chunking?.minCharsPerChunk ??
 					DEFAULT_CONFIG.chunking.minCharsPerChunk,
 				overlapLines:
-					projectConfig.chunking?.overlapLines ??
+					projectCb.chunking?.overlapLines ??
 					DEFAULT_CONFIG.chunking.overlapLines,
 			},
+			reranking,
 		};
 	} catch (error) {
 		console.error('Failed to load codebase config:', error);
@@ -148,34 +137,33 @@ export const loadCodebaseConfig = (
 };
 
 // Save codebase config
-// - Embedding settings are saved globally (~/.snow/codebase.json)
-// - Other settings (enabled, batch, chunking) are saved per-project (.snow/codebase.json)
+// - Embedding and reranking settings are saved globally (~/.snow/settings.json)
+// - Other settings (enabled, batch, chunking) are saved per-project
+//   (<cwd>/.snow/settings.json)
 export const saveCodebaseConfig = (
 	config: CodebaseConfig,
 	workingDirectory?: string,
 ): void => {
 	try {
-		// Save embedding settings globally
-		const globalConfigPath = getGlobalConfigPath();
-		const globalConfig = {embedding: config.embedding};
-		fs.writeFileSync(
-			globalConfigPath,
-			JSON.stringify(globalConfig, null, 2),
-			'utf-8',
-		);
+		updateSettings('global', settings => {
+			const cb = settings.codebase ?? {};
+			cb.embedding = config.embedding;
+			cb.reranking = config.reranking;
+			settings.codebase = cb;
+		});
 
-		// Save project-specific settings
-		const projectConfigPath = getProjectConfigPath(workingDirectory);
-		const projectConfig = {
-			enabled: config.enabled,
-			enableAgentReview: config.enableAgentReview,
-			batch: config.batch,
-			chunking: config.chunking,
-		};
-		fs.writeFileSync(
-			projectConfigPath,
-			JSON.stringify(projectConfig, null, 2),
-			'utf-8',
+		updateSettings(
+			'project',
+			settings => {
+				const cb = settings.codebase ?? {};
+				cb.enabled = config.enabled;
+				cb.enableAgentReview = config.enableAgentReview;
+				cb.enableReranking = config.enableReranking;
+				cb.batch = config.batch;
+				cb.chunking = config.chunking;
+				settings.codebase = cb;
+			},
+			workingDirectory,
 		);
 	} catch (error) {
 		console.error('Failed to save codebase config:', error);

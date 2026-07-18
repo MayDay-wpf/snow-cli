@@ -17,6 +17,7 @@ import {mcpTools as ideDiagnosticsTools} from '../../mcp/ideDiagnostics.js';
 import {mcpTools as codebaseSearchTools} from '../../mcp/codebaseSearch.js';
 import {mcpTools as askUserQuestionTools} from '../../mcp/askUserQuestion.js';
 import {mcpTools as schedulerTools} from '../../mcp/scheduler.js';
+import {mcpTools as goalMcpTools, executeGoalTool} from '../../mcp/goal.js';
 import {TodoService} from '../../mcp/todo.js';
 import {
 	mcpTools as notebookTools,
@@ -26,14 +27,19 @@ import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
 } from '../../mcp/subagent.js';
-import {
-	getTeamMCPTools as getTeamTools,
-	teamService,
-} from '../../mcp/team.js';
+import {getTeamMCPTools as getTeamTools, teamService} from '../../mcp/team.js';
 import {
 	getMCPTools as getSkillTools,
 	executeSkillTool,
 } from '../../mcp/skills.js';
+import {
+	mcpTools as snowDocsTools,
+	executeSnowDocsTool,
+} from '../../mcp/snowDocs.js';
+import {
+	mcpTools as sessionCommandTools,
+	executeSessionCommandTool,
+} from '../../mcp/sessionCommand.js';
 import {sessionManager} from '../session/sessionManager.js';
 import {
 	isBuiltInServiceEnabled,
@@ -42,6 +48,7 @@ import {
 import {getDisabledSkills} from '../config/disabledSkills.js';
 import {
 	getDisabledMCPTools,
+	getOptInEnabledMCPKeysMerged,
 	isMCPToolEnabled,
 } from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
@@ -147,8 +154,11 @@ export function getRegisteredServicePrefixes(): string[] {
 		'codebase-',
 		'askuser-',
 		'scheduler-',
+		'goal-',
 		'skill-',
 		'subagent-',
+		'snow-docs-',
+		'session-command-',
 	];
 
 	// 如果有缓存，从缓存中获取外部 MCP 服务名称
@@ -187,7 +197,13 @@ async function generateConfigHash(): Promise<string> {
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
-		const {getTeamMode} = await import('../config/projectSettings.js');
+		const {getTeamMode, getUltraTodoEnabled} = await import(
+			'../config/projectSettings.js'
+		);
+		// 把当前会话的 goal 绑定状态纳入 hash：会话切换或 hasGoal 翻转时，
+		// 缓存失效 -> 重建工具列表 -> goal- 工具按需出现/消失。
+		const sessionHasGoal = !!sessionManager.getCurrentSession()?.hasGoal;
+		const sessionId = sessionManager.getCurrentSession()?.id || '';
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
 			subAgents: subAgents.map(t => t.name),
@@ -196,7 +212,11 @@ async function generateConfigHash(): Promise<string> {
 			disabledBuiltInServices: getDisabledBuiltInServices(),
 			disabledSkills: getDisabledSkills(),
 			disabledMCPTools: getDisabledMCPTools(),
+			optInEnabledMCPTools: getOptInEnabledMCPKeysMerged(),
 			teamMode: getTeamMode(),
+			ultraTodoEnabled: getUltraTodoEnabled(),
+			sessionHasGoal,
+			sessionId,
 		});
 	} catch {
 		return '';
@@ -273,7 +293,7 @@ async function refreshToolsCache(): Promise<void> {
 		}
 	};
 
-	// Add built-in filesystem tools
+	// Built-in filesystem (filesystem-edit is opt-in; filesystem-replaceedit is enabled by default)
 	addBuiltInService('filesystem', filesystemTools, 'filesystem');
 
 	// Add built-in terminal tools
@@ -282,7 +302,9 @@ async function refreshToolsCache(): Promise<void> {
 	// Add built-in TODO tools
 	const todoSvc = getTodoService();
 	await todoSvc.initialize();
-	const todoTools = todoSvc.getTools();
+	const {getUltraTodoEnabled} = await import('../config/projectSettings.js');
+	const ultraTodoEnabled = getUltraTodoEnabled();
+	const todoTools = todoSvc.getTools(ultraTodoEnabled);
 	addBuiltInService(
 		'todo',
 		todoTools.map(t => ({
@@ -310,6 +332,12 @@ async function refreshToolsCache(): Promise<void> {
 	// Add built-in Web Search tools
 	addBuiltInService('websearch', websearchTools, 'websearch');
 
+	// Add built-in Snow Docs tools (bundled official usage docs, progressive disclosure)
+	addBuiltInService('snow-docs', snowDocsTools, 'snow-docs');
+
+	// Session/slash control plane tools (issue #190)
+	addBuiltInService('session-command', sessionCommandTools, 'session-command');
+
 	// Add built-in IDE Diagnostics tools
 	addBuiltInService('ide', ideDiagnosticsTools, 'ide');
 
@@ -328,6 +356,27 @@ async function refreshToolsCache(): Promise<void> {
 		inputSchema: tool.function.parameters,
 	}));
 	addBuiltInService('scheduler', schedulerToolsNormalized, 'scheduler');
+
+	// Add built-in Goal tools (/goal Ralph Loop)
+	// ⚠️ 重要：goal- 工具只在【当前会话绑定了未完结目标】时才注册。
+	// 判定来源是 session.hasGoal（由 goalManager.createGoal / resumeGoal 设置，
+	// clearGoal / modelUpdateGoal(achieved|unmet) 撤销）。
+	// 这样可以：
+	// 1) 普通对话/会话面板里 AI 看不到 goal-update_goal，避免误用
+	// 2) /goal 创建/恢复目标后立刻在本会话生效
+	// 3) 切换会话（/resume <id>）时基于新会话的 hasGoal 自动决定是否暴露
+	//
+	// 配合：configHash 把 hasGoal 纳入计算（见 generateConfigHash），
+	// hasGoal 变化时缓存失效，重建一次工具列表。
+	const currentSession = sessionManager.getCurrentSession();
+	if (currentSession?.hasGoal) {
+		const goalToolsNormalized = goalMcpTools.map(tool => ({
+			name: tool.function.name,
+			description: tool.function.description,
+			inputSchema: tool.function.parameters,
+		}));
+		addBuiltInService('goal', goalToolsNormalized, 'goal');
+	}
 
 	// Add sub-agent tools (dynamically generated from configuration)
 	const subAgentTools = getSubAgentTools();
@@ -563,6 +612,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		serviceName === 'todo' ||
 		serviceName === 'ace' ||
 		serviceName === 'websearch' ||
+		serviceName === 'snow-docs' ||
 		serviceName === 'codebase' ||
 		serviceName === 'askuser' ||
 		serviceName === 'scheduler' ||
@@ -1184,6 +1234,12 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('websearch-')) {
 			serviceName = 'websearch';
 			actualToolName = toolName.substring('websearch-'.length);
+		} else if (toolName.startsWith('snow-docs-')) {
+			serviceName = 'snow-docs';
+			actualToolName = toolName.substring('snow-docs-'.length);
+		} else if (toolName.startsWith('session-command-')) {
+			serviceName = 'session-command';
+			actualToolName = toolName.substring('session-command-'.length);
 		} else if (toolName.startsWith('ide-')) {
 			serviceName = 'ide';
 			actualToolName = toolName.substring('ide-'.length);
@@ -1196,6 +1252,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('scheduler-')) {
 			serviceName = 'scheduler';
 			actualToolName = toolName.substring('scheduler-'.length);
+		} else if (toolName.startsWith('goal-')) {
+			serviceName = 'goal';
+			actualToolName = toolName.substring('goal-'.length);
 		} else if (toolName.startsWith('skill-')) {
 			serviceName = 'skill';
 			actualToolName = toolName.substring('skill-'.length);
@@ -1240,10 +1299,13 @@ export async function executeMCPTool(
 			'terminal',
 			'ace',
 			'websearch',
+			'snow-docs',
+			'session-command',
 			'ide',
 			'codebase',
 			'askuser',
 			'scheduler',
+			'goal',
 			'skill',
 			'subagent',
 		];
@@ -1266,11 +1328,31 @@ export async function executeMCPTool(
 		}
 
 		if (serviceName === 'todo') {
+			const {getUltraTodoEnabled} = await import(
+				'../config/projectSettings.js'
+			);
+			const ultraTodoEnabled = getUltraTodoEnabled();
+			if (ultraTodoEnabled && actualToolName === 'manage') {
+				throw new Error(
+					'Legacy todo-manage is disabled while Ultra TODO mode is enabled. Use todo-ultra instead.',
+				);
+			}
+			if (!ultraTodoEnabled && actualToolName === 'ultra') {
+				throw new Error(
+					'Ultra TODO tool is disabled. Enable it with /ultra-todo first.',
+				);
+			}
+		}
+
+		if (serviceName === 'todo') {
 			// Handle built-in TODO tools (no connection needed)
 			result = await getTodoService().executeTool(actualToolName, args);
+		} else if (serviceName === 'goal') {
+			// Handle built-in Goal tools (/goal Ralph Loop)
+			result = await executeGoalTool(actualToolName, args);
 		} else if (serviceName === 'notebook') {
 			// Handle built-in Notebook tools (no connection needed)
-			result = await executeNotebookTool(toolName, args);
+			result = await executeNotebookTool(actualToolName, args);
 		} else if (serviceName === 'filesystem') {
 			// Handle built-in filesystem tools (no connection needed)
 			const {filesystemService} = await import('../../mcp/filesystem.js');
@@ -1297,27 +1379,76 @@ export async function executeMCPTool(
 					// Validate required parameters
 					if (!args.filePath) {
 						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-create tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string.`,
+							`Missing required parameter 'filePath' for filesystem-create tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}\n` +
+								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
 						);
 					}
-					if (args.content === undefined || args.content === null) {
-						throw new Error(
-							`Missing required parameter 'content' for filesystem-create tool.
-` +
-								`Received args: ${JSON.stringify(args, null, 2)}
-` +
-								`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+					if (Array.isArray(args.filePath)) {
+						// Batch mode: validate each item
+						for (let i = 0; i < args.filePath.length; i++) {
+							const item = args.filePath[i];
+							if (!item || typeof item !== 'object' || !item.path) {
+								throw new Error(
+									`Invalid item at index ${i} in filePath array for filesystem-create tool.\n` +
+										`Each item must be an object with 'path' and 'content' properties.\n` +
+										`Received args: ${JSON.stringify(args, null, 2)}`,
+								);
+							}
+							if (item.content === undefined || item.content === null) {
+								throw new Error(
+									`Missing 'content' in filePath[${i}] for filesystem-create tool.\n` +
+										`Received args: ${JSON.stringify(args, null, 2)}`,
+								);
+							}
+							if (typeof item.content !== 'string') {
+								throw new Error(
+									`Invalid type for 'content' in filePath[${i}] for filesystem-create tool. ` +
+										`Expected string but received ${typeof item.content}.\n` +
+										`AI Tip: The 'content' field must be a string. If you need to write JSON, ` +
+										`serialize it first using JSON.stringify().`,
+								);
+							}
+						}
+						result = await filesystemService.createFile(
+							args.filePath,
+							undefined,
+							args.createDirectories,
+							args.overwrite,
+						);
+					} else {
+						// Single file mode
+						if (typeof args.filePath !== 'string') {
+							throw new Error(
+								`Invalid type for parameter 'filePath' for filesystem-create tool. ` +
+									`Expected string or array but received ${typeof args.filePath}.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}`,
+							);
+						}
+						if (args.content === undefined || args.content === null) {
+							throw new Error(
+								`Missing required parameter 'content' for filesystem-create tool.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}\n` +
+									`AI Tip: Make sure to provide the 'content' parameter as a string (can be empty string "").`,
+							);
+						}
+						if (typeof args.content !== 'string') {
+							throw new Error(
+								`Invalid type for parameter 'content' in filesystem-create tool. ` +
+									`Expected string but received ${typeof args.content}.\n` +
+									`Received args: ${JSON.stringify(args, null, 2)}\n` +
+									`AI Tip: The 'content' parameter must be a string. If you need to write JSON, ` +
+									`serialize it first using JSON.stringify(). For example: ` +
+									`content: JSON.stringify({ ... }) instead of content: { ... }.`,
+							);
+						}
+						result = await filesystemService.createFile(
+							args.filePath,
+							args.content,
+							args.createDirectories,
+							args.overwrite,
 						);
 					}
-					result = await filesystemService.createFile(
-						args.filePath,
-						args.content,
-						args.createDirectories,
-					);
 					break;
 				case 'edit':
 					if (!args.filePath) {
@@ -1329,17 +1460,76 @@ export async function executeMCPTool(
 					}
 					if (
 						typeof args.filePath === 'string' &&
-						(!args.operations || !Array.isArray(args.operations) || args.operations.length === 0)
+						(!args.operations ||
+							!Array.isArray(args.operations) ||
+							args.operations.length === 0)
 					) {
 						throw new Error(
 							`Missing required parameter 'operations' for filesystem-edit tool.\n` +
 								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: Provide an array of {type, startAnchor, endAnchor?, content?} operations.`,
+								`AI Tip: Provide an array of {type, startAnchor, endAnchor, content} operations (endAnchor required; same as startAnchor for single-line edits).`,
 						);
+					}
+					// Validate that content fields in operations are strings
+					for (let i = 0; i < args.operations.length; i++) {
+						const op = args.operations[i];
+						if (
+							op &&
+							op.content !== undefined &&
+							op.content !== null &&
+							typeof op.content !== 'string'
+						) {
+							throw new Error(
+								`Invalid type for 'content' in operations[${i}] for filesystem-edit tool. ` +
+									`Expected string but received ${typeof op.content}.\n` +
+									`AI Tip: The 'content' field in each operation must be a string. ` +
+									`If you need to write JSON, serialize it first using JSON.stringify().`,
+							);
+						}
 					}
 					result = await filesystemService.editFile(
 						args.filePath,
 						args.operations,
+						args.contextLines,
+					);
+					break;
+				case 'replaceedit':
+					// Default-on tool (can be disabled in MCP panel)
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-replaceedit tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}`,
+						);
+					}
+					if (
+						args.searchContent !== undefined &&
+						args.searchContent !== null &&
+						typeof args.searchContent !== 'string'
+					) {
+						throw new Error(
+							`Invalid type for parameter 'searchContent' in filesystem-replaceedit tool. ` +
+								`Expected string but received ${typeof args.searchContent}.\n` +
+								`AI Tip: The 'searchContent' parameter must be a string. ` +
+								`If you need to write JSON, serialize it first using JSON.stringify().`,
+						);
+					}
+					if (
+						args.replaceContent !== undefined &&
+						args.replaceContent !== null &&
+						typeof args.replaceContent !== 'string'
+					) {
+						throw new Error(
+							`Invalid type for parameter 'replaceContent' in filesystem-replaceedit tool. ` +
+								`Expected string but received ${typeof args.replaceContent}.\n` +
+								`AI Tip: The 'replaceContent' parameter must be a string. ` +
+								`If you need to write JSON, serialize it first using JSON.stringify().`,
+						);
+					}
+					result = await filesystemService.editFileBySearch(
+						args.filePath,
+						args.searchContent,
+						args.replaceContent,
+						args.occurrence ?? 1,
 						args.contextLines,
 					);
 					break;
@@ -1365,6 +1555,10 @@ export async function executeMCPTool(
 								`Use the project root path or a specific directory path.`,
 						);
 					}
+					// enableAiSummary 有默认值 false，AI 若未提供或类型错误则兜底为 false，避免因傻瓜式调用直接报错中断
+					if (typeof args.enableAiSummary !== 'boolean') {
+						args.enableAiSummary = false;
+					}
 
 					// Set working directory from AI-provided parameter
 					terminalService.setWorkingDirectory(args.workingDirectory);
@@ -1386,6 +1580,7 @@ export async function executeMCPTool(
 							args.timeout,
 							abortSignal, // Pass abort signal to support ESC key interruption
 							args.isInteractive ?? false, // Pass isInteractive flag for AI-determined interactive commands
+							args.enableAiSummary,
 						);
 					} finally {
 						// Clear execution state
@@ -1405,11 +1600,24 @@ export async function executeMCPTool(
 			}
 		} else if (serviceName === 'ace') {
 			// Handle built-in ACE Code Search tools with LSP hybrid support
+			// 聚合后的统一入口：actualToolName 始终是 'search'，通过 args.action 分发
 			const {hybridCodeSearchService} = await import(
 				'../../mcp/lsp/HybridCodeSearchService.js'
 			);
 
-			switch (actualToolName) {
+			// 兼容老的子工具名（find_definition/find_references/...），同时支持新的统一 ace-search
+			const aceAction =
+				actualToolName === 'search'
+					? (args.action as string | undefined)
+					: actualToolName;
+
+			if (!aceAction) {
+				throw new Error(
+					'ace-search requires "action" field: one of find_definition, find_references, semantic_search, file_outline, text_search.',
+				);
+			}
+
+			switch (aceAction) {
 				case 'search_symbols':
 					result = await hybridCodeSearchService.semanticSearch(
 						args.query,
@@ -1458,7 +1666,7 @@ export async function executeMCPTool(
 					);
 					break;
 				default:
-					throw new Error(`Unknown ACE tool: ${actualToolName}`);
+					throw new Error(`Unknown ACE action: ${aceAction}`);
 			}
 		} else if (serviceName === 'websearch') {
 			// Handle built-in Web Search tools (no connection needed)
@@ -1481,6 +1689,7 @@ export async function executeMCPTool(
 						args.userQuery, // Pass optional userQuery parameter
 						abortSignal, // Pass abort signal
 						onTokenUpdate, // Pass token update callback
+						args.enableAiSummary, // Pass enableAiSummary parameter
 					);
 					// Return object directly, will be JSON.stringify in API layer
 					result = pageContent;
@@ -1615,16 +1824,12 @@ export async function executeMCPTool(
 			switch (actualToolName) {
 				case 'schedule_task': {
 					// Validate parameters
-					if (
-						typeof args.duration !== 'number' ||
-						args.duration < 1 ||
-						args.duration > 3600
-					) {
+					if (typeof args.duration !== 'number' || args.duration < 1) {
 						return {
 							content: [
 								{
 									type: 'text',
-									text: `Error: "duration" must be a number between 1 and 3600 seconds.\n\nReceived: ${JSON.stringify(
+									text: `Error: "duration" must be a number greater than or equal to 1 second.\n\nReceived: ${JSON.stringify(
 										args.duration,
 									)}`,
 								},
@@ -1727,6 +1932,12 @@ export async function executeMCPTool(
 			// Handle skill tools (no connection needed)
 			const projectRoot = process.cwd();
 			result = await executeSkillTool(toolName, args, projectRoot);
+		} else if (serviceName === 'snow-docs') {
+			// Handle bundled Snow docs tools (read-only progressive disclosure)
+			result = await executeSnowDocsTool(actualToolName, args);
+		} else if (serviceName === 'session-command') {
+			// Headless session/slash control plane (issue #190)
+			result = await executeSessionCommandTool(actualToolName, args);
 		} else if (serviceName === 'subagent') {
 			// Handle sub-agent tools
 			// actualToolName is the agent ID
@@ -1767,9 +1978,41 @@ export async function executeMCPTool(
 		throw error;
 	}
 
+	// Preserve diff metadata before token truncation (batch edit payloads are large)
+	const {extractFilesystemEditDiffFromRawResult} = await import(
+		'../config/toolDisplayConfig.js'
+	);
+	let preservedEditDiffData = extractFilesystemEditDiffFromRawResult(
+		toolName,
+		result,
+	);
+
+	// For filesystem-create single file: the result is a plain string message,
+	// not a JSON object. Construct editDiffData from the tool call args so that
+	// all downstream paths (main agent, sub-agent, team) can render DiffViewer.
+	if (
+		!preservedEditDiffData &&
+		toolName === 'filesystem-create' &&
+		args &&
+		typeof args.filePath === 'string' &&
+		typeof args.content === 'string'
+	) {
+		preservedEditDiffData = {
+			content: args.content,
+			path: args.filePath,
+		};
+	}
+
 	// Apply token limit validation before returning result (truncates if exceeded)
 	const {wrapToolResultWithTokenLimit} = await import('./tokenLimiter.js');
 	result = await wrapToolResultWithTokenLimit(result, toolName);
+
+	if (preservedEditDiffData) {
+		return {
+			__toolResultContent: result,
+			editDiffData: preservedEditDiffData,
+		};
+	}
 
 	return result;
 }
@@ -1818,8 +2061,8 @@ async function executeOnExternalMCPService(
 			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 		);
 
-		// 获取 timeout 配置，默认 5 分钟
-		const timeout = server.timeout ?? 300000;
+		// 获取 timeout 配置，默认 20 分钟
+		const timeout = server.timeout ?? 1200000;
 
 		// Execute the tool with the original tool name (not prefixed)
 		const result = await client.callTool(

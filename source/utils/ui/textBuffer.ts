@@ -31,6 +31,136 @@ function sanitizeInput(str: string): string {
 	);
 }
 
+function isStrictBase64(base64Data: string): boolean {
+	if (base64Data.length <= 100) return false;
+	if (base64Data.length % 4 !== 0) return false;
+
+	let paddingStart = base64Data.length;
+	for (let index = 0; index < base64Data.length; index += 1) {
+		const code = base64Data.charCodeAt(index);
+		const isBase64Char =
+			(code >= 0x41 && code <= 0x5a) ||
+			(code >= 0x61 && code <= 0x7a) ||
+			(code >= 0x30 && code <= 0x39) ||
+			code === 0x2b ||
+			code === 0x2f;
+
+		if (isBase64Char) {
+			if (paddingStart !== base64Data.length) return false;
+			continue;
+		}
+
+		if (code === 0x3d) {
+			if (paddingStart === base64Data.length) paddingStart = index;
+			continue;
+		}
+
+		return false;
+	}
+
+	const paddingLength = base64Data.length - paddingStart;
+	if (paddingLength > 2) return false;
+	if (paddingLength > 0 && paddingStart < base64Data.length - 2) return false;
+
+	return true;
+}
+
+function decodeStrictBase64(base64Data: string): Uint8Array | null {
+	if (!isStrictBase64(base64Data)) return null;
+
+	const decoded = Buffer.from(base64Data, 'base64');
+	if (decoded.length === 0) return null;
+	return decoded;
+}
+
+function hasAscii(bytes: Uint8Array, offset: number, text: string): boolean {
+	if (bytes.length < offset + text.length) return false;
+	for (let index = 0; index < text.length; index += 1) {
+		if (bytes[offset + index] !== text.charCodeAt(index)) return false;
+	}
+	return true;
+}
+
+function hasPngSignature(bytes: Uint8Array): boolean {
+	const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+	return signature.every((value, index) => bytes[index] === value);
+}
+
+function isCompleteImageData(bytes: Uint8Array, mimeType: string): boolean {
+	if (mimeType === 'image/png') {
+		return (
+			bytes.length >= 45 &&
+			hasPngSignature(bytes) &&
+			bytes[bytes.length - 12] === 0x00 &&
+			bytes[bytes.length - 11] === 0x00 &&
+			bytes[bytes.length - 10] === 0x00 &&
+			bytes[bytes.length - 9] === 0x00 &&
+			hasAscii(bytes, bytes.length - 8, 'IEND')
+		);
+	}
+
+	if (mimeType === 'image/jpeg') {
+		return (
+			bytes.length >= 4 &&
+			bytes[0] === 0xff &&
+			bytes[1] === 0xd8 &&
+			bytes[bytes.length - 2] === 0xff &&
+			bytes[bytes.length - 1] === 0xd9
+		);
+	}
+
+	if (mimeType === 'image/gif') {
+		return (
+			bytes.length >= 14 &&
+			(hasAscii(bytes, 0, 'GIF87a') || hasAscii(bytes, 0, 'GIF89a')) &&
+			bytes[bytes.length - 1] === 0x3b
+		);
+	}
+
+	if (mimeType === 'image/webp') {
+		if (
+			bytes.length < 20 ||
+			!hasAscii(bytes, 0, 'RIFF') ||
+			!hasAscii(bytes, 8, 'WEBP')
+		) {
+			return false;
+		}
+		const riffSize =
+			(bytes.at(4) ?? 0) +
+			(bytes.at(5) ?? 0) * 0x100 +
+			(bytes.at(6) ?? 0) * 0x10000 +
+			(bytes.at(7) ?? 0) * 0x1000000;
+		return riffSize === bytes.length - 8;
+	}
+
+	return false;
+}
+
+function parsePastedImageDataUrl(
+	input: string,
+): {base64Data: string; mimeType: string} | null {
+	const trimmed = input.trim();
+	if (!trimmed) return null;
+
+	const markdownImageMatch = trimmed.match(
+		/^!\[[^\]]*\]\((data:image\/(?:png|jpe?g|gif|webp);base64,[\s\S]+)\)$/i,
+	);
+	const dataUrl = markdownImageMatch?.[1] ?? trimmed;
+	const dataUrlMatch = dataUrl.match(
+		/^data:(image\/(?:png|jpe?g|gif|webp));base64,([\s\S]+)$/i,
+	);
+	if (!dataUrlMatch) return null;
+
+	const mimeType = (dataUrlMatch[1] || 'image/png')
+		.toLowerCase()
+		.replace('image/jpg', 'image/jpeg');
+	const base64Data = (dataUrlMatch[2] || '').replace(/\s/g, '');
+	const decoded = decodeStrictBase64(base64Data);
+	if (!decoded || !isCompleteImageData(decoded, mimeType)) return null;
+
+	return {base64Data, mimeType};
+}
+
 /**
  * 统一的占位符类型，用于大文本粘贴和图片
  */
@@ -151,8 +281,7 @@ export class TextBuffer {
 			const before = this.content.substring(pos, entry.idx);
 			result += this.expandNonPastePlaceholders(before);
 
-			const lineCount =
-				(entry.ph.content.match(/\n/g) || []).length + 1;
+			const lineCount = (entry.ph.content.match(/\n/g) || []).length + 1;
 			// Ensure marker starts on its own line
 			if (result.length > 0 && !result.endsWith('\n')) result += '\n';
 			result += `# Paste: ${lineCount} lines\n`;
@@ -166,9 +295,7 @@ export class TextBuffer {
 
 		// Append remaining text after the last placeholder
 		if (pos < this.content.length) {
-			result += this.expandNonPastePlaceholders(
-				this.content.substring(pos),
-			);
+			result += this.expandNonPastePlaceholders(this.content.substring(pos));
 		}
 
 		return result;
@@ -197,6 +324,22 @@ export class TextBuffer {
 		this.cursorIndex = position;
 		this.clampCursorIndex();
 		this.recomputeVisualCursorOnly();
+	}
+
+	replaceRange(start: number, end: number, replacement: string): void {
+		const sanitizedReplacement = sanitizeInput(replacement);
+		const length = cpLen(this.content);
+		const safeStart = Math.max(0, Math.min(start, length));
+		const safeEnd = Math.max(safeStart, Math.min(end, length));
+		const before = cpSlice(this.content, 0, safeStart);
+		const after = cpSlice(this.content, safeEnd);
+
+		this.lastTextPlaceholderId = null;
+		this.lastTextPlaceholderAt = 0;
+		this.content = before + sanitizedReplacement + after;
+		this.cursorIndex = safeStart + cpLen(sanitizedReplacement);
+		this.recalculateVisualState();
+		this.scheduleUpdate();
 	}
 
 	get viewportVisualLines(): string[] {
@@ -235,9 +378,18 @@ export class TextBuffer {
 		this.scheduleUpdate();
 	}
 
-	insert(input: string): void {
+	insert(input: string, options?: {isPasteChunk?: boolean}): void {
+		const isPasteChunk = options?.isPasteChunk ?? false;
 		const sanitized = sanitizeInput(input);
 		if (!sanitized) {
+			return;
+		}
+
+		const pastedImage = parsePastedImageDataUrl(sanitized);
+		if (pastedImage) {
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.insertImage(pastedImage.base64Data, pastedImage.mimeType);
 			return;
 		}
 
@@ -283,7 +435,10 @@ export class TextBuffer {
 		}
 
 		const now = Date.now();
+		// 只有显式标记为粘贴分片（缓冲 flush / flushPendingInput）的输入才允许合并到上一个占位符。
+		// 用户手动键入的单字符 / IME commit 不应被合并，否则粘贴标签后立即输入的内容会被吞掉不显示。
 		const shouldMerge =
+			isPasteChunk &&
 			this.lastTextPlaceholderId !== null &&
 			now - this.lastTextPlaceholderAt < 1200;
 
@@ -375,6 +530,46 @@ export class TextBuffer {
 	}
 
 	/**
+	 * 插入临时"图片上传中"占位符，用于剪贴板图片粘贴时的视觉反馈。
+	 * 与 insertPastingIndicator 共用 tempPastingPlaceholder 字段，
+	 * 任意时刻只允许一个临时占位符存在。
+	 */
+	insertImageLoadingIndicator(isImagePaste: boolean): void {
+		if (!isImagePaste || this.tempPastingPlaceholder) {
+			return;
+		}
+		this.tempPastingPlaceholder = `[image upload...]`;
+		this.insertPlainText(this.tempPastingPlaceholder);
+		this.scheduleUpdate();
+	}
+
+	/**
+	 * 显式移除当前的临时占位符（粘贴中 / 图片上传中）。
+	 * 用于剪贴板读取失败或回退到文本路径之前清理 UI。
+	 */
+	removeTempPlaceholder(): void {
+		if (!this.tempPastingPlaceholder) return;
+		const placeholderIndex = this.content.indexOf(this.tempPastingPlaceholder);
+		if (placeholderIndex !== -1) {
+			const placeholderLength = cpLen(this.tempPastingPlaceholder);
+			this.content =
+				this.content.slice(0, placeholderIndex) +
+				this.content.slice(
+					placeholderIndex + this.tempPastingPlaceholder.length,
+				);
+			if (this.cursorIndex > placeholderIndex) {
+				this.cursorIndex = Math.max(
+					placeholderIndex,
+					this.cursorIndex - placeholderLength,
+				);
+			}
+		}
+		this.tempPastingPlaceholder = null;
+		this.recalculateVisualState();
+		this.scheduleUpdate();
+	}
+
+	/**
 	 * 插入文本占位符：显示 placeholderText，但 getFullText() 会还原为原始 content。
 	 * 用于 skills 注入等“只做视觉隐藏”的场景。
 	 */
@@ -431,6 +626,35 @@ export class TextBuffer {
 			return;
 		}
 
+		// 如果光标紧邻占位符的尾部，则整体删除该占位符（一次按键删整个标签）
+		const phAtEnd = this.findPlaceholderEndingAt(this.cursorIndex);
+		if (phAtEnd) {
+			const before = cpSlice(this.content, 0, phAtEnd.cpStart);
+			const after = cpSlice(this.content, phAtEnd.cpStart + phAtEnd.phCpLen);
+			this.content = before + after;
+			this.cursorIndex = phAtEnd.cpStart;
+			this.removePlaceholderRecord(phAtEnd.id);
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.recalculateVisualState();
+			this.scheduleUpdate();
+			return;
+		}
+
+		// Fallback：裸文本标签（如 ESC 回滚后恢复的 [image #N] / [Skill:xx] / [GitLine:xx] / [Paste ... lines #N] / [»...] 以及 #agent_xxx）
+		const tagAtEnd = this.findBareTagEndingAt(this.cursorIndex);
+		if (tagAtEnd) {
+			const before = cpSlice(this.content, 0, tagAtEnd.cpStart);
+			const after = cpSlice(this.content, tagAtEnd.cpStart + tagAtEnd.phCpLen);
+			this.content = before + after;
+			this.cursorIndex = tagAtEnd.cpStart;
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.recalculateVisualState();
+			this.scheduleUpdate();
+			return;
+		}
+
 		const before = cpSlice(this.content, 0, this.cursorIndex - 1);
 		const after = cpSlice(this.content, this.cursorIndex);
 		this.content = before + after;
@@ -444,11 +668,217 @@ export class TextBuffer {
 			return;
 		}
 
+		// 如果光标位于占位符首部，则整体删除该占位符
+		const phAtStart = this.findPlaceholderStartingAt(this.cursorIndex);
+		if (phAtStart) {
+			const before = cpSlice(this.content, 0, phAtStart.cpStart);
+			const after = cpSlice(
+				this.content,
+				phAtStart.cpStart + phAtStart.phCpLen,
+			);
+			this.content = before + after;
+			this.cursorIndex = phAtStart.cpStart;
+			this.removePlaceholderRecord(phAtStart.id);
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.recalculateVisualState();
+			this.scheduleUpdate();
+			return;
+		}
+
+		// Fallback：裸文本标签（同 backspace）
+		const tagAtStart = this.findBareTagStartingAt(this.cursorIndex);
+		if (tagAtStart) {
+			const before = cpSlice(this.content, 0, tagAtStart.cpStart);
+			const after = cpSlice(
+				this.content,
+				tagAtStart.cpStart + tagAtStart.phCpLen,
+			);
+			this.content = before + after;
+			this.cursorIndex = tagAtStart.cpStart;
+			this.lastTextPlaceholderId = null;
+			this.lastTextPlaceholderAt = 0;
+			this.recalculateVisualState();
+			this.scheduleUpdate();
+			return;
+		}
+
 		const before = cpSlice(this.content, 0, this.cursorIndex);
 		const after = cpSlice(this.content, this.cursorIndex + 1);
 		this.content = before + after;
 		this.recalculateVisualState();
 		this.scheduleUpdate();
+	}
+
+	/**
+	 * 查找以 cursorCp 结尾的占位符（包括 tempPastingPlaceholder）。
+	 * 返回占位符的 id（tempPastingPlaceholder 返回特殊标识）和 cp 位置。
+	 */
+	private findPlaceholderEndingAt(
+		cursorCp: number,
+	): {id: string; cpStart: number; phCpLen: number} | null {
+		const boundaries = this.collectPlaceholderBoundaries();
+		for (const b of boundaries) {
+			if (cursorCp === b.cpStart + b.phCpLen) {
+				return b;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 查找以 cursorCp 开头的占位符。
+	 */
+	private findPlaceholderStartingAt(
+		cursorCp: number,
+	): {id: string; cpStart: number; phCpLen: number} | null {
+		const boundaries = this.collectPlaceholderBoundaries();
+		for (const b of boundaries) {
+			if (cursorCp === b.cpStart) {
+				return b;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 收集当前 content 中“裸文本标签”的 cp 边界。
+	 * 与 placeholderStorage 无关，仅靠文本模式识别。用于处理 ESC 回滚后被还原为纯文本的标签，
+	 * 以及本身就是裸文本的子代理标签（`#agent_xxx`）。
+	 *
+	 * 识别范围（必须是与预定义模式严格匹配的完整标签）：
+	 *   - `[Paste N lines #M]`
+	 *   - `[image #N]`
+	 *   - `[Skill:xxx]`
+	 *   - `[GitLine:xxx]`
+	 *   - `[»...]` / `[»☆...]`
+	 *   - `#agent_xxx`（词边界：前面为行首/空白）
+	 *
+	 * 为了与 “一个标签 + 尾随空格” 的预期一致，[..] 样式标签若后面紧跟一个空格，则该空格也会被计入边界。
+	 */
+	private collectBareTagBoundaries(): Array<{
+		id: string;
+		cpStart: number;
+		phCpLen: number;
+	}> {
+		const result: Array<{id: string; cpStart: number; phCpLen: number}> = [];
+		const text = this.content;
+
+		// 统一边界收集器：传入 strStart/strEnd（字符索引，不是 cp）
+		const pushRange = (strStart: number, strEnd: number, tag: string) => {
+			// 如果标签后紧跟一个普通空格（不是\n），将该空格也包含进去
+			let actualEnd = strEnd;
+			if (text[actualEnd] === ' ') {
+				actualEnd += 1;
+			}
+			const cpStart = cpLen(text.substring(0, strStart));
+			const cpEnd = cpLen(text.substring(0, actualEnd));
+			result.push({
+				id: `bare_${strStart}_${tag}`,
+				cpStart,
+				phCpLen: cpEnd - cpStart,
+			});
+		};
+
+		// 1) [..] 样式占位符标签
+		const bracketPattern =
+			/\[(?:Paste \d+ lines #\d+|image #\d+|Skill:[^\]]+|GitLine:[^\]]+|»[^\]]*)\]/g;
+		let m: RegExpExecArray | null;
+		while ((m = bracketPattern.exec(text)) !== null) {
+			pushRange(m.index, m.index + m[0].length, 'bracket');
+		}
+
+		// 1b) @[workspace] 工作区标签（@ 前缀 + [name]）
+		const wsTagPattern = /@\[[^\]]+\]/g;
+		while ((m = wsTagPattern.exec(text)) !== null) {
+			pushRange(m.index, m.index + m[0].length, 'wsTag');
+		}
+
+		// 2) #agent_xxx 裸文本子代理标签：要求前面是行首或空白（不能是字母/数字/[]）
+		// 只匹配 `#` + ASCII 开头的标识符，避免误伤中文 #标题 这类常规文本
+		const agentPattern = /(^|\s)(#[A-Za-z][\w-]*)/g;
+		while ((m = agentPattern.exec(text)) !== null) {
+			const leading = m[1] ?? '';
+			const tag = m[2] ?? '';
+			if (!tag) continue;
+			const start = m.index + leading.length;
+			pushRange(start, start + tag.length, 'agent');
+		}
+
+		result.sort((a, b) => a.cpStart - b.cpStart);
+		return result;
+	}
+
+	private findBareTagEndingAt(
+		cursorCp: number,
+	): {id: string; cpStart: number; phCpLen: number} | null {
+		const boundaries = this.collectBareTagBoundaries();
+		for (const b of boundaries) {
+			if (cursorCp === b.cpStart + b.phCpLen) {
+				return b;
+			}
+		}
+		return null;
+	}
+
+	private findBareTagStartingAt(
+		cursorCp: number,
+	): {id: string; cpStart: number; phCpLen: number} | null {
+		const boundaries = this.collectBareTagBoundaries();
+		for (const b of boundaries) {
+			if (cursorCp === b.cpStart) {
+				return b;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 收集所有当前 content 中可见的占位符的 cp 边界（含临时 Pasting 占位符）。
+	 * 在展开视图下，文本类型占位符已被替换为原始内容、不在 storage 中，因此不会命中。
+	 */
+	private collectPlaceholderBoundaries(): Array<{
+		id: string;
+		cpStart: number;
+		phCpLen: number;
+	}> {
+		const result: Array<{id: string; cpStart: number; phCpLen: number}> = [];
+
+		for (const ph of this.placeholderStorage.values()) {
+			if (!ph.placeholder) continue;
+			const strIdx = this.content.indexOf(ph.placeholder);
+			if (strIdx === -1) continue;
+			result.push({
+				id: ph.id,
+				cpStart: cpLen(this.content.substring(0, strIdx)),
+				phCpLen: cpLen(ph.placeholder),
+			});
+		}
+
+		if (this.tempPastingPlaceholder) {
+			const strIdx = this.content.indexOf(this.tempPastingPlaceholder);
+			if (strIdx !== -1) {
+				result.push({
+					id: '__pasting__',
+					cpStart: cpLen(this.content.substring(0, strIdx)),
+					phCpLen: cpLen(this.tempPastingPlaceholder),
+				});
+			}
+		}
+
+		result.sort((a, b) => a.cpStart - b.cpStart);
+		return result;
+	}
+
+	/**
+	 * 按 id 移除占位符记录。
+	 */
+	private removePlaceholderRecord(id: string): void {
+		if (id === '__pasting__') {
+			this.tempPastingPlaceholder = null;
+			return;
+		}
+		this.placeholderStorage.delete(id);
 	}
 
 	moveLeft(): void {
@@ -581,9 +1011,7 @@ export class TextBuffer {
 
 			this._expandedSegments = this.buildExpandedSegments();
 			const expandedText = this.getFullText();
-			const expandedCursor = this.mapCursorToExpandedIndex(
-				this.cursorIndex,
-			);
+			const expandedCursor = this.mapCursorToExpandedIndex(this.cursorIndex);
 
 			for (const [id, ph] of this.placeholderStorage.entries()) {
 				if (ph.type === 'text') {
@@ -790,20 +1218,19 @@ export class TextBuffer {
 					oldCursor >= region.start &&
 					oldCursor <= region.end
 				) {
-					newCursor =
-						cpLen(newContent) + (oldCursor - region.start);
+					newCursor = cpLen(newContent) + (oldCursor - region.start);
 					cursorMapped = true;
 				}
 				newContent += regionText;
 			} else if (regionText.length > 0) {
-				const lineCount =
-					(regionText.match(/\n/g) || []).length + 1;
-				const shouldFold =
-					regionText.length >= 400 || lineCount >= 12;
+				const lineCount = (regionText.match(/\n/g) || []).length + 1;
+				const shouldFold = regionText.length >= 400 || lineCount >= 12;
 
 				if (shouldFold) {
 					this.textPlaceholderCounter++;
-					const pasteId = `paste_refold_${Date.now()}_${this.textPlaceholderCounter}`;
+					const pasteId = `paste_refold_${Date.now()}_${
+						this.textPlaceholderCounter
+					}`;
 					const placeholderText = `[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
 
 					this.placeholderStorage.set(pasteId, {
@@ -820,8 +1247,7 @@ export class TextBuffer {
 						oldCursor >= region.start &&
 						oldCursor <= region.end
 					) {
-						newCursor =
-							cpLen(newContent) + cpLen(placeholderText);
+						newCursor = cpLen(newContent) + cpLen(placeholderText);
 						cursorMapped = true;
 					}
 					newContent += placeholderText;
@@ -831,9 +1257,7 @@ export class TextBuffer {
 						oldCursor >= region.start &&
 						oldCursor <= region.end
 					) {
-						newCursor =
-							cpLen(newContent) +
-							(oldCursor - region.start);
+						newCursor = cpLen(newContent) + (oldCursor - region.start);
 						cursorMapped = true;
 					}
 					newContent += regionText;
@@ -872,21 +1296,20 @@ export class TextBuffer {
 					oldCursor >= expandedPos &&
 					oldCursor <= expandedPos + seg.text.length
 				) {
-					newCursor =
-						cpLen(newContent) + (oldCursor - expandedPos);
+					newCursor = cpLen(newContent) + (oldCursor - expandedPos);
 					cursorMapped = true;
 				}
 				newContent += seg.text;
 				expandedPos += seg.text.length;
 			} else {
-				const lineCount =
-					(seg.text.match(/\n/g) || []).length + 1;
-				const shouldFold =
-					seg.text.length >= 400 || lineCount >= 12;
+				const lineCount = (seg.text.match(/\n/g) || []).length + 1;
+				const shouldFold = seg.text.length >= 400 || lineCount >= 12;
 
 				if (shouldFold) {
 					this.textPlaceholderCounter++;
-					const pasteId = `paste_restore_${Date.now()}_${this.textPlaceholderCounter}`;
+					const pasteId = `paste_restore_${Date.now()}_${
+						this.textPlaceholderCounter
+					}`;
 					const placeholderText =
 						seg.originalPlaceholder ||
 						`[Paste ${lineCount} lines #${this.textPlaceholderCounter}] `;
@@ -905,8 +1328,7 @@ export class TextBuffer {
 						oldCursor >= expandedPos &&
 						oldCursor <= expandedPos + seg.text.length
 					) {
-						newCursor =
-							cpLen(newContent) + cpLen(placeholderText);
+						newCursor = cpLen(newContent) + cpLen(placeholderText);
 						cursorMapped = true;
 					}
 					newContent += placeholderText;
@@ -916,9 +1338,7 @@ export class TextBuffer {
 						oldCursor >= expandedPos &&
 						oldCursor <= expandedPos + seg.text.length
 					) {
-						newCursor =
-							cpLen(newContent) +
-							(oldCursor - expandedPos);
+						newCursor = cpLen(newContent) + (oldCursor - expandedPos);
 						cursorMapped = true;
 					}
 					newContent += seg.text;
@@ -1044,9 +1464,7 @@ export class TextBuffer {
 	private recalculateVisualState(): void {
 		this.clampCursorIndex();
 
-		this._displayText = this._expandedView
-			? this.getFullText()
-			: this.content;
+		this._displayText = this._expandedView ? this.getFullText() : this.content;
 
 		const width = this.viewport.width;
 		const effectiveWidth =
@@ -1089,8 +1507,7 @@ export class TextBuffer {
 		const displayCursorIdx = this._expandedView
 			? this.mapCursorToExpandedIndex(this.cursorIndex)
 			: this.cursorIndex;
-		this.visualCursorPos =
-			this.computeVisualCursorFromIndex(displayCursorIdx);
+		this.visualCursorPos = this.computeVisualCursorFromIndex(displayCursorIdx);
 		this.preferredVisualCol = this.visualCursorPos[1];
 	}
 
@@ -1136,7 +1553,8 @@ export class TextBuffer {
 						placeholderText.match(/^\[image #\d+\] ?$/) ||
 						placeholderText === '[Pasting...]' ||
 						placeholderText === '[Pasting...] ' ||
-						placeholderText.match(/^\[Skill:[^\]]+\] ?$/)
+						placeholderText.match(/^\[Skill:[^\]]+\] ?$/) ||
+						placeholderText.match(/^\[GitLine:[^\]]+\] ?$/)
 					) {
 						return {start: openPos, end};
 					}
@@ -1274,6 +1692,12 @@ export class TextBuffer {
 	 * 插入图片数据（使用统一的占位符系统）
 	 */
 	insertImage(base64Data: string, mimeType: string): void {
+		// 如果存在临时"图片上传中/粘贴中"占位符，先移除它
+		// 这样图片标签就能无缝替换 loading 标签
+		if (this.tempPastingPlaceholder) {
+			this.removeTempPlaceholder();
+		}
+
 		// 清理 base64 数据：移除所有空白字符（包括换行符）
 		// PowerShell/macOS 的 base64 编码可能包含换行符
 		const cleanedBase64 = base64Data.replace(/\s+/g, '');

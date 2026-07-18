@@ -8,10 +8,15 @@ import {
 
 export type PanelState = {
 	showSessionPanel: boolean;
+	// /goal resume 弹出的会话列表（与 showSessionPanel 互斥，独立状态便于 ESC 关闭和样式区分）
+	showGoalSessionPanel: boolean;
 	showMcpPanel: boolean;
 	showUsagePanel: boolean;
+	showHelpPanel: boolean;
 	showCustomCommandConfig: boolean;
 	showSkillsCreation: boolean;
+	showSkillsInstall: boolean;
+	showSkillsListPanel: boolean;
 	showRoleCreation: boolean;
 	showRoleDeletion: boolean;
 	showRoleList: boolean;
@@ -22,11 +27,21 @@ export type PanelState = {
 	showReviewCommitPanel: boolean;
 	showBranchPanel: boolean;
 	showProfilePanel: boolean;
+	// 配置编辑面板：从 ProfilePanel 按右方向键进入，编辑指定 profile（不切换 active）
+	showProfileEditPanel: boolean;
+	editingProfileName: string | null;
 	showModelsPanel: boolean;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
+	showTelemetryPanel: boolean;
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
+	showTaskManagerPanel: boolean;
+	showPixelEditor: boolean;
+	showGamesPanel: boolean;
+	showAnyPanel: boolean;
+	activeAnyPanelPluginId: string | null;
+	showIdeSelectPanel: boolean;
 	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
@@ -35,13 +50,25 @@ export type PanelState = {
 
 export type PanelActions = {
 	setShowSessionPanel: Dispatch<SetStateAction<boolean>>;
-	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
-	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
-	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
+	setShowGoalSessionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
+	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
+	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTelemetryPanel: Dispatch<SetStateAction<boolean>>;
+	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
+	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
+	setShowSkillsInstall: Dispatch<SetStateAction<boolean>>;
+	setShowSkillsListPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
+	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
+	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
+	setShowGamesPanel: Dispatch<SetStateAction<boolean>>;
+	setShowAnyPanel: Dispatch<SetStateAction<boolean>>;
+	setActiveAnyPanelPluginId: Dispatch<SetStateAction<string | null>>;
+	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
 	setShowRoleCreation: Dispatch<SetStateAction<boolean>>;
 	setShowRoleDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowRoleList: Dispatch<SetStateAction<boolean>>;
@@ -52,11 +79,21 @@ export type PanelActions = {
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowBranchPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
+	setShowProfileEditPanel: Dispatch<SetStateAction<boolean>>;
+	setEditingProfileName: Dispatch<SetStateAction<string | null>>;
 	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
 	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
-	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
+	/**
+	 * 打开 ProfileEditPanel 编辑指定 profile：
+	 * 同时关闭 ProfilePanel（picker），切换为编辑视图。
+	 */
+	openProfileEdit: (profileName: string) => void;
+	/**
+	 * 关闭 ProfileEditPanel 并回到 ProfilePanel（picker）。
+	 */
+	closeProfileEditAndReturnToPicker: () => void;
 	handleSwitchProfile: (options: {
 		isStreaming: boolean;
 		hasPendingRollback: boolean;
@@ -70,10 +107,15 @@ export type PanelActions = {
 
 export function usePanelState(): PanelState & PanelActions {
 	const [showSessionPanel, setShowSessionPanel] = useState(false);
+	// /goal resume 专属面板状态——与 showSessionPanel 互斥但独立持有
+	const [showGoalSessionPanel, setShowGoalSessionPanel] = useState(false);
 	const [showMcpPanel, setShowMcpPanel] = useState(false);
 	const [showUsagePanel, setShowUsagePanel] = useState(false);
+	const [showHelpPanel, setShowHelpPanel] = useState(false);
 	const [showCustomCommandConfig, setShowCustomCommandConfig] = useState(false);
 	const [showSkillsCreation, setShowSkillsCreation] = useState(false);
+	const [showSkillsInstall, setShowSkillsInstall] = useState(false);
+	const [showSkillsListPanel, setShowSkillsListPanel] = useState(false);
 	const [showRoleCreation, setShowRoleCreation] = useState(false);
 	const [showRoleDeletion, setShowRoleDeletion] = useState(false);
 	const [showRoleList, setShowRoleList] = useState(false);
@@ -86,11 +128,24 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showBranchPanel, setShowBranchPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
+	const [showProfileEditPanel, setShowProfileEditPanel] = useState(false);
+	const [editingProfileName, setEditingProfileName] = useState<string | null>(
+		null,
+	);
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+	const [showTelemetryPanel, setShowTelemetryPanel] = useState(false);
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
+	const [showTaskManagerPanel, setShowTaskManagerPanel] = useState(false);
+	const [showPixelEditor, setShowPixelEditor] = useState(false);
+	const [showGamesPanel, setShowGamesPanel] = useState(false);
+	const [showAnyPanel, setShowAnyPanel] = useState(false);
+	const [activeAnyPanelPluginId, setActiveAnyPanelPluginId] = useState<
+		string | null
+	>(null);
+	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
 	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
 		string | undefined
 	>(undefined);
@@ -116,6 +171,8 @@ export function usePanelState(): PanelState & PanelActions {
 			showUsagePanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showSkillsInstall ||
+			showSkillsListPanel ||
 			showRoleCreation ||
 			showRoleDeletion ||
 			showRoleList ||
@@ -128,8 +185,14 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
+			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
+			showTaskManagerPanel ||
+			showPixelEditor ||
+			showGamesPanel ||
+			showAnyPanel ||
+			showIdeSelectPanel ||
 			options.hasPendingRollback ||
 			options.hasPendingToolConfirmation ||
 			options.hasPendingUserQuestion ||
@@ -140,7 +203,33 @@ export function usePanelState(): PanelState & PanelActions {
 
 		// Show profile selection panel instead of cycling
 		setShowProfilePanel(true);
-		setProfileSelectedIndex(0);
+		setProfileSearchQuery('');
+		const profiles = getAllProfiles();
+		// 使用内存中的 currentProfileName（displayName）定位光标，
+		// 避免其他终端切换 profile 写文件后，本终端读到的 active 与内存不一致
+		const activeIndex = profiles.findIndex(
+			p => p.displayName === currentProfileName,
+		);
+		setProfileSelectedIndex(activeIndex >= 0 ? activeIndex : 0);
+	};
+
+	// 从 ProfilePanel 进入 ProfileEditPanel：编辑光标焦点的 profile
+	// 注意：保留 profileSelectedIndex 与 profileSearchQuery，
+	// 这样 ESC 返回 picker 时光标停留在原来的 profile 上。
+	const openProfileEdit = (profileName: string) => {
+		setEditingProfileName(profileName);
+		setShowProfileEditPanel(true);
+		// 关闭 picker 让 footer 不再渲染 ProfilePanel；
+		// ProfileEditPanel 会在 PanelsManager 里独立渲染。
+		setShowProfilePanel(false);
+	};
+
+	// 关闭 ProfileEditPanel 后回到 ProfilePanel（picker）
+	// 同样保留 profileSelectedIndex，让光标回到进入编辑面板时的位置。
+	const closeProfileEditAndReturnToPicker = () => {
+		setShowProfileEditPanel(false);
+		setEditingProfileName(null);
+		setShowProfilePanel(true);
 	};
 
 	const handleProfileSelect = (profileName: string) => {
@@ -167,6 +256,10 @@ export function usePanelState(): PanelState & PanelActions {
 			setShowSessionPanel(false);
 			return true;
 		}
+		if (showGoalSessionPanel) {
+			setShowGoalSessionPanel(false);
+			return true;
+		}
 		if (showMcpPanel) {
 			// Let MCPInfoPanel handle ESC internally (tool list page vs main page)
 			return false;
@@ -174,6 +267,11 @@ export function usePanelState(): PanelState & PanelActions {
 
 		if (showUsagePanel) {
 			setShowUsagePanel(false);
+			return true;
+		}
+
+		if (showHelpPanel) {
+			setShowHelpPanel(false);
 			return true;
 		}
 		// CustomCommandConfigPanel handles its own ESC key logic internally
@@ -186,6 +284,15 @@ export function usePanelState(): PanelState & PanelActions {
 		if (showSkillsCreation) {
 			return false; // Let SkillsCreationPanel handle ESC
 		}
+		// SkillsInstallPanel handles its own ESC key logic internally
+		if (showSkillsInstall) {
+			return false; // Let SkillsInstallPanel handle ESC
+		}
+		if (showSkillsListPanel) {
+			setShowSkillsListPanel(false);
+			return true;
+		}
+
 		// RoleCreationPanel handles its own ESC key logic internally
 		// Don't close it here - let the panel decide when to close
 		if (showRoleCreation) {
@@ -242,6 +349,19 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let ConnectionPanel handle ESC
 		}
 
+		// TelemetryPanel handles its own ESC key logic internally
+		if (showTelemetryPanel) {
+			return false;
+		}
+
+		// ProfileEditPanel 完全交由 ConfigScreen 内部处理 ESC：
+		// 内部 useConfigInput 会按层级处理（先关闭 select 子项 / 退出编辑模式，
+		// 再按 ESC 才会保存并通过 onBack 触发 closeProfileEditAndReturnToPicker）。
+		// 外层若也处理，会一次 ESC 直接弹出整个面板，破坏多级返回体验。
+		if (showProfileEditPanel) {
+			return false;
+		}
+
 		if (showProfilePanel) {
 			setShowProfilePanel(false);
 			return true;
@@ -263,16 +383,41 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
+		if (showTaskManagerPanel) {
+			setShowTaskManagerPanel(false);
+			return true;
+		}
+
+		if (showPixelEditor) {
+			return false; // Let PixelEditorScreen handle ESC
+		}
+
+		if (showGamesPanel) {
+			return false; // Let GamesScreen handle ESC
+		}
+		// AnyPanelScreen handles its own ESC key logic internally
+		if (showAnyPanel) {
+			return false; // Let AnyPanelScreen handle ESC
+		}
+
+		if (showIdeSelectPanel) {
+			setShowIdeSelectPanel(false);
+			return true;
+		}
+
 		return false; // ESC not handled
 	};
 
 	const isAnyPanelOpen = (): boolean => {
 		return (
 			showSessionPanel ||
+			showGoalSessionPanel ||
 			showMcpPanel ||
 			showUsagePanel ||
 			showCustomCommandConfig ||
 			showSkillsCreation ||
+			showSkillsInstall ||
+			showSkillsListPanel ||
 			showRoleCreation ||
 			showRoleDeletion ||
 			showRoleList ||
@@ -283,21 +428,32 @@ export function usePanelState(): PanelState & PanelActions {
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
+			showProfileEditPanel ||
 			showModelsPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
+			showTelemetryPanel ||
 			showNewPromptPanel ||
-			showTodoListPanel
+			showTodoListPanel ||
+			showTaskManagerPanel ||
+			showPixelEditor ||
+			showGamesPanel ||
+			showAnyPanel ||
+			showIdeSelectPanel
 		);
 	};
 
 	return {
 		// State
 		showSessionPanel,
+		showGoalSessionPanel,
 		showMcpPanel,
 		showUsagePanel,
+		showHelpPanel,
 		showCustomCommandConfig,
 		showSkillsCreation,
+		showSkillsInstall,
+		showSkillsListPanel,
 		showRoleCreation,
 		showRoleDeletion,
 		showRoleList,
@@ -308,21 +464,34 @@ export function usePanelState(): PanelState & PanelActions {
 		showReviewCommitPanel,
 		showBranchPanel,
 		showProfilePanel,
+		showProfileEditPanel,
+		editingProfileName,
 		showModelsPanel,
 		showDiffReviewPanel,
 		showConnectionPanel,
+		showTelemetryPanel,
 		showNewPromptPanel,
 		showTodoListPanel,
+		showTaskManagerPanel,
+		showPixelEditor,
+		showGamesPanel,
+		showAnyPanel,
+		activeAnyPanelPluginId,
+		showIdeSelectPanel,
 		connectionPanelApiUrl,
 		profileSelectedIndex,
 		profileSearchQuery,
 		currentProfileName,
 		// Actions
 		setShowSessionPanel,
+		setShowGoalSessionPanel,
 		setShowMcpPanel,
 		setShowUsagePanel,
+		setShowHelpPanel,
 		setShowCustomCommandConfig,
 		setShowSkillsCreation,
+		setShowSkillsInstall,
+		setShowSkillsListPanel,
 		setShowRoleCreation,
 		setShowRoleDeletion,
 		setShowRoleList,
@@ -333,11 +502,22 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowReviewCommitPanel,
 		setShowBranchPanel,
 		setShowProfilePanel,
+		setShowProfileEditPanel,
+		setEditingProfileName,
 		setShowModelsPanel,
+		openProfileEdit,
+		closeProfileEditAndReturnToPicker,
 		setShowDiffReviewPanel,
 		setShowConnectionPanel,
+		setShowTelemetryPanel,
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
+		setShowTaskManagerPanel,
+		setShowPixelEditor,
+		setShowGamesPanel,
+		setShowAnyPanel,
+		setActiveAnyPanelPluginId,
+		setShowIdeSelectPanel,
 		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,

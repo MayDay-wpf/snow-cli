@@ -8,6 +8,7 @@ import {
 	createTeam,
 	getTeam,
 	addMember,
+	updateMember,
 	disbandTeam,
 } from '../utils/team/teamConfig.js';
 import {
@@ -27,16 +28,21 @@ import {
 	getConflictedFiles,
 	completeMerge,
 	abortCurrentMerge,
+	validateTeamWorktreeName,
 	type MergeStrategy,
 } from '../utils/team/teamWorktree.js';
 import {existsSync, readFileSync, writeFileSync} from 'fs';
 import {teamTracker} from '../utils/execution/teamTracker.js';
 import type {RequestMethod} from '../utils/config/apiConfig.js';
-import {executeTeammate} from '../utils/execution/teamExecutor.js';
-import type {SubAgentMessage} from '../utils/execution/subAgentExecutor.js';
+import {executeTeammateInChildProcess} from '../utils/execution/agentChildProcess.js';
+import type {SubAgentMessage} from '../utils/execution/subAgentTypes.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
-import {recordTeamCreated, recordMemberSpawned, deleteTeamSnapshotsByTeamName} from '../utils/team/teamSnapshot.js';
+import {
+	recordTeamCreated,
+	recordMemberSpawned,
+	deleteTeamSnapshotsByTeamName,
+} from '../utils/team/teamSnapshot.js';
 import {clearAllTeammateStreamEntries} from '../hooks/conversation/core/subAgentMessageHandler.js';
 
 export interface TeamToolExecutionOptions {
@@ -59,7 +65,9 @@ export interface TeamToolExecutionOptions {
 }
 
 export class TeamService {
-	private getOwnTeam(): import('../utils/team/teamConfig.js').TeamConfig | null {
+	private getOwnTeam():
+		| import('../utils/team/teamConfig.js').TeamConfig
+		| null {
 		const teamName = teamTracker.getActiveTeamName();
 		if (!teamName) return null;
 		const team = getTeam(teamName);
@@ -76,14 +84,16 @@ export class TeamService {
 		conflictFiles: string[],
 		memberName: string,
 	): Promise<{resolved: string[]; failed: string[]; error?: string}> {
-		const {getOpenAiConfig} = await import('../utils/config/apiConfig.js');
+		const {getSnowConfig} = await import('../utils/config/apiConfig.js');
 		const {createStreamingChatCompletion} = await import('../api/chat.js');
-		const {createStreamingAnthropicCompletion} = await import('../api/anthropic.js');
+		const {createStreamingAnthropicCompletion} = await import(
+			'../api/anthropic.js'
+		);
 		const {createStreamingGeminiCompletion} = await import('../api/gemini.js');
 		const {createStreamingResponse} = await import('../api/responses.js');
 		const {execSync} = await import('child_process');
 
-		const config = getOpenAiConfig();
+		const config = getSnowConfig();
 		const model = config.advancedModel || config.basicModel || 'gpt-4o-mini';
 		const method: RequestMethod = config.requestMethod || 'chat';
 
@@ -103,7 +113,9 @@ export class TeamService {
 				try {
 					execSync(`git add "${file}"`, {stdio: 'pipe'});
 					resolved.push(file);
-				} catch { failed.push(file); }
+				} catch {
+					failed.push(file);
+				}
 				continue;
 			}
 
@@ -140,25 +152,29 @@ export class TeamService {
 
 				switch (method) {
 					case 'anthropic':
-						await collectContent(createStreamingAnthropicCompletion(
-							{model, messages, max_tokens: config.maxTokens || 8192, temperature: 0, disableThinking: true},
-						));
+						await collectContent(
+							createStreamingAnthropicCompletion({
+								model,
+								messages,
+								max_tokens: config.maxTokens || 8192,
+								temperature: 0,
+								disableThinking: true,
+							}),
+						);
 						break;
 					case 'gemini':
-						await collectContent(createStreamingGeminiCompletion(
-							{model, messages},
-						));
+						await collectContent(
+							createStreamingGeminiCompletion({model, messages}),
+						);
 						break;
 					case 'responses':
-						await collectContent(createStreamingResponse(
-							{model, messages},
-						));
+						await collectContent(createStreamingResponse({model, messages}));
 						break;
 					case 'chat':
 					default:
-						await collectContent(createStreamingChatCompletion(
-							{model, messages, temperature: 0},
-						));
+						await collectContent(
+							createStreamingChatCompletion({model, messages, temperature: 0}),
+						);
 						break;
 				}
 
@@ -167,10 +183,15 @@ export class TeamService {
 					execSync(`git add "${file}"`, {stdio: 'pipe'});
 					resolved.push(file);
 				} else {
-					throw new Error('AI output still contains conflict markers or is empty');
+					throw new Error(
+						'AI output still contains conflict markers or is empty',
+					);
 				}
 			} catch (aiError) {
-				console.error(`[Team] AI conflict resolution failed for ${file}, falling back to --theirs:`, aiError);
+				console.error(
+					`[Team] AI conflict resolution failed for ${file}, falling back to --theirs:`,
+					aiError,
+				);
 				try {
 					execSync(`git checkout --theirs "${file}"`, {stdio: 'pipe'});
 					execSync(`git add "${file}"`, {stdio: 'pipe'});
@@ -224,18 +245,33 @@ export class TeamService {
 	}
 
 	private async spawnTeammate(options: TeamToolExecutionOptions): Promise<any> {
-		const {args, onMessage, abortSignal, requestToolConfirmation, isToolAutoApproved, yoloMode, addToAlwaysApproved, requestUserQuestion} = options;
+		const {
+			args,
+			onMessage,
+			abortSignal,
+			requestToolConfirmation,
+			isToolAutoApproved,
+			yoloMode,
+			addToAlwaysApproved,
+			requestUserQuestion,
+		} = options;
 		const name = args['name'] as string;
 		const role = args['role'] as string | undefined;
 		const prompt = args['prompt'] as string;
-		const requirePlanApproval = args['require_plan_approval'] as boolean | undefined;
+		const requirePlanApproval = args['require_plan_approval'] as
+			| boolean
+			| undefined;
 
 		if (!name || !prompt) {
 			throw new Error('spawn_teammate requires "name" and "prompt" parameters');
 		}
 
+		validateTeamWorktreeName(name, 'teammate name');
+
 		if (!isGitRepo()) {
-			throw new Error('Agent Teams require a Git repository. Initialize git first.');
+			throw new Error(
+				'Agent Teams require a Git repository. Initialize git first.',
+			);
 		}
 
 		// Ensure a team exists (scoped to this session)
@@ -259,14 +295,39 @@ export class TeamService {
 			if (isNewTeam) {
 				recordTeamCreated(ctx.sessionId, ctx.messageIndex, team.name);
 			}
-			recordMemberSpawned(ctx.sessionId, ctx.messageIndex, team.name, member.id, name, worktreePath);
+			recordMemberSpawned(
+				ctx.sessionId,
+				ctx.messageIndex,
+				team.name,
+				member.id,
+				name,
+				worktreePath,
+			);
 		}
 
-		// Create a managed AbortController so rollback can force-stop this teammate
-		const teammateAC = teamTracker.createAbortController(member.id, abortSignal);
+		const teammateInstanceId = member.id;
 
-		// Spawn teammate execution (fire-and-forget)
-		executeTeammate(
+		// Keep a lightweight parent-process tracker entry for UI, messaging, wait,
+		// and abort control while the heavy teammate runtime lives in the child.
+		teamTracker.register({
+			instanceId: teammateInstanceId,
+			memberId: member.id,
+			memberName: name,
+			role,
+			worktreePath,
+			teamName: team.name,
+			prompt,
+			startedAt: new Date(),
+		});
+
+		// Create a managed AbortController so rollback can force-stop this teammate.
+		const teammateAC = teamTracker.createAbortController(
+			teammateInstanceId,
+			abortSignal,
+		);
+
+		// Spawn teammate execution in a child process (fire-and-forget).
+		executeTeammateInChildProcess(
 			member.id,
 			name,
 			prompt,
@@ -282,10 +343,40 @@ export class TeamService {
 				addToAlwaysApproved,
 				requestUserQuestion,
 				requirePlanApproval,
+				instanceId: teammateInstanceId,
 			},
-		).catch(error => {
-			console.error(`Teammate ${name} failed:`, error);
-		});
+			teammateInstanceId,
+		)
+			.then(result => {
+				teamTracker.storeResult({
+					instanceId: teammateInstanceId,
+					memberId: member.id,
+					memberName: name,
+					success: result.success,
+					result: result.result,
+					error: result.error,
+					completedAt: new Date(),
+				});
+			})
+			.catch(error => {
+				teamTracker.storeResult({
+					instanceId: teammateInstanceId,
+					memberId: member.id,
+					memberName: name,
+					success: false,
+					result: '',
+					error: error instanceof Error ? error.message : String(error),
+					completedAt: new Date(),
+				});
+				console.error(`Teammate ${name} failed:`, error);
+			})
+			.finally(() => {
+				updateMember(team.name, member.id, {
+					status: 'shutdown',
+					shutdownAt: new Date().toISOString(),
+				});
+				teamTracker.unregister(teammateInstanceId);
+			});
 
 		return {
 			success: true,
@@ -305,9 +396,10 @@ export class TeamService {
 		}
 
 		// Find teammate by member ID, name, or instance ID
-		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId)
-			|| teamTracker.getTeammate(targetId);
+		let teammate =
+			teamTracker.findByMemberId(targetId) ||
+			teamTracker.findByMemberName(targetId) ||
+			teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {
@@ -351,9 +443,10 @@ export class TeamService {
 			throw new Error('shutdown_teammate requires "target_id"');
 		}
 
-		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId)
-			|| teamTracker.getTeammate(targetId);
+		let teammate =
+			teamTracker.findByMemberId(targetId) ||
+			teamTracker.findByMemberName(targetId) ||
+			teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {
@@ -370,7 +463,9 @@ export class TeamService {
 
 		return {
 			success: true,
-			result: `Teammate ${teammate.memberName} has been shut down.${reason ? ` Reason: ${reason}` : ''}`,
+			result: `Teammate ${teammate.memberName} has been shut down.${
+				reason ? ` Reason: ${reason}` : ''
+			}`,
 		};
 	}
 
@@ -421,11 +516,14 @@ export class TeamService {
 		}
 
 		const timeoutMs = Math.min(
-			Math.max((args['timeout_seconds'] as number || 600) * 1000, 10_000),
+			Math.max(((args['timeout_seconds'] as number) || 600) * 1000, 10_000),
 			1_800_000,
 		);
 
-		const allDone = await teamTracker.waitForAllTeammates(timeoutMs, abortSignal);
+		const allDone = await teamTracker.waitForAllTeammates(
+			timeoutMs,
+			abortSignal,
+		);
 
 		const results = teamTracker.drainResults();
 		const leadMessages = teamTracker.dequeueLeadMessages();
@@ -441,7 +539,9 @@ export class TeamService {
 			success: allDone,
 			result: allDone
 				? `All ${currentRunning.length} teammate(s) are on standby (work complete). Use shutdown_teammate to shut them down, then merge their work.`
-				: `Timed out after ${timeoutMs / 1000}s. ${stillWorking.length} teammate(s) still working: ${stillWorking.join(', ')}`,
+				: `Timed out after ${timeoutMs / 1000}s. ${
+						stillWorking.length
+				  } teammate(s) still working: ${stillWorking.join(', ')}`,
 			standbyTeammates,
 			stillWorking,
 			completedResults: results.map(r => ({
@@ -460,7 +560,9 @@ export class TeamService {
 	private createTask(args: Record<string, any>): any {
 		const team = this.getOwnTeam();
 		if (!team) {
-			throw new Error('No active team. You must call spawn_teammate first — the team is created automatically when the first teammate is spawned. Call spawn_teammate, then create_task.');
+			throw new Error(
+				'No active team. You must call spawn_teammate first — the team is created automatically when the first teammate is spawned. Call spawn_teammate, then create_task.',
+			);
 		}
 
 		const title = args['title'] as string;
@@ -474,8 +576,12 @@ export class TeamService {
 		}
 
 		const task = createTask(
-			team.name, title, description,
-			dependencies, assigneeId, assigneeName,
+			team.name,
+			title,
+			description,
+			dependencies,
+			assigneeId,
+			assigneeName,
 		);
 
 		return {
@@ -541,7 +647,9 @@ export class TeamService {
 				instanceId: t.instanceId,
 				worktreePath: t.worktreePath,
 				currentTaskId: t.currentTaskId,
-				runningFor: `${Math.round((Date.now() - t.startedAt.getTime()) / 1000)}s`,
+				runningFor: `${Math.round(
+					(Date.now() - t.startedAt.getTime()) / 1000,
+				)}s`,
 			})),
 		};
 	}
@@ -555,7 +663,8 @@ export class TeamService {
 		if (isInMergeState()) {
 			return {
 				success: false,
-				error: 'A merge is already in progress. Call team-resolve_merge_conflicts to complete it or team-abort_merge to cancel.',
+				error:
+					'A merge is already in progress. Call team-resolve_merge_conflicts to complete it or team-abort_merge to cancel.',
 			};
 		}
 
@@ -570,7 +679,10 @@ export class TeamService {
 			m => m.name.toLowerCase() === targetName.toLowerCase(),
 		);
 		if (!member) {
-			return {success: false, error: `Member "${targetName}" not found in team.`};
+			return {
+				success: false,
+				error: `Member "${targetName}" not found in team.`,
+			};
 		}
 
 		if (member.worktreePath && existsSync(member.worktreePath)) {
@@ -599,7 +711,9 @@ export class TeamService {
 				abortCurrentMerge();
 				return {
 					success: false,
-					error: `AI conflict resolution failed for ${aiResult.failed.length} file(s): ${aiResult.failed.join(', ')}`,
+					error: `AI conflict resolution failed for ${
+						aiResult.failed.length
+					} file(s): ${aiResult.failed.join(', ')}`,
 					conflictFiles: aiResult.failed,
 				};
 			}
@@ -610,7 +724,11 @@ export class TeamService {
 			if (mergeComplete.success) {
 				return {
 					success: true,
-					result: `Merged ${result.commitCount} commit(s) from ${member.name}. AI resolved conflicts in ${aiResult.resolved.length} file(s): ${aiResult.resolved.join(', ')}.`,
+					result: `Merged ${result.commitCount} commit(s) from ${
+						member.name
+					}. AI resolved conflicts in ${
+						aiResult.resolved.length
+					} file(s): ${aiResult.resolved.join(', ')}.`,
 					autoResolved: aiResult.resolved,
 				};
 			}
@@ -641,7 +759,8 @@ export class TeamService {
 		if (isInMergeState()) {
 			return {
 				success: false,
-				error: 'A merge is already in progress. Call team-resolve_merge_conflicts to complete it or team-abort_merge to cancel.',
+				error:
+					'A merge is already in progress. Call team-resolve_merge_conflicts to complete it or team-abort_merge to cancel.',
 			};
 		}
 
@@ -655,7 +774,15 @@ export class TeamService {
 		}
 
 		const strategy = (args['strategy'] as MergeStrategy) || 'manual';
-		const results: Array<{name: string; merged: boolean; commits: number; files: number; error?: string; conflictFiles?: string[]; autoResolved?: string[]}> = [];
+		const results: Array<{
+			name: string;
+			merged: boolean;
+			commits: number;
+			files: number;
+			error?: string;
+			conflictFiles?: string[];
+			autoResolved?: string[];
+		}> = [];
 
 		for (const member of team.members) {
 			if (member.worktreePath && existsSync(member.worktreePath)) {
@@ -689,7 +816,9 @@ export class TeamService {
 						merged: false,
 						commits: mergeResult.commitCount,
 						files: 0,
-						error: `AI conflict resolution failed for: ${aiResult.failed.join(', ')}`,
+						error: `AI conflict resolution failed for: ${aiResult.failed.join(
+							', ',
+						)}`,
 						conflictFiles: aiResult.failed,
 					});
 					break;
@@ -761,9 +890,12 @@ export class TeamService {
 			};
 		}
 
-		const autoInfo = allAutoResolved.length > 0
-			? ` AI resolved conflicts in ${allAutoResolved.length} file(s): ${allAutoResolved.join(', ')}.`
-			: '';
+		const autoInfo =
+			allAutoResolved.length > 0
+				? ` AI resolved conflicts in ${
+						allAutoResolved.length
+				  } file(s): ${allAutoResolved.join(', ')}.`
+				: '';
 
 		return {
 			success: true,
@@ -775,14 +907,21 @@ export class TeamService {
 
 	private resolveMergeConflicts(): any {
 		if (!isInMergeState()) {
-			return {success: false, error: 'Not currently in a merge state. Nothing to resolve.'};
+			return {
+				success: false,
+				error: 'Not currently in a merge state. Nothing to resolve.',
+			};
 		}
 
 		const remaining = getConflictedFiles();
 		if (remaining.length > 0) {
 			return {
 				success: false,
-				error: `${remaining.length} file(s) still have unresolved conflict markers: ${remaining.join(', ')}. Edit them to remove <<<<<<< / ======= / >>>>>>> markers first.`,
+				error: `${
+					remaining.length
+				} file(s) still have unresolved conflict markers: ${remaining.join(
+					', ',
+				)}. Edit them to remove <<<<<<< / ======= / >>>>>>> markers first.`,
 				unresolvedFiles: remaining,
 			};
 		}
@@ -791,7 +930,8 @@ export class TeamService {
 		if (result.success) {
 			return {
 				success: true,
-				result: 'Merge completed successfully. All conflicts resolved and committed.',
+				result:
+					'Merge completed successfully. All conflicts resolved and committed.',
 			};
 		}
 		return {success: false, error: result.error};
@@ -832,7 +972,9 @@ export class TeamService {
 		for (const member of team.members) {
 			const diff = getTeammateDiffSummary(team.name, member.name);
 			if (diff && diff.commitCount > 0) {
-				unmergedMembers.push(`${member.name} (${diff.commitCount} commits, ${diff.filesChanged} files)`);
+				unmergedMembers.push(
+					`${member.name} (${diff.commitCount} commits, ${diff.filesChanged} files)`,
+				);
 			}
 		}
 
@@ -877,9 +1019,10 @@ export class TeamService {
 			throw new Error('approve_plan requires "target_id" and "approved"');
 		}
 
-		let teammate = teamTracker.findByMemberId(targetId)
-			|| teamTracker.findByMemberName(targetId)
-			|| teamTracker.getTeammate(targetId);
+		let teammate =
+			teamTracker.findByMemberId(targetId) ||
+			teamTracker.findByMemberName(targetId) ||
+			teamTracker.getTeammate(targetId);
 
 		if (!teammate) {
 			return {success: false, error: `Teammate "${targetId}" not found.`};
@@ -894,7 +1037,9 @@ export class TeamService {
 		return {
 			success: resolved,
 			result: resolved
-				? `Plan ${approved ? 'approved' : 'rejected'} for ${teammate.memberName}.`
+				? `Plan ${approved ? 'approved' : 'rejected'} for ${
+						teammate.memberName
+				  }.`
 				: `No pending plan approval found for ${targetId}.`,
 		};
 	}
@@ -907,25 +1052,46 @@ export class TeamService {
 		return [
 			{
 				name: 'spawn_teammate',
-				description: 'Spawn a new teammate agent that works independently in its own Git worktree. Each teammate has full tool access and can communicate with other teammates.',
+				description:
+					'Spawn a new teammate agent that works independently in its own Git worktree. Each teammate has full tool access and can communicate with other teammates.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						name: {type: 'string', description: 'A short, descriptive name for this teammate (e.g., "frontend", "backend", "tester").'},
-						role: {type: 'string', description: 'Optional role description guiding the teammate\'s focus area.'},
-						prompt: {type: 'string', description: 'The task prompt for this teammate. Include all relevant context since teammates don\'t inherit your conversation history.'},
-						require_plan_approval: {type: 'boolean', description: 'If true, the teammate must submit a plan for your approval before making changes.'},
+						name: {
+							type: 'string',
+							description:
+								'A short, descriptive name for this teammate. Must contain at least one Chinese/English letter or number after sanitization; "_" and "-" are allowed separators (e.g., "frontend", "后端", "tester-1").',
+						},
+						role: {
+							type: 'string',
+							description:
+								"Optional role description guiding the teammate's focus area.",
+						},
+						prompt: {
+							type: 'string',
+							description:
+								"The task prompt for this teammate. Include all relevant context since teammates don't inherit your conversation history.",
+						},
+						require_plan_approval: {
+							type: 'boolean',
+							description:
+								'If true, the teammate must submit a plan for your approval before making changes.',
+						},
 					},
 					required: ['name', 'prompt'],
 				},
 			},
 			{
 				name: 'message_teammate',
-				description: 'Send a direct message to a specific teammate. Use to provide guidance, share findings, or redirect their approach.',
+				description:
+					'Send a direct message to a specific teammate. Use to provide guidance, share findings, or redirect their approach.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						target_id: {type: 'string', description: 'The member ID or name of the target teammate.'},
+						target_id: {
+							type: 'string',
+							description: 'The member ID or name of the target teammate.',
+						},
 						content: {type: 'string', description: 'The message content.'},
 					},
 					required: ['target_id', 'content'],
@@ -933,62 +1099,101 @@ export class TeamService {
 			},
 			{
 				name: 'broadcast_to_team',
-				description: 'Send a message to all teammates simultaneously. Use sparingly as costs scale with team size.',
+				description:
+					'Send a message to all teammates simultaneously. Use sparingly as costs scale with team size.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						content: {type: 'string', description: 'The message to broadcast to all teammates.'},
+						content: {
+							type: 'string',
+							description: 'The message to broadcast to all teammates.',
+						},
 					},
 					required: ['content'],
 				},
 			},
-		{
-			name: 'shutdown_teammate',
-			description: 'Immediately shut down a specific teammate. Teammates cannot self-terminate — this is the ONLY way to end a teammate. Teammates enter standby after finishing work, remaining available for messages until you shut them down.',
+			{
+				name: 'shutdown_teammate',
+				description:
+					'Immediately shut down a specific teammate. Teammates cannot self-terminate — this is the ONLY way to end a teammate. Teammates enter standby after finishing work, remaining available for messages until you shut them down.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						target_id: {type: 'string', description: 'The member ID or name of the teammate to shut down.'},
-						reason: {type: 'string', description: 'Optional reason for the shutdown.'},
+						target_id: {
+							type: 'string',
+							description:
+								'The member ID or name of the teammate to shut down.',
+						},
+						reason: {
+							type: 'string',
+							description: 'Optional reason for the shutdown.',
+						},
 					},
 					required: ['target_id'],
 				},
 			},
 			{
-			name: 'wait_for_teammates',
-			description: 'Block and wait until ALL running teammates have entered standby (finished their work). Returns collected results and messages. After this returns, you should review results, then shut down teammates with shutdown_teammate, merge their work, and clean up.',
+				name: 'wait_for_teammates',
+				description:
+					'Block and wait until ALL running teammates have entered standby (finished their work). Returns collected results and messages. After this returns, you should review results, then shut down teammates with shutdown_teammate, merge their work, and clean up.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						timeout_seconds: {type: 'number', description: 'Maximum time to wait in seconds. Default: 600 (10 min). Range: 10-1800.'},
+						timeout_seconds: {
+							type: 'number',
+							description:
+								'Maximum time to wait in seconds. Default: 600 (10 min). Range: 10-1800.',
+						},
 					},
 					required: [],
 				},
 			},
 			{
 				name: 'create_task',
-				description: 'Create a new task in the shared task list. PREREQUISITE: At least one teammate must be spawned first (spawn_teammate creates the team). Calling this without an active team will fail.',
+				description:
+					'Create a new task in the shared task list. PREREQUISITE: At least one teammate must be spawned first (spawn_teammate creates the team). Calling this without an active team will fail.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						title: {type: 'string', description: 'Brief title for the task.'},
-						description: {type: 'string', description: 'Detailed description of what needs to be done.'},
-						dependencies: {type: 'array', items: {type: 'string'}, description: 'Task IDs that must be completed before this task can be claimed.'},
-						assignee_id: {type: 'string', description: 'Optional member ID to pre-assign this task to.'},
-						assignee_name: {type: 'string', description: 'Optional member name for the pre-assignment.'},
+						description: {
+							type: 'string',
+							description: 'Detailed description of what needs to be done.',
+						},
+						dependencies: {
+							type: 'array',
+							items: {type: 'string'},
+							description:
+								'Task IDs that must be completed before this task can be claimed.',
+						},
+						assignee_id: {
+							type: 'string',
+							description: 'Optional member ID to pre-assign this task to.',
+						},
+						assignee_name: {
+							type: 'string',
+							description: 'Optional member name for the pre-assignment.',
+						},
 					},
 					required: ['title'],
 				},
 			},
 			{
 				name: 'update_task',
-				description: 'Update a task\'s status or reassign it.',
+				description: "Update a task's status or reassign it.",
 				inputSchema: {
 					type: 'object',
 					properties: {
 						task_id: {type: 'string', description: 'The task ID to update.'},
-						status: {type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'New status for the task.'},
-						assignee_id: {type: 'string', description: 'New assignee member ID.'},
+						status: {
+							type: 'string',
+							enum: ['pending', 'in_progress', 'completed'],
+							description: 'New status for the task.',
+						},
+						assignee_id: {
+							type: 'string',
+							description: 'New assignee member ID.',
+						},
 						assignee_name: {type: 'string', description: 'New assignee name.'},
 					},
 					required: ['task_id'],
@@ -996,7 +1201,8 @@ export class TeamService {
 			},
 			{
 				name: 'list_tasks',
-				description: 'View all tasks in the shared task list with status, assignees, and dependencies.',
+				description:
+					'View all tasks in the shared task list with status, assignees, and dependencies.',
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -1005,7 +1211,8 @@ export class TeamService {
 			},
 			{
 				name: 'list_teammates',
-				description: 'View all currently running teammates with their status, roles, and current tasks.',
+				description:
+					'View all currently running teammates with their status, roles, and current tasks.',
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -1014,30 +1221,46 @@ export class TeamService {
 			},
 			{
 				name: 'merge_teammate_work',
-				description: 'Merge a specific teammate\'s Git branch into the main branch. Auto-commits first. On conflict with strategy "manual" (default), leaves the working directory in merge state so you can read/edit conflicted files and then call team-resolve_merge_conflicts.',
+				description:
+					'Merge a specific teammate\'s Git branch into the main branch. Auto-commits first. On conflict with strategy "manual" (default), leaves the working directory in merge state so you can read/edit conflicted files and then call team-resolve_merge_conflicts.',
 				inputSchema: {
 					type: 'object',
 					properties: {
-						name: {type: 'string', description: 'The name of the teammate whose work to merge.'},
-					strategy: {type: 'string', enum: ['manual', 'theirs', 'ours', 'auto'], description: '"manual" (default): pause on conflicts for you to resolve. "theirs": auto-accept all teammate changes on conflict. "ours": auto-keep main branch changes on conflict. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.'},
+						name: {
+							type: 'string',
+							description: 'The name of the teammate whose work to merge.',
+						},
+						strategy: {
+							type: 'string',
+							enum: ['manual', 'theirs', 'ours', 'auto'],
+							description:
+								'"manual" (default): pause on conflicts for you to resolve. "theirs": auto-accept all teammate changes on conflict. "ours": auto-keep main branch changes on conflict. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.',
+						},
+					},
+					required: ['name'],
 				},
-				required: ['name'],
 			},
-		},
-		{
-			name: 'merge_all_teammate_work',
-			description: 'Merge ALL teammates\' branches sequentially. Stops on first conflict (in "manual" mode) so you can resolve it. With "auto" strategy, conflicts are auto-resolved and merging continues. MUST call before cleanup_team.',
-			inputSchema: {
-				type: 'object',
-				properties: {
-					strategy: {type: 'string', enum: ['manual', 'theirs', 'ours', 'auto'], description: '"manual" (default): stop on conflicts for resolution. "theirs": auto-accept teammate changes. "ours": auto-keep main branch. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.'},
+			{
+				name: 'merge_all_teammate_work',
+				description:
+					'Merge ALL teammates\' branches sequentially. Stops on first conflict (in "manual" mode) so you can resolve it. With "auto" strategy, conflicts are auto-resolved and merging continues. MUST call before cleanup_team.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						strategy: {
+							type: 'string',
+							enum: ['manual', 'theirs', 'ours', 'auto'],
+							description:
+								'"manual" (default): stop on conflicts for resolution. "theirs": auto-accept teammate changes. "ours": auto-keep main branch. "auto": try normal merge, auto-resolve conflicts by accepting teammate\'s version.',
+						},
 					},
 					required: [],
 				},
 			},
 			{
 				name: 'resolve_merge_conflicts',
-				description: 'Complete a merge after manually resolving conflicts. Stages all changes and commits. Call this after editing conflicted files to remove <<<<<<< / ======= / >>>>>>> markers.',
+				description:
+					'Complete a merge after manually resolving conflicts. Stages all changes and commits. Call this after editing conflicted files to remove <<<<<<< / ======= / >>>>>>> markers.',
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -1046,7 +1269,8 @@ export class TeamService {
 			},
 			{
 				name: 'abort_merge',
-				description: 'Abort the current merge and restore the working directory to pre-merge state. Use when you decide not to merge a teammate\'s conflicting changes.',
+				description:
+					"Abort the current merge and restore the working directory to pre-merge state. Use when you decide not to merge a teammate's conflicting changes.",
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -1055,7 +1279,8 @@ export class TeamService {
 			},
 			{
 				name: 'cleanup_team',
-				description: 'Clean up the team: remove Git worktrees and disband. All teammates must be shut down AND their work must be merged first (will refuse if unmerged changes exist).',
+				description:
+					'Clean up the team: remove Git worktrees and disband. All teammates must be shut down AND their work must be merged first (will refuse if unmerged changes exist).',
 				inputSchema: {
 					type: 'object',
 					properties: {},
@@ -1064,13 +1289,25 @@ export class TeamService {
 			},
 			{
 				name: 'approve_plan',
-				description: 'Approve or reject a teammate\'s implementation plan. Only applicable when the teammate was spawned with require_plan_approval.',
+				description:
+					"Approve or reject a teammate's implementation plan. Only applicable when the teammate was spawned with require_plan_approval.",
 				inputSchema: {
 					type: 'object',
 					properties: {
-						target_id: {type: 'string', description: 'The member ID or name of the teammate whose plan to review.'},
-						approved: {type: 'boolean', description: 'Whether to approve the plan.'},
-						feedback: {type: 'string', description: 'Optional feedback, especially useful when rejecting.'},
+						target_id: {
+							type: 'string',
+							description:
+								'The member ID or name of the teammate whose plan to review.',
+						},
+						approved: {
+							type: 'boolean',
+							description: 'Whether to approve the plan.',
+						},
+						feedback: {
+							type: 'string',
+							description:
+								'Optional feedback, especially useful when rejecting.',
+						},
 					},
 					required: ['target_id', 'approved'],
 				},

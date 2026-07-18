@@ -2,20 +2,34 @@ import {useStdout} from 'ink';
 import {useCallback} from 'react';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
-import {sessionManager} from '../../utils/session/sessionManager.js';
+import {
+	buildInitialUserPromptBlock,
+	sessionManager,
+} from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
 import {performHybridCompression} from '../../utils/core/subAgentContextCompressor.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {performImageCompression} from '../../utils/core/imageContextCompressor.js';
+import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
+import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import {getHybridCompressEnabled} from '../../utils/config/projectSettings.js';
+import {getImageCompressEnabled} from '../../utils/config/projectSettings.js';
 import {getTodoService} from '../../utils/execution/mcpToolsManager.js';
-import {navigateTo} from '../integration/useGlobalNavigation.js';
+import {goalManager} from '../../utils/task/goalManager.js';
+import type {GoalRecord} from '../../utils/task/goalManager.js';
 import type {UsageInfo} from '../../api/chat.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
+import {navigateTo} from '../integration/useGlobalNavigation.js';
 import {
 	showSaveDialog,
+	showOpenDialog,
+	showConfirmDialog,
 	isFileDialogSupported,
 } from '../../utils/ui/fileDialog.js';
-import {exportMessagesToFile} from '../../utils/session/chatExporter.js';
+import {exportSessionToFile} from '../../utils/session/chatExporter.js';
+import {
+	exportConfigManagerToYamlFile,
+	importConfigManagerFromYamlFile,
+} from '../../utils/config/configExporter.js';
 import {copyToClipboard} from '../../utils/core/clipboard.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCurrentLanguage} from '../../utils/config/languageConfig.js';
@@ -27,6 +41,85 @@ import {translations} from '../../i18n/index.js';
 function getExportMessages() {
 	const currentLanguage = getCurrentLanguage();
 	return translations[currentLanguage].commandPanel.commandOutput.export;
+}
+
+/**
+ * Helper function to get config command messages
+ */
+function getConfigMessages() {
+	const currentLanguage = getCurrentLanguage();
+	return translations[currentLanguage].commandPanel.commandOutput.config;
+}
+
+/**
+ * 构造 /goal 需求原文注入区块。
+ *
+ * 使用场景：executeContextCompression 创建压缩会话时，会把该区块拼到第一条 user
+ * 消息的最前面（或 hybrid 分支的首条 user 消息内部），避免 AI 生成的 handover
+ * 摘要改写 / 漯移用户原话。只拼原文，不加任何 paraphrase。
+ */
+function buildGoalObjectiveBlock(goal: GoalRecord): string {
+	return [
+		'[GOAL OBJECTIVE - VERBATIM, MUST NOT BE PARAPHRASED]',
+		`Active goal (id=${goal.id}, status=${goal.status}):`,
+		`"${goal.objective}"`,
+		'',
+		"The exact wording above is the user's original requirement. Treat it as the",
+		'authoritative source of truth. Do NOT rephrase it. If subsequent summary content',
+		'appears to contradict this objective, the verbatim text wins.',
+	].join('\n');
+}
+
+function prependInitialUserPromptBlock(
+	messages: Array<{role?: string; content?: string}>,
+	initialUserPrompt: string | null,
+): void {
+	if (!initialUserPrompt) {
+		return;
+	}
+
+	const initialUserPromptBlock = buildInitialUserPromptBlock(initialUserPrompt);
+	const firstUserIndex = messages.findIndex(
+		message => message?.role === 'user',
+	);
+	const firstUserMessage = messages[firstUserIndex];
+	if (firstUserMessage) {
+		firstUserMessage.content = `${initialUserPromptBlock}\n\n${
+			firstUserMessage.content ?? ''
+		}`;
+		return;
+	}
+
+	messages.unshift({
+		role: 'user',
+		content: initialUserPromptBlock,
+	});
+}
+
+/**
+ * 构造压缩 AI 的 goal-awareness 指令。
+ *
+ * 追加到待压缩消息末尾，让压缩模型在生成 handover 文档时优先保留
+ * goal 相关的验证证据（文件路径、测试命令、审计结果、进度状态）。
+ * 这是对 buildGoalObjectiveBlock（事后注入 verbatim 原文）的补充——
+ * 前者保证目标原文不丢，本函数保证支撑验证的上下文不丢。
+ */
+function buildGoalCompressionHint(goal: GoalRecord): string {
+	return [
+		'[COMPRESSION PRIORITY — ACTIVE GOAL]',
+		`This conversation is actively pursuing a goal (id=${goal.id}):`,
+		`"${goal.objective}"`,
+		'',
+		'When compressing the above conversation, you MUST give highest priority to preserving:',
+		'1. The EXACT goal objective text (verbatim, no paraphrasing).',
+		'2. All verification criteria and audit evidence: file paths inspected, test commands run, expected vs actual outputs.',
+		'3. Progress tracking: which deliverables are verified-complete vs still pending.',
+		'4. Blockers, unresolved decisions, or contradictions related to goal completion.',
+		'5. Any todolist state or structured task breakdown referenced in the conversation.',
+		'',
+		'These details are critical for the goal continuation loop to function correctly after compression.',
+		'Generic summaries that lose this specificity will break the automated verification process.',
+	].join('\n');
 }
 
 /**
@@ -85,35 +178,162 @@ export async function executeContextCompression(
 
 		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
 		const sessionMessages = currentSession.messages;
+		const initialUserPrompt = await sessionManager.getInitialUserPrompt(
+			currentSession,
+		);
 
 		// 转换为 ChatMessage 格式（保留所有关键字段）
-		const chatMessages = sessionMessages.map(msg => ({
+		const chatMessages: Array<any> = sessionMessages.map(msg => ({
 			role: msg.role,
 			content: msg.content,
 			tool_call_id: msg.tool_call_id,
 			tool_calls: msg.tool_calls,
 			images: msg.images,
+			imageContextCompressed: (msg as any).imageContextCompressed,
 			reasoning: msg.reasoning,
-			thinking: msg.thinking, // 保留 thinking 字段（Anthropic Extended Thinking）
+			thinking: msg.thinking,
 			subAgentInternal: msg.subAgentInternal,
+			messageStatus: (msg as any).messageStatus,
+			editDiffData: (msg as any).editDiffData,
 		}));
+
+		// ── /goal: 提前加载当前会话的 goal，供压缩指令注入和后续 objective 注入复用 ──
+		const activeGoalForCompression = await goalManager.loadGoalForSession(
+			currentSession.id,
+		);
+
+		// 若存在活跃目标，追加一条 goal-awareness 指令到对话末尾。
+		// 这条消息会被压缩 AI 看到，使其生成的 handover 文档优先保留 goal 相关的
+		// 验证证据（文件路径、测试命令、进度状态），而非只靠后面的 verbatim 注入。
+		if (
+			activeGoalForCompression &&
+			activeGoalForCompression.status === 'pursuing'
+		) {
+			chatMessages.push({
+				role: 'user',
+				content: buildGoalCompressionHint(activeGoalForCompression),
+			});
+		}
 
 		// Check if Hybrid Compress mode is enabled
 		const useHybridCompress = getHybridCompressEnabled();
+		const apiConfig = getSnowConfig();
+		// Image compression produces PNG context and therefore requires the active model to support vision.
+		const imageCompressionEnabled = getImageCompressEnabled();
+		const useImageCompress =
+			imageCompressionEnabled && apiConfig.supportsVision !== false;
 
-		onStatusUpdate?.({step: 'compressing', sessionId});
+		let compressionStreamStarted = false;
+		let compressionStreamScore = 0;
+		let compressionProgress = 0;
+		let compressionStreamLineBuffer = '';
+		const compressionStreamLines: string[] = [];
+		const MAX_COMPRESSION_STREAM_LINES = 80;
+		const MAX_COMPRESSION_STREAM_LINE_LENGTH = 120;
+
+		const appendCompressionStreamLine = (line: string) => {
+			compressionStreamLines.push(line);
+			if (compressionStreamLines.length > MAX_COMPRESSION_STREAM_LINES) {
+				compressionStreamLines.splice(
+					0,
+					compressionStreamLines.length - MAX_COMPRESSION_STREAM_LINES,
+				);
+			}
+		};
+
+		const emitCompressionStreamUpdate = () => {
+			onStatusUpdate?.({
+				step: 'compressing',
+				sessionId,
+				progress: compressionProgress,
+				streamStarted: compressionStreamStarted,
+				streamContent: compressionStreamLines.join('\n'),
+			});
+		};
+
+		const flushCompressionStreamBuffer = (force: boolean = false) => {
+			if (!compressionStreamStarted) {
+				return;
+			}
+
+			if (force && compressionStreamLineBuffer) {
+				appendCompressionStreamLine(compressionStreamLineBuffer);
+				compressionStreamLineBuffer = '';
+			}
+
+			if (compressionStreamLines.length === 0) {
+				return;
+			}
+
+			emitCompressionStreamUpdate();
+		};
+
+		const notifyCompressionStreamStarted = (content?: string) => {
+			if (!content) {
+				return;
+			}
+
+			compressionStreamStarted = true;
+			compressionStreamLineBuffer += content.replace(/\r\n?/g, '\n');
+
+			let shouldEmit = false;
+			const lineParts = compressionStreamLineBuffer.split('\n');
+			compressionStreamLineBuffer = lineParts.pop() ?? '';
+
+			for (const line of lineParts) {
+				appendCompressionStreamLine(line);
+				shouldEmit = true;
+			}
+
+			while (
+				compressionStreamLineBuffer.length >= MAX_COMPRESSION_STREAM_LINE_LENGTH
+			) {
+				appendCompressionStreamLine(
+					compressionStreamLineBuffer.slice(
+						0,
+						MAX_COMPRESSION_STREAM_LINE_LENGTH,
+					),
+				);
+				compressionStreamLineBuffer = compressionStreamLineBuffer.slice(
+					MAX_COMPRESSION_STREAM_LINE_LENGTH,
+				);
+				shouldEmit = true;
+			}
+
+			compressionStreamScore += Math.max(1, Math.ceil(content.length / 1500));
+
+			const nextProgress = Math.min(
+				90,
+				10 + Math.floor((1 - Math.exp(-compressionStreamScore / 800)) * 80),
+			);
+
+			if (nextProgress > compressionProgress) {
+				compressionProgress = nextProgress;
+			}
+
+			if (shouldEmit) {
+				emitCompressionStreamUpdate();
+			}
+		};
+
+		onStatusUpdate?.({
+			step: 'compressing',
+			sessionId,
+			progress: 0,
+			streamStarted: false,
+			streamContent: '',
+		});
 
 		// ── Hybrid Compress path: AI summary + preserved rounds with truncated tool results ──
 		if (useHybridCompress) {
-			const apiConfig = getOpenAiConfig();
-			const hybridResult = await performHybridCompression(
-				chatMessages,
-				{
-					model: apiConfig.advancedModel || 'gpt-5',
-					requestMethod: apiConfig.requestMethod,
-					maxTokens: apiConfig.maxTokens,
-				},
-			);
+			const apiConfig = getSnowConfig();
+			const hybridResult = await performHybridCompression(chatMessages, {
+				model: apiConfig.advancedModel || 'gpt-5',
+				requestMethod: apiConfig.requestMethod,
+				maxTokens: apiConfig.maxTokens,
+				onStreamStart: notifyCompressionStreamStarted,
+			});
+			flushCompressionStreamBuffer(true);
 
 			if (!hybridResult.compressed) {
 				onStatusUpdate?.({
@@ -131,7 +351,33 @@ export async function executeContextCompression(
 			}));
 
 			// Create new session
-			const compressedSession = await sessionManager.createNewSession(false, true);
+			const compressedSession = await sessionManager.createNewSession(
+				false,
+				true,
+			);
+			// ── /goal: 在压缩消息序列最前面注入用户目标原文 ──
+			// hybrid 分支返回的 newSessionMessages 第一条通常是 AI 生成的「Auto-Compressed Summary」
+			// user 消息（aiSummaryCompress 构造）。AI 摘要会改写、压缩用户原话，goal 模式必须
+			// 保证用户的需求原文 (goal.objective) 在新会话上下文里逐字可见，否则后续 Ralph Loop
+			// continuation prompt 中 `"${goal.objective}"` 与摘要里的目标信息可能漂移 / 丢失。
+			// 因此：找到第一条 user 消息，把目标原文以独立区块前置；若没有 user 则 prepend 一条。
+			if (activeGoalForCompression) {
+				const goalBlock = buildGoalObjectiveBlock(activeGoalForCompression);
+				const firstUserIdx = newSessionMessages.findIndex(
+					(m: any) => m && m.role === 'user',
+				);
+				if (firstUserIdx >= 0) {
+					const first = newSessionMessages[firstUserIdx];
+					first.content = `${goalBlock}\n\n${first.content || ''}`;
+				} else {
+					newSessionMessages.unshift({
+						role: 'user',
+						content: goalBlock,
+						timestamp: Date.now(),
+					});
+				}
+			}
+			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
 			compressedSession.messages = newSessionMessages;
 			compressedSession.messageCount = newSessionMessages.length;
 			compressedSession.updatedAt = Date.now();
@@ -139,8 +385,39 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
+			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
+			compressedSession.originalMessageIndex = currentSession.messages.length;
+			// ── /goal: 把 hasGoal 标记带过来，新会话 saveSession 后即可让
+			// mcpToolsManager 在切换后重新暴露 goal-update_goal 工具。
+			if (currentSession.hasGoal) {
+				compressedSession.hasGoal = true;
+			}
 
 			await sessionManager.saveSession(compressedSession);
+
+			// ── /goal: 迁移 goal 文件到新 sessionId ──
+			// 必须放在 saveSession 之后、reload 之前。这样 goalManager.loadCurrentGoal
+			// 在 setCurrentSession(reloadedSession) 之后能立刻命中新 path 的 goal 文件，
+			// Ralph Loop 续接、accrueTokens、modelUpdateGoal 全部链路恢复正常。
+			if (currentSession.hasGoal) {
+				try {
+					await goalManager.migrateGoalToSession(
+						currentSession.id,
+						compressedSession.id,
+					);
+					// 让 mcpToolsManager 下一次刷新工具列表时基于新 session.hasGoal 重新注册
+					// goal-update_goal（configHash 已把 sessionHasGoal 纳入）。
+					const {clearMCPToolsCache} = await import(
+						'../../utils/execution/mcpToolsManager.js'
+					);
+					clearMCPToolsCache();
+				} catch (err) {
+					console.error(
+						'[goal] Failed to migrate goal after hybrid compression:',
+						err,
+					);
+				}
+			}
 
 			// Inherit TODO list
 			try {
@@ -152,7 +429,9 @@ export async function executeContextCompression(
 
 			// Reload session
 			onStatusUpdate?.({step: 'loading', sessionId: compressedSession.id});
-			const reloadedSession = await sessionManager.loadSession(compressedSession.id);
+			const reloadedSession = await sessionManager.loadSession(
+				compressedSession.id,
+			);
 			if (reloadedSession) {
 				sessionManager.setCurrentSession(reloadedSession);
 			} else {
@@ -161,14 +440,12 @@ export async function executeContextCompression(
 
 			onStatusUpdate?.({step: 'completed', sessionId: compressedSession.id});
 
-			// Build UI messages (skip tool messages)
-			const newUIMessages: Message[] = newSessionMessages
-				.filter((msg: any) => msg.role !== 'tool')
-				.map((msg: any) => ({
-					role: msg.role as any,
-					content: msg.content || '',
-					streaming: false,
-				}));
+			// Build UI messages from session messages so preserved tool results keep
+			// their DiffViewer metadata after compression.
+			const newUIMessages = convertSessionMessagesToUI(
+				(sessionManager.getCurrentSession()?.messages ??
+					newSessionMessages) as any,
+			);
 
 			const apiUsage = hybridResult.compressionApiUsage;
 			const afterEstimate = hybridResult.afterTokensEstimate || 0;
@@ -182,9 +459,135 @@ export async function executeContextCompression(
 				},
 			};
 		}
+		// ── Image Compress path: history -> PNG image ──
+		if (useImageCompress) {
+			flushCompressionStreamBuffer(true);
 
+			const imageResult = await performImageCompression(
+				chatMessages,
+				currentSession.id,
+				sessionManager.getProjectId(),
+				currentSession.createdAt,
+				currentSession.imageContextArchive,
+			);
+
+			if (!imageResult.compressed) {
+				onStatusUpdate?.({
+					step: 'skipped',
+					message: 'Not enough history to compress',
+					sessionId,
+				});
+				return null;
+			}
+
+			// Build session messages
+			const newSessionMessages: Array<any> = imageResult.messages.map(msg => ({
+				...msg,
+				timestamp: Date.now(),
+			}));
+
+			// ── /goal: inject goal objective block ──
+			if (activeGoalForCompression) {
+				const goalBlock = buildGoalObjectiveBlock(activeGoalForCompression);
+				const firstUserIdx = newSessionMessages.findIndex(
+					(m: any) => m && m.role === 'user',
+				);
+				if (firstUserIdx >= 0) {
+					const first = newSessionMessages[firstUserIdx];
+					first.content = `${goalBlock}\n\n${first.content || ''}`;
+				} else {
+					newSessionMessages.unshift({
+						role: 'user',
+						content: goalBlock,
+						timestamp: Date.now(),
+					});
+				}
+			}
+			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
+
+			// Create new session
+			const compressedSession = await sessionManager.createNewSession(
+				false,
+				true,
+			);
+			compressedSession.messages = newSessionMessages;
+			compressedSession.messageCount = newSessionMessages.length;
+			compressedSession.updatedAt = Date.now();
+			compressedSession.title = currentSession.title;
+			compressedSession.summary = currentSession.summary;
+			compressedSession.compressedFrom = currentSession.id;
+			compressedSession.compressedAt = Date.now();
+			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
+			compressedSession.originalMessageIndex = currentSession.messages.length;
+			compressedSession.imageContextArchive = imageResult.archiveText;
+
+			if (currentSession.hasGoal) {
+				compressedSession.hasGoal = true;
+			}
+
+			await sessionManager.saveSession(compressedSession);
+
+			// ── /goal: migrate goal file to new sessionId ──
+			if (currentSession.hasGoal) {
+				try {
+					await goalManager.migrateGoalToSession(
+						currentSession.id,
+						compressedSession.id,
+					);
+					const {clearMCPToolsCache} = await import(
+						'../../utils/execution/mcpToolsManager.js'
+					);
+					clearMCPToolsCache();
+				} catch (err) {
+					console.error(
+						'[goal] Failed to migrate goal after image compression:',
+						err,
+					);
+				}
+			}
+
+			// Inherit TODO list
+			try {
+				const todoService = getTodoService();
+				await todoService.copyTodoList(currentSession.id, compressedSession.id);
+			} catch {
+				// Non-critical
+			}
+
+			// Reload session
+			onStatusUpdate?.({step: 'loading', sessionId: compressedSession.id});
+			const reloadedSession = await sessionManager.loadSession(
+				compressedSession.id,
+			);
+			if (reloadedSession) {
+				sessionManager.setCurrentSession(reloadedSession);
+			} else {
+				sessionManager.setCurrentSession(compressedSession);
+			}
+
+			onStatusUpdate?.({step: 'completed', sessionId: compressedSession.id});
+
+			const newUIMessages = convertSessionMessagesToUI(
+				(sessionManager.getCurrentSession()?.messages ??
+					newSessionMessages) as any,
+			);
+
+			const afterEstimate = imageResult.afterTokensEstimate || 0;
+
+			return {
+				uiMessages: newUIMessages,
+				usage: {
+					prompt_tokens: afterEstimate,
+					completion_tokens: 0,
+					total_tokens: afterEstimate,
+				},
+			};
+		}
 		// ── Standard full compression path ──
-		const compressionResult = await compressContext(chatMessages);
+		const compressionResult = await compressContext(chatMessages, {
+			onStreamStart: notifyCompressionStreamStarted,
+		});
+		flushCompressionStreamBuffer(true);
 
 		if (!compressionResult) {
 			onStatusUpdate?.({
@@ -212,39 +615,23 @@ export async function executeContextCompression(
 		// 构建新的会话消息列表
 		const newSessionMessages: Array<any> = [];
 
-		let finalContent = `[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
+		// ── /goal: 把用户目标原文逐字嵌入压缩摘要顶部 ──
+		// compressContext 会调 AI 生成 handover 文档，虽然要求保留 user requirements 但
+		// 仍是经过 AI 改写的摘要，不保证逐字。goal 模式必须保证需求原文 (goal.objective)
+		// 在新会话上下文里逐字可见：
+		// - 驱动 Ralph Loop 续接的 continuation prompt 里 `"${goal.objective}"` 是原文，
+		//   如果摘要里只有 paraphrase，模型会看到两段意思不同的“目标”，决策面会漂移。
+		// - 以后万一 migrateGoalToSession 失败也能双保险：模型至少能从上下文中读到目标原话。
+		const goalHeader = activeGoalForCompression
+			? buildGoalObjectiveBlock(activeGoalForCompression) + '\n\n'
+			: '';
 
-		if (
-			compressionResult.preservedMessages &&
-			compressionResult.preservedMessages.length > 0
-		) {
+		let finalContent = `${goalHeader}[Context Summary from Previous Conversation]\n\n${compressionResult.summary}`;
+
+		const preservedMessages = compressionResult.preservedMessages ?? [];
+		if (preservedMessages.length > 0) {
 			finalContent +=
-				'\n\n---\n\n[Last Interaction - Preserved for Continuity]\n\n';
-
-			for (const msg of compressionResult.preservedMessages) {
-				if (msg.role === 'user') {
-					finalContent += `**User:**\n${msg.content}\n\n`;
-				} else if (msg.role === 'assistant') {
-					finalContent += `**Assistant:**\n${msg.content}`;
-
-					if (msg.tool_calls && msg.tool_calls.length > 0) {
-						finalContent += '\n\n**[Tool Calls Initiated]:**\n```json\n';
-						finalContent += JSON.stringify(msg.tool_calls, null, 2);
-						finalContent += '\n```\n\n';
-					} else {
-						finalContent += '\n\n';
-					}
-				} else if (msg.role === 'tool') {
-					finalContent += `**[Tool Result - ${msg.tool_call_id}]:**\n`;
-					try {
-						const parsed = JSON.parse(msg.content);
-						finalContent +=
-							'```json\n' + JSON.stringify(parsed, null, 2) + '\n```\n\n';
-					} catch {
-						finalContent += `${msg.content}\n\n`;
-					}
-				}
-			}
+				'\n\n---\n\n[Last Interaction - Preserved Below for Continuity]';
 		}
 
 		newSessionMessages.push({
@@ -252,6 +639,16 @@ export async function executeContextCompression(
 			content: finalContent,
 			timestamp: Date.now(),
 		});
+		prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
+
+		if (preservedMessages.length > 0) {
+			newSessionMessages.push(
+				...preservedMessages.map((msg: any) => ({
+					...msg,
+					timestamp: Date.now(),
+				})),
+			);
+		}
 
 		// 创建新会话而不是覆盖旧会话
 		// 这样可以保留压缩前的完整历史，支持回滚到压缩前的任意快照点
@@ -273,11 +670,41 @@ export async function executeContextCompression(
 		// 记录压缩关系
 		compressedSession.compressedFrom = currentSession.id;
 		compressedSession.compressedAt = Date.now();
+		compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
 		compressedSession.originalMessageIndex =
 			compressionResult.preservedMessageStartIndex;
 
+		// ── /goal: 把 hasGoal 标记带过来 ──
+		// 必须在 saveSession 之前设置，否则落盘后新会话丢失 hasGoal，
+		// mcpToolsManager 下次重建工具列表时拿不到 hasGoal=true，goal-update_goal
+		// 会从工具集里消失，模型无法标记目标完成、Ralph Loop 反而停不下来。
+		if (currentSession.hasGoal) {
+			compressedSession.hasGoal = true;
+		}
+
 		// 保存新会话
 		await sessionManager.saveSession(compressedSession);
+
+		// ── /goal: 迁移 goal 文件到新 sessionId ──
+		// 详见 hybrid 分支同名逻辑的注释。复用 activeGoalForCompression 验证确实
+		// 存在 goal 文件 -> 避免在错误状态下重复调用。
+		if (currentSession.hasGoal && activeGoalForCompression) {
+			try {
+				await goalManager.migrateGoalToSession(
+					currentSession.id,
+					compressedSession.id,
+				);
+				const {clearMCPToolsCache} = await import(
+					'../../utils/execution/mcpToolsManager.js'
+				);
+				clearMCPToolsCache();
+			} catch (err) {
+				console.error(
+					'[goal] Failed to migrate goal after standard compression:',
+					err,
+				);
+			}
+		}
 
 		// 继承原会话的 TODO 列表到新会话
 		try {
@@ -330,36 +757,12 @@ export async function executeContextCompression(
 		// 新会话有独立的快照系统，不需要重映射旧会话的快照
 		// 旧会话的快照保持不变，如果需要回滚到压缩前，可以切换回旧会话
 
-		// 同步更新UI消息列表：从会话消息转换为UI Message格式
-		const newUIMessages: Message[] = [];
-
-		for (const sessionMsg of newSessionMessages) {
-			// 跳过 tool 角色的消息（工具执行结果），避免UI显示大量JSON
-			if (sessionMsg.role === 'tool') {
-				continue;
-			}
-
-			const uiMessage: Message = {
-				role: sessionMsg.role as any,
-				content: sessionMsg.content,
-				streaming: false,
-			};
-
-			// 如果有 tool_calls，显示工具调用信息（但不显示详细参数）
-			if (sessionMsg.tool_calls && sessionMsg.tool_calls.length > 0) {
-				// 在内容中添加简洁的工具调用摘要
-				const toolSummary = sessionMsg.tool_calls
-					.map((tc: any) => `[Tool: ${tc.function.name}]`)
-					.join(', ');
-
-				// 如果内容为空或很短，显示工具调用摘要
-				if (!uiMessage.content || uiMessage.content.length < 10) {
-					uiMessage.content = toolSummary;
-				}
-			}
-
-			newUIMessages.push(uiMessage);
-		}
+		// 同步更新UI消息列表：从会话消息转换为UI Message格式，保留工具结果
+		// 中的 editDiffData，确保压缩后编辑工具仍能显示 DiffViewer。
+		const newUIMessages = convertSessionMessagesToUI(
+			(sessionManager.getCurrentSession()?.messages ??
+				newSessionMessages) as any,
+		);
 
 		return {
 			uiMessages: newUIMessages,
@@ -397,21 +800,49 @@ type CommandHandlerOptions = {
 	setCompressionError: React.Dispatch<React.SetStateAction<string | null>>;
 	setShowSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	onResumeSessionById?: (sessionId: string) => Promise<void>;
+	/** /goal resume 弹出列表用 */
+	setShowGoalSessionPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	/**
+	 * /goal resume <sessionId> 直接定位的回调：
+	 * 与 onResumeSessionById 区别——除了切换会话，还会启动 Ralph Loop 第一轮。
+	 */
+	onResumeGoalSession?: (sessionId: string) => Promise<void>;
 	setShowConnectionPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowTelemetryPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setConnectionPanelApiUrl: React.Dispatch<
 		React.SetStateAction<string | undefined>
 	>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	onCompressionStatus?: (
 		status:
 			| import('../../ui/components/compression/CompressionStatus.js').CompressionStatus
 			| null,
 	) => void;
+	onThinkingStatus?: (
+		status:
+			| import('../../ui/components/chat/ThinkingStatus.js').ThinkingStatus
+			| null,
+	) => void;
+	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowAnyPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setImageCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
+	setUltraTodoEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+	setActiveAnyPanelPluginId: React.Dispatch<
+		React.SetStateAction<string | null>
+	>;
 	setShowUsagePanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowSkillsInstall: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowSkillsListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleList: React.Dispatch<React.SetStateAction<boolean>>;
@@ -423,16 +854,14 @@ type CommandHandlerOptions = {
 	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBranchPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowIdeSelectPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowNewPromptPanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowBackgroundPanel: () => void;
 	onSwitchProfile: () => void;
 	setYoloMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setPlanMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setVulnerabilityHuntingMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setToolSearchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-	setTeamMode: React.Dispatch<React.SetStateAction<boolean>>;
 	setContextUsage: React.Dispatch<React.SetStateAction<UsageInfo | null>>;
 	setCurrentContextPercentage: React.Dispatch<React.SetStateAction<number>>;
 	currentContextPercentageRef: React.MutableRefObject<number>;
@@ -460,6 +889,11 @@ type CommandHandlerOptions = {
 	onQuit?: () => void;
 	onReindexCodebase?: (force?: boolean) => Promise<void>;
 	onToggleCodebase?: (mode?: string) => Promise<void>;
+	onResetTerminalTitle?: () => void;
+	/** ESC interrupt handler - aborts current AI streaming */
+	handleInterrupt?: () => boolean;
+	/** Ref set to true when /cut triggers the interrupt, to suppress discontinued UI */
+	cutInterruptRef?: React.MutableRefObject<boolean>;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -478,36 +912,36 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setCompressionError(null);
 
 				try {
-					// 获取当前会话ID
-					const currentSession = sessionManager.getCurrentSession();
-					if (!currentSession) {
-						throw new Error('No active session to compress');
-					}
+					const {performAutoCompression} = await import(
+						'../../utils/core/autoCompress.js'
+					);
 
-					// 使用提取的压缩函数，传入当前会话ID和状态回调
-					const compressionResult = await executeContextCompression(
-						currentSession.id,
-						status => {
+					const currentSession = sessionManager.getCurrentSession();
+					const compressionResult = await performAutoCompression(
+						currentSession?.id,
+						(status: CompressionStatus | null) => {
 							options.onCompressionStatus?.(status);
 						},
 					);
 
-					if (!compressionResult) {
-						throw new Error('Compression failed');
+					if (compressionResult && (compressionResult as any).hookFailed) {
+						const errorMsg = 'Blocked by beforeCompress hook';
+						options.setCompressionError(errorMsg);
+						return;
 					}
 
-					// Clear compression status after completion
+					if (!compressionResult) {
+						return;
+					}
+
 					options.onCompressionStatus?.(null);
 
-					// 更新UI
 					options.clearSavedMessages();
 					options.setMessages(compressionResult.uiMessages);
 					options.setRemountKey(prev => prev + 1);
 
-					// Update token usage with compression result
 					options.setContextUsage(compressionResult.usage);
 				} catch (error) {
-					// Show error message
 					const errorMsg =
 						error instanceof Error
 							? error.message
@@ -517,35 +951,73 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						message: errorMsg,
 					});
 					options.setCompressionError(errorMsg);
-
-					const errorMessage: Message = {
-						role: 'assistant',
-						content: `**Compression Failed**\\n\\n${errorMsg}`,
-						streaming: false,
-					};
-					options.setMessages(prev => [...prev, errorMessage]);
+					setTimeout(() => {
+						options.onCompressionStatus?.(null);
+					}, 5000);
 				} finally {
 					options.setIsCompressing(false);
 				}
 				return;
 			}
 
-			// Handle /ide command
+			// Handle /ide command — open selection panel
 			if (commandName === 'ide') {
-				if (result.success) {
-					// Connection successful, set status to connected immediately
-					// The轮询 mechanism will also update the status, but we do it here for immediate feedback
-					options.setVscodeConnectionStatus('connected');
-					// Don't add command message to keep UI clean
-				} else {
-					options.setVscodeConnectionStatus('error');
+				if (result.success && result.action === 'showIdeSelectPanel') {
+					options.setShowIdeSelectPanel(true);
 				}
 				return;
 			}
 
+			if (result.success && result.action === 'deleteCurrentSession') {
+				const currentSession = sessionManager.getCurrentSession();
+
+				if (!currentSession) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: t.commandPanel.delSessionFeedback.noCurrentSession,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				const deleted = await sessionManager.deleteSession(currentSession.id);
+
+				if (!deleted) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: t.commandPanel.delSessionFeedback.deleteFailed,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				resetTerminal(stdout);
+				options.onResetTerminalTitle?.();
+				options.clearSavedMessages();
+				options.setMessages([]);
+				options.setRemountKey(prev => prev + 1);
+				options.setContextUsage(null);
+				options.setCurrentContextPercentage(0);
+				options.currentContextPercentageRef.current = 0;
+
+				import('../../utils/core/globalCleanup.js')
+					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+					.catch(() => {});
+
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages([commandMessage]);
+				return;
+			}
 			if (result.success && result.action === 'clear') {
-				// Execute onSessionStart hook BEFORE clearing session
+				// Reserve the next session identity before its onSessionStart hook runs.
 				(async () => {
+					const nextSessionId = sessionManager.createSessionId();
 					try {
 						const {unifiedHooksExecutor} = await import(
 							'../../utils/execution/unifiedHooksExecutor.js'
@@ -555,9 +1027,18 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						);
 						const hookResult = await unifiedHooksExecutor.executeHooks(
 							'onSessionStart',
-							{messages: [], messageCount: 0},
+							{
+								messages: [],
+								messageCount: 0,
+								sessionId: nextSessionId,
+								cwd: process.cwd(),
+								isResume: false,
+							},
 						);
-						const interpreted = interpretHookResult('onSessionStart', hookResult);
+						const interpreted = interpretHookResult(
+							'onSessionStart',
+							hookResult,
+						);
 
 						if (interpreted.action === 'block' && interpreted.errorDetails) {
 							const errorMessage: Message = {
@@ -569,13 +1050,21 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 							return;
 						}
 
-						const warningMessage = interpreted.action === 'warn'
-							? interpreted.warningMessage
-							: null;
+						const warningMessage =
+							interpreted.action === 'warn' ? interpreted.warningMessage : null;
 
-						// Hook passed, now clear session
+						// Hook passed, now clear session and retain the reserved identity.
 						resetTerminal(stdout);
+						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
+						sessionManager.setPendingNewSessionId(nextSessionId);
+						// After clear, queue session-start inject for the next user turn
+						if (interpreted.additionalContext || interpreted.displayMessage) {
+							sessionManager.setPendingAdditionalContext(
+								interpreted.additionalContext,
+								interpreted.displayMessage,
+							);
+						}
 						options.clearSavedMessages();
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);
@@ -584,6 +1073,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// CRITICAL: Also reset the ref immediately to prevent auto-compress trigger
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
+
+						// Clean up global singleton resources to reclaim memory
+						import('../../utils/core/globalCleanup.js')
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.catch(() => {});
 
 						// Add command message
 						const commandMessage: Message = {
@@ -597,11 +1091,16 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						if (warningMessage) {
 							console.log(warningMessage);
 						}
+						if (interpreted.displayMessage) {
+							console.log(interpreted.displayMessage);
+						}
 					} catch (error) {
 						console.error('Failed to execute onSessionStart hook:', error);
-						// On exception, still clear session
+						// On exception, still clear session with the reserved identity.
 						resetTerminal(stdout);
+						options.onResetTerminalTitle?.();
 						sessionManager.clearCurrentSession();
+						sessionManager.setPendingNewSessionId(nextSessionId);
 						options.clearSavedMessages();
 						options.setMessages([]);
 						options.setRemountKey(prev => prev + 1);
@@ -610,6 +1109,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// CRITICAL: Also reset the ref immediately to prevent auto-compress trigger
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
+
+						// Clean up global singleton resources to reclaim memory
+						import('../../utils/core/globalCleanup.js')
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.catch(() => {});
 
 						const commandMessage: Message = {
 							role: 'command',
@@ -646,11 +1150,34 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showGoalSessionPanel') {
+				// /goal resume：带 sessionId 直接定位、不带就弹面板让用户挑
+				// （详见 source/utils/commands/goal.ts 中 'resume' 分支的说明）
+				if (result.sessionId && options.onResumeGoalSession) {
+					// 把命令摘要插入消息历史，再走 ChatScreen 的恢复+启动循环路径
+					const commandMessage: Message = {
+						role: 'command',
+						content: result.message || '',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+					await options.onResumeGoalSession(result.sessionId);
+				} else {
+					options.setShowGoalSessionPanel(true);
+					const commandMessage: Message = {
+						role: 'command',
+						content: '',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				}
 			} else if (result.success && result.action === 'showDiffReviewPanel') {
 				options.setShowDiffReviewPanel(true);
 			} else if (result.success && result.action === 'showConnectionPanel') {
 				options.setConnectionPanelApiUrl(result.apiUrl);
 				options.setShowConnectionPanel(true);
+			} else if (result.success && result.action === 'showTelemetryPanel') {
+				options.setShowTelemetryPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
 				const commandMessage: Message = {
@@ -703,8 +1230,28 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'help') {
-				// Help uses a dedicated screen to avoid chat layout overflow.
-				navigateTo('help');
+				// Help shown as an in-chat panel, ESC closes panel without resetting terminal.
+				options.setShowHelpPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'showTelemetryPanel') {
+				options.setShowTelemetryPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'pixel') {
+				// Pixel editor shown as an overlay panel
+				options.setShowPixelEditor(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'showGamesPanel') {
+				// Games panel shown as an overlay panel
+				options.setShowGamesPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (
+				result.success &&
+				result.action === 'showAnyPanel' &&
+				result.prompt
+			) {
+				// AnyPanel plugin panel shown as an overlay panel
+				options.setActiveAnyPanelPluginId(result.prompt);
+				options.setShowAnyPanel(true);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
@@ -719,6 +1266,22 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showSkillsCreation') {
 				options.setShowSkillsCreation(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showSkillsListPanel') {
+				options.setShowSkillsListPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showSkillsInstall') {
+				options.setShowSkillsInstall(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',
@@ -771,10 +1334,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-			} else if (
-				result.success &&
-				result.action === 'showRoleSubagentList'
-			) {
+			} else if (result.success && result.action === 'showRoleSubagentList') {
 				options.setShowRoleSubagentList(true);
 				const commandMessage: Message = {
 					role: 'command',
@@ -814,6 +1374,90 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'forkSession') {
+				const currentSession = sessionManager.getCurrentSession();
+				if (!currentSession) {
+					const errorMessage: Message = {
+						role: 'command',
+						content:
+							t.commandPanel.commandOutput.branchFork?.noActiveSession ||
+							'No active session to fork.',
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
+				try {
+					await sessionManager.saveSession(currentSession);
+
+					const forkedSession = await sessionManager.createNewSession(
+						false,
+						true,
+					);
+
+					const branchName = result.prompt || undefined;
+
+					forkedSession.messages = currentSession.messages.map(msg => ({
+						...msg,
+					}));
+					forkedSession.messageCount = currentSession.messageCount;
+					forkedSession.title = branchName
+						? `${currentSession.title} [${branchName}]`
+						: currentSession.title;
+					forkedSession.summary = currentSession.summary;
+					forkedSession.branchedFrom = currentSession.id;
+					forkedSession.branchName = branchName;
+					forkedSession.updatedAt = Date.now();
+
+					await sessionManager.saveSession(forkedSession);
+
+					try {
+						const {getTodoService} = await import(
+							'../../utils/execution/mcpToolsManager.js'
+						);
+						const todoService = getTodoService();
+						await todoService.copyTodoList(currentSession.id, forkedSession.id);
+					} catch {
+						// Non-critical
+					}
+
+					if (options.onResumeSessionById) {
+						await options.onResumeSessionById(forkedSession.id);
+					} else {
+						sessionManager.setCurrentSession(forkedSession);
+					}
+
+					const displayName = branchName
+						? `"${branchName}"`
+						: forkedSession.id.slice(0, 8);
+					const originalId = currentSession.id;
+					const successContent = (
+						t.commandPanel.commandOutput.branchFork?.success ||
+						'Conversation forked into branch {name}. To return to the original session:\n/resume {originalId}'
+					)
+						.replace('{name}', displayName)
+						.replace('{originalId}', originalId);
+
+					const commandMessage: Message = {
+						role: 'command',
+						content: successContent,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : 'Unknown error';
+					const errorMessage: Message = {
+						role: 'command',
+						content: `${
+							t.commandPanel.commandOutput.branchFork?.failed ||
+							'Failed to fork session'
+						}: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (result.success && result.action === 'showNewPromptPanel') {
 				options.setShowNewPromptPanel(true);
 			} else if (result.success && result.action === 'showSubAgentDepthPanel') {
@@ -825,7 +1469,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showTaskManager') {
-				navigateTo('tasks');
+				options.setShowTaskManagerPanel(true);
 			} else if (result.success && result.action === 'showTodoListPanel') {
 				options.setShowTodoListPanel(true);
 			} else if (
@@ -1007,6 +1651,22 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 					return newValue;
 				});
+			} else if (result.success && result.action === 'toggleSimple') {
+				// /simple 切换简易模式后，ChatHeader 等位于 <Static> 区域的组件
+				// 不会随 simpleMode 变化自动重绘，必须强制清屏并 bump remountKey
+				// 让 <Static> 重新挂载，按新模式重绘静态区域。
+				resetTerminal(stdout);
+				options.setRemountKey(prev => prev + 1);
+			} else if (result.success && result.action === 'toggleToolDisplay') {
+				// /tool-display 切换工具显示模式后，<Static> 区域中的历史工具消息
+				// 不会随 toolDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。
+				resetTerminal(stdout);
+				options.setRemountKey(prev => prev + 1);
+			} else if (result.success && result.action === 'toggleThinkDisplay') {
+				// /think-display 切换思考显示模式后，<Static> 区域中的历史思考消息
+				// 不会随 thinkDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。
+				resetTerminal(stdout);
+				options.setRemountKey(prev => prev + 1);
 			} else if (
 				result.success &&
 				result.action === 'toggleVulnerabilityHunting'
@@ -1021,8 +1681,31 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				});
 			} else if (result.success && result.action === 'toggleToolSearch') {
 				options.setToolSearchDisabled(prev => !prev);
+			} else if (result.success && result.action === 'toggleSpeedometer') {
+				// 测速仪切换由 speedometer.ts 命令直接调用 tpsTracker.start()/stop()，
+				// 这里只需添加命令反馈消息。
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'toggleHybridCompress') {
-				options.setHybridCompressEnabled(prev => !prev);
+				options.setHybridCompressEnabled(prev => {
+					const newValue = !prev;
+					if (newValue) {
+						options.setImageCompressEnabled(false);
+					}
+					return newValue;
+				});
+			} else if (result.success && result.action === 'toggleImageCompress') {
+				options.setImageCompressEnabled(prev => {
+					const newValue = !prev;
+					if (newValue) {
+						options.setHybridCompressEnabled(false);
+					}
+					return newValue;
+				});
 			} else if (result.success && result.action === 'toggleTeam') {
 				options.setTeamMode(prev => {
 					const newValue = !prev;
@@ -1032,20 +1715,77 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					}
 					return newValue;
 				});
+			} else if (result.success && result.action === 'toggleUltraTodo') {
+				const messages =
+					translations[getCurrentLanguage()].commandPanel.commandOutput
+						.ultraTodo;
+				try {
+					const {getUltraTodoEnabled, setUltraTodoEnabled} = await import(
+						'../../utils/config/projectSettings.js'
+					);
+					const {refreshMCPToolsCache} = await import(
+						'../../utils/execution/mcpToolsManager.js'
+					);
+					const newValue = !getUltraTodoEnabled();
+					setUltraTodoEnabled(newValue);
+					options.setUltraTodoEnabled(newValue);
+					await refreshMCPToolsCache();
+
+					const commandMessage: Message = {
+						role: 'command',
+						content: newValue ? messages.enabled : messages.disabled,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : messages.unknownError;
+					const errorMessage: Message = {
+						role: 'command',
+						content: messages.failed.replace('{error}', errorMsg),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
 			} else if (
 				result.success &&
 				result.action === 'initProject' &&
 				result.prompt
 			) {
-				// Add command execution feedback
+				// Add command execution feedback; show truncated user prompt under
+				// the command tree node when args were provided.
 				const commandMessage: Message = {
 					role: 'command',
-					content: '',
+					content: result.message || '',
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
-				// Auto-send the prompt using basicModel, hide the prompt from UI
-				options.processMessage(result.prompt, undefined, true, true);
+				// Use advanced model for init workflow (requires tool calls), hide the prompt from UI
+				options.processMessage(result.prompt, undefined, false, true);
+			} else if (
+				result.success &&
+				result.action === 'startGoalLoop' &&
+				result.prompt
+			) {
+				// /goal <objective> 创建后立刻启动 Ralph Loop 第一轮。
+				// goalManager.createGoal 已把 pendingContinuation 置为 true，
+				// processMessage 入口会消费 continuation prompt 作为本轮 AI 输入额外注入。
+				//
+				// 设计要点（避免之前 Bug：用户中断后无法 ESC 回滚到 /goal 之前）：
+				// 1) command 消息：显示 goal id + budget + 操作提示（不含完整 objective）
+				// 2) 第一轮启用 hideUserMessage=false，让 result.prompt（用户的目标原文）
+				//    作为可见 user 消息进入会话历史，这样：
+				//    - 双击 ESC 历史导航能定位到这条消息进行回滚
+				//    - 历史菜单中能直观看到用户当初设的目标
+				//    - 与 /review、/deepresearch 的设计模式保持一致
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+				// useBasicModel=false（用高级模型），hideUserMessage=false（目标作为可见 user 消息）
+				options.processMessage(result.prompt, undefined, false, false);
 			} else if (
 				result.success &&
 				result.action === 'review' &&
@@ -1068,12 +1808,50 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages([commandMessage]);
 				// Auto-send the review prompt using advanced model (not basic model), hide the prompt from UI
 				options.processMessage(result.prompt, undefined, false, true);
+			} else if (
+				result.success &&
+				result.action === 'deepResearch' &&
+				result.prompt
+			) {
+				// Deep Research command: run as a normal advanced-model task while
+				// hiding the (very long) embedded prompt from the chat history.
+				// Show the original (truncated) user request under the command tree
+				// node — `result.message` is set by deepresearch.ts to the truncated
+				// user prompt, which formatCommandResultLines() renders as `└─ ...`.
+				const commandMessage: Message = {
+					role: 'command',
+					content: result.message || '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+				// Use advanced model (basicModel=false) and hide the prompt from UI
+				options.processMessage(result.prompt, undefined, false, true);
 			} else if (result.success && result.action === 'exportChat') {
-				// Handle export chat command
+				// Handle export chat command - source of truth is the persisted session
+				// entity (~/.snow/sessions/...). Refuse to export if there is no session
+				// to read from (e.g. temporary chat or session not yet created).
+				const exportFormat = result.exportFormat ?? 'txt';
+				const exportMessages = getExportMessages();
+
+				const sessionForExport = sessionManager.getCurrentSession();
+				if (
+					!sessionForExport ||
+					!sessionForExport.id ||
+					sessionForExport.isTemporary
+				) {
+					const errorMessage: Message = {
+						role: 'command',
+						content: exportMessages.noSession,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+					return;
+				}
+
 				// Show loading message first
 				const loadingMessage: Message = {
 					role: 'command',
-					content: getExportMessages().openingDialog,
+					content: exportMessages.openingDialog,
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, loadingMessage]);
@@ -1091,12 +1869,32 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						return;
 					}
 
-					// Generate default filename with timestamp
+					// Flush any pending in-memory state to disk so the export reflects
+					// the latest assistant turn (mirrors the /copy-last pattern).
+					await sessionManager.saveSession(sessionForExport);
+
+					// Re-load the session entity from disk so we export the canonical,
+					// persisted ChatMessage[] rather than UI Message[].
+					const diskSession = await sessionManager.getSessionForExport(
+						sessionForExport.id,
+					);
+					if (!diskSession) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: exportMessages.noSession,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					// Generate default filename with timestamp + short session id
 					const timestamp = new Date()
 						.toISOString()
 						.replace(/[:.]/g, '-')
 						.split('.')[0];
-					const defaultFilename = `snow-chat-${timestamp}.txt`;
+					const shortId = diskSession.id.slice(0, 8);
+					const defaultFilename = `snow-chat-${timestamp}-${shortId}.${exportFormat}`;
 
 					// Show native save dialog
 					const filePath = await showSaveDialog(
@@ -1108,15 +1906,15 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// User cancelled
 						const cancelMessage: Message = {
 							role: 'command',
-							content: getExportMessages().cancelledByUser,
+							content: exportMessages.cancelledByUser,
 							commandName: commandName,
 						};
 						options.setMessages(prev => [...prev, cancelMessage]);
 						return;
 					}
 
-					// Export messages to file
-					await exportMessagesToFile(options.messages, filePath);
+					// Export the on-disk session entity to file
+					await exportSessionToFile(diskSession, filePath, exportFormat);
 
 					// Show success message
 					const successMessage: Message = {
@@ -1132,6 +1930,137 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					const errorMessage: Message = {
 						role: 'command',
 						content: `✗ Export failed: ${errorMsg}`,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (result.success && result.action === 'exportConfig') {
+				const configMessages = getConfigMessages();
+				const loadingMessage: Message = {
+					role: 'command',
+					content: configMessages.openingDialog,
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, loadingMessage]);
+
+				try {
+					if (!isFileDialogSupported()) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: configMessages.fileDialogUnsupported,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					const timestamp = new Date()
+						.toISOString()
+						.replace(/[:.]/g, '-')
+						.split('.')[0];
+					const defaultFilename = `snow-config-${timestamp}.yaml`;
+					const filePath = await showSaveDialog(
+						defaultFilename,
+						configMessages.saveDialogTitle,
+					);
+
+					if (!filePath) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.cancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					await exportConfigManagerToYamlFile(filePath);
+
+					const successMessage: Message = {
+						role: 'command',
+						content: configMessages.exportSuccess.replace('{path}', filePath),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error
+							? error.message
+							: configMessages.unknownError;
+					const errorMessage: Message = {
+						role: 'command',
+						content: configMessages.exportFailed.replace('{error}', errorMsg),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, errorMessage]);
+				}
+			} else if (result.success && result.action === 'importConfig') {
+				const configMessages = getConfigMessages();
+				const warningMessage: Message = {
+					role: 'command',
+					content: configMessages.importWarning,
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, warningMessage]);
+
+				try {
+					if (!isFileDialogSupported()) {
+						const errorMessage: Message = {
+							role: 'command',
+							content: configMessages.fileDialogUnsupported,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, errorMessage]);
+						return;
+					}
+
+					const confirmed = await showConfirmDialog(
+						configMessages.importConfirmMessage,
+						configMessages.importConfirmTitle,
+					);
+					if (!confirmed) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.importCancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					const filePath = await showOpenDialog(configMessages.openDialogTitle);
+					if (!filePath) {
+						const cancelMessage: Message = {
+							role: 'command',
+							content: configMessages.importCancelledByUser,
+							commandName: commandName,
+						};
+						options.setMessages(prev => [...prev, cancelMessage]);
+						return;
+					}
+
+					const importResult = await importConfigManagerFromYamlFile(filePath);
+					const imported =
+						importResult.importedKeys.join(', ') || configMessages.none;
+					const skipped =
+						importResult.skippedKeys.join(', ') || configMessages.none;
+					const successMessage: Message = {
+						role: 'command',
+						content: configMessages.importSuccess
+							.replace('{path}', filePath)
+							.replace('{imported}', imported)
+							.replace('{skipped}', skipped),
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, successMessage]);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error
+							? error.message
+							: configMessages.unknownError;
+					const errorMessage: Message = {
+						role: 'command',
+						content: configMessages.importFailed.replace('{error}', errorMsg),
 						commandName: commandName,
 					};
 					options.setMessages(prev => [...prev, errorMessage]);
@@ -1221,9 +2150,27 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				}
 			} else if (
 				result.success &&
-				result.action === 'btw' &&
+				result.action === 'interruptAndSend' &&
 				result.prompt
 			) {
+				// /cut <message> - Interrupt AI mid-response and queue user message
+				// The interrupt triggers the same abort path as ESC, causing the
+				// streaming finally block to save the incomplete AI content and
+				// mark it with discontinued=true. The user message is added to
+				// pendingMessages so it auto-sends once streaming fully stops.
+				if (options.cutInterruptRef) {
+					options.cutInterruptRef.current = true;
+				}
+				if (options.handleInterrupt) {
+					options.handleInterrupt();
+				}
+				if (options.setPendingMessages) {
+					options.setPendingMessages(prev => [
+						...prev,
+						{text: result.prompt as string},
+					]);
+				}
+			} else if (result.success && result.action === 'btw' && result.prompt) {
 				options.setBtwPrompt(result.prompt);
 			} else if (result.success && result.action === 'toggleCodebase') {
 				// Handle toggle codebase command

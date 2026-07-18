@@ -16,7 +16,42 @@ permissions:
   packages: write
 
 jobs:
+  build-native:
+    name: Build native accelerator (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32-x64
+          - os: macos-15-intel
+            platform: darwin-x64
+          - os: macos-14
+            platform: darwin-arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build native accelerator
+        shell: bash
+        run: SNOW_NATIVE_TARGET=${{ matrix.platform }} node scripts/build-native.cjs
+
+      - name: Upload native accelerator
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-native-${{ matrix.platform }}
+          path: bundle/native/*.node
+          if-no-files-found: error
+
   publish:
+    needs: build-native
     runs-on: ubuntu-latest
 
     steps:
@@ -28,8 +63,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Use CI npm config
         run: cp .npmrc.ci .npmrc
@@ -39,6 +77,16 @@ jobs:
 
       - name: Build project
         run: npm run build
+
+      - name: Download cross-platform native accelerators
+        uses: actions/download-artifact@v4
+        with:
+          pattern: snow-native-*
+          path: bundle/native
+          merge-multiple: true
+
+      - name: Verify publish contents
+        run: npm pack --dry-run
 
       - name: Publish to NPM
         run: npm publish
@@ -56,12 +104,7 @@ jobs:
 
             ### What's New
 
-            - Add batch processing function to tools like TODO
-            - Optimize part of UI display to avoid icon display anomalies and terminal jitter
-            - Update Gemini thinking strength parameters
-            - Persistent context information
-            - Enhance robustness of `/btw` command
-            - Remove outdated API setting parameters
+            - Emergency fix for destructive update, configuration file hot reload disabled
 
             ### Installation
             ```bash

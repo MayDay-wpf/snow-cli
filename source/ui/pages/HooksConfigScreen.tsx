@@ -18,6 +18,11 @@ import {
 	type HookActionType,
 	isActionTypeAllowed,
 } from '../../utils/config/hooksConfig.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {
+	getHookActionIcon,
+	getHookTypeIcon,
+} from '../components/special/hookIcons.js';
 
 type Props = {
 	onBack: () => void;
@@ -33,7 +38,13 @@ type Screen =
 	| 'action-edit'; // 编辑动作
 
 type RuleField = 'description' | 'matcher';
-type ActionField = 'enabled' | 'type' | 'command' | 'prompt' | 'timeout';
+type ActionField =
+	| 'enabled'
+	| 'type'
+	| 'command'
+	| 'prompt'
+	| 'content'
+	| 'timeout';
 
 export default function HooksConfigScreen({
 	onBack,
@@ -42,6 +53,7 @@ export default function HooksConfigScreen({
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.hooksConfig.title}`);
 
 	const [screen, setScreen] = useState<Screen>('scope-select');
 	const [selectedScope, setSelectedScope] = useState<HookScope>('project');
@@ -76,14 +88,17 @@ export default function HooksConfigScreen({
 	// 验证是否可以添加指定类型的 Action
 	const canAddActionType = useCallback(
 		(newType: HookActionType, currentHooks: HookAction[]): boolean => {
-			if (!selectedHookType || !isActionTypeAllowed(selectedHookType, newType)) {
+			if (
+				!selectedHookType ||
+				!isActionTypeAllowed(selectedHookType, newType)
+			) {
 				return false;
 			}
-			// prompt 和 command 互斥：prompt 独占，command 不能与 prompt 共存
+			// prompt 独占：不能与 command/context 共存
 			if (newType === 'prompt') {
 				return currentHooks.length === 0;
 			}
-			if (newType === 'command') {
+			if (newType === 'command' || newType === 'context') {
 				return !currentHooks.some(h => h.type === 'prompt');
 			}
 			return false;
@@ -177,10 +192,11 @@ export default function HooksConfigScreen({
 			const isConfigured = configuredHooks.includes(hookType);
 			const rules = isConfigured ? loadHookConfig(hookType, selectedScope) : [];
 			const ruleCount = rules.length;
-			const icon = isConfigured ? '[✓]' : '[ ]';
+			const check = isConfigured ? '[✓]' : '[ ]';
+			const typeIcon = getHookTypeIcon(hookType);
 
 			return {
-				label: `${icon} ${hookType}${
+				label: `${check} ${typeIcon} ${hookType}${
 					ruleCount > 0 ? ` (${ruleCount} ${t.hooksConfig.hookList.rules})` : ''
 				}`,
 				value: hookType,
@@ -390,11 +406,12 @@ export default function HooksConfigScreen({
 		editingRule.hooks.forEach((action, index) => {
 			const enabled = action.enabled !== false;
 			const enabledIcon = enabled ? '[✓]' : '[ ]';
+			const actionGlyph = getHookActionIcon(action.type);
 			const actionLabel =
 				action.type === 'command'
 					? `${action.command || ''}`
 					: `${action.prompt || ''}`;
-			const label = `${enabledIcon} ${index + 1}. ${
+			const label = `${enabledIcon} ${actionGlyph} ${index + 1}. ${
 				action.type
 			}: ${actionLabel}`;
 
@@ -605,6 +622,16 @@ export default function HooksConfigScreen({
 				infoText: t.hooksConfig.actionEdit.commandInfo,
 				color: theme.colors.menuNormal,
 			});
+		} else if (editingAction.type === 'context') {
+			options.push({
+				label: `content: ${
+					editingAction.content || t.hooksConfig.actionEdit.commandNotSet
+				}`,
+				value: 'content',
+				infoText:
+					'Static additionalContext text (no shell). Plain text or JSON.',
+				color: theme.colors.menuNormal,
+			});
 		} else {
 			options.push({
 				label: `${t.hooksConfig.actionEdit.prompt}: ${
@@ -690,29 +717,32 @@ export default function HooksConfigScreen({
 								enabled: !enabled,
 							});
 						} else if (value === 'type') {
-							// 切换类型
-							const newType: HookActionType =
-								editingAction.type === 'command' ? 'prompt' : 'command';
-
-							// 检查规则中除当前 Action 外的其他 Actions
+							// Cycle command -> context -> prompt (when allowed)
 							const otherActions = editingRule.hooks.filter(
 								(_, i) => i !== selectedActionIndex,
 							);
-
-							// 验证是否可以切换到新类型
-							if (!canAddActionType(newType, otherActions)) {
-								// 不能切换类型，因为与现有 Actions 冲突
-								// 这里可以显示错误提示，暂时直接返回
+							const cycle: HookActionType[] = ['command', 'context', 'prompt'];
+							const start = Math.max(0, cycle.indexOf(editingAction.type));
+							let newType: HookActionType | null = null;
+							for (let step = 1; step <= cycle.length; step++) {
+								const candidate = cycle[(start + step) % cycle.length]!;
+								if (canAddActionType(candidate, otherActions)) {
+									newType = candidate;
+									break;
+								}
+							}
+							if (!newType || newType === editingAction.type) {
 								return;
 							}
 
 							setEditingAction({
 								...editingAction,
 								type: newType,
-								// 清除旧类型的字段
 								command:
 									newType === 'command' ? editingAction.command : undefined,
 								prompt: newType === 'prompt' ? editingAction.prompt : undefined,
+								content:
+									newType === 'context' ? editingAction.content : undefined,
 							});
 						} else if (value === 'command') {
 							setEditingActionField('command');
@@ -720,6 +750,9 @@ export default function HooksConfigScreen({
 						} else if (value === 'prompt') {
 							setEditingActionField('prompt');
 							setActionFieldValue(editingAction.prompt || '');
+						} else if (value === 'content') {
+							setEditingActionField('content');
+							setActionFieldValue(editingAction.content || '');
 						} else if (value === 'timeout') {
 							setEditingActionField('timeout');
 							setActionFieldValue(editingAction.timeout?.toString() || '');

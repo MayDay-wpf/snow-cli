@@ -1,5 +1,9 @@
 import type {TranslationKeys} from '../types.js';
 
+const inputNewlineShortcut =
+	process.platform === 'darwin' ? 'Option+Enter' : 'Alt+Enter / Ctrl+Enter';
+const pasteImageShortcut = process.platform === 'darwin' ? 'Ctrl+V' : 'Alt+V';
+
 export const en: TranslationKeys = {
 	welcome: {
 		title: '❆ SNOW AI CLI',
@@ -31,6 +35,8 @@ export const en: TranslationKeys = {
 		languageSettingsInfo: 'Switch application language',
 		themeSettings: 'Theme Settings',
 		themeSettingsInfo: 'Configure theme and preview DiffViewer',
+		privacySettings: 'Privacy Settings',
+		privacySettingsInfo: 'Configure privacy-related options',
 		hooksSettings: 'Hooks Settings',
 		hooksSettingsInfo: 'Configure hooks for customizing AI workflow',
 		updateNoticeTitle: 'Update available',
@@ -38,8 +44,121 @@ export const en: TranslationKeys = {
 		updateNoticeLatest: 'Latest',
 		updateNoticeRun: 'Run',
 		updateNoticeGithub: 'GitHub',
+		updateNow: 'Update Now',
+		updateNowInfo:
+			'Exit the CLI and run "npm i -g snow-ai" to upgrade to the latest version',
 		exit: 'Exit',
 		exitInfo: 'Exit the application',
+	},
+	notification: {
+		taskCompletedTitle: 'Snow task completed',
+		taskFailedTitle: 'Snow task failed',
+		agentWaitingForInputTitle: 'Snow agent waiting for input',
+		unknownError: 'Unknown error',
+	},
+	doctor: {
+		available: 'available',
+		unavailableOrFailed: 'unavailable or failed to execute',
+		exitCodeColon: 'Exit code: {code}',
+		exitCode: 'exit code {code}',
+		bundledRipgrepMissingPath: '@vscode/ripgrep did not provide rgPath',
+		bundledRipgrep: 'bundled @vscode/ripgrep: {version}',
+		systemRg: 'system rg: {version}',
+		bundledRipgrepFailed: 'bundled @vscode/ripgrep failed: {reason}',
+		bothRipgrepUnavailable:
+			'bundled @vscode/ripgrep and system rg are both unavailable',
+		bundledPath: 'bundled path: {path}',
+		bundledError: 'bundled error: {reason}',
+		systemError: 'system error: {reason}',
+		bundledRipgrepUnavailable: 'bundled @vscode/ripgrep unavailable: {reason}',
+		privacyNotConfigured: 'Not configured',
+		privacyEnabled: 'Enabled',
+		privacyDisabled: 'Disabled',
+		version: 'version {version}',
+		unknown: 'unknown',
+		required: ', required {version}',
+		readFailed: 'Unable to read',
+		npmRegistry: 'npm registry',
+		workingDirectory: 'Working directory',
+		projectPackageJson: 'Project package.json',
+		parseFailed: 'Parse failed',
+		found: 'Found',
+		notFoundInCurrentDirectory: 'Not found in current directory',
+		userConfigDirectory: 'User config directory',
+		notReadableWritable: 'Not readable/writable',
+		userConfigDirectoryMissing:
+			'Missing; it will be created after initial configuration',
+		globalSettingsJson: 'Global settings.json',
+		readable: 'Readable',
+		notCreated: 'Not created',
+		projectSettingsJson: 'Project settings.json',
+		projectSettingsNotConfigured: 'Project-level settings not configured',
+		activeProfile: 'Active Profile',
+		profileMissing: '{profile} does not exist',
+		apiKeyConfigured: 'Configured',
+		apiKeyMissing: 'Not configured in the active Profile',
+		profileCount: '{count} profiles',
+		mcpServices: 'MCP services',
+		mcpServerCount: 'global {global} servers, project {project} servers',
+		privacyFilter: 'Privacy filter',
+		asyncTasks: 'Async tasks',
+		taskFileCount: '{count} task files',
+		sseDaemonRecordCount: 'records {total}, running {alive}, stale {stale}',
+		nodeOptionsMayAffect: 'Set; may affect Node.js startup behavior',
+		notSet: 'Not set',
+		proxyEnvironmentVariables: 'Proxy environment variables',
+		setItemCount: '{count} items set',
+		title: '[i] Snow Doctor environment diagnostics',
+		summary: 'Summary',
+		summaryOk: '{count} OK',
+		summaryWarning: '{count} warning',
+		summaryFailed: '{count} failed',
+		summaryInfo: '{count} info',
+		blockingIssues: '\n[x] Doctor found blocking environment issues.',
+		completedWithWarnings: '\n[!] Doctor completed with warnings.',
+		completedSuccessfully: '\n[OK] Doctor completed successfully.',
+	},
+	updateCheck: {
+		checking: 'Checking whether snow-ai can be updated safely...',
+		failed: '- {label}: failed',
+		error: '  Error: {error}',
+		stderr: '  stderr: {stderr}',
+		exitCode: '  Exit code: {code}',
+		notFoundInPath: '- {label}: not found in PATH',
+		allFoundInPath: '  All {label} found in PATH:',
+		npmPath: 'npm path',
+		npmPathLookup: 'npm path lookup',
+		warningMultipleNpm:
+			'  Warning: multiple npm executables were found in PATH. The update may install snow-ai with a different npm than the one used by your shell.',
+		npm: 'npm',
+		cannotUpdateNpmUnavailable: 'Cannot update because npm is not available.',
+		npmGlobalPrefix: 'npm global prefix',
+		npmGlobalRoot: 'npm global root',
+		snowPath: 'snow path',
+		snowPathLookup: 'snow path lookup',
+		warningMultipleSnow:
+			'  Warning: multiple snow executables were found in PATH. After updating, your shell may still run an older snow executable first.',
+		warningSnowOutsidePrefix:
+			'  Warning: at least one snow executable is outside the current npm global prefix. Updating may not affect the snow command that your shell runs first.',
+		globalSnowAiPackage: 'global snow-ai package',
+		globalSnowAiPackageLabel: '- global snow-ai package:',
+		npmRegistry: 'npm registry',
+		warningNonOfficialRegistry:
+			'  Warning: this is not the official npm registry. Mirror registries may lag behind the official latest version.',
+		officialLatestVersion: 'official registry latest version',
+		latestOfficialRegistry: '- latest on official registry: {version}',
+		configuredLatestVersion: 'configured registry latest version',
+		latestConfiguredRegistry: '- latest on configured registry: {version}',
+		warningRegistryLatestDiffers:
+			'  Warning: configured registry latest version differs from the official registry. Updating now may install a delayed mirror version.',
+		currentSnowAi: '- current snow-ai: {version}',
+		updateCheckFailed:
+			'Update check failed. Please fix the blocking issue above before updating.',
+		alreadyUpToDate: 'snow-ai is already up to date.',
+		updatePossibleWithWarnings:
+			'Update is possible, but review the warnings above before running snow --update.',
+		environmentSuitable:
+			'Environment looks suitable for updating. Run snow --update to update.',
 	},
 	menu: {
 		navigate: 'Use ↑↓ keys to navigate, press Enter to select:',
@@ -55,6 +174,7 @@ export const en: TranslationKeys = {
 		notSet: 'Not set',
 		browserPath: 'Browser Path (Optional):',
 		autoDetect: 'Auto-detect',
+		searchEngine: 'Search Engine:',
 		errors: 'Errors:',
 		editingHint:
 			'Editing mode: Press Enter to save and exit editing (Make your changes and press Enter when done)',
@@ -88,6 +208,10 @@ export const en: TranslationKeys = {
 		embeddingApiKey: 'Embedding API Key:',
 		embeddingApiKeyOptional: 'Embedding API Key (Optional for local):',
 		embeddingDimensions: 'Embedding Dimensions:',
+		embeddingSettingsGroup: 'Embedding Model Config',
+		embeddingSettingsExpandHint: '(Press Enter to expand/collapse)',
+		batchSettingsGroup: 'Batch Settings',
+		batchSettingsExpandHint: '(Press Enter to expand/collapse)',
 		batchMaxLines: 'Batch Max Lines:',
 		batchConcurrency: 'Batch Concurrency:',
 		notSet: 'Not set',
@@ -115,6 +239,23 @@ export const en: TranslationKeys = {
 		chunkingMinLinesPerChunk: 'Min Lines Per Chunk:',
 		chunkingMinCharsPerChunk: 'Min Characters Per Chunk:',
 		chunkingOverlapLines: 'Overlap Lines:',
+		rerankingToggle: 'Result Reranking:',
+		rerankingSettingsGroup: 'Reranking Model Config',
+		rerankingSettingsExpandHint: '(Press Enter to expand/collapse)',
+		rerankingModelName: 'Model Name:',
+		rerankingBaseUrl: 'Base URL:',
+		rerankingApiKey: 'API Key:',
+		rerankingContextLength: 'Model Context Length:',
+		rerankingTopN: 'Top N:',
+		rerankingNotConfigured:
+			'Please configure Model Name and Base URL in "Reranking Model Config" first',
+		validationRerankingModelNameRequired:
+			'Reranking model name is required when enabled',
+		validationRerankingBaseUrlRequired:
+			'Reranking base URL is required when enabled',
+		validationRerankingContextLengthPositive:
+			'Model context length must be greater than 0',
+		validationRerankingTopNPositive: 'Top N must be greater than 0',
 		saveError: 'Failed to save configuration',
 		gitignoreNotFound:
 			'Cannot create index: .gitignore file not found. Please add a .gitignore file to your project to prevent indexing unnecessary files.',
@@ -168,6 +309,10 @@ export const en: TranslationKeys = {
 		moreBelow: '{count} more below',
 		profile: 'Profile:',
 		baseUrl: 'Base URL:',
+		baseUrlMode: 'Base URL Mode:',
+		baseUrlModeAuto: 'Auto',
+		baseUrlModeBase: 'Base URL',
+		baseUrlModeEndpoint: 'Full Endpoint',
 		apiKey: 'API Key:',
 		requestMethod: 'Request Method:',
 		requestUrlLabel: 'Request URL: ',
@@ -198,13 +343,35 @@ export const en: TranslationKeys = {
 		geminiThinkingLevel: 'Gemini Thinking Level:',
 		responsesReasoningEnabled: 'Responses Reasoning Enabled:',
 		responsesReasoningEffort: 'Responses Reasoning Effort:',
+		responsesReasoningMode: 'Responses Reasoning Mode:',
+		responsesReasoningModeNone: 'None',
 		responsesVerbosity: 'Responses Verbosity:',
 		responsesFastMode: 'Responses Fast Mode (priority):',
+		chatThinkingEnabled: 'Chat Thinking (DeepSeek):',
+		chatReasoningEffort: 'Chat Reasoning Effort:',
 		advancedModel: 'Advanced Model(Type to search):',
 		basicModel: 'Basic Model(Type to search):',
+		supportsVision: 'Current Model Supports Vision:',
+		supportsVisionYes: 'Yes',
+		supportsVisionNo: 'No, configure a dedicated vision model',
+		visionConfig: 'Vision Model Configuration:',
+		visionConfigTitle: 'Vision Model Configuration',
+		visionConfigSubtitle:
+			'Configure an independent vision model URL, API key, request method, and model for a primary model without vision support',
+		visionConfigOpenHint:
+			'(Press Enter to enter, Esc to return to main configuration)',
+		visionConfigNavigationHint:
+			'↑↓ Navigate · Enter edit/select · Esc return to main configuration · Ctrl+S save',
+		visionBaseUrl: 'Vision Model URL:',
+		visionBaseUrlMode: 'Vision Model URL Mode:',
+		visionApiKey: 'Vision Model API Key:',
+		visionRequestMethod: 'Vision Model Request Method:',
+		visionModel: 'Vision Model(Type to search):',
 		maxContextTokens: 'Max Context Tokens:',
 		maxTokens: 'Max Tokens:',
 		streamIdleTimeoutSec: 'Stream Idle Timeout(sec):',
+		maxRetries: 'Max Retries:',
+		retryDelayMs: 'Retry Delay (ms):',
 		toolResultTokenLimit: 'Tool Result Limit (%):',
 		toolResultTokenLimitHint:
 			'Algorithm: maxContextTokens × {percentage}% = {actualLimit} tokens',
@@ -274,6 +441,16 @@ export const en: TranslationKeys = {
 		followGlobalNoneWithParentheses: 'Follow Global (None)',
 		notUse: 'Not Use',
 		systemPromptMultiSelectHint: 'Space: toggle | Enter: confirm | Esc: cancel',
+		modelSelectFilterLabel: 'Filter:',
+		modelSelectModelCount: '{count} models',
+		modelSelectScrollHint: '↑↓ scroll for more',
+		apiConnectionGroup: 'API Connection',
+		promptHeadersGroup: 'Prompt & Headers',
+		displayCompressGroup: 'Display & Compression',
+		reasoningGroup: 'Reasoning Settings',
+		modelGroup: 'Model Settings',
+		tokenTimeoutGroup: 'Token & Timeout',
+		groupExpandHint: '(Press Enter to expand/collapse)',
 	},
 	customHeaders: {
 		title: 'Custom Headers Management',
@@ -318,6 +495,8 @@ export const en: TranslationKeys = {
 		headerValuePlaceholder: 'Header value',
 		headerEditingHint:
 			'↑↓: Navigate fields | Enter: Edit | Ctrl+S: Save | ESC: Cancel',
+		placeholderHint:
+			'Values support {{placeholder}} syntax, resolved by plugins in ~/.snow/plugin/custom_headers/',
 	},
 	subAgentConfig: {
 		title: 'Sub-Agent Configuration',
@@ -351,6 +530,7 @@ export const en: TranslationKeys = {
 		terminalTools: 'Terminal Tools',
 		todoTools: 'TODO Management Tools',
 		webSearchTools: 'Web Search Tools',
+		snowDocsTools: 'Snow Docs Tools',
 		ideTools: 'IDE Diagnostics Tools',
 		userInteractionTools: 'User Interaction Tools',
 		skillTools: 'Skill Tools',
@@ -400,13 +580,11 @@ export const en: TranslationKeys = {
 		scopeGlobal: 'Global',
 		scopeSelectTitle: 'Select scope for new command',
 		scopeSelectHint: '↑↓: Navigate • Enter: Select • Esc: Cancel',
-		duplicatePattern:
-			'Pattern "{pattern}" already exists in {scope} scope',
+		duplicatePattern: 'Pattern "{pattern}" already exists in {scope} scope',
 		resetScopeSelectTitle: 'Select scope to reset',
 		resetGlobalDesc: 'Restore to default preset commands',
 		resetProjectDesc: 'Clear all project custom commands',
-		confirmResetScopeMessage:
-			'⚠️ Press Enter again to confirm {scope} reset',
+		confirmResetScopeMessage: '⚠️ Press Enter again to confirm {scope} reset',
 		// Add view
 		addTitle: 'Add Custom Sensitive Command ({scope})',
 		patternLabel: 'Pattern (supports wildcards, e.g., "rm*"):',
@@ -455,10 +633,61 @@ export const en: TranslationKeys = {
 		solarizedDarkInfo: 'Solarized dark theme with precision colors',
 		nord: 'Nord',
 		nordInfo: 'Arctic, north-bluish color palette',
+		tiffany: 'Tiffany Blue',
+		tiffanyInfo: 'Fresh and elegant Tiffany blue palette',
+		macaronPink: 'Macaron Pink',
+		macaronPinkInfo: 'Sweet pastel macaron pink palette',
+		trumpGold: 'Trump Gold',
+		trumpGoldInfo: 'Bold and eye-catching gold palette',
+		chinaRed: 'China Red',
+		chinaRedInfo: 'Elegant and festive Chinese red palette',
+		evaPurple: 'Optimus Prime',
+		evaPurpleInfo: 'Classic red-blue-silver truck palette, Autobots roll out',
 		custom: 'Custom',
 		customInfo: 'Use your own custom colors',
 		editCustom: 'Edit Custom Theme...',
 		editCustomInfo: 'Customize theme colors',
+	},
+	privacySettings: {
+		title: 'Privacy Settings',
+		apiConfig: 'API Configuration',
+		apiConfigInfo: 'Manage online privacy filter API configuration',
+		toolResultsConfig: 'Tool Results Configuration',
+		toolResultsConfigInfo: 'Manage privacy options related to tool results',
+		enablePrivacy: 'Enable Privacy Filter',
+		enablePrivacyInfo:
+			'Process related content with the selected mode when enabled',
+		enabled: '[✓] Enabled',
+		disabled: '[ ] Disabled',
+		modeLabel: 'Filter Mode',
+		modeApi: 'Online API',
+		modeApiInfo: 'Use the configured online privacy filter API for redaction',
+		modeLocalRules: 'Local Rules',
+		modeLocalRulesInfo:
+			'Use @blindfold/sdk local rules for redaction without API configuration',
+		modeSelectInfo: 'Choose privacy filter mode',
+		configLocation: 'Config Location',
+		projectLocation: 'Project',
+		projectLocationInfo:
+			'Save to .snow/settings.json under the current working directory root',
+		globalLocation: 'Global',
+		globalLocationInfo:
+			'Save to .snow/settings.json under the user home directory',
+		scopeSelectInfo: 'Choose where to save privacy configuration first',
+		urlLabel: 'URL (full path)',
+		urlInfo: 'Enter the full URL of the privacy filter API',
+		apiKeyLabel: 'APIKEY (optional)',
+		apiKeyInfo: 'Enter APIKEY; leave empty if authentication is not required',
+		modelLabel: 'Model',
+		modelInfo: 'Model name, default openai/privacy-filter',
+		notSet: 'Not set',
+		configured: 'Configured',
+		optional: 'Optional',
+		save: 'Save',
+		saveInfo: 'Save API configuration to the selected location',
+		savedInfo: 'Privacy settings saved',
+		back: '← Back',
+		backInfo: 'Return to main menu',
 	},
 	customTheme: {
 		title: 'Custom Theme Editor',
@@ -476,7 +705,8 @@ export const en: TranslationKeys = {
 		confirm: 'Confirm',
 		preview: 'Preview',
 		userMessagePreview: 'User message preview',
-		userMessageSample: 'Check if userMessageBackground looks right.',
+		userMessageSample:
+			'Check if the user message accent bar (userMessageBackground) looks right.',
 		colorHint: 'Press Enter to edit this color',
 	},
 	helpPanel: {
@@ -558,6 +788,45 @@ export const en: TranslationKeys = {
 		useCommandPrefix: 'Use',
 		useCommandSuffix: 'command to disconnect',
 	},
+	telemetryPanel: {
+		title: 'OpenTelemetry Telemetry',
+		description1:
+			'Collects traces, metrics, and logs only when explicitly enabled. Data is exported in OpenTelemetry format to external collectors such as Jaeger, Prometheus, Grafana, or APM/HPM platforms.',
+		description2:
+			'Settings are saved to Snow JSON project settings and are passed directly to OpenTelemetry exporters. Environment variables are not used.',
+		enableTelemetry: 'Enable telemetry',
+		serviceName: 'Service name',
+		tracesExporter: 'Traces exporter',
+		metricsExporter: 'Metrics exporter',
+		logsExporter: 'Logs exporter',
+		otlpProtocol: 'OTLP protocol',
+		otlpEndpoint: 'OTLP base endpoint',
+		otlpHeaders: 'OTLP headers',
+		injectSessionIdHeader: 'Inject Session-Id header',
+		captureContent: 'Capture prompt/tool content',
+		contentMaxLength: 'Content max length',
+		hintEnabled: 'Stored in Snow JSON project settings',
+		hintServiceName:
+			'OpenTelemetry resource service.name. Empty uses the default snow-cli. Restart Snow after changing.',
+		hintTracesExporter: 'Options: otlp, console, none',
+		hintMetricsExporter: 'Options: otlp, prometheus, console, none',
+		hintLogsExporter: 'Options: otlp, console, none',
+		hintOtlpProtocol: 'Options: grpc, http/protobuf, http/json',
+		hintOtlpEndpoint:
+			'Example: http://localhost:4317 or /api/public/otel. Exporters auto-complete per-signal paths.',
+		hintOtlpHeaders: 'Example: Authorization=Bearer your-token',
+		hintInjectSessionIdHeader:
+			'When enabled, injects Session-Id from the current trace tag snow.session_id if Session-Id is not configured manually.',
+		hintCaptureContent:
+			'On by default. Disable if traces must not include prompts, completions, tool args, or tool results.',
+		hintContentMaxLength:
+			'Max characters per captured content event when content capture is enabled.',
+		empty: '(empty)',
+		savedMessage:
+			'OpenTelemetry telemetry settings saved. Restart Snow to reinitialize exporters.',
+		navigationHint:
+			'\u2191\u2193 select \u00b7 \u2190\u2192/Enter change \u00b7 S save \u00b7 Esc save+close',
+	},
 	commandPanel: {
 		title: 'Command Panel',
 		availableCommands: 'Available Commands',
@@ -572,6 +841,7 @@ export const en: TranslationKeys = {
 			help: 'Show keyboard shortcuts and help information',
 			clear: 'Clear chat context and conversation history',
 			copyLast: 'Copy last AI message to clipboard',
+			delSession: 'Delete the current session and clear the screen',
 			resume: 'Resume a conversation',
 			mcp: 'Show Model Context Protocol services and tools',
 			yolo: 'Toggle unattended mode (auto-approve all tools)',
@@ -584,11 +854,14 @@ export const en: TranslationKeys = {
 				'Review changes in the working tree and selected commits. Opens a picker panel where you can select items and add notes.',
 			gitline:
 				'Select git commits and insert their content into the current chat input',
+			goal: 'Set a persistent goal that drives the AI to auto-continue until achieved, unmet, or budget-exhausted. Usage: /goal <objective> | /goal pause | /goal resume | /goal clear | /goal status',
 			role: 'Open or create ROLE.md file to customize AI assistant role. Use -l or --list to list all roles',
 			roleSubagent:
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
 			export: 'Export chat conversation to text file with save dialog',
+			config:
+				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
 			custom: 'Add custom command and save to ~/.snow/commands',
 			skills: 'Create skill template with documentation and examples',
 			skillsPicker:
@@ -604,19 +877,28 @@ export const en: TranslationKeys = {
 				'Toggle codebase indexing for current project. Usage: /codebase [on|off|status]',
 			permissions: 'Manage always-approved tools permissions',
 			backend: 'Show background processes panel',
-			loop: 'Schedule a session-scoped recurring task. Usage: /loop 5m <prompt>',
+			loop: 'Schedule recurring tasks by interval or daily time. Usage: /loop 5m <prompt> or /loop daily 09:30 <prompt>',
 			profiles: 'Switch configuration profiles',
-			models: 'Open model switching panel',
+			models: 'Open the model switching panel',
 			subAgentDepth: 'Set the maximum nested spawn depth for sub-agents',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			autoFormat:
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
+			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
+			buddy:
+				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch:
 				'Toggle Tool Search (progressive tool loading). Enabled by default to save context',
 			hybridCompress:
 				'Toggle Hybrid Compress mode (AI summary + smart truncation for /compact and auto-compress)',
+			imageCompress:
+				'Toggle Image Compress mode (history -> PNG image for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
+			ultraTodo:
+				'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
+			telemetry: 'Configure OpenTelemetry telemetry exporters and endpoint',
+			branch: 'Fork current conversation into a new branch',
 			worktree:
 				'Open Git branch management panel for switching, creating and deleting branches',
 			diff: 'Review file changes from a conversation in IDE diff view',
@@ -624,7 +906,22 @@ export const en: TranslationKeys = {
 			disconnect: 'Disconnect from the current Snow Instance',
 			connectionStatus: 'Show current Snow Instance connection status',
 			newPrompt: 'Generate a refined prompt from your requirement using AI',
+			pixel: 'Open the terminal pixel editor',
+			games: 'Open the games panel - play built-in and plugin games',
 			btw: 'Ask a side-question while AI is working (temporary, no context saved)',
+			deepresearch:
+				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
+			toolDisplay:
+				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+			toolIcons:
+				'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
+			toolNames:
+				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
+			thinkDisplay:
+				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
+			speedometer:
+				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
+			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -635,6 +932,10 @@ export const en: TranslationKeys = {
 			copyFailedPrefix: '✗ Failed to copy to clipboard',
 			unknownError: 'Unknown error',
 		},
+		delSessionFeedback: {
+			noCurrentSession: 'No current session to delete.',
+			deleteFailed: 'Failed to delete the current session.',
+		},
 		// Command output messages (for command execution results)
 		commandOutput: {
 			// Auto-format command messages
@@ -644,13 +945,376 @@ export const en: TranslationKeys = {
 				statusEnabled: 'Auto-format: Enabled for this project',
 				statusDisabled: 'Auto-format: Disabled for this project',
 			},
+			// Simple mode command messages
+			simpleMode: {
+				enabled: 'Simple mode: Enabled',
+				disabled: 'Simple mode: Disabled',
+				statusEnabled: 'Simple mode: Enabled',
+				statusDisabled: 'Simple mode: Disabled',
+			},
+			// Tool display mode command messages
+			toolDisplay: {
+				status: (mode: string) =>
+					`Tool display mode: ${mode}` +
+					(mode === 'full'
+						? ' (show tool name + args + result)'
+						: mode === 'compact'
+						? ' (show tool name + brief status only)'
+						: ' (hide all tool calls, show only AI reply)'),
+				set: (mode: string) => `Tool display mode set to: ${mode}`,
+				invalid:
+					'Invalid mode. Usage: /tool-display [full|compact|hidden|status]',
+			},
+			// Tool category icons + status prefix command messages
+			toolIcons: {
+				status: (enabled: boolean, overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					const overrideText =
+						keys.length === 0
+							? 'none'
+							: keys.map(k => `${k}:${overrides[k]}`).join(', ');
+					return `Tool category icons: ${
+						enabled ? 'on' : 'off'
+					} · overrides: ${overrideText}`;
+				},
+				setEnabled: (enabled: boolean) =>
+					`Tool category icons ${
+						enabled ? 'enabled' : 'disabled'
+					} (affects new tool titles only)`,
+				setOverride: (toolName: string, icon: string) =>
+					`Set icon for ${toolName} to ${icon}`,
+				cleared: (toolName: string) => `Cleared icon override for ${toolName}`,
+				setStatusEnabled: (enabled: boolean) =>
+					`Tool status prefixes ${
+						enabled ? 'enabled' : 'disabled'
+					} (default ✓/·/✗; new titles only)`,
+				setStatusOverride: (statusKey: string, icon: string) =>
+					`Set status ${statusKey} glyph to ${icon}`,
+				clearedStatus: (statusKey: string) =>
+					`Reset status ${statusKey} to default glyph`,
+				invalid:
+					'Invalid args. Usage: /tool-icons [on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
+			},
+			// Tool display names (user overrides only; no built-in defaults)
+			toolNames: {
+				status: (overrides: Record<string, string>) => {
+					const keys = Object.keys(overrides);
+					if (keys.length === 0) {
+						return 'Tool display names: no overrides (technical ids). Batch: /tool-names a:A b:B (prefer over editing theme.json)';
+					}
+					return (
+						`Tool display name overrides (${keys.length}):\n` +
+						keys.map(k => `  ${k} → ${overrides[k]}`).join('\n')
+					);
+				},
+				setOverride: (toolName: string, displayName: string) =>
+					`Set display name for ${toolName} to "${displayName}" (new titles only)`,
+				cleared: (toolName: string) =>
+					`Cleared display name override for ${toolName}`,
+				batch: (set: number, cleared: number) =>
+					`Batch-updated tool display names: set ${set}` +
+					(cleared > 0 ? `, cleared ${cleared}` : '') +
+					' (new titles only)',
+				clearAll: (count: number) =>
+					count === 0
+						? 'Tool display names: nothing to clear'
+						: `Cleared all ${count} tool display name override(s)`,
+				invalid:
+					'Invalid args. Usage: /tool-names [status|clear|<tool>:<display> …]; space/comma batch; `<tool>:` clears one',
+			},
+			// Think display mode command messages
+			thinkDisplay: {
+				status: (mode: string) =>
+					`Think display mode: ${mode}` +
+					(mode === 'full'
+						? ' (move all thinking content to static area)'
+						: ' (compact thinking content then move to static area)'),
+				set: (mode: string) => `Think display mode set to: ${mode}`,
+				invalid: 'Invalid mode. Usage: /think-display [full|compact|status]',
+			},
+			// Speedometer command messages
+			speedometer: {
+				enabled: 'Speedometer: Enabled',
+				disabled: 'Speedometer: Disabled',
+				statusEnabled: 'Speedometer: Enabled',
+				statusDisabled: 'Speedometer: Disabled',
+			},
+			// Buddy command messages
+			buddy: {
+				noCompanion:
+					'No buddy has hatched yet. Use /buddy hatch [name] to hatch one.',
+				statusLine: '{name} the {shiny}{rarity} {species}',
+				shinyPrefix: 'shiny ',
+				personalityLabel: 'Personality',
+				hatLabel: 'Hat',
+				eyeLabel: 'Eye',
+				colorLabel: 'Color',
+				colorDefault: 'default (species/shiny)',
+				mutedLabel: 'Muted',
+				mutedYes: 'yes',
+				mutedNo: 'no',
+				profileLabel: 'AI Profile',
+				currentProfileLabel: '(current Snow profile)',
+				hatchedLabel: 'Hatched',
+				statsLabel: 'Stats',
+				alreadyExists:
+					'A buddy already exists.\n\n{status}\n\nUse /buddy reset before hatching a new one.',
+				availableSpecies: 'Available buddy species: {species}',
+				invalidSpecies:
+					'Unknown buddy species "{species}". Available species: {available}',
+				hatchGreeting:
+					'{name} hatched as a{shiny} {rarity} {species}{hat}: {flavor}. Try /buddy say hello.',
+				hatchedSummary: 'Hatched {name} the {rarity} {species}.',
+				hatchKeepChatting:
+					'Use /buddy pet or /buddy say <message> to keep chatting.',
+				noBuddyToPet: 'No buddy to pet yet. Use /buddy hatch [name] first.',
+				petReaction: '{name} seems pleased.',
+				petSuccess: 'You pet {name}.',
+				noBuddyToRename:
+					'No buddy to rename yet. Use /buddy hatch [name] first.',
+				renameUsage: 'Usage: /buddy rename <name>',
+				renameReaction: '{oldName} is now {newName}.',
+				renameSuccess: 'Renamed buddy from {oldName} to {newName}.',
+				noBuddyToSet:
+					'No buddy to customize yet. Use /buddy hatch [name] first.',
+				setUsage:
+					'Usage: /buddy set --hat=crown --eye=✦ --color=cyan --rarity=legendary --shiny=true [--species=fox] [--personality="..."] [--debugging=10] or /buddy set --list',
+				setSuccess: 'Updated {name}: {changed}.',
+				setReaction: 'Looking sharp! Updated {changed}.',
+				setOptionsTitle: 'Buddy customization options:',
+				setOptionsHats: 'Hats: {hats}',
+				setOptionsEyes: 'Eyes: {eyes}',
+				setOptionsRarities: 'Rarities: {rarities}',
+				setOptionsSpecies: 'Species: {species}',
+				setOptionsColors: 'Colors: {colors}',
+				setOptionsStats: 'Stats (1-10): {stats}',
+				noBuddyToTalk:
+					'No buddy to talk to yet. Use /buddy hatch [name] first.',
+				sayUsage: 'Usage: /buddy say <message>',
+				profileListTitle: 'Buddy AI profile: {profile}',
+				profileListItem: '{marker} {name} {active}',
+				profileUsage:
+					'Usage: /buddy profile [list|current|default|reset|<profile>]',
+				profileSet: 'Buddy AI profile set to {profile}.',
+				profileCleared:
+					'Buddy AI profile cleared. It will follow current Snow profile: {profile}.',
+				profileNotFound:
+					'Profile "{profile}" not found. Use /buddy profile list.',
+				muted:
+					'Buddy muted. UI companion and prompt context are hidden until /buddy unmute.',
+				unmutedReaction: 'I am back.',
+				unmuted: 'Buddy unmuted.',
+				reset: 'Buddy reset. Use /buddy hatch [name] to hatch a new companion.',
+				usage:
+					'Usage: /buddy [status|hatch [name] [--species=species] [--list-species] [--personality=text]|pet|rename <name>|set [--hat=... --eye=... --rarity=... --shiny=true|false --species=... --personality=... --debugging=1-10]|say <message>|profile [list|current|default|reset|<profile>]|mute|unmute|reset]',
+				teaser: 'Psst... try /buddy',
+				noModelConfigured: 'No model configured for buddy reply',
+				emptyReply: '{name} is listening.',
+				replyError: '{name} wanted to reply, but something went wrong: {error}',
+			},
+			// Ultra TODO command messages
+			ultraTodo: {
+				toggling: 'Toggling Ultra TODO mode',
+				enabled:
+					'Ultra TODO enabled. todo-manage is disabled and todo-ultra is available.',
+				disabled: 'Ultra TODO disabled. todo-manage is available again.',
+				failed: 'Failed to toggle Ultra TODO: {error}',
+				unknownError: 'Unknown error',
+			},
 			// Export command messages
 			export: {
 				exporting: 'Exporting conversation...',
 				openingDialog: 'Opening file save dialog...',
 				cancelledByUser: 'Export cancelled by user.',
+				invalidFormat:
+					'Invalid export format: {format}. Supported: txt, md, html.',
+				noSession:
+					'No active session to export. Start a conversation first, then try /export again.',
+			},
+			// Config command messages
+			config: {
+				exporting: 'Exporting configuration...',
+				importing: 'Importing configuration...',
+				openingDialog: 'Opening configuration save dialog...',
+				saveDialogTitle: 'Export Snow CLI Configuration',
+				openDialogTitle: 'Import Snow CLI Configuration',
+				cancelledByUser: 'Configuration export cancelled by user.',
+				importCancelledByUser: 'Configuration import cancelled by user.',
+				fileDialogUnsupported:
+					'File dialog not supported on this platform. Configuration operation cancelled.',
+				exportSuccess: 'Configuration exported successfully to:\n{path}',
+				exportFailed: 'Configuration export failed: {error}',
+				importWarning:
+					'Configuration import will overwrite configuration items included in the YAML file. Items missing from the YAML file will be skipped and kept unchanged.',
+				importConfirmTitle: 'Confirm Configuration Import',
+				importConfirmMessage:
+					'This is an overwrite import. Configuration items included in the YAML file will replace current values; missing items will be skipped. Continue?',
+				importSuccess:
+					'Configuration imported successfully from:\n{path}\nImported: {imported}\nSkipped: {skipped}',
+				importFailed: 'Configuration import failed: {error}',
+				none: 'none',
+				usage: 'Usage: /config <export|import>',
+				unknownError: 'Unknown error',
+			},
+			// IDE command messages
+			ide: {
+				disconnected: 'Disconnected from IDE.',
+				noAvailableIDEs:
+					'No available IDEs detected. Make sure your IDE has the Snow CLI extension or plugin installed and is running.',
+				unmatchedIDEs:
+					'Found {count} other running IDE(s). However, their workspace/project directories do not match the current cwd.',
+				connectedTo: 'Connected to {label}',
+				connectFailed: 'Failed to connect to IDE: {error}',
+			},
+			branchFork: {
+				noActiveSession: 'No active session to fork.',
+				success:
+					'Conversation forked into branch {name}. To return to the original session:\n/resume {originalId}',
+				failed: 'Failed to fork session',
+			},
+			// Deep Research command messages
+			deepResearch: {
+				usage:
+					'Usage: /deepresearch <prompt>\nExample: /deepresearch Compare the architectures of OpenAI Deep Research and Gemini Deep Research',
+			},
+			// Cut (interrupt) command messages
+			cut: {
+				usage: 'Usage: /cut <message>',
+			},
+			// BTW command messages
+			btw: {
+				usage: 'Usage: /btw <your question>',
+			},
+			// Loop command messages
+			loop: {
+				usage:
+					'Usage: /loop 5m <prompt> | /loop daemon 5m <prompt> | /loop daily 09:30 <prompt> | /loop at 09:30 <prompt> | /loop every day at 09:30 <prompt> | /loop <prompt> every day at 09:30 | /loop list | /loop cancel <id> | /loop tasks',
+				openingTaskManager: 'Opening task manager...',
+				relatedLoopTasks: 'Related loop tasks:',
+				noActiveLoops:
+					'No active loops. Create one with /loop 5m <prompt>, /loop daily 09:30 <prompt>, or /loop daemon 5m <prompt> for a daemon loop.',
+				loopNotFound: 'Loop not found: {id}',
+				cancelled: 'Cancelled loop {id} ({schedule})',
+				created: 'Loop created: {id}',
+				scheduleEvery: 'Schedule: {schedule}',
+				promptLabel: 'Prompt: {prompt}',
+				nextRun: 'Next run: {time}',
+				sessionScopedNote:
+					'Session-scoped only: loop jobs stop when Snow CLI exits.',
+				daemonScopedNote:
+					'Daemon mode: loop keeps running after Snow CLI exits and only stops when manually cancelled.',
+				logPath: 'Log: {path}',
+				usageHint:
+					'Use /loop list to inspect jobs or /loop cancel <id> to stop one.',
+			},
+			// Goal command messages
+			goal: {
+				noActiveGoal: 'No active goal.',
+				noActiveGoalInSession: 'No active goal in this session.',
+				usageHeader: 'Usage:',
+				usageObjective:
+					'  /goal <objective>            Create and start a new persistent goal',
+				usageBudget:
+					'  /goal <objective> --budget=N Set token budget in millions (default 2M)',
+				usagePause: '  /goal pause                  Pause the active goal',
+				usageResume:
+					'  /goal resume                 Open goal session picker (or resume current paused goal)',
+				usageResumeSession:
+					'  /goal resume <sessionId>     Resume the goal of a specific session directly',
+				usageClear: '  /goal clear                  Clear the active goal',
+				usageStatus: '  /goal status                 Show current goal summary',
+				tipHeader:
+					'Tip: Write objectives as verifiable contracts, not vague wishes.',
+				tipGood:
+					'  Good: "Refactor src/auth/login.ts to async/await; verify with npm test"',
+				tipBad: '  Bad:  "Improve the repo"',
+				currentGoal: 'Current goal:',
+				noActiveGoalToPause: 'No active goal to pause.',
+				pauseSuccess:
+					'Goal {id} paused. The loop will not auto-continue. Use /goal resume to reactivate.',
+				resumingSession: 'Resuming goal session {sessionId}...',
+				noGoalToResume: 'No goal to resume.',
+				cannotResumeStatus:
+					'Cannot resume goal in status "{status}". Use /goal clear to start over.',
+				resumeSuccess: 'Goal {id} resumed (status: pursuing).',
+				resumeHint: 'Press ESC to pause. Use /goal clear to abort.',
+				openSessionPicker: 'Open goal session picker.',
+				noActiveGoalToClear: 'No active goal to clear.',
+				clearSuccess: 'Goal {id} cleared. Session returns to single-turn chat.',
+				created: 'Goal {id} created and pursuing.',
+				tokenBudget: 'Token budget: {budget}',
+				createHint:
+					'Press ESC to pause. Use /goal resume to continue, /goal clear to abort.',
+				createFailed: 'Failed to create goal: {error}',
+				unknownError: 'unknown error',
+				invalidUsage:
+					'Invalid /goal usage. Run /goal without arguments to see usage hints.',
+				budgetUnlimited: 'unlimited',
+				budgetMillion: '{value}M tokens',
+				budgetThousand: '{value}K tokens',
+				budgetTokens: '{value} tokens',
+			},
+			// Codebase command messages
+			codebase: {
+				notConfigured:
+					'Codebase: Not configured. Please configure embedding settings in /home first.',
+				cannotEnable:
+					'Cannot enable codebase: Embedding settings not configured. Please configure in /home first.',
+				enabledLabel: 'Enabled',
+				disabledLabel: 'Disabled',
+				statusWithFiles:
+					'Codebase: {status} for this project ({count} {fileWord} will be embedded)',
+				status: 'Codebase: {status} for this project',
+				fileSingular: 'file',
+				filePlural: 'files',
 			},
 		},
+	},
+	fileList: {
+		loadingFiles: 'Loading files...',
+		noFilesFound: 'No files found',
+		searchingDeeper: 'Searching deeper (depth {depth})...',
+		scanning: 'Scanning... ({count} indexed)',
+		scanningDeeper: 'Searching deeper (depth {depth}, {count} indexed)...',
+		deeperSearchHint:
+			'More directories not scanned · press ↓ on the last item to search deeper',
+		multiSelectHint:
+			'Space toggle · Enter insert · select multiple files at once',
+		multiSelectActiveHint: '{count} selected · Space toggle · Enter insert all',
+		workspaceFilterHint: 'Workspace: {filter} · searching in selected dir only',
+		contentSearchHeader: '≡ Content Search',
+		filesHeader: '≡ Files [{mode} • Ctrl+T]',
+		treeMode: 'Tree',
+		listMode: 'List',
+		agentSearching: '✦ AI searching... (round {round})',
+		agentSearchError: '✦ AI search failed: {error}',
+		agentNoResults: '✦ AI found no matching files',
+		agentSearchHeader: '✦ AI Search',
+		agentPreviewAssistantPrefix: 'AI',
+		agentPreviewRoundRequest:
+			'Round {round}/{maxRounds}: sending search request',
+		agentPreviewRequestedToolCalls: 'AI requested {count} tool call(s)',
+		agentPreviewToolCall: 'Tool: {tool}{args}',
+		agentPreviewToolResultCandidates: 'Tool result: {count} candidate file(s)',
+		agentPreviewToolResultReceived: 'Tool result received',
+		agentPreviewToolError: 'Tool error: {error}',
+		agentPreviewParsingFinalResults: 'Parsing final results',
+		agentPreviewFinalizing: 'Finalizing results without more tool calls',
+	},
+	ideSelectPanel: {
+		title: 'Select IDE',
+		subtitle: 'Connect to an IDE for integrated development features.',
+		noneOption: 'None',
+		connectedMark: ' ✔',
+		hint: '↑↓ navigate • Enter select • ESC close',
+		connecting: 'Connecting...',
+		connectSuccess: 'Connected to {label}',
+		connectError: 'Failed to connect: {error}',
+		unmatchedIDEs:
+			'The above {count} IDE(s) have workspaces that do not match the current directory. Selecting one will switch the working directory.',
+		unmatchedHeader: '— Switch working directory —',
+		switchWorkdirMark: ' (switch cwd)',
+		switchWorkdirError: 'Failed to switch working directory: {error}',
 	},
 	permissionsPanel: {
 		title: 'Permissions',
@@ -708,6 +1372,8 @@ export const en: TranslationKeys = {
 		saveFailed: 'Save failed',
 		modelSaveFailed: 'Model save failed',
 		tipLabel: 'Tip:',
+		modelCount: '{count} models',
+		scrollHint: '↑↓ scroll for more',
 	},
 	profilePanel: {
 		title: 'Select Profile',
@@ -716,6 +1382,7 @@ export const en: TranslationKeys = {
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
 		escHint: 'Press ESC to close',
+		editHint: 'Press Tab to edit',
 		activeLabel: '(active)',
 		searchLabel: 'Search:',
 		noResults: 'No matching profiles found',
@@ -803,6 +1470,8 @@ export const en: TranslationKeys = {
 			onSessionStart:
 				'Run when starting new session or resuming existing session',
 			onStop: 'Run before Stop AI process ends',
+			beforeSubAgentStart:
+				'Run before a sub-agent starts (can inject or replace prompt)',
 		},
 		hookList: {
 			title: 'Hooks Configuration',
@@ -879,6 +1548,12 @@ export const en: TranslationKeys = {
 		namePlaceholder: 'e.g., open',
 		commandLabel: 'Enter the command to execute:',
 		commandPlaceholder: 'npm run build && npm run deploy...',
+		commandLabelExecute: 'Enter the command to execute:',
+		commandLabelPrompt: 'Enter the prompt to send to AI:',
+		commandLabelPanel: 'Enter the AnyPanel plugin id:',
+		commandPlaceholderExecute: 'npm run build && npm run deploy...',
+		commandPlaceholderPrompt: 'Please help me refactor this code...',
+		commandPlaceholderPanel: 'my-panel',
 		descriptionLabel: 'Description (optional):',
 		descriptionPlaceholder: 'A brief description...',
 		descriptionHint: 'Optional, keep it short (press Enter to skip)',
@@ -886,6 +1561,9 @@ export const en: TranslationKeys = {
 		typeLabel: 'Select command type:',
 		typeExecute: 'Execute (run in terminal)',
 		typePrompt: 'Prompt (send to AI)',
+		typePanel: 'Panel (load AnyPanel plugin)',
+		typePanelHint:
+			'Panel type: command field should be the AnyPanel plugin id (~/.snow/plugin/anypanel/)',
 		locationLabel: 'Select save location:',
 		locationGlobal: 'Global',
 		locationProject: 'Project',
@@ -897,6 +1575,7 @@ export const en: TranslationKeys = {
 		escCancel: 'Press ESC to cancel',
 		resultTypeExecute: 'Execute in terminal',
 		resultTypePrompt: 'Send to AI',
+		resultTypePanel: 'AnyPanel plugin',
 		resultLocationGlobal: 'Global (~/.snow/commands/)',
 		resultLocationProject: 'Project (.snow/commands/)',
 		saveSuccessMessage:
@@ -914,11 +1593,13 @@ export const en: TranslationKeys = {
 			"Shortcuts: Ctrl+L (delete to start) • Ctrl+R (delete to end) • Ctrl+O (copy input) • {pasteKey} (paste images) • '@' (files) • '@@' (search content) • '#' (sub-agents) • '/' (commands)",
 		headerExpandedView:
 			'Press Ctrl+T: toggle expanded/collapsed view for pasted text',
+		headerSimpleHint: 'Type /simple to switch to simplified display',
 		headerWorkingDirectory: 'Working directory: {directory}',
 		// Status messages
 		statusThinking: 'Thinking...',
 		statusDeepThinking: 'Deep thinking...',
 		statusWriting: 'Writing...',
+		statusFinishing: 'Finishing...',
 		statusStreaming: 'Streaming',
 		statusWorking: 'Working',
 		statusIndexing: 'Indexing codebase...',
@@ -941,6 +1622,7 @@ export const en: TranslationKeys = {
 		profileSwitchHint: 'switch',
 		gitBranch: 'Git Branch',
 		memoryUsageLabel: 'Memory Usage:',
+		speedometerLabel: 'Speed',
 		// Tool execution
 		toolCall: 'Tool call',
 		toolThinking: 'Thinking',
@@ -958,6 +1640,15 @@ export const en: TranslationKeys = {
 		assistantMessage: 'Assistant',
 		commandMessage: 'Command',
 		discontinuedMessage: '└─ user discontinue',
+		aiCompletionTimeMessage: '└─ AI finished at {time}',
+		aiCompletionTimeWithDurationMessage:
+			'└─ AI finished at {time} ({duration})',
+		compressionSummaryAutoTitle: 'Auto-compressed summary collapsed',
+		compressionSummaryManualTitle: 'Manual compressed summary collapsed',
+		compressionSummaryStats: '{lines} lines · {chars} chars',
+		compressionSummaryPreviewPrefix: 'Preview',
+		compressionSummaryOriginalSaved:
+			'Display only; original text is fully preserved',
 		// File operations
 		fileCreated: 'Created',
 		fileModified: 'Modified',
@@ -1036,7 +1727,7 @@ export const en: TranslationKeys = {
 		ideActiveFile: '| {file}',
 		ideSelectedText: '| {count} chars selected',
 		// Input
-		inputPlaceholder: 'Ask me anything about coding...',
+		inputPlaceholder: `Ask me anything about coding... New line: ${inputNewlineShortcut}`,
 		inputProcessing: 'Processing...',
 		inputDisabled: 'Input disabled',
 		// Shortcuts
@@ -1055,6 +1746,7 @@ export const en: TranslationKeys = {
 		rollbackConversation: 'Rollback conversation only',
 		rollbackWarning: '{count} files will be affected',
 		// Session
+		chatInitializing: 'Initializing...',
 		sessionCreating: 'Create the first dialogue record file...',
 		sessionLoading: 'Loading session...',
 		sessionSaving: 'Saving session...',
@@ -1079,6 +1771,51 @@ export const en: TranslationKeys = {
 		pressCtrlC: 'Ctrl+C to cancel',
 		pressCtrlR: 'Ctrl+R to regenerate',
 		pressCtrlS: 'Ctrl+S to save',
+		loadingTips: [
+			'Type / to view all commands',
+			'Use /help to view all shortcuts',
+			'Use @ to reference files, @@ to search file content',
+			`Press ${pasteImageShortcut} to paste images from the clipboard`,
+			`Press ${inputNewlineShortcut} for multi-line input`,
+			'Press ESC to interrupt the current response',
+			'Use Shift+Tab or Ctrl+Y to switch YOLO, Plan, and Team modes',
+			'State your goal and constraints first for steadier results',
+			'For multi-step work, ask for a plan before execution',
+			'Use # to pick a sub-agent for specialized tasks',
+			'Type /todo to view or manage the task list',
+			'Use /add-dir to add a working directory for complex projects',
+			'Type /simple to reduce display noise',
+			'After pasting a screenshot, add text context before sending',
+			'Describe expected behavior and actual behavior when reporting a bug',
+			'Include reproduction steps, error messages, and relevant logs when debugging',
+			'Mention the files, functions, or modules you think are related',
+			'Say what must stay unchanged before asking for a refactor',
+			'For risky changes, ask Snow to work in small verifiable steps',
+			'Give acceptance criteria so the final result can be checked clearly',
+			'Tell Snow which command should verify the change if the project has one',
+			'When performance matters, include the input size and latency target',
+			'For UI issues, include terminal size, theme, and what you expected to see',
+			'For API changes, mention compatibility requirements and existing clients',
+			'If you want minimal changes, say so before Snow starts editing',
+			'If a command failed, paste both the command and the relevant output',
+			'For code reviews, describe the risk areas you care about most',
+			'When requirements are uncertain, ask Snow to list assumptions first',
+			'Use /models to switch models without leaving the chat',
+			'Use /profiles to switch API and model profiles quickly',
+			'Use /compact when long conversations start approaching the context limit',
+			'Use /review to ask Snow to inspect working tree changes or selected commits',
+			'Use /diff to reopen file changes from the current conversation in your IDE',
+			'Use /new-prompt to turn a rough requirement into a clearer prompt',
+			'Use /btw to ask a temporary side question while the main task is running',
+			'Use /loop to schedule repeated session-scoped work such as periodic checks',
+			'Use /skills- to pick a Skill and inject reusable instructions into the input',
+			'Use /role to customize the assistant behavior for this project',
+			'Use /reindex after large codebase changes to refresh search results',
+			'Use /permissions to review tools that are always approved',
+			'Enable /auto-format to format files after edits when the project supports it',
+			'Use /usage to inspect token consumption and cache statistics',
+			'Use /branch to fork the current conversation before exploring another direction',
+		],
 		// Context
 		contextUsage: 'Context usage: {percentage}%',
 		contextPercentage: '{percentage}%',
@@ -1102,8 +1839,13 @@ export const en: TranslationKeys = {
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
 		hybridCompressEnabled:
 			'⇌ Hybrid Compress ON - AI summary + smart truncation',
+		imageCompressEnabled: '🖼 Image Compress ON - History rendered as PNG',
 		teamModeActive:
 			'⚑ Agent Team Mode Active - Orchestrating multiple agents with independent worktrees',
+		ultraTodoActive:
+			'◈ Ultra TODO Mode Active - phase advancement requires completion checks',
+		telemetryActive:
+			'OpenTelemetry telemetry active - traces and metrics are exported externally',
 		tokens: ' tokens',
 		cached: 'cached',
 		newCache: 'new cache',
@@ -1151,6 +1893,7 @@ export const en: TranslationKeys = {
 		modeLabel: 'Creation Mode:',
 		modeAi: 'AI Generate (describe requirement)',
 		modeManual: 'Manual (create templates)',
+		modeInstall: 'Install from GitHub',
 		requirementLabel: 'Requirement:',
 		requirementHint:
 			'Describe what you want this Skill to do (content will follow this language)',
@@ -1200,6 +1943,27 @@ export const en: TranslationKeys = {
 			'Skill "{name}" created successfully!\nMode: {mode}\nLocation: {location}\nPath: {path}\n\nThe following files have been created:\n- SKILL.md (main skill documentation)\n- reference.md (detailed reference)\n- examples.md (usage examples)\n- templates/template.txt (template file)\n- scripts/helper.py (helper script)\n\nYou can now edit these files to customize your skill.',
 		createErrorMessage: 'Failed to create skill: {error}',
 		errorUnknown: 'Unknown error',
+	},
+	skillsInstall: {
+		title: 'Install Skill from GitHub',
+		urlLabel: 'GitHub URL:',
+		urlPlaceholder: 'https://github.com/owner/repo or owner/repo',
+		urlHint: 'Enter a GitHub repository URL containing SKILL.md',
+		urlExamples:
+			'Examples:\n  https://github.com/owner/repo\n  https://github.com/owner/repo/tree/main/skills/my-skill\n  owner/repo@main:skills/my-skill',
+		urlActions: 'Enter: Continue | ESC: Cancel',
+		locationLabel: 'Select Install Location:',
+		locationGlobal: 'Global (~/.snow/skills/)',
+		locationProject: 'Project (.snow/skills/ in project root)',
+		locationActions: 'Up/Down: Select location | Enter: Install | ESC: Cancel',
+		installing: 'Installing skill from GitHub...',
+		installingHint: 'Downloading and extracting repository, please wait',
+		installSuccess: 'Skill "{name}" installed successfully!\nPath: {path}',
+		batchInstallSuccess:
+			'Installed {count}/{total} skills from repository: {names}',
+		installError: 'Install failed: {error}',
+		errorUnknown: 'Unknown error',
+		resultActions: 'Enter: Install another | ESC: Close',
 	},
 	roleCreation: {
 		title: 'Create ROLE.md',
@@ -1252,10 +2016,14 @@ export const en: TranslationKeys = {
 		deleteSuccess: 'Role deleted successfully',
 		loading: 'Processing...',
 		hints:
-			'Tab: Switch scope | Enter: Activate | N: New | D: Delete | ESC: Close',
+			'Tab: Switch scope | Enter: Activate | N: New | D: Delete | R: Override prompt | ESC: Close',
 		cannotDeleteActive: 'Cannot delete active role',
 		confirmDelete: 'Confirm delete this role?',
 		confirmDeleteHint: 'Press Y to confirm, N to cancel',
+		overrideTag: 'Override',
+		overrideEnabled: 'Enabled: this role overrides the system prompt',
+		overrideDisabled: 'Disabled: default system prompt restored',
+		cannotOverrideInactive: 'Only the active role can be marked as override',
 	},
 
 	roleSubagentCreation: {
@@ -1403,7 +2171,7 @@ export const en: TranslationKeys = {
 		emptyHint: 'No background processes',
 	},
 	fileRollback: {
-		title: 'File Rollback Confirmation',
+		title: 'Rollback Confirmation',
 		description: 'This checkpoint has',
 		filesCount: '{count} file(s) will be rolled back',
 		filesCountWithSelection:
@@ -1411,6 +2179,7 @@ export const en: TranslationKeys = {
 		notebookCount: '{count} notebook(s) will also be rolled back',
 		teamCount:
 			'{count} team member(s) will be terminated and worktrees cleaned up',
+		todoCount: '{count} TODO snapshot(s) will also be rolled back',
 		question: 'Choose rollback mode:',
 		conversationOnly: 'Rollback conversation only',
 		conversationAndFiles: 'Rollback conversation + files',
@@ -1428,7 +2197,7 @@ export const en: TranslationKeys = {
 		backHint: 'Tab back',
 		closeHint: 'ESC close',
 		emptyHint: 'No files to rollback',
-		noFilesConfirm: 'No file changes detected. Rollback conversation only?',
+		noFilesConfirm: 'No file changes detected. Confirm rollback?',
 		noFilesConfirmHint: 'Enter confirm · ESC cancel',
 	},
 	usagePanel: {
@@ -1511,6 +2280,11 @@ export const en: TranslationKeys = {
 		title: 'Diff Review',
 		noSnapshots: 'No file changes found in this session',
 		navigationHint: '↑↓ navigate • Tab view files • Enter open all • ESC close',
+		filesSuffix: '{count} files',
+		filesViewNavigationHint:
+			'↑↓ navigate • Tab back • Enter open all • ESC close',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
 	},
 	sessionListPanel: {
 		title: 'Resume',
@@ -1533,6 +2307,7 @@ export const en: TranslationKeys = {
 		renamePrompt: 'Rename Session',
 		renaming: 'Renaming...',
 		renamePlaceholder: 'Enter new title',
+		confirmDelete: 'Press D again within 1s to confirm delete ({count})',
 	},
 	mcpInfoPanel: {
 		title: 'MCP Services',
@@ -1566,17 +2341,43 @@ export const en: TranslationKeys = {
 		mcpSourceProject: ' [Project]',
 		mcpSourceGlobal: ' [Global]',
 	},
+	skillsListPanel: {
+		title: 'Skills',
+		loading: 'Loading skills...',
+		error: 'Error: {message}',
+		noSkills: 'No skills available',
+		locationProject: '(Project)',
+		locationGlobal: '(Global)',
+		statusDisabled: '(Disabled)',
+		navigationHint:
+			'↑↓ Navigate • Tab/Space/Enter Toggle • U Update Selected • A Update All • ESC Close',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		updateInProgress: 'Updating: {name}...',
+		updateSingleSuccess: '{name}: updated to latest.',
+		updateSingleUpToDate: '{name}: already up to date.',
+		updateNoSkills: 'No GitHub-installed skills found to update.',
+		updateFailed: 'Update failed',
+		updateTimeout: 'Timed out',
+		updateAllInProgress: 'Updating all GitHub skills...',
+		updateResult: 'Updated {updated}/{total} skills.',
+		updateAllUpToDate: 'Checked {total} skills, all up to date.',
+		updatePartial: 'Updated {updated}/{total}, {failed} failed.',
+	},
 	mcpConfigScreen: {
 		title: 'MCP Config - Select scope to edit',
 		scopeProject: 'Project Config',
 		scopeGlobal: 'Global Config',
 		navigationHint: '↑↓ Navigate • Enter Edit • ESC Back',
 		savedSuccess:
-			'{scope} MCP configuration saved successfully! Please use `snow` restart!',
+			'{scope} MCP configuration saved successfully! Tools cache hot-refreshed (no restart).',
 		configErrors: 'Configuration errors: {errors}',
 		reverted: 'Changes have been reverted to the previous valid configuration.',
 		invalidJson:
 			'Invalid JSON format. Changes have been reverted to the previous valid configuration.',
+	},
+	commandArgsPanel: {
+		navigationHint: '\u2191\u2193 navigate  Enter select  Tab/ESC close',
 	},
 	runningAgentsPanel: {
 		title: 'Running Agents',
@@ -1660,10 +2461,93 @@ export const en: TranslationKeys = {
 		errorPrefix: 'Error: ',
 		scrollHint: '↑↓ Scroll',
 	},
+	pixelEditor: {
+		title: 'Pixel Editor',
+		palette: 'Palette',
+		eraser: 'Eraser',
+		colorNumber: 'Color {n}',
+		canvasCleared: 'Canvas cleared',
+		clearCancelled: 'Clear cancelled',
+		saveCancelled: 'Save cancelled',
+		nameCannotBeEmpty: 'Name cannot be empty',
+		savedAs: 'Saved as {name}',
+		controlsHint:
+			'Arrows: move • Space: draw/erase • Enter: draw • 1-9: color • 0: erase • C: clear',
+		controlsHintPosBrush:
+			'ESC/Q: back • Ctrl+S: save • Pos: ({x}, {y}) • Brush: ',
+		saveDrawingLabel: 'Save drawing: ',
+		namePlaceholder: 'Enter name...',
+		escCancelHint: '  ESC cancel',
+		confirmClearCanvas:
+			'Clear canvas? Press Y to confirm, any other key to cancel.',
+	},
+	pixelEditorScreen: {
+		screenTitle: 'Pixel Editor',
+		newCanvas: 'New Canvas',
+		manageDrawings: 'Manage Drawings',
+		menuNavigateHint: '↑↓ navigate • Enter select • Esc back',
+		manageTitle: 'Manage Drawings',
+		noDrawings: 'No drawings found.',
+		managerHint:
+			'↑↓ navigate • Space select • D delete • S toggle exit image • Enter edit • Esc back',
+		confirmDeleteMany:
+			'Confirm delete {count} item(s)? Enter/Y/D confirm, N/Esc cancel',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		selectedCount: 'Selected {count} item(s)',
+		exitImageDisabled: 'Exit image disabled',
+		failedDisableExitImage: 'Failed to disable exit image',
+		setAsExitImage: 'Set "{name}" as exit image',
+	},
+	gamesScreen: {
+		screenTitle: 'Games',
+		loading: 'Loading game list...',
+		noGames:
+			'No games found. Drop game plugins into ~/.snow/plugin/games/ to load.',
+		menuHint: '↑↓ navigate • Enter play • Esc back',
+		moreAbove: '↑ {count} more above',
+		moreBelow: '↓ {count} more below',
+		pluginDirHint: 'Plugin directory: ~/.snow/plugin/games/ (.js/.mjs/.cjs)',
+	},
+	anyPanel: {
+		loading: 'Loading panel...',
+		errorTitle: 'Panel Error',
+		pluginNotFound: 'Panel plugin with ID {id} not found',
+		loadError: 'Failed to load panel plugin: {error}',
+		renderError: 'Panel render error: {error}',
+		pressEscToClose: 'Press Esc to close',
+	},
+	agentPickerPanel: {
+		title: 'Sub-Agent Selection',
+		noAgentsWarning:
+			'No sub-agents configured. Please configure sub-agents first.',
+		selectAgent: 'Select Sub-Agent',
+		escHint: '(Press ESC to close)',
+		noDescription: 'No description',
+		scrollHint: '· ↑↓ to scroll',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
+	},
+	todoPickerPanel: {
+		title: 'TODO Selection',
+		scanning: 'Scanning project for TODO comments...',
+		noTodosFound: 'No TODO comments found in the project',
+		noMatchSearch: 'No TODOs match "{searchQuery}" (Total: {totalCount})',
+		typeToClearSearch: 'Type to filter · Backspace to clear search',
+		selectTodos: 'Select TODOs',
+		filteringLabel: 'Filtering: "{searchQuery}"',
+		typeToFilterHint:
+			'Type to filter · Backspace to clear · Space: toggle · Enter: confirm',
+		typeToSearchHint:
+			'Type to search · Space: toggle · Enter: confirm · Esc: cancel',
+		selectedCount: '{count} TODO(s) selected',
+		noDescription: 'No description',
+	},
 	exitScreen: {
 		title: 'Goodbye',
 		goodbye: 'Thanks for using Snow CLI',
 		thankYou: 'See you next time',
+		resumeSession: 'Resume Session',
 		version: 'v{version}',
 	},
 };

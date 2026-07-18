@@ -65,8 +65,9 @@ export class LSPManager {
 			return null;
 		}
 
+		let uri: string | undefined;
 		try {
-			const uri = this.pathToUri(filePath);
+			uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
 			if (!content) {
@@ -75,15 +76,25 @@ export class LSPManager {
 
 			await client.openDocument(uri, content);
 
+			if (!client.isReady()) {
+				return null;
+			}
+
 			const position: Position = {line, character: column};
 			const locations = await client.gotoDefinition(uri, position);
-
-			await client.closeDocument(uri);
 
 			return locations.length > 0 ? locations[0]! : null;
 		} catch (error) {
 			console.debug('LSP findDefinition error:', error);
 			return null;
+		} finally {
+			if (uri) {
+				try {
+					await client.closeDocument(uri);
+				} catch {
+					// Suppress close errors — the server may already be dead
+				}
+			}
 		}
 	}
 
@@ -103,8 +114,9 @@ export class LSPManager {
 			return [];
 		}
 
+		let uri: string | undefined;
 		try {
-			const uri = this.pathToUri(filePath);
+			uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
 			if (!content) {
@@ -113,15 +125,25 @@ export class LSPManager {
 
 			await client.openDocument(uri, content);
 
+			if (!client.isReady()) {
+				return [];
+			}
+
 			const position: Position = {line, character: column};
 			const locations = await client.findReferences(uri, position, false);
-
-			await client.closeDocument(uri);
 
 			return locations.slice(0, maxResults);
 		} catch (error) {
 			console.debug('LSP findReferences error:', error);
 			return [];
+		} finally {
+			if (uri) {
+				try {
+					await client.closeDocument(uri);
+				} catch {
+					// Suppress close errors — the server may already be dead
+				}
+			}
 		}
 	}
 
@@ -136,8 +158,9 @@ export class LSPManager {
 			return null;
 		}
 
+		let uri: string | undefined;
 		try {
-			const uri = this.pathToUri(filePath);
+			uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
 			if (!content) {
@@ -146,14 +169,24 @@ export class LSPManager {
 
 			await client.openDocument(uri, content);
 
-			const symbols = await client.documentSymbol(uri);
+			if (!client.isReady()) {
+				return null;
+			}
 
-			await client.closeDocument(uri);
+			const symbols = await client.documentSymbol(uri);
 
 			return symbols;
 		} catch (error) {
 			console.debug('LSP documentSymbol error:', error);
 			return null;
+		} finally {
+			if (uri) {
+				try {
+					await client.closeDocument(uri);
+				} catch {
+					// Suppress close errors — the server may already be dead
+				}
+			}
 		}
 	}
 
@@ -168,8 +201,9 @@ export class LSPManager {
 			return null;
 		}
 
+		let uri: string | undefined;
 		try {
-			const uri = this.pathToUri(filePath);
+			uri = this.pathToUri(filePath);
 			const content = await this.getDocumentContent(filePath);
 
 			if (!content) {
@@ -178,15 +212,25 @@ export class LSPManager {
 
 			await client.openDocument(uri, content);
 
+			if (!client.isReady()) {
+				return null;
+			}
+
 			const position: Position = {line, character: column};
 			const hover = await client.hover(uri, position);
-
-			await client.closeDocument(uri);
 
 			return hover;
 		} catch (error) {
 			console.debug('LSP hover error:', error);
 			return null;
+		} finally {
+			if (uri) {
+				try {
+					await client.closeDocument(uri);
+				} catch {
+					// Suppress close errors — the server may already be dead
+				}
+			}
 		}
 	}
 

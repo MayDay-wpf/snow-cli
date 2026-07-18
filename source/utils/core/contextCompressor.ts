@@ -1,4 +1,4 @@
-import {getOpenAiConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
+import {getSnowConfig, getCustomSystemPrompt} from '../config/apiConfig.js';
 import {getSystemPromptForMode} from '../../prompt/systemPrompt.js';
 import type {ChatMessage} from '../../api/types.js';
 import {createStreamingChatCompletion} from '../../api/chat.js';
@@ -31,6 +31,10 @@ export interface CompressionResult {
 		output?: string;
 		error?: string;
 	}; // Hook error details for UI rendering
+}
+
+export interface CompressionOptions {
+	onStreamStart?: (content: string) => void;
 }
 
 /**
@@ -161,7 +165,7 @@ function findPreserveStartIndex(messages: ChatMessage[]): number {
  *
  * @param messages - Array of conversation messages (will be modified in-place)
  */
-function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
+export function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 	// Find indices to remove (iterate backwards for safe removal)
 	const indicesToRemove: number[] = [];
 
@@ -346,9 +350,8 @@ function formatMessageForTranscript(msg: ChatMessage): string | null {
 
 	// Include thinking/reasoning if present (important context)
 	if (msg.thinking) {
-		const thinkingContent = typeof msg.thinking === 'string'
-			? msg.thinking
-			: msg.thinking.thinking;
+		const thinkingContent =
+			typeof msg.thinking === 'string' ? msg.thinking : msg.thinking.thinking;
 		if (thinkingContent) {
 			parts.push(`[Thinking]\n${cleanThinkingContent(thinkingContent)}`);
 		}
@@ -428,6 +431,7 @@ async function compressWithChatCompletions(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -448,7 +452,12 @@ async function compressWithChatCompletions(
 		stream: true,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -461,6 +470,7 @@ async function compressWithChatCompletions(
 			};
 		}
 	}
+
 	if (!summary) {
 		throw new Error('Failed to generate summary');
 	}
@@ -475,6 +485,7 @@ async function compressWithResponses(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -495,7 +506,12 @@ async function compressWithResponses(
 		stream: true,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -523,6 +539,7 @@ async function compressWithGemini(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -542,7 +559,12 @@ async function compressWithGemini(
 		messages,
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -570,6 +592,7 @@ async function compressWithAnthropic(
 	modelName: string,
 	conversationMessages: ChatMessage[],
 	customSystemPrompts: string[] | null,
+	options?: CompressionOptions,
 ): Promise<CompressionResult> {
 	const messages = prepareMessagesForCompression(
 		conversationMessages,
@@ -591,7 +614,12 @@ async function compressWithAnthropic(
 		disableThinking: true, // Context compression 不使用 Extended Thinking
 	})) {
 		// Collect content
+		if (chunk.type === 'reasoning_delta' && chunk.delta) {
+			options?.onStreamStart?.(chunk.delta);
+		}
+
 		if (chunk.type === 'content' && chunk.content) {
+			options?.onStreamStart?.(chunk.content);
 			summary += chunk.content;
 		}
 
@@ -615,10 +643,12 @@ async function compressWithAnthropic(
 /**
  * Compress conversation history using the advanced model
  * @param messages - Array of messages to compress
+ * @param options - Optional compression lifecycle callbacks
  * @returns Compressed summary and token usage information, or null if compression should be skipped
  */
 export async function compressContext(
 	messages: ChatMessage[],
+	options?: CompressionOptions,
 ): Promise<CompressionResult | null> {
 	// Execute beforeCompress hook
 	try {
@@ -655,7 +685,7 @@ export async function compressContext(
 		console.warn('Failed to execute beforeCompress hook:', error);
 	}
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 
 	if (messages.length === 0) {
 		console.warn('No messages to compress');
@@ -707,6 +737,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -715,6 +746,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -724,6 +756,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 
@@ -734,6 +767,7 @@ export async function compressContext(
 					modelName,
 					messagesToCompress,
 					customSystemPrompt || null,
+					options,
 				);
 				break;
 		}

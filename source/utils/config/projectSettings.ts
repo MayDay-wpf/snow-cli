@@ -1,6 +1,9 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import {
+	readSettings,
+	updateSettings,
+	type SettingsScope,
+	type UnifiedSettings,
+} from './unifiedSettings.js';
 
 export interface ProjectSettings {
 	toolSearchEnabled?: boolean;
@@ -11,53 +14,74 @@ export interface ProjectSettings {
 	planMode?: boolean;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
+	imageCompressEnabled?: boolean;
 	teamMode?: boolean;
+	ultraTodoEnabled?: boolean;
+	disableBashAiSummary?: boolean;
+	speedometerEnabled?: boolean;
+	telemetry?: TelemetryConfig;
 }
 
-const PROJECT_SNOW_DIR = path.join(process.cwd(), '.snow');
-const GLOBAL_SNOW_DIR = path.join(os.homedir(), '.snow');
-const PROJECT_SETTINGS_FILE = path.join(PROJECT_SNOW_DIR, 'settings.json');
-const GLOBAL_SETTINGS_FILE = path.join(GLOBAL_SNOW_DIR, 'settings.json');
+export interface TelemetryConfig {
+	enabled?: boolean;
+	serviceName?: string;
+	tracesExporter?: 'otlp' | 'console' | 'none';
+	metricsExporter?: 'otlp' | 'prometheus' | 'console' | 'none';
+	logsExporter?: 'otlp' | 'console' | 'none';
+	otlpProtocol?: 'grpc' | 'http/protobuf' | 'http/json';
+	otlpEndpoint?: string;
+	otlpHeaders?: string;
+	injectSessionIdHeader?: boolean;
+	captureContent?: boolean;
+	contentMaxLength?: number;
+}
 
+export const DEFAULT_TELEMETRY_SERVICE_NAME = 'snow-cli';
 export const DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH = 1;
 
-function ensureSnowDir(): void {
-	if (!fs.existsSync(PROJECT_SNOW_DIR)) {
-		fs.mkdirSync(PROJECT_SNOW_DIR, {recursive: true});
-	}
-}
-
+/**
+ * Backwards-compatible loader: prefer project scope, fall back to global, then
+ * default. The new storage backend is `unifiedSettings`, so this just reads the
+ * relevant top-level fields from `settings.json`.
+ */
 function loadSettings(): ProjectSettings {
-	try {
-		// 优先读取项目配置
-		if (fs.existsSync(PROJECT_SETTINGS_FILE)) {
-			const content = fs.readFileSync(PROJECT_SETTINGS_FILE, 'utf-8');
-			return JSON.parse(content) as ProjectSettings;
-		}
+	const project = readSettings('project');
+	const global = readSettings('global');
 
-		// 如果项目配置不存在，读取全局配置
-		if (fs.existsSync(GLOBAL_SETTINGS_FILE)) {
-			const content = fs.readFileSync(GLOBAL_SETTINGS_FILE, 'utf-8');
-			return JSON.parse(content) as ProjectSettings;
-		}
+	const pick = <K extends keyof ProjectSettings>(
+		key: K,
+	): ProjectSettings[K] | undefined => {
+		const fromProject = (project as ProjectSettings)[key];
+		if (fromProject !== undefined) return fromProject;
+		return (global as ProjectSettings)[key];
+	};
 
-		return {};
-	} catch {
-		return {};
-	}
+	return {
+		toolSearchEnabled: pick('toolSearchEnabled'),
+		autoFormatEnabled: pick('autoFormatEnabled'),
+		subAgentMaxSpawnDepth: pick('subAgentMaxSpawnDepth'),
+		fileListDisplayMode: pick('fileListDisplayMode'),
+		yoloMode: pick('yoloMode'),
+		planMode: pick('planMode'),
+		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
+		hybridCompressEnabled: pick('hybridCompressEnabled'),
+		imageCompressEnabled: pick('imageCompressEnabled'),
+		teamMode: pick('teamMode'),
+		ultraTodoEnabled: pick('ultraTodoEnabled'),
+		disableBashAiSummary: pick('disableBashAiSummary'),
+		speedometerEnabled: pick('speedometerEnabled'),
+		telemetry: pick('telemetry'),
+	};
 }
 
-function saveSettings(settings: ProjectSettings): void {
-	try {
-		ensureSnowDir();
-		fs.writeFileSync(
-			PROJECT_SETTINGS_FILE,
-			JSON.stringify(settings, null, 2),
-			'utf-8',
-		);
-	} catch {
-		// Ignore write errors
-	}
+function setField<K extends keyof ProjectSettings>(
+	key: K,
+	value: ProjectSettings[K],
+	scope: SettingsScope = 'project',
+): void {
+	updateSettings(scope, settings => {
+		(settings as UnifiedSettings)[key] = value as UnifiedSettings[K];
+	});
 }
 
 function normalizeSubAgentMaxSpawnDepth(depth: unknown): number {
@@ -75,9 +99,7 @@ export function getToolSearchEnabled(): boolean {
 }
 
 export function setToolSearchEnabled(enabled: boolean): void {
-	const settings = loadSettings();
-	settings.toolSearchEnabled = enabled;
-	saveSettings(settings);
+	setField('toolSearchEnabled', enabled);
 }
 
 export function getAutoFormatEnabled(): boolean {
@@ -86,9 +108,7 @@ export function getAutoFormatEnabled(): boolean {
 }
 
 export function setAutoFormatEnabled(enabled: boolean): void {
-	const settings = loadSettings();
-	settings.autoFormatEnabled = enabled;
-	saveSettings(settings);
+	setField('autoFormatEnabled', enabled);
 }
 
 export function getSubAgentMaxSpawnDepth(): number {
@@ -97,10 +117,8 @@ export function getSubAgentMaxSpawnDepth(): number {
 }
 
 export function setSubAgentMaxSpawnDepth(depth: number): number {
-	const settings = loadSettings();
 	const normalizedDepth = normalizeSubAgentMaxSpawnDepth(depth);
-	settings.subAgentMaxSpawnDepth = normalizedDepth;
-	saveSettings(settings);
+	setField('subAgentMaxSpawnDepth', normalizedDepth);
 	return normalizedDepth;
 }
 
@@ -110,9 +128,7 @@ export function getFileListDisplayMode(): 'list' | 'tree' {
 }
 
 export function setFileListDisplayMode(mode: 'list' | 'tree'): void {
-	const settings = loadSettings();
-	settings.fileListDisplayMode = mode;
-	saveSettings(settings);
+	setField('fileListDisplayMode', mode);
 }
 
 export function getYoloMode(): boolean {
@@ -121,9 +137,7 @@ export function getYoloMode(): boolean {
 }
 
 export function setYoloMode(enabled: boolean): void {
-	const settings = loadSettings();
-	settings.yoloMode = enabled;
-	saveSettings(settings);
+	setField('yoloMode', enabled);
 }
 
 export function getPlanMode(): boolean {
@@ -132,9 +146,7 @@ export function getPlanMode(): boolean {
 }
 
 export function setPlanMode(enabled: boolean): void {
-	const settings = loadSettings();
-	settings.planMode = enabled;
-	saveSettings(settings);
+	setField('planMode', enabled);
 }
 
 export function getVulnerabilityHuntingMode(): boolean {
@@ -143,9 +155,7 @@ export function getVulnerabilityHuntingMode(): boolean {
 }
 
 export function setVulnerabilityHuntingMode(enabled: boolean): void {
-	const settings = loadSettings();
-	settings.vulnerabilityHuntingMode = enabled;
-	saveSettings(settings);
+	setField('vulnerabilityHuntingMode', enabled);
 }
 
 export function getHybridCompressEnabled(): boolean {
@@ -154,9 +164,16 @@ export function getHybridCompressEnabled(): boolean {
 }
 
 export function setHybridCompressEnabled(enabled: boolean): void {
+	setField('hybridCompressEnabled', enabled);
+}
+
+export function getImageCompressEnabled(): boolean {
 	const settings = loadSettings();
-	settings.hybridCompressEnabled = enabled;
-	saveSettings(settings);
+	return settings.imageCompressEnabled ?? false;
+}
+
+export function setImageCompressEnabled(enabled: boolean): void {
+	setField('imageCompressEnabled', enabled);
 }
 
 export function getTeamMode(): boolean {
@@ -165,7 +182,138 @@ export function getTeamMode(): boolean {
 }
 
 export function setTeamMode(enabled: boolean): void {
+	setField('teamMode', enabled);
+}
+
+export function getUltraTodoEnabled(): boolean {
 	const settings = loadSettings();
-	settings.teamMode = enabled;
-	saveSettings(settings);
+	return settings.ultraTodoEnabled ?? false;
+}
+
+export function setUltraTodoEnabled(enabled: boolean): void {
+	setField('ultraTodoEnabled', enabled);
+}
+
+/**
+ * Whether AI summary for bash/terminal command output is globally disabled.
+ * This is a user-maintained setting (no UI entry); when true, the bash
+ * service skips AI summarization regardless of the enableAiSummary argument.
+ */
+export function getDisableBashAiSummary(): boolean {
+	const settings = loadSettings();
+	return settings.disableBashAiSummary === true;
+}
+
+export function getSpeedometerEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.speedometerEnabled === true;
+}
+
+export function setSpeedometerEnabled(enabled: boolean): void {
+	setField('speedometerEnabled', enabled);
+}
+
+export function getTelemetryConfig(): TelemetryConfig {
+	const settings = loadSettings();
+	return {
+		enabled: settings.telemetry?.enabled ?? false,
+		serviceName:
+			settings.telemetry?.serviceName?.trim() || DEFAULT_TELEMETRY_SERVICE_NAME,
+		tracesExporter: settings.telemetry?.tracesExporter ?? 'otlp',
+		metricsExporter: settings.telemetry?.metricsExporter ?? 'otlp',
+		logsExporter: settings.telemetry?.logsExporter ?? 'none',
+		otlpProtocol: settings.telemetry?.otlpProtocol ?? 'grpc',
+		otlpEndpoint: settings.telemetry?.otlpEndpoint ?? 'http://localhost:4317',
+		otlpHeaders: settings.telemetry?.otlpHeaders ?? '',
+		injectSessionIdHeader: settings.telemetry?.injectSessionIdHeader ?? false,
+		captureContent: settings.telemetry?.captureContent ?? true,
+		contentMaxLength: settings.telemetry?.contentMaxLength ?? 4096,
+	};
+}
+
+export function setTelemetryConfig(config: TelemetryConfig): void {
+	setField('telemetry', config);
+}
+
+export function isTelemetryEnabled(): boolean {
+	return getTelemetryConfig().enabled === true;
+}
+
+export function getTelemetryEnabled(): boolean {
+	return getTelemetryConfig().enabled === true;
+}
+
+export function setTelemetryEnabled(enabled: boolean): void {
+	setTelemetryConfig({...getTelemetryConfig(), enabled});
+}
+
+export function getTelemetryTracesExporter(): string {
+	return getTelemetryConfig().tracesExporter ?? 'otlp';
+}
+
+export function setTelemetryTracesExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		tracesExporter: value as TelemetryConfig['tracesExporter'],
+	});
+}
+
+export function getTelemetryMetricsExporter(): string {
+	return getTelemetryConfig().metricsExporter ?? 'otlp';
+}
+
+export function setTelemetryMetricsExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		metricsExporter: value as TelemetryConfig['metricsExporter'],
+	});
+}
+
+export function getTelemetryLogsExporter(): string {
+	return getTelemetryConfig().logsExporter ?? 'none';
+}
+
+export function setTelemetryLogsExporter(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		logsExporter: value as TelemetryConfig['logsExporter'],
+	});
+}
+
+export function getTelemetryOtlpProtocol(): string {
+	return getTelemetryConfig().otlpProtocol ?? 'grpc';
+}
+
+export function setTelemetryOtlpProtocol(value: string): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		otlpProtocol: value as TelemetryConfig['otlpProtocol'],
+	});
+}
+
+export function getTelemetryOtlpEndpoint(): string {
+	return getTelemetryConfig().otlpEndpoint ?? 'http://localhost:4317';
+}
+
+export function setTelemetryOtlpEndpoint(value: string): void {
+	setTelemetryConfig({...getTelemetryConfig(), otlpEndpoint: value});
+}
+
+export function getTelemetryOtlpHeaders(): string {
+	return getTelemetryConfig().otlpHeaders ?? '';
+}
+
+export function setTelemetryOtlpHeaders(value: string): void {
+	setTelemetryConfig({...getTelemetryConfig(), otlpHeaders: value});
+}
+
+export function getTelemetryInjectSessionIdHeader(): boolean {
+	return getTelemetryConfig().injectSessionIdHeader === true;
+}
+
+export function setTelemetryInjectSessionIdHeader(value: boolean): void {
+	setTelemetryConfig({
+		...getTelemetryConfig(),
+		injectSessionIdHeader: value,
+	});
 }

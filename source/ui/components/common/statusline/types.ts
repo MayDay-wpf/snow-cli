@@ -17,6 +17,7 @@ export interface StatusLineRenderItem {
 	text: string;
 	detailedText?: string;
 	color?: string;
+	gradient?: string[];
 	priority?: number;
 }
 
@@ -67,6 +68,16 @@ export interface StatusLineContextWindowMetrics {
 	hasAnyCache: boolean;
 }
 
+export interface StatusLinePrivacyState {
+	configured: boolean;
+	enabled: boolean;
+	mode: 'api' | 'local';
+	apiUrlConfigured: boolean;
+	apiUrl?: string;
+	model?: string;
+	toolResultTools: string[];
+}
+
 export interface StatusLineSystemState {
 	memory: {
 		usageMb: number;
@@ -78,6 +89,10 @@ export interface StatusLineSystemState {
 		vulnerabilityHunting: boolean;
 		toolSearchEnabled: boolean;
 		hybridCompress: boolean;
+		imageCompress: boolean;
+		team: boolean;
+		ultraTodo: boolean;
+		telemetry: boolean;
 		simple: boolean;
 	};
 	ide: {
@@ -99,6 +114,7 @@ export interface StatusLineSystemState {
 		fileUpdateNotification?: StatusLineFileUpdateNotification | null;
 	};
 	clipboard?: StatusLineCopyStatusMessage | null;
+	privacy: StatusLinePrivacyState;
 	profile: {
 		currentName?: string;
 		baseUrl?: string;
@@ -117,6 +133,8 @@ export interface StatusLineSystemState {
 		geminiThinkingLevel?: string;
 		responsesReasoningEnabled?: boolean;
 		responsesReasoningEffort?: string;
+		chatThinkingEnabled?: boolean;
+		chatReasoningEffort?: string;
 		responsesFastMode?: boolean;
 		responsesVerbosity?: string;
 		anthropicSpeed?: string;
@@ -132,6 +150,11 @@ export interface StatusLineSystemState {
 	};
 	compression: {
 		blockToast?: string | null;
+	};
+	speedometer: {
+		enabled: boolean;
+		tps: number;
+		peakTps: number;
 	};
 }
 

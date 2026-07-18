@@ -6,7 +6,7 @@ import {homedir} from 'os';
 import {join} from 'path';
 import {mkdir, writeFile} from 'fs/promises';
 import {existsSync} from 'fs';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {
 	createStreamingChatCompletion,
 	type ChatMessage,
@@ -212,7 +212,7 @@ async function callModelForText(
 	messages: ChatMessage[],
 	abortSignal?: AbortSignal,
 ): Promise<string> {
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = config.advancedModel || config.basicModel;
 	if (!model) {
 		throw new Error('未配置模型，请先在设置中选择模型');
@@ -382,30 +382,57 @@ ${cleanedBody}
 `;
 }
 
-// Check if skill name already exists in specified location
+// Check if skill name already exists in specified location.
+// To prevent any conflict with the .agents compatibility directory, we check
+// BOTH `.snow/skills` and `.agents/skills` for the given location and return
+// true if a skill with the same id is present in either of them.
 export function checkSkillExists(
 	skillName: string,
 	location: SkillLocation,
 	projectRoot?: string,
 ): boolean {
-	const skillDir = getSkillDirectory(skillName, location, projectRoot);
-	return existsSync(skillDir);
+	const snowDir = getSkillDirectory(skillName, location, projectRoot);
+	if (existsSync(snowDir)) {
+		return true;
+	}
+
+	const agentsDir = getSkillDirectoryForRoot(
+		skillName,
+		location,
+		'.agents',
+		projectRoot,
+	);
+	return existsSync(agentsDir);
 }
 
-// Get skill directory path
+// Get skill directory path (always under `.snow/skills`, used when CREATING
+// new skills — Snow CLI always writes into its native directory).
 export function getSkillDirectory(
 	skillName: string,
 	location: SkillLocation,
 	projectRoot?: string,
 ): string {
+	return getSkillDirectoryForRoot(skillName, location, '.snow', projectRoot);
+}
+
+// Internal helper that resolves a skill directory under an arbitrary root
+// folder name (e.g. '.snow' or '.agents'). Not exported because Snow CLI
+// only ever creates skills under `.snow`; this exists solely so that
+// checkSkillExists can detect cross-directory collisions.
+function getSkillDirectoryForRoot(
+	skillName: string,
+	location: SkillLocation,
+	rootDirName: string,
+	projectRoot?: string,
+): string {
 	const segments = skillName.split('/').filter(Boolean);
 
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'skills', ...segments);
+		return join(homedir(), rootDirName, 'skills', ...segments);
 	}
 
 	const root = projectRoot || process.cwd();
-	return join(root, '.snow', 'skills', ...segments);
+	return join(root, rootDirName, 'skills', ...segments);
 }
 
 // Generate SKILL.md content
@@ -741,7 +768,28 @@ if __name__ == "__main__":
 
 // Register /skills command
 registerCommand('skills', {
-	execute: async (): Promise<CommandResult> => {
+	execute: async (args?: string): Promise<CommandResult> => {
+		const trimmedArgs = args?.trim();
+
+		// -l / --list: open skills list panel (toggle enable/disable per skill)
+		if (trimmedArgs === '-l' || trimmedArgs === '--list') {
+			return {
+				success: true,
+				action: 'showSkillsListPanel',
+				message: 'Opening Skills list panel...',
+			};
+		}
+
+		// install <github-url>: open the GitHub install panel
+		if (trimmedArgs === 'install' || trimmedArgs?.startsWith('install ')) {
+			return {
+				success: true,
+				action: 'showSkillsInstall',
+				message: 'Opening Skills install panel...',
+			};
+		}
+
+		// Default: show creation dialog
 		return {
 			success: true,
 			action: 'showSkillsCreation',

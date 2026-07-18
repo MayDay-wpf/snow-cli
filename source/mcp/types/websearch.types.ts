@@ -27,7 +27,12 @@ export interface SearchResponse {
 export interface WebPageContent {
 	url: string;
 	title: string;
-	content: string;
+	content:
+		| string
+		| Array<
+				| {type: 'text'; text: string}
+				| {type: 'image'; data: string; mimeType: string}
+		  >;
 	textLength: number;
 	contentPreview: string;
 }

@@ -3,6 +3,7 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {formatTodoContext} from '../../../utils/core/todoPreprocessor.js';
 import {getSystemPromptForMode} from '../../../prompt/systemPrompt.js';
+import {getCompanionSystemPromptAddon} from '../../../buddy/prompt.js';
 
 /**
  * Initialize conversation session and TODO context
@@ -34,25 +35,41 @@ export async function initializeConversationSession(
 	const existingTodoList = await todoService.getTodoList(currentSession.id);
 
 	// Build conversation history with TODO context as pinned user message
+	const baseSystemPrompt = getSystemPromptForMode(
+		planMode,
+		vulnerabilityHuntingMode,
+		toolSearchDisabled,
+		teamMode,
+	);
+	const companionPromptAddon = getCompanionSystemPromptAddon();
 	const conversationMessages: ChatMessage[] = [
 		{
 			role: 'system',
-			content: getSystemPromptForMode(planMode, vulnerabilityHuntingMode, toolSearchDisabled, teamMode),
+			content: companionPromptAddon
+				? `${baseSystemPrompt}\n\n${companionPromptAddon}`
+				: baseSystemPrompt,
 		},
 	];
 
+	// Add history messages from session (includes tool_calls and tool results)
+	// Filter out internal sub-agent messages (marked with subAgentInternal: true)
+	const session = sessionManager.getCurrentSession();
+
 	// If there are TODOs, add pinned context message at the front
 	if (existingTodoList && existingTodoList.todos.length > 0) {
-		const todoContext = formatTodoContext(existingTodoList.todos);
+		// 追问场景：session 已存在历史消息（含工具调用结果），AI 容易忘记拉起 TODO 列表，
+		// 此处通过 isFollowUp 引导 AI 主动调用 get 恢复 TODO 上下文，确保后续交互继续使用 TODO 工作流。
+		const isFollowUp = !!session && session.messages.length > 0;
+		const todoContext = formatTodoContext(existingTodoList.todos, {
+			isFollowUp,
+			ultraMode: existingTodoList.ultraMode,
+		});
 		conversationMessages.push({
 			role: 'user',
 			content: todoContext,
 		});
 	}
 
-	// Add history messages from session (includes tool_calls and tool results)
-	// Filter out internal sub-agent messages (marked with subAgentInternal: true)
-	const session = sessionManager.getCurrentSession();
 	if (session && session.messages.length > 0) {
 		const filteredMessages = session.messages.filter(
 			msg => !msg.subAgentInternal,

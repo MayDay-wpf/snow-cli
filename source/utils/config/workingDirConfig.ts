@@ -1,10 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
 import process from 'process';
-import {logger} from '../core/logger.js';
-
-const SNOW_DIR = '.snow';
-const WORKING_DIR_FILE = 'working-dirs.json';
+import {
+	readSettings,
+	updateSettings,
+	type UnifiedSettings,
+} from './unifiedSettings.js';
 
 export interface SSHConfig {
 	host: string;
@@ -34,50 +35,11 @@ export interface WorkingDirConfig {
 	directories: WorkingDirectory[];
 }
 
-/**
- * Get the .snow directory path
- */
-function getSnowDirPath(): string {
-	return path.join(process.cwd(), SNOW_DIR);
-}
+type StoredWorkingDirectory = NonNullable<
+	UnifiedSettings['workingDirectories']
+>[number];
 
-/**
- * Get the working directory config file path
- */
-function getConfigFilePath(): string {
-	return path.join(getSnowDirPath(), WORKING_DIR_FILE);
-}
-
-/**
- * Ensure .snow directory exists
- */
-async function ensureSnowDir(): Promise<void> {
-	const snowDir = getSnowDirPath();
-	try {
-		await fs.ensureDir(snowDir);
-	} catch (error) {
-		logger.error('Failed to create .snow directory', error);
-		throw error;
-	}
-}
-
-/**
- * Load working directory configuration
- */
-export async function loadWorkingDirConfig(): Promise<WorkingDirConfig> {
-	const configPath = getConfigFilePath();
-
-	try {
-		if (await fs.pathExists(configPath)) {
-			const content = await fs.readFile(configPath, 'utf-8');
-			const config = JSON.parse(content) as WorkingDirConfig;
-			return config;
-		}
-	} catch (error) {
-		logger.error('Failed to load working directory config', error);
-	}
-
-	// Return default config with current directory
+function createDefaultWorkingDirConfig(): WorkingDirConfig {
 	return {
 		directories: [
 			{
@@ -89,21 +51,40 @@ export async function loadWorkingDirConfig(): Promise<WorkingDirConfig> {
 	};
 }
 
+function toWorkingDirConfig(
+	directories: StoredWorkingDirectory[] | undefined,
+): WorkingDirConfig {
+	if (!Array.isArray(directories)) {
+		return createDefaultWorkingDirConfig();
+	}
+
+	return {
+		directories: directories as WorkingDirectory[],
+	};
+}
+
 /**
- * Save working directory configuration
+ * Load working directory configuration from project `.snow/settings.json`.
+ *
+ * 旧 `.snow/working-dirs.json` 只由启动期 legacyConfigMigration 负责扫描、
+ * 合入 settings.json 并删除；这里不再做旧文件兼容读取。
  */
-export async function saveWorkingDirConfig(
+export function loadWorkingDirConfig(): Promise<WorkingDirConfig> {
+	const settings = readSettings('project');
+	return Promise.resolve(toWorkingDirConfig(settings.workingDirectories));
+}
+
+/**
+ * Save working directory configuration to project `.snow/settings.json`.
+ */
+export function saveWorkingDirConfig(
 	config: WorkingDirConfig,
 ): Promise<void> {
-	await ensureSnowDir();
-	const configPath = getConfigFilePath();
+	updateSettings('project', settings => {
+		settings.workingDirectories = config.directories;
+	});
 
-	try {
-		await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
-	} catch (error) {
-		logger.error('Failed to save working directory config', error);
-		throw error;
-	}
+	return Promise.resolve();
 }
 
 /**

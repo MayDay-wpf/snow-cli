@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useEffect} from 'react';
+import React, {useState, useCallback, useEffect, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -7,6 +7,7 @@ import {
 	switchActiveRole,
 	createInactiveRole,
 	deleteRole,
+	toggleRoleOverride,
 	type RoleLocation,
 	type RoleItem,
 } from '../../../utils/commands/role.js';
@@ -33,6 +34,7 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 	const [pendingDeleteRoleId, setPendingDeleteRoleId] = useState<string | null>(
 		null,
 	);
+	const autoClearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
 	// Load roles
 	const loadRoles = useCallback(() => {
@@ -43,6 +45,31 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 	useEffect(() => {
 		loadRoles();
 	}, [loadRoles]);
+
+	// Cleanup auto-clear timer on unmount
+	useEffect(() => {
+		return () => {
+			if (autoClearTimerRef.current) {
+				clearTimeout(autoClearTimerRef.current);
+				autoClearTimerRef.current = null;
+			}
+		};
+	}, []);
+
+	// Show a message that auto-hides after `durationMs` (default 2000ms)
+	const showAutoMessage = useCallback(
+		(msg: {type: 'success' | 'error'; text: string}, durationMs = 2000) => {
+			if (autoClearTimerRef.current) {
+				clearTimeout(autoClearTimerRef.current);
+			}
+			setMessage(msg);
+			autoClearTimerRef.current = setTimeout(() => {
+				setMessage(null);
+				autoClearTimerRef.current = null;
+			}, durationMs);
+		},
+		[],
+	);
 
 	// Get current roles based on active tab
 	const currentRoles = activeTab === 'global' ? globalRoles : projectRoles;
@@ -131,6 +158,54 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 		[currentRoles, currentLocation, projectRoot, loadRoles, selectedIndex, t],
 	);
 
+	// Handle toggle override flag (R key)
+	const handleToggleOverride = useCallback(async () => {
+		const role = currentRoles[selectedIndex];
+		if (!role) return;
+
+		if (!role.isActive) {
+			showAutoMessage({
+				type: 'error',
+				text:
+					t.roleList?.cannotOverrideInactive ||
+					'Only the active role can be marked as override',
+			});
+			return;
+		}
+
+		setIsLoading(true);
+		setMessage(null);
+		const result = await toggleRoleOverride(
+			role.id,
+			currentLocation,
+			projectRoot,
+		);
+		setIsLoading(false);
+
+		if (result.success) {
+			showAutoMessage({
+				type: 'success',
+				text: result.isOverride
+					? t.roleList?.overrideEnabled || 'System prompt override enabled'
+					: t.roleList?.overrideDisabled || 'System prompt override disabled',
+			});
+			loadRoles();
+		} else {
+			showAutoMessage({
+				type: 'error',
+				text: result.error || 'Failed to toggle override',
+			});
+		}
+	}, [
+		currentRoles,
+		selectedIndex,
+		currentLocation,
+		projectRoot,
+		loadRoles,
+		showAutoMessage,
+		t,
+	]);
+
 	useInput((input, key) => {
 		if (isLoading) return;
 
@@ -192,6 +267,10 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 			}
 			setPendingDeleteRoleId(role.id);
 			setMessage(null);
+			return;
+		}
+		if (input.toLowerCase() === 'r') {
+			handleToggleOverride();
 			return;
 		}
 	});
@@ -261,8 +340,12 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 							>
 								{index === selectedIndex ? '✓ ' : '  '}
 								{role.isActive ? '[✓] ' : '[ ] '}
+								{role.isOverride ? '[OVR] ' : ''}
 								{role.filename}
 								{role.isActive ? ` (${t.roleList?.active || 'Active'})` : ''}
+								{role.isOverride
+									? ` (${t.roleList?.overrideTag || 'Override'})`
+									: ''}
 							</Text>
 						</Box>
 					))
@@ -311,7 +394,7 @@ export const RoleListPanel: React.FC<Props> = ({onClose, projectRoot}) => {
 					{pendingDeleteRoleId
 						? t.roleList?.confirmDeleteHint || 'Press Y to confirm, N to cancel'
 						: t.roleList?.hints ||
-						  'Tab: Switch scope | Enter: Activate | N: New | D: Delete | ESC: Close'}
+						  'Tab: Switch scope | Enter: Activate | N: New | D: Delete | R: Override | ESC: Close'}
 				</Text>
 			</Box>
 		</Box>

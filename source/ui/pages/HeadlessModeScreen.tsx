@@ -18,6 +18,7 @@ import {
 import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.js';
 import {getCurrentTheme} from '../../utils/config/themeConfig.js';
 import {themes} from '../themes/index.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	prompt: string;
@@ -359,6 +360,7 @@ export default function HeadlessModeScreen({
 	const {stdout} = useStdout();
 	const workingDirectory = process.cwd();
 	const {t} = useI18n();
+	useTerminalTitle('Snow CLI - Headless Mode');
 
 	// Use custom hooks
 	const streamingState = useStreamingState();
@@ -450,7 +452,10 @@ export default function HeadlessModeScreen({
 					console.log(
 						`\n\x1b[93m${t.chatScreen.retryAttempt
 							.replace('{current}', String(streamingState.retryStatus.attempt))
-							.replace('{max}', '5')} \x1b[93m${t.chatScreen.retryIn.replace(
+							.replace(
+								'{max}',
+								String(streamingState.retryStatus.maxRetries ?? 5),
+							)} \x1b[93m${t.chatScreen.retryIn.replace(
 							'{seconds}',
 							String(streamingState.retryStatus.remainingSeconds),
 						)}\x1b[93m...\x1b[0m`,
@@ -459,7 +464,10 @@ export default function HeadlessModeScreen({
 					console.log(
 						`\n\x1b[93m${t.chatScreen.retryResending
 							.replace('{current}', String(streamingState.retryStatus.attempt))
-							.replace('{max}', '5')}\x1b[0m`,
+							.replace(
+								'{max}',
+								String(streamingState.retryStatus.maxRetries ?? 5),
+							)}\x1b[0m`,
 					);
 				}
 			} else {

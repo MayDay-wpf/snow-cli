@@ -13,11 +13,16 @@ import {
 	saveConfig,
 	DEFAULT_CONFIG,
 	DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
+	DEFAULT_RETRY_DELAY_MS,
+	normalizeBaseUrlMode,
+	type ApiConfig,
 	type AppConfig,
+	type RequestMethod,
 } from './apiConfig.js';
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
+import {bashOutputSummaryAgent} from '../../agents/bashOutputSummaryAgent.js';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 
 const CONFIG_DIR = join(homedir(), '.snow');
@@ -34,6 +39,7 @@ export function clearAllAgentCaches(): void {
 	codebaseReviewAgent.clearCache();
 	reviewAgent.clearCache();
 	summaryAgent.clearCache();
+	bashOutputSummaryAgent.clearCache();
 	unifiedHooksExecutor.clearCache();
 }
 
@@ -112,6 +118,13 @@ function setActiveProfileName(profileName: string): void {
 }
 
 /**
+ * Set the active profile from imported configuration.
+ */
+export function setActiveProfileFromImport(profileName: string): void {
+	setActiveProfileName(profileName);
+}
+
+/**
  * Get the path to a profile file
  */
 function getProfilePath(profileName: string): string {
@@ -160,6 +173,32 @@ function normalizeStreamIdleTimeoutSec(value: unknown): number {
 }
 
 /**
+ * 归一化 retryDelayMs.
+ * 缺失或非法值统一回退默认值(3000ms).
+ * 允许 0 (立即重试), 拒绝负数和非整数.
+ */
+function normalizeRetryDelayMs(value: unknown): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+		return DEFAULT_RETRY_DELAY_MS;
+	}
+
+	return value;
+}
+
+function normalizeRequestMethod(method: unknown): RequestMethod {
+	if (
+		method === 'chat' ||
+		method === 'responses' ||
+		method === 'gemini' ||
+		method === 'anthropic'
+	) {
+		return method;
+	}
+
+	return DEFAULT_CONFIG.snowcfg.requestMethod;
+}
+
+/**
  * Load a specific profile with deep merge of default config
  * This ensures new config fields (like browserPath) are preserved
  */
@@ -176,16 +215,27 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 	try {
 		const configData = readFileSync(profilePath, 'utf8');
 		const parsedConfig = JSON.parse(configData) as Partial<AppConfig>;
+		const parsedSnowcfg = (parsedConfig.snowcfg || {}) as Partial<ApiConfig>;
 
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,
 			...parsedConfig,
 			snowcfg: {
 				...DEFAULT_CONFIG.snowcfg,
-				...(parsedConfig.snowcfg || {}),
-				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
-					parsedConfig.snowcfg?.streamIdleTimeoutSec,
+				...parsedSnowcfg,
+				baseUrlMode: normalizeBaseUrlMode(parsedSnowcfg.baseUrlMode),
+				visionBaseUrlMode: normalizeBaseUrlMode(
+					parsedSnowcfg.visionBaseUrlMode,
 				),
+				requestMethod: normalizeRequestMethod(parsedSnowcfg.requestMethod),
+				visionRequestMethod: normalizeRequestMethod(
+					parsedSnowcfg.visionRequestMethod,
+				),
+				supportsVision: parsedSnowcfg.supportsVision !== false,
+				streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
+					parsedSnowcfg.streamIdleTimeoutSec,
+				),
+				retryDelayMs: normalizeRetryDelayMs(parsedSnowcfg.retryDelayMs),
 			},
 		};
 
@@ -204,9 +254,7 @@ export function saveProfile(profileName: string, config: AppConfig): void {
 	const profilePath = getProfilePath(profileName);
 
 	try {
-		// Remove openai field for backward compatibility
-		const {openai, ...configWithoutOpenai} = config;
-		const configData = JSON.stringify(configWithoutOpenai, null, 2);
+		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(profilePath, configData, 'utf8');
 	} catch (error) {
 		throw new Error(`Failed to save profile: ${error}`);
@@ -234,7 +282,7 @@ export function getAllProfiles(): ConfigProfile[] {
 				if (config) {
 					profiles.push({
 						name: profileName,
-						displayName: getProfileDisplayName(profileName),
+						displayName: profileName,
 						isActive: profileName === activeProfile,
 						config,
 					});
@@ -251,7 +299,7 @@ export function getAllProfiles(): ConfigProfile[] {
 		saveProfile('default', defaultConfig);
 		profiles.push({
 			name: 'default',
-			displayName: 'Default',
+			displayName: 'default',
 			isActive: true,
 			config: defaultConfig,
 		});
@@ -259,14 +307,6 @@ export function getAllProfiles(): ConfigProfile[] {
 	}
 
 	return profiles.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Get a user-friendly display name for a profile
- */
-function getProfileDisplayName(profileName: string): string {
-	// Capitalize first letter
-	return profileName.charAt(0).toUpperCase() + profileName.slice(1);
 }
 
 /**

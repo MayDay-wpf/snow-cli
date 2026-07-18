@@ -3,6 +3,8 @@ import {
 	stripFocusArtifacts,
 	isFocusEventInput,
 	isSelectField,
+	isGroupField,
+	NUMERIC_FIELDS,
 } from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -64,13 +66,39 @@ export function useConfigInput(
 		setStreamIdleTimeoutSec,
 		toolResultTokenLimit,
 		setToolResultTokenLimit,
+		maxRetries,
+		setMaxRetries,
+		retryDelayMs,
+		setRetryDelayMs,
 		thinkingBudgetTokens,
 		setThinkingBudgetTokens,
+		setThinkingEffort,
+		setGeminiThinkingLevel,
+		setResponsesReasoningEffort,
+		setChatReasoningEffort,
 		autoCompressThreshold,
 		setAutoCompressThreshold,
 		setAdvancedModel,
 		setBasicModel,
+		setSupportsVision,
+		supportsVision,
+		setVisionModel,
+		visionConfigMode,
+		setVisionConfigMode,
 		systemPromptId,
+		// Group expansion
+		apiConnectionExpanded,
+		setApiConnectionExpanded,
+		promptHeadersExpanded,
+		setPromptHeadersExpanded,
+		displayCompressExpanded,
+		setDisplayCompressExpanded,
+		reasoningExpanded,
+		setReasoningExpanded,
+		modelExpanded,
+		setModelExpanded,
+		tokenTimeoutExpanded,
+		setTokenTimeoutExpanded,
 	} = state;
 
 	useInput((rawInput, key) => {
@@ -185,6 +213,16 @@ export function useConfigInput(
 						setAdvancedModel(cleaned);
 					} else if (currentField === 'basicModel') {
 						setBasicModel(cleaned);
+					} else if (currentField === 'visionModel') {
+						setVisionModel(cleaned);
+					} else if (currentField === 'thinkingEffort') {
+						setThinkingEffort(cleaned);
+					} else if (currentField === 'geminiThinkingLevel') {
+						setGeminiThinkingLevel(cleaned);
+					} else if (currentField === 'responsesReasoningEffort') {
+						setResponsesReasoningEffort(cleaned);
+					} else if (currentField === 'chatReasoningEffort') {
+						setChatReasoningEffort(cleaned);
 					}
 				}
 				setManualInputMode(false);
@@ -215,7 +253,12 @@ export function useConfigInput(
 
 		// Handle editing mode
 		if (isEditing) {
-			if (currentField === 'baseUrl' || currentField === 'apiKey') {
+			if (
+				currentField === 'baseUrl' ||
+				currentField === 'apiKey' ||
+				currentField === 'visionBaseUrl' ||
+				currentField === 'visionApiKey'
+			) {
 				if (key.return) {
 					setIsEditing(false);
 				}
@@ -223,15 +266,8 @@ export function useConfigInput(
 			}
 
 			// Handle numeric / decimal input
-			if (
-				currentField === 'maxContextTokens' ||
-				currentField === 'maxTokens' ||
-				currentField === 'streamIdleTimeoutSec' ||
-				currentField === 'toolResultTokenLimit' ||
-				currentField === 'thinkingBudgetTokens' ||
-			currentField === 'autoCompressThreshold'
-		) {
-			handleNumericInput(input, key);
+			if (NUMERIC_FIELDS.includes(currentField)) {
+				handleNumericInput(input, key);
 				return;
 			}
 
@@ -252,11 +288,21 @@ export function useConfigInput(
 				}
 			});
 		} else if (key.escape) {
+			if (visionConfigMode) {
+				setVisionConfigMode(false);
+				setCurrentField('visionConfig');
+				setIsEditing(false);
+				return;
+			}
 			saveConfiguration().then(() => onBack());
 		} else if (key.return) {
 			handleEnterKey();
 		} else if (input === 'm' && !isEditing) {
-			if (currentField === 'advancedModel' || currentField === 'basicModel') {
+			if (
+				currentField === 'advancedModel' ||
+				currentField === 'basicModel' ||
+				currentField === 'visionModel'
+			) {
 				setManualInputMode(true);
 				setManualInputValue(getCurrentValue());
 			}
@@ -310,6 +356,18 @@ export function useConfigInput(
 				min: 20,
 				max: 80,
 			},
+			maxRetries: {
+				get: () => maxRetries,
+				set: setMaxRetries,
+				min: 0,
+				max: Infinity,
+			},
+			retryDelayMs: {
+				get: () => retryDelayMs,
+				set: setRetryDelayMs,
+				min: 0,
+				max: Infinity,
+			},
 			thinkingBudgetTokens: {
 				get: () => thinkingBudgetTokens,
 				set: setThinkingBudgetTokens,
@@ -353,6 +411,31 @@ export function useConfigInput(
 			return;
 		}
 
+		// Toggle group expansion
+		if (isGroupField(currentField)) {
+			switch (currentField) {
+				case 'apiConnectionGroup':
+					setApiConnectionExpanded(!apiConnectionExpanded);
+					break;
+				case 'promptHeadersGroup':
+					setPromptHeadersExpanded(!promptHeadersExpanded);
+					break;
+				case 'displayCompressGroup':
+					setDisplayCompressExpanded(!displayCompressExpanded);
+					break;
+				case 'reasoningGroup':
+					setReasoningExpanded(!reasoningExpanded);
+					break;
+				case 'modelGroup':
+					setModelExpanded(!modelExpanded);
+					break;
+				case 'tokenTimeoutGroup':
+					setTokenTimeoutExpanded(!tokenTimeoutExpanded);
+					break;
+			}
+			return;
+		}
+
 		// Toggle fields
 		if (currentField === 'anthropicBeta') {
 			setAnthropicBeta(!anthropicBeta);
@@ -376,6 +459,16 @@ export function useConfigInput(
 			if (!next) setShowThinking(false);
 		} else if (currentField === 'responsesFastMode') {
 			setResponsesFastMode(!responsesFastMode);
+		} else if (currentField === 'chatThinkingEnabled') {
+			const next = !state.chatThinkingEnabled;
+			state.setChatThinkingEnabled(next);
+			if (!next) setShowThinking(false);
+		} else if (currentField === 'supportsVision') {
+			setSupportsVision(!supportsVision);
+		} else if (currentField === 'visionConfig') {
+			setVisionConfigMode(true);
+			setCurrentField('visionBaseUrl');
+			setIsEditing(false);
 		} else if (
 			currentField === 'anthropicCacheTTL' ||
 			currentField === 'anthropicSpeed' ||
@@ -383,21 +476,17 @@ export function useConfigInput(
 			currentField === 'thinkingEffort' ||
 			currentField === 'geminiThinkingLevel' ||
 			currentField === 'responsesReasoningEffort' ||
-			currentField === 'responsesVerbosity'
+			currentField === 'responsesReasoningMode' ||
+			currentField === 'responsesVerbosity' ||
+			currentField === 'chatReasoningEffort'
 		) {
+			setIsEditing(true);
+		} else if (NUMERIC_FIELDS.includes(currentField)) {
 			setIsEditing(true);
 		} else if (
-			currentField === 'maxContextTokens' ||
-			currentField === 'maxTokens' ||
-			currentField === 'streamIdleTimeoutSec' ||
-			currentField === 'toolResultTokenLimit' ||
-			currentField === 'thinkingBudgetTokens' ||
-			currentField === 'autoCompressThreshold'
-		) {
-			setIsEditing(true);
-	} else if (
 			currentField === 'advancedModel' ||
-			currentField === 'basicModel'
+			currentField === 'basicModel' ||
+			currentField === 'visionModel'
 		) {
 			loadModels()
 				.then(() => {

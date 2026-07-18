@@ -2,6 +2,7 @@ import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'fs';
 import {join} from 'path';
 import {homedir} from 'os';
 import {getAllBuiltinAgentDefinitions} from '../execution/subagents/index.js';
+import {loadGlobalAgents, loadProjectAgents} from './projectAgents.js';
 
 export interface SubAgent {
 	id: string;
@@ -27,13 +28,16 @@ const SUB_AGENTS_CONFIG_FILE = join(CONFIG_DIR, 'sub-agents.json');
 
 /**
  * Built-in sub-agents (hardcoded, always available)
+ * Build dynamically so tool enable/disable changes are reflected immediately.
  */
-const BUILTIN_AGENTS: SubAgent[] = getAllBuiltinAgentDefinitions().map(def => ({
-	...def,
-	createdAt: '2024-01-01T00:00:00.000Z',
-	updatedAt: '2024-01-01T00:00:00.000Z',
-	builtin: true,
-}));
+function getBuiltinAgents(): SubAgent[] {
+	return getAllBuiltinAgentDefinitions().map(def => ({
+		...def,
+		createdAt: '2024-01-01T00:00:00.000Z',
+		updatedAt: '2024-01-01T00:00:00.000Z',
+		builtin: true,
+	}));
+}
 
 function ensureConfigDirectory(): void {
 	if (!existsSync(CONFIG_DIR)) {
@@ -66,28 +70,44 @@ export function getUserSubAgents(): SubAgent[] {
 }
 
 /**
- * Get all sub-agents (built-in + user-configured)
- * 优先使用用户副本，避免重复
+ * Get all sub-agents (built-in + user-configured + project/global md agents)
+ * Merge priority (highest wins):
+ *   project .snow/agents > global ~/.snow/agents > user sub-agents.json > builtin
  */
-export function getSubAgents(): SubAgent[] {
-	const userAgents = getUserSubAgents();
-	const userAgentIds = new Set(userAgents.map(a => a.id));
+export function getSubAgents(cwd: string = process.cwd()): SubAgent[] {
+	const byId = new Map<string, SubAgent>();
 
-	// 过滤掉已被用户覆盖的内置代理
-	const effectiveBuiltinAgents = BUILTIN_AGENTS.filter(
-		agent => !userAgentIds.has(agent.id),
-	);
+	// 1. Builtin (lowest)
+	for (const agent of getBuiltinAgents()) {
+		byId.set(agent.id, agent);
+	}
 
-	// 先返回内置代理（未被覆盖的），再返回用户代理
-	return [...effectiveBuiltinAgents, ...userAgents];
+	// 2. User JSON overrides
+	for (const agent of getUserSubAgents()) {
+		byId.set(agent.id, agent);
+	}
+
+	// 3. Global agents dir
+	for (const agent of loadGlobalAgents()) {
+		byId.set(agent.id, agent);
+	}
+
+	// 4. Project agents dir (highest)
+	for (const agent of loadProjectAgents(cwd)) {
+		byId.set(agent.id, agent);
+	}
+
+	return [...byId.values()];
 }
 
 /**
- * Get a sub-agent by ID (checks both built-in and user-configured)
- * getSubAgents已经处理了优先级（用户副本优先）
+ * Get a sub-agent by ID using the same effective merge priority as the list.
  */
-export function getSubAgent(id: string): SubAgent | null {
-	const agents = getSubAgents();
+export function getSubAgent(
+	id: string,
+	cwd: string = process.cwd(),
+): SubAgent | null {
+	const agents = getSubAgents(cwd);
 	return agents.find(agent => agent.id === id) || null;
 }
 
@@ -105,6 +125,13 @@ function saveSubAgents(agents: SubAgent[]): void {
 	} catch (error) {
 		throw new Error(`Failed to save sub-agents: ${error}`);
 	}
+}
+
+/**
+ * Overwrite user-configured sub-agents from imported configuration.
+ */
+export function saveUserSubAgents(agents: SubAgent[]): void {
+	saveSubAgents(agents);
 }
 
 /**

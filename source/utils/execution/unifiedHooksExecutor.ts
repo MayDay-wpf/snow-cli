@@ -1,13 +1,13 @@
 import {exec} from 'child_process';
 import {
-	loadHookConfig,
+	loadHookConfigWithFallback,
 	type HookType,
 	type HookRule,
 	type HookAction,
 	type HookContextMap,
 } from '../config/hooksConfig.js';
 import {processManager} from '../core/processManager.js';
-import {getOpenAiConfig} from '../config/apiConfig.js';
+import {getSnowConfig} from '../config/apiConfig.js';
 import {logger} from '../core/logger.js';
 import {
 	createStreamingChatCompletion,
@@ -17,6 +17,11 @@ import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {RequestMethod} from '../config/apiConfig.js';
+import {emitHookStatus, summarizeHookAction} from './hookStatusEvents.js';
+import {
+	buildSessionIdentityEnv,
+	enrichHookContext,
+} from './sessionIdentityEnv.js';
 
 /**
  * Prompt Hook 执行结果（小模型返回的 JSON）
@@ -64,9 +69,24 @@ export interface PromptHookResult {
 }
 
 /**
+ * Context Hook 执行结果（静态注入，无 shell 副作用）
+ * output is JSON-shaped so extractAdditionalContext can reuse command path.
+ */
+export interface ContextHookResult {
+	type: 'context';
+	success: boolean;
+	/** JSON string: { additionalContext, display? } */
+	output?: string;
+	error?: string;
+}
+
+/**
  * Hook 执行结果（单个 Action）
  */
-export type HookActionResult = CommandHookResult | PromptHookResult;
+export type HookActionResult =
+	| CommandHookResult
+	| PromptHookResult
+	| ContextHookResult;
 
 /**
  * Hooks 执行器执行结果（整体）
@@ -128,7 +148,7 @@ export class UnifiedHooksExecutor {
 		}
 
 		try {
-			const config = getOpenAiConfig();
+			const config = getSnowConfig();
 
 			if (!config.basicModel) {
 				logger.warn('Unified hooks executor: Basic model not configured');
@@ -156,13 +176,8 @@ export class UnifiedHooksExecutor {
 		hookType: T,
 		context?: HookContextMap[T],
 	): Promise<UnifiedHookExecutionResult> {
-		// 1. 先尝试加载项目级 hooks
-		let rules = loadHookConfig(hookType, 'project');
-
-		// 2. 如果项目级没有，回退到全局级
-		if (rules.length === 0) {
-			rules = loadHookConfig(hookType, 'global');
-		}
+		// 1. 加载 hooks：优先项目级，项目级没有时回退到全局级。
+		const rules = loadHookConfigWithFallback(hookType);
 
 		// 3. 没有配置任何 hooks
 		if (rules.length === 0) {
@@ -174,11 +189,70 @@ export class UnifiedHooksExecutor {
 			};
 		}
 
+		// Pre-count enabled actions that will run (for progress UI)
+		const plannedActions: Array<{
+			type: 'command' | 'prompt' | 'context';
+			label: string;
+		}> = [];
+		for (const rule of rules) {
+			if (!this.matchRule(rule, context)) {
+				continue;
+			}
+			for (const action of rule.hooks) {
+				if (action.enabled !== true) {
+					continue;
+				}
+				if (action.type === 'command' && action.command) {
+					plannedActions.push({
+						type: 'command',
+						label: summarizeHookAction(action.command) || action.command,
+					});
+				} else if (action.type === 'prompt' && action.prompt) {
+					plannedActions.push({
+						type: 'prompt',
+						label: summarizeHookAction(action.prompt) || 'prompt',
+					});
+				} else if (action.type === 'context' && action.content) {
+					plannedActions.push({
+						type: 'context',
+						label: summarizeHookAction(action.content) || 'context inject',
+					});
+				}
+			}
+		}
+
+		if (plannedActions.length === 0) {
+			return {
+				success: true,
+				results: [],
+				executedActions: 0,
+				skippedActions: rules.reduce((n, r) => n + r.hooks.length, 0),
+			};
+		}
+
+		emitHookStatus({
+			phase: 'start',
+			hookType,
+			totalActions: plannedActions.length,
+			actionIndex: 0,
+		});
+
 		// 4. 执行所有匹配的规则
+		//
+		// Exit-code semantics (command hooks) — align status UI with hookStrategies:
+		//   0  → pass
+		//   1  → intentional soft signal (replace / warn / block-with-content);
+		//        NOT a hard failure for status banner
+		//   ≥2 / <0 → hard failure (abort further actions when ≥2)
+		// Per-action `success` stays `exitCode === 0` so strategies can still
+		// find soft signals via findFirstFailedCommand (!success).
 		let totalExecuted = 0;
 		let totalSkipped = 0;
+		let failedActions = 0;
+		let softActions = 0;
 		const allResults: HookActionResult[] = [];
-		let hasError = false;
+		let hasHardError = false;
+		let abortedHard = false;
 
 		for (const rule of rules) {
 			// 检查 matcher
@@ -189,19 +263,53 @@ export class UnifiedHooksExecutor {
 
 			// 按顺序执行规则中的所有 actions
 			for (const action of rule.hooks) {
-				// 跳过禁用的 action
-				if (action.enabled === false) {
+				// 跳过未显式启用的 action
+				if (action.enabled !== true) {
 					totalSkipped++;
 					continue;
 				}
 
 				// 根据类型执行相应的 action
 				let result: HookActionResult | null = null;
+				let actionType: 'command' | 'prompt' | 'context' | undefined;
+				let actionLabel: string | undefined;
 
 				if (action.type === 'command' && action.command) {
+					actionType = 'command';
+					actionLabel = summarizeHookAction(action.command);
+					emitHookStatus({
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
 					result = await this.executeCommand(action, context);
 				} else if (action.type === 'prompt' && action.prompt) {
+					actionType = 'prompt';
+					actionLabel = summarizeHookAction(action.prompt);
+					emitHookStatus({
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
 					result = await this.executePrompt(action, context);
+				} else if (action.type === 'context' && action.content) {
+					actionType = 'context';
+					actionLabel = summarizeHookAction(action.content) || 'context inject';
+					emitHookStatus({
+						phase: 'action',
+						hookType,
+						actionType,
+						actionLabel,
+						actionIndex: totalExecuted + 1,
+						totalActions: plannedActions.length,
+					});
+					result = this.executeContext(action);
 				} else {
 					// 类型不匹配或缺少必要参数
 					totalSkipped++;
@@ -211,20 +319,48 @@ export class UnifiedHooksExecutor {
 				totalExecuted++;
 				allResults.push(result);
 
-				// 检查是否有错误
+				// Soft vs hard outcome for status / aggregate success
 				if (!result.success) {
-					hasError = true;
+					const isSoftExit1 =
+						result.type === 'command' && result.exitCode === 1;
+					if (isSoftExit1) {
+						softActions++;
+					} else {
+						hasHardError = true;
+						failedActions++;
 
-					// 如果是 Command 类型且 exitCode >= 2,停止后续 Action 执行
-					if (result.type === 'command' && result.exitCode >= 2) {
-						break;
+						// 如果是 Command 类型且 exitCode >= 2,停止后续 Action 执行
+						if (result.type === 'command' && result.exitCode >= 2) {
+							abortedHard = true;
+							break;
+						}
 					}
 				}
 			}
+			if (abortedHard) {
+				break;
+			}
 		}
 
+		emitHookStatus({
+			phase: hasHardError ? 'failed' : 'success',
+			hookType,
+			executedActions: totalExecuted,
+			failedActions: hasHardError ? failedActions : 0,
+			softActions: softActions > 0 ? softActions : undefined,
+			totalActions: plannedActions.length,
+			message: hasHardError
+				? abortedHard
+					? 'stopped (exit ≥ 2)'
+					: `${failedActions} action(s) failed`
+				: softActions > 0
+				? `${softActions} applied (exit 1)`
+				: undefined,
+		});
+
 		return {
-			success: !hasError,
+			// Overall success means no hard failure; exit 1 soft signals still pass.
+			success: !hasHardError,
 			results: allResults,
 			executedActions: totalExecuted,
 			skippedActions: totalSkipped,
@@ -237,7 +373,10 @@ export class UnifiedHooksExecutor {
 	 * @param context - 上下文对象
 	 * @returns 替换后的文本
 	 */
-	private replacePlaceholders(text: string, context?: Record<string, any>): string {
+	private replacePlaceholders(
+		text: string,
+		context?: Record<string, any>,
+	): string {
 		if (!context) {
 			return text;
 		}
@@ -380,6 +519,51 @@ export class UnifiedHooksExecutor {
 		return regex.test(value);
 	}
 
+	// ==================== Context 执行器逻辑 ====================
+
+	/**
+	 * Execute a static context inject action (no shell side effects).
+	 * Emits command-compatible JSON output for extractAdditionalContext.
+	 */
+	private executeContext(action: HookAction): ContextHookResult {
+		const content = (action.content || '').trim();
+		if (!content) {
+			return {
+				type: 'context',
+				success: false,
+				error: 'Empty context content',
+			};
+		}
+
+		// If already JSON with additionalContext, pass through; else wrap as text context.
+		let output: string;
+		try {
+			const parsed = JSON.parse(content);
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				!Array.isArray(parsed) &&
+				(typeof (parsed as any).additionalContext === 'string' ||
+					typeof (parsed as any).prompt === 'string' ||
+					typeof (parsed as any).display === 'string' ||
+					((parsed as any).hookSpecificOutput &&
+						typeof (parsed as any).hookSpecificOutput === 'object'))
+			) {
+				output = content;
+			} else {
+				output = JSON.stringify({additionalContext: content});
+			}
+		} catch {
+			output = JSON.stringify({additionalContext: content});
+		}
+
+		return {
+			type: 'context',
+			success: true,
+			output: this.truncateOutput(output),
+		};
+	}
+
 	// ==================== Command 执行器逻辑 ====================
 
 	/**
@@ -396,16 +580,35 @@ export class UnifiedHooksExecutor {
 		const command = this.replacePlaceholders(action.command!, context);
 		const timeout = action.timeout || this.defaultTimeout;
 
-		// 准备通过 stdin 传递的 context JSON
-		const stdinData = context ? JSON.stringify(context) : '';
+		// Enrich stdin with dual session keys + platform (Trellis / multi-session harnesses)
+		const stdinContext = context
+			? enrichHookContext(context as Record<string, any>)
+			: undefined;
+		const stdinData = stdinContext ? JSON.stringify(stdinContext) : '';
+
+		const sessionId =
+			(typeof stdinContext?.['sessionId'] === 'string' &&
+				stdinContext['sessionId']) ||
+			(typeof stdinContext?.['session_id'] === 'string' &&
+				stdinContext['session_id']) ||
+			undefined;
+		const cwd =
+			(typeof stdinContext?.['cwd'] === 'string' &&
+				String(stdinContext['cwd']).trim()) ||
+			process.cwd();
+		const identityEnv = buildSessionIdentityEnv({
+			sessionId,
+			cwd,
+			baseEnv: process.env,
+		});
 
 		try {
 			const childProcess = exec(command, {
-				cwd: process.cwd(),
+				cwd,
 				timeout,
 				maxBuffer: this.maxOutputLength,
 				env: {
-					...process.env,
+					...identityEnv,
 					// Windows 下设置 UTF-8 编码
 					...(process.platform === 'win32' && {
 						PYTHONIOENCODING: 'utf-8',
@@ -751,15 +954,9 @@ Rules:
 					throw new Error('Request aborted');
 				}
 
-				// 处理不同格式的 chunk
-				if (this.requestMethod === 'chat') {
-					if (chunk.choices && chunk.choices[0]?.delta?.content) {
-						completeContent += chunk.choices[0].delta.content;
-					}
-				} else {
-					if (chunk.type === 'content' && chunk.content) {
-						completeContent += chunk.content;
-					}
+				// All streaming APIs yield the unified StreamChunk format
+				if (chunk.type === 'content' && chunk.content) {
+					completeContent += chunk.content;
 				}
 			}
 		} catch (streamError) {

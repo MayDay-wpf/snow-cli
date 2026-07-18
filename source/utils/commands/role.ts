@@ -5,41 +5,38 @@ import {
 import fs from 'fs/promises';
 import path from 'path';
 import {homedir} from 'os';
-import {existsSync, readdirSync, readFileSync} from 'fs';
+import {existsSync, readdirSync} from 'fs';
 import crypto from 'crypto';
+import {
+	readSettings,
+	updateSettings,
+	type SettingsScope,
+	type UnifiedSettings,
+} from '../config/unifiedSettings.js';
 
 // Role location type
 export type RoleLocation = 'global' | 'project';
 
-type RoleConfig = {
-	activeRoleId?: string;
-};
+type RoleConfig = NonNullable<UnifiedSettings['role']>;
 
 const DEFAULT_ACTIVE_ROLE_ID = 'active';
 
-function getRoleConfigPath(
-	location: RoleLocation,
-	projectRoot?: string,
-): string {
-	if (location === 'global') {
-		return path.join(homedir(), '.snow', 'role.json');
-	}
-	const root = projectRoot || process.cwd();
-	return path.join(root, '.snow', 'role.json');
+/**
+ * Role metadata (activeRoleId / overrideRoleIds) is now stored in the unified
+ * settings.json (`role` key). Role MARKDOWN files (`ROLE.md`,
+ * `ROLE-<hash>.md`) are still kept as plain files in the project / home
+ * directory.
+ */
+function settingsScope(location: RoleLocation): SettingsScope {
+	return location === 'global' ? 'global' : 'project';
 }
 
 function readRoleConfig(
 	location: RoleLocation,
 	projectRoot?: string,
 ): RoleConfig {
-	const configPath = getRoleConfigPath(location, projectRoot);
-	if (!existsSync(configPath)) return {};
-	try {
-		const content = readFileSync(configPath, 'utf-8');
-		return JSON.parse(content) as RoleConfig;
-	} catch {
-		return {};
-	}
+	const settings = readSettings(settingsScope(location), projectRoot);
+	return settings.role ?? {};
 }
 
 async function writeRoleConfig(
@@ -47,10 +44,13 @@ async function writeRoleConfig(
 	config: RoleConfig,
 	projectRoot?: string,
 ): Promise<void> {
-	const configPath = getRoleConfigPath(location, projectRoot);
-	const dir = path.dirname(configPath);
-	await fs.mkdir(dir, {recursive: true});
-	await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+	updateSettings(
+		settingsScope(location),
+		settings => {
+			settings.role = config;
+		},
+		projectRoot,
+	);
 }
 
 function resolveActiveRoleId(
@@ -172,6 +172,7 @@ export interface RoleItem {
 	name: string; // display name (extracted from file or filename)
 	filename: string; // actual filename
 	isActive: boolean; // whether this is the active ROLE.md
+	isOverride: boolean; // whether this role is marked to OVERRIDE the system prompt
 	location: RoleLocation;
 	path: string; // full file path
 }
@@ -239,6 +240,8 @@ export function listRoles(
 		}
 
 		const activeRoleId = resolveActiveRoleId(location, projectRoot, scanned);
+		const config = readRoleConfig(location, projectRoot);
+		const overrideSet = new Set(config.overrideRoleIds || []);
 
 		for (const item of scanned) {
 			const isActive = item.id === activeRoleId;
@@ -247,6 +250,7 @@ export function listRoles(
 				name: isActive ? 'Active Role' : `Role (${item.id})`,
 				filename: item.filename,
 				isActive,
+				isOverride: overrideSet.has(item.id),
 				location,
 				path: path.join(dir, item.filename),
 			});
@@ -278,7 +282,12 @@ export async function switchActiveRole(
 			return {success: false, error: 'Role not found'};
 		}
 
-		await writeRoleConfig(location, {activeRoleId: roleId}, projectRoot);
+		const previous = readRoleConfig(location, projectRoot);
+		await writeRoleConfig(
+			location,
+			{...previous, activeRoleId: roleId},
+			projectRoot,
+		);
 		return {success: true};
 	} catch (error) {
 		return {
@@ -348,12 +357,61 @@ export async function deleteRole(
 		if (config.activeRoleId === roleId) {
 			await writeRoleConfig(
 				location,
-				{activeRoleId: DEFAULT_ACTIVE_ROLE_ID},
+				{...config, activeRoleId: DEFAULT_ACTIVE_ROLE_ID},
 				projectRoot,
 			);
 		}
 
 		return {success: true};
+	} catch (error) {
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error',
+		};
+	}
+}
+
+/**
+ * Toggle override flag for a role: when enabled, this role's content
+ * COMPLETELY REPLACES the default system prompt (only system env/time appended).
+ * Only the active role can be toggled - inactive roles cannot be made the override.
+ */
+export async function toggleRoleOverride(
+	roleId: string,
+	location: RoleLocation,
+	projectRoot?: string,
+): Promise<{success: boolean; isOverride?: boolean; error?: string}> {
+	try {
+		const roles = listRoles(location, projectRoot);
+		const targetRole = roles.find(r => r.id === roleId);
+
+		if (!targetRole) {
+			return {success: false, error: 'Role not found'};
+		}
+
+		if (!targetRole.isActive) {
+			return {
+				success: false,
+				error: 'Only the active role can be marked as override',
+			};
+		}
+
+		const config = readRoleConfig(location, projectRoot);
+		const current = new Set(config.overrideRoleIds || []);
+		let nextIsOverride: boolean;
+		if (current.has(roleId)) {
+			current.delete(roleId);
+			nextIsOverride = false;
+		} else {
+			current.add(roleId);
+			nextIsOverride = true;
+		}
+		const nextConfig: RoleConfig = {
+			...config,
+			overrideRoleIds: Array.from(current),
+		};
+		await writeRoleConfig(location, nextConfig, projectRoot);
+		return {success: true, isOverride: nextIsOverride};
 	} catch (error) {
 		return {
 			success: false,

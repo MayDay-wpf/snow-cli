@@ -1,12 +1,20 @@
 import {executeMCPTool} from './mcpToolsManager.js';
+import {maskToolResultContentIfNeeded} from '../../api/privacyMask.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import {teamService} from '../../mcp/team.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+import {
+	endToolSpan,
+	recordToolContent,
+	startToolSpan,
+	withActiveTelemetrySpan,
+} from '../telemetry/otel.js';
 
 import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
-import type {MultimodalContent} from '../../mcp/types/filesystem.types.js';
+import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
+import {extractMultimodalContent} from './toolResultNormalizer.js';
 
 //安全解析JSON，处理可能被拼接的多个JSON对象
 function safeParseToolArguments(argsString: string): Record<string, any> {
@@ -124,90 +132,93 @@ export interface UserInteractionCallback {
 }
 
 /**
- * Check if a value is a multimodal content array
+ * 将 askuser-ask_question 的选择结果格式化为 AI 可读的文本。
+ *
+ * @param selected - 用户选择的值（单个或多个）
+ * @param customInput - 用户额外输入的自定义文本（可选）
+ * @returns 格式化后的回答文本
  */
-function isMultimodalContent(value: any): value is MultimodalContent {
-	return (
-		Array.isArray(value) &&
-		value.length > 0 &&
-		value.every(
-			(item: any) =>
-				item &&
-				typeof item === 'object' &&
-				(item.type === 'text' || item.type === 'image'),
-		)
-	);
+function formatAskUserAnswer(
+	selected: string | string[],
+	customInput?: string,
+): string {
+	const selectedText = Array.isArray(selected) ? selected.join(', ') : selected;
+	return customInput ? `${selectedText}: ${customInput}` : selectedText;
 }
 
 /**
- * Extract images and text content from a result that may be multimodal
+ * 从 beforeToolCall Hook 的执行结果中提取 askuser-ask_question 的选择结果。
+ *
+ * 当工具为 askuser-ask_question 且 Hook 命令以退出码 0 返回了 stdout 时，
+ * 尝试将 stdout 解析为用户的选择结果，从而跳过实际的 UI 交互流程。
+ *
+ * 支持的 stdout 格式：
+ * 1. 纯文本: 直接作为 selected 值
+ *    示例: "选项A"
+ * 2. JSON 对象: 包含 selected 和可选的 customInput 字段
+ *    示例: {"selected": "选项A", "customInput": "补充说明"}
+ *    示例: {"selected": ["选项A", "选项B"], "customInput": "补充说明"}
+ * 3. JSON 数组: 直接作为多选结果
+ *    示例: ["选项A", "选项B"]
+ *
+ * @param hookResult - Hook 执行结果
+ * @returns 解析出的选择结果，如果无法解析则返回 null
  */
-function extractMultimodalContent(result: any): {
-	textContent: string;
-	images?: ImageContent[];
-} {
-	// Check if result has multimodal content array
-	let contentToCheck = result;
-
-	// Handle wrapped results (e.g., {content: [...], files: [...], totalFiles: n})
-	if (result && typeof result === 'object' && result.content) {
-		contentToCheck = result.content;
-	}
-
-	if (isMultimodalContent(contentToCheck)) {
-		const textParts: string[] = [];
-		const images: ImageContent[] = [];
-
-		for (const item of contentToCheck) {
-			if (item.type === 'text') {
-				textParts.push(item.text);
-			} else if (item.type === 'image') {
-				images.push({
-					type: 'image',
-					data: item.data,
-					mimeType: item.mimeType,
-				});
-			}
+function extractHookProvidedAnswer(
+	hookResult: UnifiedHookExecutionResult,
+): {selected: string | string[]; customInput?: string} | null {
+	// 遍历所有 Hook 执行结果，查找第一个成功的 command 输出
+	for (const result of hookResult.results) {
+		if (result.type !== 'command' || !result.success || !result.output) {
+			continue;
 		}
 
-		// If we extracted the content, we need to rebuild the result
-		if (
-			result &&
-			typeof result === 'object' &&
-			result.content === contentToCheck
-		) {
-			// Check if result has only 'content' field (pure MCP response)
-			// In this case, return the extracted text directly without wrapping
-			const resultKeys = Object.keys(result);
-			if (resultKeys.length === 1 && resultKeys[0] === 'content') {
-				// Pure MCP response - return extracted text directly
-				return {
-					textContent: textParts.join('\n\n'),
-					images: images.length > 0 ? images : undefined,
-				};
-			}
-
-			// Result has additional fields (e.g., files, totalFiles) - preserve them
-			const newResult = {...result, content: textParts.join('\n\n')};
-			return {
-				textContent: JSON.stringify(newResult),
-				images: images.length > 0 ? images : undefined,
-			};
+		const rawOutput = result.output.trim();
+		if (!rawOutput) {
+			continue;
 		}
 
-		return {
-			textContent: textParts.join('\n\n'),
-			images: images.length > 0 ? images : undefined,
-		};
+		// 尝试解析为 JSON
+		try {
+			const parsed = JSON.parse(rawOutput);
+
+			// JSON 对象格式: {selected, customInput?}
+			if (
+				parsed &&
+				typeof parsed === 'object' &&
+				!Array.isArray(parsed) &&
+				parsed.selected !== undefined
+			) {
+				const selected = parsed.selected;
+				if (
+					typeof selected === 'string' ||
+					(Array.isArray(selected) &&
+						selected.every((s: any) => typeof s === 'string'))
+				) {
+					return {
+						selected,
+						customInput:
+							typeof parsed.customInput === 'string'
+								? parsed.customInput
+								: undefined,
+					};
+				}
+			}
+
+			// JSON 数组格式: ["选项A", "选项B"]
+			if (
+				Array.isArray(parsed) &&
+				parsed.every((s: any) => typeof s === 'string')
+			) {
+				return {selected: parsed};
+			}
+		} catch {
+			// 不是有效的 JSON，按纯文本处理
+			return {selected: rawOutput};
+		}
 	}
 
-	// Not multimodal — convert to string for tool result content
-	if (typeof result === 'string') {
-		return {textContent: result};
-	}
-	return {
-		textContent: JSON.stringify(result),
-	};
+	return null;
 }
 
 /**
@@ -223,419 +234,516 @@ export async function executeToolCall(
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
+	sessionId?: string,
+	workingDirectory?: string,
 ): Promise<ToolResult> {
 	let result: ToolResult | undefined;
 	let executionError: Error | null = null;
+	const telemetry = startToolSpan({
+		toolName: toolCall.function.name,
+		toolCallId: toolCall.id,
+		sessionId,
+		conversationId: sessionId,
+	});
 
-	// Setup ESC key listener for terminal commands (allows user to interrupt long-running commands)
-	let escKeyListener: ((data: Buffer) => void) | undefined;
-	let abortController: AbortController | undefined;
+	return withActiveTelemetrySpan(telemetry.span, async () => {
+		// Setup ESC key listener for terminal commands (allows user to interrupt long-running commands)
+		let escKeyListener: ((data: Buffer) => void) | undefined;
+		let abortController: AbortController | undefined;
 
-	// Only enable ESC interruption for terminal-execute tool
-	if (toolCall.function.name === 'terminal-execute' && !abortSignal) {
-		abortController = new AbortController();
-		abortSignal = abortController.signal;
+		// Only enable ESC interruption for terminal-execute tool
+		if (toolCall.function.name === 'terminal-execute' && !abortSignal) {
+			abortController = new AbortController();
+			abortSignal = abortController.signal;
 
-		escKeyListener = (data: Buffer) => {
-			const str = data.toString();
-			// ESC key: \x1b
-			if (str === '\x1b' && abortController && !abortSignal?.aborted) {
-				console.log('\n[ESC] Interrupting command execution...');
-				abortController.abort();
-			}
-		};
-
-		// Enable raw mode to capture ESC key immediately
-		if (process.stdin.isTTY && process.stdin.setRawMode) {
-			process.stdin.setRawMode(true);
-			process.stdin.on('data', escKeyListener);
-		}
-	}
-
-	try {
-		const args = safeParseToolArguments(toolCall.function.arguments);
-
-		// Execute beforeToolCall hook
-		try {
-			const {unifiedHooksExecutor} = await import(
-				'../execution/unifiedHooksExecutor.js'
-			);
-			const {interpretHookResult} = await import('./hookResultInterpreter.js');
-			const hookResult = await unifiedHooksExecutor.executeHooks(
-				'beforeToolCall',
-				{toolName: toolCall.function.name, args},
-			);
-			const interpreted = interpretHookResult('beforeToolCall', hookResult);
-			if (interpreted.action === 'block') {
-				return {
-					tool_call_id: toolCall.id,
-					role: 'tool',
-					content: interpreted.replacedContent || '',
-					hookFailed: interpreted.hookFailed,
-					hookErrorDetails: interpreted.errorDetails,
-				};
-			}
-		} catch (error) {
-			console.warn('Failed to execute beforeToolCall hook:', error);
-		}
-
-		// Check if this is a team tool
-		if (toolCall.function.name.startsWith('team-')) {
-			const teamToolName = toolCall.function.name.substring('team-'.length);
-			const teamArgs = args as Record<string, any>;
-
-			try {
-				const teamResult = await teamService.execute({
-					toolName: teamToolName,
-					args: teamArgs,
-					onMessage: onSubAgentMessage,
-					abortSignal,
-					requestToolConfirmation: requestToolConfirmation
-						? async (toolName: string, toolArgs: any) => {
-								const fakeToolCall = {
-									id: 'team-tool',
-									type: 'function' as const,
-									function: {name: toolName, arguments: JSON.stringify(toolArgs)},
-								};
-								return await requestToolConfirmation(fakeToolCall);
-						  }
-						: undefined,
-					isToolAutoApproved,
-					yoloMode,
-					addToAlwaysApproved: addToAlwaysApproved
-						? (name: string) => addToAlwaysApproved(name)
-						: undefined,
-					requestUserQuestion: onUserInteractionNeeded
-						? async (q: string, opts: string[], multi?: boolean) => {
-								const r = await onUserInteractionNeeded(q, opts, multi);
-								return {selected: r.selected, customInput: r.customInput};
-						  }
-						: undefined,
-				});
-
-				result = {
-					tool_call_id: toolCall.id,
-					role: 'tool',
-					content: JSON.stringify(teamResult),
-				};
-			} catch (error: any) {
-				result = {
-					tool_call_id: toolCall.id,
-					role: 'tool',
-					content: JSON.stringify({success: false, error: error.message}),
-				};
-			}
-		}
-		// Check if this is a sub-agent tool
-		else if (toolCall.function.name.startsWith('subagent-')) {
-			const agentId = toolCall.function.name.substring('subagent-'.length);
-			const subAgentPrompt = (args['prompt'] as string) || '';
-
-			// Look up agent name from config for tracking
-			let agentName = agentId;
-			try {
-				const {getSubAgent} = await import('../config/subAgentConfig.js');
-				const agentConfig = getSubAgent(agentId);
-				if (agentConfig) {
-					agentName = agentConfig.name;
+			escKeyListener = (data: Buffer) => {
+				const str = data.toString();
+				// ESC key: \x1b
+				if (str === '\x1b' && abortController && !abortSignal?.aborted) {
+					console.log('\n[ESC] Interrupting command execution...');
+					abortController.abort();
 				}
-			} catch {
-				// Fallback to agentId if lookup fails
+			};
+
+			// Enable raw mode to capture ESC key immediately
+			if (process.stdin.isTTY && process.stdin.setRawMode) {
+				process.stdin.setRawMode(true);
+				process.stdin.on('data', escKeyListener);
+			}
+		}
+
+		try {
+			const args = safeParseToolArguments(toolCall.function.arguments);
+			recordToolContent(
+				telemetry.span,
+				'tool.input',
+				args,
+				telemetry.metricAttributes,
+			);
+
+			// Execute beforeToolCall hook
+			let beforeHookResult: UnifiedHookExecutionResult | null = null;
+			try {
+				const {unifiedHooksExecutor} = await import(
+					'../execution/unifiedHooksExecutor.js'
+				);
+				const {interpretHookResult} = await import(
+					'./hookResultInterpreter.js'
+				);
+				beforeHookResult = await unifiedHooksExecutor.executeHooks(
+					'beforeToolCall',
+					{toolName: toolCall.function.name, args},
+				);
+				const interpreted = interpretHookResult(
+					'beforeToolCall',
+					beforeHookResult,
+				);
+				if (interpreted.action === 'block') {
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: interpreted.replacedContent || '',
+						hookFailed: interpreted.hookFailed,
+						hookErrorDetails: interpreted.errorDetails,
+					};
+					return result;
+				}
+			} catch (error) {
+				console.warn('Failed to execute beforeToolCall hook:', error);
 			}
 
-			// Register this sub-agent as running
-			runningSubAgentTracker.register({
-				instanceId: toolCall.id,
-				agentId,
-				agentName,
-				prompt: subAgentPrompt,
-				startedAt: new Date(),
-			});
+			// If the tool is askuser-ask_question, check whether the
+			// beforeToolCall hook has already provided an answer on stdout.
+			// When a hook returns a selection result, we skip the interactive
+			// UI and feed the answer directly back to the AI, allowing the
+			// workflow to continue without user intervention.
+			if (
+				toolCall.function.name === 'askuser-ask_question' &&
+				beforeHookResult
+			) {
+				const hookAnswer = extractHookProvidedAnswer(beforeHookResult);
+				if (hookAnswer) {
+					const answerText = formatAskUserAnswer(
+						hookAnswer.selected,
+						hookAnswer.customInput,
+					);
 
-			// Create a tool confirmation adapter for sub-agent
-			const subAgentToolConfirmation = requestToolConfirmation
-				? async (toolName: string, toolArgs: any) => {
-						// Create a fake tool call for confirmation
-						const fakeToolCall: ToolCall = {
-							id: 'subagent-tool',
-							type: 'function',
-							function: {
-								name: toolName,
-								arguments: JSON.stringify(toolArgs),
-							},
-						};
-						return await requestToolConfirmation(fakeToolCall);
-				  }
-				: undefined;
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: JSON.stringify({
+							answer: answerText,
+							selected: hookAnswer.selected,
+							customInput: hookAnswer.customInput,
+						}),
+					};
+					return result;
+				}
+			}
 
-			try {
-				// Create an abortable wrapper for sub-agent execution
-				const subAgentPromise = subAgentService.execute({
-					agentId,
-					prompt: subAgentPrompt,
+			// Check if this is a team tool
+			if (toolCall.function.name.startsWith('team-')) {
+				const teamToolName = toolCall.function.name.substring('team-'.length);
+				const teamArgs = args as Record<string, any>;
+
+				try {
+					const teamResult = await teamService.execute({
+						toolName: teamToolName,
+						args: teamArgs,
+						onMessage: onSubAgentMessage,
+						abortSignal,
+						requestToolConfirmation: requestToolConfirmation
+							? async (toolName: string, toolArgs: any) => {
+									const fakeToolCall = {
+										id: 'team-tool',
+										type: 'function' as const,
+										function: {
+											name: toolName,
+											arguments: JSON.stringify(toolArgs),
+										},
+									};
+									return await requestToolConfirmation(fakeToolCall);
+							  }
+							: undefined,
+						isToolAutoApproved,
+						yoloMode,
+						addToAlwaysApproved: addToAlwaysApproved
+							? (name: string) => addToAlwaysApproved(name)
+							: undefined,
+						requestUserQuestion: onUserInteractionNeeded
+							? async (q: string, opts: string[], multi?: boolean) => {
+									const r = await onUserInteractionNeeded(q, opts, multi);
+									return {selected: r.selected, customInput: r.customInput};
+							  }
+							: undefined,
+					});
+
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: JSON.stringify(teamResult),
+					};
+				} catch (error: any) {
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: JSON.stringify({success: false, error: error.message}),
+					};
+				}
+			}
+			// Check if this is a sub-agent tool
+			else if (toolCall.function.name.startsWith('subagent-')) {
+				const agentId = toolCall.function.name.substring('subagent-'.length);
+				const subAgentPrompt = (args['prompt'] as string) || '';
+
+				// Look up agent name from config for tracking
+				let agentName = agentId;
+				try {
+					const {getSubAgent} = await import('../config/subAgentConfig.js');
+					const agentConfig = getSubAgent(agentId);
+					if (agentConfig) {
+						agentName = agentConfig.name;
+					}
+				} catch {
+					// Fallback to agentId if lookup fails
+				}
+
+				// Register this sub-agent as running
+				runningSubAgentTracker.register({
 					instanceId: toolCall.id,
-					onMessage: onSubAgentMessage,
-					abortSignal,
-					requestToolConfirmation: subAgentToolConfirmation
-						? async (toolCall: ToolCall) => {
-								// Use the adapter to convert to the expected signature
-								const args = safeParseToolArguments(
-									toolCall.function.arguments,
-								);
-								return await subAgentToolConfirmation(
-									toolCall.function.name,
-									args,
-								);
-						  }
-						: undefined,
-					isToolAutoApproved,
-					yoloMode,
-					addToAlwaysApproved,
-					requestUserQuestion: onUserInteractionNeeded,
+					agentId,
+					agentName,
+					prompt: subAgentPrompt,
+					startedAt: new Date(),
 				});
 
-				// Race with abort signal
-				const subAgentResult = abortSignal
-					? await Promise.race([
+				// Create a tool confirmation adapter for sub-agent
+				const subAgentToolConfirmation = requestToolConfirmation
+					? async (toolName: string, toolArgs: any) => {
+							// Create a fake tool call for confirmation
+							const fakeToolCall: ToolCall = {
+								id: 'subagent-tool',
+								type: 'function',
+								function: {
+									name: toolName,
+									arguments: JSON.stringify(toolArgs),
+								},
+							};
+							return await requestToolConfirmation(fakeToolCall);
+					  }
+					: undefined;
+
+				try {
+					// Create an abortable wrapper for sub-agent execution
+					const subAgentPromise = subAgentService.execute({
+						agentId,
+						prompt: subAgentPrompt,
+						instanceId: toolCall.id,
+						onMessage: onSubAgentMessage,
+						abortSignal,
+						requestToolConfirmation: subAgentToolConfirmation
+							? async (toolCall: ToolCall) => {
+									// Use the adapter to convert to the expected signature
+									const args = safeParseToolArguments(
+										toolCall.function.arguments,
+									);
+									return await subAgentToolConfirmation(
+										toolCall.function.name,
+										args,
+									);
+							  }
+							: undefined,
+						isToolAutoApproved,
+						yoloMode,
+						addToAlwaysApproved,
+						requestUserQuestion: onUserInteractionNeeded,
+					});
+
+					// Race with abort signal. Keep a const reference so TypeScript
+					// preserves narrowing inside the nested Promise callback.
+					const activeAbortSignal = abortSignal;
+					let subAgentResult: Awaited<typeof subAgentPromise>;
+					if (activeAbortSignal) {
+						subAgentResult = await Promise.race([
 							subAgentPromise,
 							new Promise<never>((_, reject) => {
 								const onAbort = () =>
 									reject(new Error('Sub-agent execution aborted'));
-								if (abortSignal.aborted) {
+								if (activeAbortSignal.aborted) {
 									onAbort();
 								} else {
-									abortSignal.addEventListener('abort', onAbort, {once: true});
+									activeAbortSignal.addEventListener('abort', onAbort, {
+										once: true,
+									});
 								}
 							}),
-					  ])
-					: await subAgentPromise;
+						]);
+					} else {
+						subAgentResult = await subAgentPromise;
+					}
 
-				// Build sub-agent result content.
-				// If the user injected messages to this sub-agent during execution,
-				// append a summary so the main-flow AI is aware of the user–sub-agent
-				// communication and can avoid information gaps.
-				let subAgentContent: string;
-				if (
-					subAgentResult.injectedUserMessages &&
-					subAgentResult.injectedUserMessages.length > 0
-				) {
-					const injectedSummary = subAgentResult.injectedUserMessages
-						.map((msg: string, i: number) => `  ${i + 1}. ${msg}`)
-						.join('\n');
-					subAgentContent = JSON.stringify({
-						...subAgentResult,
-						_userMessagesNote: `During execution, the user sent ${subAgentResult.injectedUserMessages.length} message(s) directly to this sub-agent:\n${injectedSummary}`,
-					});
-				} else {
-					subAgentContent = JSON.stringify(subAgentResult);
-				}
+					// Build sub-agent result content.
+					// If the user injected messages to this sub-agent during execution,
+					// append a summary so the main-flow AI is aware of the user–sub-agent
+					// communication and can avoid information gaps.
+					let subAgentContent: string;
+					if (
+						subAgentResult.injectedUserMessages &&
+						subAgentResult.injectedUserMessages.length > 0
+					) {
+						const injectedSummary = subAgentResult.injectedUserMessages
+							.map((msg: string, i: number) => `  ${i + 1}. ${msg}`)
+							.join('\n');
+						subAgentContent = JSON.stringify({
+							...subAgentResult,
+							_userMessagesNote: `During execution, the user sent ${subAgentResult.injectedUserMessages.length} message(s) directly to this sub-agent:\n${injectedSummary}`,
+						});
+					} else {
+						subAgentContent = JSON.stringify(subAgentResult);
+					}
 
-				result = {
-					tool_call_id: toolCall.id,
-					role: 'tool',
-					content: subAgentContent,
-				};
-			} finally {
-				// Always unregister the sub-agent when it completes (success or error)
-				runningSubAgentTracker.unregister(toolCall.id);
-			}
-		} else {
-			// Regular tool execution
-			const toolResult = await executeMCPTool(
-				toolCall.function.name,
-				args,
-				abortSignal,
-				onTokenUpdate,
-			);
-
-			// Pre-extract edit diff data from raw result before stringification/truncation
-			// This ensures DiffViewer data survives token limit truncation
-			let editDiffData: Record<string, any> | undefined;
-			if (
-				typeof toolResult === 'object' && toolResult !== null &&
-				toolCall.function.name === 'filesystem-edit'
-			) {
-				if (toolResult.oldContent && toolResult.newContent) {
-					editDiffData = {
-						oldContent: toolResult.oldContent,
-						newContent: toolResult.newContent,
-						filename: args['filePath'],
-						completeOldContent: toolResult.completeOldContent,
-						completeNewContent: toolResult.completeNewContent,
-						contextStartLine: toolResult.contextStartLine,
-					};
-				} else if (toolResult.results && Array.isArray(toolResult.results)) {
-					editDiffData = {
-						batchResults: toolResult.results,
-						isBatch: true,
-					};
-				}
-			}
-
-			// Extract multimodal content (text + images)
-			const {textContent, images} = extractMultimodalContent(toolResult);
-
-			result = {
-				tool_call_id: toolCall.id,
-				role: 'tool',
-				content: textContent,
-				images,
-				editDiffData,
-			};
-		}
-	} catch (error) {
-		executionError = error instanceof Error ? error : new Error(String(error));
-
-		// Check if this is a user interaction needed error
-		const {UserInteractionNeededError} = await import(
-			'../ui/userInteractionError.js'
-		);
-
-		if (error instanceof UserInteractionNeededError) {
-			// Call the user interaction callback if provided
-			if (onUserInteractionNeeded) {
-				// Check abort before calling user interaction
-				if (abortSignal?.aborted) {
 					result = {
 						tool_call_id: toolCall.id,
 						role: 'tool',
-						content: 'Error: User question interaction aborted',
-						messageStatus: 'error' as const,
+						content: subAgentContent,
 					};
-					return result;
+				} finally {
+					// Always unregister the sub-agent when it completes (success or error)
+					runningSubAgentTracker.unregister(toolCall.id);
 				}
-
-				const response = await onUserInteractionNeeded(
-					error.question,
-					error.options,
-					error.multiSelect,
+			} else {
+				// Regular tool execution
+				const toolResult = await executeMCPTool(
+					toolCall.function.name,
+					args,
+					abortSignal,
+					onTokenUpdate,
 				);
 
-				// Check abort after getting response
-				if (abortSignal?.aborted) {
-					result = {
-						tool_call_id: toolCall.id,
-						role: 'tool',
-						content: 'Error: User question interaction aborted',
-						messageStatus: 'error' as const,
-					};
-					return result;
+				// Diff metadata is captured before token truncation inside executeMCPTool
+				const {extractFilesystemEditDiffFromRawResult} = await import(
+					'../config/toolDisplayConfig.js'
+				);
+				let editDiffData: Record<string, any> | undefined;
+				let contentSource: unknown = toolResult;
+				if (
+					toolResult &&
+					typeof toolResult === 'object' &&
+					'editDiffData' in toolResult &&
+					(toolResult as {editDiffData?: Record<string, any>}).editDiffData
+				) {
+					editDiffData = (toolResult as {editDiffData: Record<string, any>})
+						.editDiffData;
+					if ('__toolResultContent' in toolResult) {
+						contentSource = (toolResult as {__toolResultContent: unknown})
+							.__toolResultContent;
+					}
+				} else {
+					editDiffData = extractFilesystemEditDiffFromRawResult(
+						toolCall.function.name,
+						toolResult,
+					);
+					if (
+						editDiffData &&
+						!editDiffData['filename'] &&
+						typeof args['filePath'] === 'string'
+					) {
+						editDiffData['filename'] = args['filePath'];
+					}
 				}
 
-				// 检查用户是否取消
-				if (response.cancelled) {
-					// 用户取消时，返回拒绝结果而不是抛出错误
-					// 这样工具记录会保留在 session 中
-					result = {
-						tool_call_id: toolCall.id,
-						role: 'tool',
-						content: 'Error: User cancelled the question interaction',
-						messageStatus: 'error' as const,
-					};
-					return result;
-				}
-
-				//返回用户的响应作为工具结果
-				const answerText = response.customInput
-					? `${
-							Array.isArray(response.selected)
-								? response.selected.join(', ')
-								: response.selected
-					  }: ${response.customInput}`
-					: Array.isArray(response.selected)
-					? response.selected.join(', ')
-					: response.selected;
+				// Extract multimodal content (text + images)
+				const {textContent, images} = extractMultimodalContent(contentSource);
 
 				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
-					content: JSON.stringify({
-						answer: answerText,
-						selected: response.selected,
-						customInput: response.customInput,
-					}),
+					content: textContent,
+					images,
+					editDiffData,
 				};
-			} else {
-				// No callback provided, return error
-				result = {
-					tool_call_id: toolCall.id,
-					role: 'tool',
-					content: 'Error: User interaction needed but no callback provided',
-				};
-			}
-		} else {
-			// Regular error handling
-			result = {
-				tool_call_id: toolCall.id,
-				role: 'tool',
-				content: `Error: ${
-					error instanceof Error ? error.message : 'Tool execution failed'
-				}`,
-			};
-		}
-	} finally {
-		// Execute afterToolCall hook
-		try {
-			const {unifiedHooksExecutor} = await import(
-				'../execution/unifiedHooksExecutor.js'
-			);
-			const {interpretHookResult} = await import('./hookResultInterpreter.js');
-			const hookResult = await unifiedHooksExecutor.executeHooks(
-				'afterToolCall',
-				{
-					toolName: toolCall.function.name,
-					args: safeParseToolArguments(toolCall.function.arguments),
-					result,
-					error: executionError,
-				},
-			);
-			const interpreted = interpretHookResult('afterToolCall', hookResult);
-			if (result) {
-				if (interpreted.action === 'replace') {
-					result.content = interpreted.replacedContent || result.content;
-				} else if (interpreted.action === 'block') {
-					result.hookFailed = interpreted.hookFailed;
-					result.hookErrorDetails = interpreted.errorDetails;
-				}
 			}
 		} catch (error) {
-			console.warn('Failed to execute afterToolCall hook:', error);
-		}
-	}
+			executionError =
+				error instanceof Error ? error : new Error(String(error));
 
-	// Cleanup ESC key listener
-	if (escKeyListener) {
-		if (process.stdin.isTTY && process.stdin.setRawMode) {
-			process.stdin.setRawMode(false);
-			process.stdin.off('data', escKeyListener);
-		}
-	}
+			// Check if this is a user interaction needed error
+			const {UserInteractionNeededError} = await import(
+				'../ui/userInteractionError.js'
+			);
 
-	return result!;
+			if (error instanceof UserInteractionNeededError) {
+				// Call the user interaction callback if provided
+				if (onUserInteractionNeeded) {
+					// Check abort before calling user interaction
+					if (abortSignal?.aborted) {
+						result = {
+							tool_call_id: toolCall.id,
+							role: 'tool',
+							content: 'Error: User question interaction aborted',
+							messageStatus: 'error' as const,
+						};
+						return result;
+					}
+
+					const response = await onUserInteractionNeeded(
+						error.question,
+						error.options,
+						error.multiSelect,
+					);
+
+					// Check abort after getting response
+					if (abortSignal?.aborted) {
+						result = {
+							tool_call_id: toolCall.id,
+							role: 'tool',
+							content: 'Error: User question interaction aborted',
+							messageStatus: 'error' as const,
+						};
+						return result;
+					}
+
+					// 检查用户是否取消
+					if (response.cancelled) {
+						// 用户取消时，返回拒绝结果而不是抛出错误
+						// 这样工具记录会保留在 session 中
+						result = {
+							tool_call_id: toolCall.id,
+							role: 'tool',
+							content: 'Error: User cancelled the question interaction',
+							messageStatus: 'error' as const,
+						};
+						return result;
+					}
+
+					//返回用户的响应作为工具结果
+					const answerText = formatAskUserAnswer(
+						response.selected,
+						response.customInput,
+					);
+
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: JSON.stringify({
+							answer: answerText,
+							selected: response.selected,
+							customInput: response.customInput,
+						}),
+					};
+				} else {
+					// No callback provided, return error
+					result = {
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						content: 'Error: User interaction needed but no callback provided',
+					};
+				}
+			} else {
+				// Regular error handling
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: `Error: ${
+						error instanceof Error ? error.message : 'Tool execution failed'
+					}`,
+				};
+			}
+		} finally {
+			// Execute afterToolCall hook
+			try {
+				const {unifiedHooksExecutor} = await import(
+					'../execution/unifiedHooksExecutor.js'
+				);
+				const {interpretHookResult} = await import(
+					'./hookResultInterpreter.js'
+				);
+				const hookResult = await unifiedHooksExecutor.executeHooks(
+					'afterToolCall',
+					{
+						toolName: toolCall.function.name,
+						args: safeParseToolArguments(toolCall.function.arguments),
+						result,
+						error: executionError,
+					},
+				);
+				const interpreted = interpretHookResult('afterToolCall', hookResult);
+				if (result) {
+					if (interpreted.action === 'replace') {
+						result.content = interpreted.replacedContent || result.content;
+					} else if (interpreted.action === 'block') {
+						result.hookFailed = interpreted.hookFailed;
+						result.hookErrorDetails = interpreted.errorDetails;
+					}
+				}
+			} catch (error) {
+				console.warn('Failed to execute afterToolCall hook:', error);
+			}
+
+			if (result && !executionError && !result.hookFailed) {
+				result.content = await maskToolResultContentIfNeeded(
+					toolCall.function.name,
+					result.content,
+					workingDirectory,
+					abortSignal,
+				);
+			}
+
+			const telemetryStatus =
+				result?.messageStatus === 'error' || result?.hookFailed
+					? 'error'
+					: 'success';
+			const telemetryAttributes = {
+				...telemetry.metricAttributes,
+				'snow.tool.status': telemetryStatus,
+				...(result?.content
+					? {'snow.tool.output.length': result.content.length}
+					: {}),
+			};
+			if (result) {
+				recordToolContent(
+					telemetry.span,
+					'tool.output',
+					result.content,
+					telemetryAttributes,
+				);
+			}
+			endToolSpan(
+				telemetry.span,
+				telemetry.startTime,
+				telemetryAttributes,
+				executionError ??
+					(telemetryStatus === 'error'
+						? new Error(result?.content || 'Tool execution failed')
+						: undefined),
+			);
+		}
+
+		// Cleanup ESC key listener
+		if (escKeyListener) {
+			if (process.stdin.isTTY && process.stdin.setRawMode) {
+				process.stdin.setRawMode(false);
+				process.stdin.off('data', escKeyListener);
+			}
+		}
+
+		return result!;
+	});
 }
 
 /**
  * Categorize tools by their resource type for proper execution sequencing
  */
 function getToolResourceType(toolName: string): string {
-	// TODO tools all modify the same TODO file - must be sequential
-	if (
-		toolName === 'todo-update' ||
-		toolName === 'todo-add' ||
-		toolName === 'todo-delete'
-	) {
-		return 'todo-state';
+	// Notebook state is shared and should be coordinated
+	if (toolName === 'notebook-manage') {
+		return 'notebook-state';
 	}
 
-	// Notebook tools all modify the same notebook file - must be sequential
-	if (
-		toolName === 'notebook-add' ||
-		toolName === 'notebook-update' ||
-		toolName === 'notebook-delete' ||
-		toolName === 'notebook-list' ||
-		toolName === 'notebook-query'
-	) {
-		return 'notebook-state';
+	// User interaction prompts must be serialized.
+	// Rendering multiple question UIs concurrently can leave the flow waiting forever.
+	if (toolName === 'askuser-ask_question') {
+		return 'user-interaction';
 	}
 
 	// Terminal commands must be sequential to avoid race conditions
@@ -647,6 +755,7 @@ function getToolResourceType(toolName: string): string {
 	// Each file is a separate resource
 	if (
 		toolName === 'filesystem-edit' ||
+		toolName === 'filesystem-replaceedit' ||
 		toolName === 'filesystem-create'
 	) {
 		return 'filesystem'; // Will be further refined by file path
@@ -662,14 +771,41 @@ function getToolResourceType(toolName: string): string {
  */
 function getResourceIdentifier(toolCall: ToolCall): string {
 	const toolName = toolCall.function.name;
-	const resourceType = getToolResourceType(toolName);
 
-	if (resourceType === 'todo-state') {
-		return 'todo-state'; // All TODO operations share same resource
+	// todo-manage / todo-ultra: only get can run in parallel with other work; mutating actions share todo-state
+	if (toolName === 'todo-manage' || toolName === 'todo-ultra') {
+		try {
+			const args = safeParseToolArguments(toolCall.function.arguments);
+			if (args?.['action'] === 'get') {
+				return `independent:${toolCall.id}`;
+			}
+		} catch {
+			// fall through to serialized todo-state
+		}
+		return 'todo-state';
 	}
+
+	// notebook-manage: read actions can be parallelized, mutating actions share notebook-state
+	if (toolName === 'notebook-manage') {
+		try {
+			const args = safeParseToolArguments(toolCall.function.arguments);
+			if (args?.['action'] === 'query' || args?.['action'] === 'list') {
+				return `independent:${toolCall.id}`;
+			}
+		} catch {
+			// fall through to serialized notebook-state
+		}
+		return 'notebook-state';
+	}
+
+	const resourceType = getToolResourceType(toolName);
 
 	if (resourceType === 'notebook-state') {
 		return 'notebook-state'; // All Notebook operations share same resource
+	}
+
+	if (resourceType === 'user-interaction') {
+		return 'user-interaction'; // All user question prompts share one UI interaction lane
 	}
 
 	if (resourceType === 'terminal-execution') {
@@ -711,6 +847,8 @@ export async function executeToolCalls(
 	yoloMode?: boolean,
 	addToAlwaysApproved?: AddToAlwaysApprovedCallback,
 	onUserInteractionNeeded?: UserInteractionCallback,
+	sessionId?: string,
+	workingDirectory?: string,
 ): Promise<ToolResult[]> {
 	// Group tool calls by their resource identifier
 	const resourceGroups = new Map<string, ToolCall[]>();
@@ -750,6 +888,8 @@ export async function executeToolCalls(
 					yoloMode,
 					addToAlwaysApproved,
 					onUserInteractionNeeded,
+					sessionId,
+					workingDirectory,
 				);
 				groupResults.push(result);
 

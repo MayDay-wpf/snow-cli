@@ -1,7 +1,16 @@
 import type {ChatMessage} from '../../api/chat.js';
-import {getOpenAiConfig} from '../../utils/config/apiConfig.js';
+import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import {connectionManager} from '../../utils/connection/ConnectionManager.js';
+import {sessionManager} from '../../utils/session/sessionManager.js';
+import {recordTurnContent, withTurnSpan} from '../../utils/telemetry/otel.js';
+import {getCompanion, isCompanionMuted} from '../../buddy/companion.js';
+import {
+	generateBuddyContextReply,
+	generateBuddyInProgressReply,
+	shouldGenerateBuddyInProgressReply,
+} from '../../buddy/buddyAi.js';
+import {companionReaction} from '../../buddy/companionEvents.js';
 import {extractThinkingContent} from './utils/thinkingExtractor.js';
 import {EncoderManager} from './core/encoderManager.js';
 import {
@@ -12,6 +21,7 @@ import {processStreamRound} from './core/streamProcessor.js';
 import {handleToolCallRound} from './core/toolCallRoundHandler.js';
 import {handleOnStopHooks} from './core/onStopHookHandler.js';
 import type {
+	BuddyProgressEvent,
 	ConversationHandlerOptions,
 	ConversationUsage,
 } from './core/conversationTypes.js';
@@ -21,11 +31,43 @@ export type {
 	UserQuestionResult,
 } from './core/conversationTypes.js';
 
+const BUDDY_IN_PROGRESS_COOLDOWN_MS = 45_000;
+let buddyInProgressActive = false;
+let lastBuddyInProgressAt = 0;
+let lastBuddyInProgressKey = '';
+
 /**
  * Handle conversation with streaming and tool calls.
  * Returns the usage data collected during the conversation.
  */
 export async function handleConversationWithTools(
+	options: ConversationHandlerOptions,
+): Promise<{usage: ConversationUsage | null}> {
+	const config = getSnowConfig();
+	const model = options.useBasicModel
+		? config.basicModel || config.advancedModel || 'gpt-5'
+		: config.advancedModel || 'gpt-5';
+	const currentSession = sessionManager.getCurrentSession();
+	const turnId = currentSession
+		? `${currentSession.id}:${currentSession.messageCount + 1}`
+		: undefined;
+
+	return withTurnSpan(
+		{
+			sessionId: currentSession?.id,
+			conversationId: currentSession?.id,
+			turnId,
+			model,
+			requestMethod: config.requestMethod,
+			planMode: options.planMode,
+			vulnerabilityHuntingMode: options.vulnerabilityHuntingMode,
+			teamMode: options.teamMode,
+		},
+		() => runConversationWithTools(options),
+	);
+}
+
+async function runConversationWithTools(
 	options: ConversationHandlerOptions,
 ): Promise<{usage: ConversationUsage | null}> {
 	const {
@@ -45,7 +87,6 @@ export async function handleConversationWithTools(
 		setIsReasoning,
 		setRetryStatus,
 	} = options;
-
 	const addToAlwaysApproved = (toolName: string) => {
 		addMultipleToAlwaysApproved([toolName]);
 	};
@@ -62,12 +103,32 @@ export async function handleConversationWithTools(
 		toolSearchDisabled: options.toolSearchDisabled,
 	});
 
+	const onBuddyProgress: ConversationHandlerOptions['onBuddyProgress'] =
+		event => {
+			void triggerBuddyInProgressReaction(
+				conversationMessages,
+				controller.signal,
+				event,
+			);
+		};
+	const runtimeOptions: ConversationHandlerOptions = {
+		...options,
+		onBuddyProgress,
+	};
+
 	await appendUserMessageAndSyncContext({
 		conversationMessages,
 		userContent,
 		editorContext,
 		imageContents,
 		saveMessage,
+		abortSignal: controller.signal,
+	});
+	recordTurnContent('request', userContent, {
+		'snow.content.source': 'user',
+		...(imageContents?.length
+			? {'snow.content.image_count': imageContents.length}
+			: {}),
 	});
 
 	const encoderManager = new EncoderManager();
@@ -77,7 +138,7 @@ export async function handleConversationWithTools(
 
 	setStreamTokenCount(0);
 
-	const config = getOpenAiConfig();
+	const config = getSnowConfig();
 	const model = options.useBasicModel
 		? config.basicModel || config.advancedModel || 'gpt-5'
 		: config.advancedModel || 'gpt-5';
@@ -106,7 +167,7 @@ export async function handleConversationWithTools(
 				setIsReasoning,
 				setRetryStatus,
 				setContextUsage,
-				options,
+				options: runtimeOptions,
 			});
 
 			setStreamTokenCount(0);
@@ -138,7 +199,7 @@ export async function handleConversationWithTools(
 					addToAlwaysApproved,
 					yoloModeRef,
 					streamingEnabled: config.streamingDisplay !== false,
-					options,
+					options: runtimeOptions,
 				});
 
 				if (toolLoopResult.type === 'break') {
@@ -160,10 +221,15 @@ export async function handleConversationWithTools(
 			}
 
 			if (streamResult.streamedContent.trim()) {
+				const assistantContent = streamResult.streamedContent.trim();
+				recordTurnContent('response', assistantContent, {
+					'snow.content.source': 'assistant',
+				});
+
 				if (!streamResult.hasStreamedLines) {
 					const finalAssistantMessage: Message = {
 						role: 'assistant',
-						content: streamResult.streamedContent.trim(),
+						content: assistantContent,
 						streaming: false,
 						discontinued: controller.signal.aborted,
 						thinking: extractThinkingContent(
@@ -177,7 +243,7 @@ export async function handleConversationWithTools(
 
 				const assistantMessage: ChatMessage = {
 					role: 'assistant',
-					content: streamResult.streamedContent.trim(),
+					content: assistantContent,
 					reasoning: streamResult.receivedReasoning,
 					thinking: streamResult.receivedThinking,
 					reasoning_content: streamResult.receivedReasoningContent,
@@ -188,6 +254,10 @@ export async function handleConversationWithTools(
 				});
 			}
 
+			// 最终回复已完成：立刻清掉思考态，避免收尾阶段仍显示深度思考。
+			setIsReasoning?.(false);
+			options.onThinkingStatus?.(null);
+
 			if (!controller.signal.aborted) {
 				const hookResult = await handleOnStopHooks({
 					conversationMessages,
@@ -197,6 +267,13 @@ export async function handleConversationWithTools(
 				if (hookResult.shouldContinue) {
 					continue;
 				}
+
+				// Buddy 气泡是装饰性二次 LLM 调用，绝不能阻塞主轮次收尾。
+				// 以前 await 它会导致 isStreaming 一直 true，UI 卡在“收尾中...”数秒。
+				void triggerBuddyContextReaction(
+					conversationMessages,
+					controller.signal,
+				);
 			}
 
 			break;
@@ -225,6 +302,84 @@ export async function handleConversationWithTools(
 	}
 
 	return {usage: accumulatedUsage};
+}
+
+async function triggerBuddyContextReaction(
+	conversationMessages: ChatMessage[],
+	abortSignal: AbortSignal,
+): Promise<void> {
+	if (abortSignal.aborted || isCompanionMuted()) {
+		return;
+	}
+
+	const companion = getCompanion();
+	if (!companion) {
+		return;
+	}
+
+	try {
+		const reply = await generateBuddyContextReply(
+			companion,
+			conversationMessages,
+			abortSignal,
+		);
+		if (!abortSignal.aborted && !isCompanionMuted() && reply.trim()) {
+			companionReaction(reply);
+		}
+	} catch (error) {
+		console.error('Failed to generate buddy context reaction:', error);
+	}
+}
+
+async function triggerBuddyInProgressReaction(
+	conversationMessages: ChatMessage[],
+	abortSignal: AbortSignal,
+	event: BuddyProgressEvent,
+): Promise<void> {
+	if (abortSignal.aborted || isCompanionMuted() || buddyInProgressActive) {
+		return;
+	}
+
+	const eventKey = `${event.stage}:${event.summary ?? ''}`;
+	const now = Date.now();
+	if (
+		eventKey === lastBuddyInProgressKey ||
+		now - lastBuddyInProgressAt < BUDDY_IN_PROGRESS_COOLDOWN_MS
+	) {
+		return;
+	}
+
+	const companion = getCompanion();
+	if (!companion) {
+		return;
+	}
+
+	const context = {
+		stage: event.stage,
+		summary: event.summary,
+		conversationMessages,
+	};
+	if (!shouldGenerateBuddyInProgressReply(companion, context)) {
+		return;
+	}
+
+	buddyInProgressActive = true;
+	try {
+		const reply = await generateBuddyInProgressReply(
+			companion,
+			context,
+			abortSignal,
+		);
+		if (!abortSignal.aborted && !isCompanionMuted() && reply.trim()) {
+			lastBuddyInProgressAt = Date.now();
+			lastBuddyInProgressKey = eventKey;
+			companionReaction(reply);
+		}
+	} catch (error) {
+		console.error('Failed to generate buddy in-progress reaction:', error);
+	} finally {
+		buddyInProgressActive = false;
+	}
 }
 
 function mergeUsage(

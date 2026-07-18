@@ -72,6 +72,24 @@ function shouldRetryWindowsClipboard(errorMsg: string): boolean {
 	);
 }
 
+/**
+ * Copy content to the system clipboard via OSC 52 terminal escape sequence.
+ * This works without X11/Wayland - the terminal emulator processes the escape
+ * sequence and sets the local clipboard. Essential for SSH remote connections
+ * where xclip/xsel/wl-copy all fail because there is no local display.
+ *
+ * Supported terminals: Windows Terminal, iTerm2, Alacritty, Kitty, tmux (with
+ * set-clipboard on), foot, and most modern terminals.
+ *
+ * Reference: https://chromium.googlesource.com/chromiumos/platform/assets/+/HEAD/chromeapps/nassh/doc/osc52.md
+ */
+function copyViaOsc52(content: string): void {
+	const base64 = Buffer.from(content, 'utf8').toString('base64');
+	// OSC 52: ESC ] 52 ; Pc ; <base64> BEL
+	// Some terminals also accept ST (\x1b\\) as terminator; BEL is more widely supported.
+	process.stdout.write(`\x1b]52;c;${base64}\x07`);
+}
+
 function copyToWindowsClipboard(content: string): void {
 	const formsClipboardScript = [
 		"$ErrorActionPreference = 'Stop'",
@@ -177,10 +195,33 @@ export async function copyToClipboard(content: string): Promise<void> {
 			return;
 		}
 
+		// Linux: try xclip (X11), wl-copy (Wayland), xsel (X11 fallback),
+		// then OSC 52 terminal escape sequence (works over SSH, no display needed)
+		let linuxCopySuccess = false;
 		try {
 			runClipboardCommand('xclip', ['-selection', 'clipboard'], content);
+			linuxCopySuccess = true;
 		} catch {
-			runClipboardCommand('xsel', ['--clipboard', '--input'], content);
+			// xclip failed (no X11 display or not installed)
+		}
+		if (!linuxCopySuccess) {
+			try {
+				runClipboardCommand('wl-copy', [], content);
+				linuxCopySuccess = true;
+			} catch {
+				// wl-copy failed (no Wayland display or not installed)
+			}
+		}
+		if (!linuxCopySuccess) {
+			try {
+				runClipboardCommand('xsel', ['--clipboard', '--input'], content);
+				linuxCopySuccess = true;
+			} catch {
+				// xsel failed (no X11 display or not installed)
+			}
+		}
+		if (!linuxCopySuccess) {
+			copyViaOsc52(content);
 		}
 	} catch (error) {
 		if (!(error instanceof Error)) {

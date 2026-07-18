@@ -9,10 +9,12 @@ export function useSnapshotState(messagesLength: number) {
 	>(new Map());
 	const [pendingRollback, setPendingRollback] = useState<{
 		messageIndex: number;
+		previewTargetMessageIndex?: number;
 		fileCount: number;
 		filePaths?: string[];
 		notebookCount?: number;
 		teamCount?: number;
+		todoCount?: number;
 		message?: string;
 		images?: Array<{type: 'image'; data: string; mimeType: string}>;
 		crossSessionRollback?: boolean;

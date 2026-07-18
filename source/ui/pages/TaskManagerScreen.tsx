@@ -8,6 +8,7 @@ import {
 	type TaskListItem,
 	type Task,
 } from '../../utils/task/taskManager.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -17,6 +18,7 @@ type Props = {
 export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.taskManager.title}`);
 	const [tasks, setTasks] = useState<TaskListItem[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [scrollOffset, setScrollOffset] = useState(0);

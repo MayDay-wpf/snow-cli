@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -6,35 +6,68 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
+import {getToolResultSummary} from '../tools/ToolResultPreview.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
+import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
+import {maskHookInjectedText} from '../../../utils/ui/hookInjectMask.js';
 import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
+import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
+import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import {getToolStatusIcon} from '../special/toolIcons.js';
 
 /**
  * Clean thinking content by removing XML-like tags
- * Some third-party APIs may include <think></think> or <thinking></thinking> tags
+ * Some third-party APIs may include </think> or <thinking></thinking> tags
  */
 function cleanThinkingContent(content: string): string {
 	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
 }
 
+/**
+ * Compact thinking content for display in compact mode.
+ * Keeps head + tail of the full text with ellipsis in the middle.
+ */
+function compactThinkingContent(content: string, maxLength = 200): string {
+	const trimmed = content.trim();
+	if (trimmed.length <= maxLength) {
+		return trimmed;
+	}
+	const ellipsis = '......';
+	const keepLength = maxLength - ellipsis.length;
+	const headLength = Math.ceil(keepLength / 2);
+	const tailLength = Math.floor(keepLength / 2);
+	const head = trimmed.slice(0, headLength).trimEnd();
+	const tail = trimmed.slice(-tailLength).trimStart();
+	return `${head}${ellipsis}${tail}`;
+}
+
 type Props = {
 	message: Message;
-	index: number;
-	filteredMessages: Message[];
 	terminalWidth: number;
+	isFirstInGroup?: boolean;
+	isLastInGroup?: boolean;
 	showThinking?: boolean;
+	toolDisplayMode?: 'full' | 'compact' | 'hidden';
+	thinkDisplayMode?: ThinkDisplayMode;
 };
 
-export default function MessageRenderer({
+function MessageRendererImpl({
 	message,
-	index,
-	filteredMessages,
 	terminalWidth,
+	isFirstInGroup = false,
+	isLastInGroup = false,
 	showThinking = true,
+	toolDisplayMode = 'full',
+	thinkDisplayMode = 'compact',
 }: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+
+	// Sub-agent: hide persisted content/thinking messages, only show tools and diffs
+	if (message.subAgentContent === true) {
+		return null;
+	}
 
 	if (message.streamingLine) {
 		if (message.isThinkingLine && !showThinking) return null;
@@ -76,14 +109,85 @@ export default function MessageRenderer({
 		return null;
 	}
 
+	// toolDisplayMode 'hidden': completely hide tool call messages
+	// (messages with toolStatus that are not streaming lines or user messages)
+	if (
+		toolDisplayMode === 'hidden' &&
+		message.messageStatus !== undefined &&
+		(message.role === 'assistant' || message.role === 'subagent') &&
+		!message.streaming
+	) {
+		return null;
+	}
 	// Helper function to remove ANSI escape codes
 	const removeAnsiCodes = (text: string): string => {
 		return text.replace(/\x1b\[[0-9;]*m/g, '');
 	};
 
+	const getMessageToolName = (titleLine: string): string => {
+		const structuredName = message.toolCall?.name;
+		if (structuredName) {
+			return structuredName;
+		}
+
+		const statusIcon = message.messageStatus
+			? getToolStatusIcon(message.messageStatus)
+			: '';
+		const withoutStatus =
+			statusIcon && titleLine.startsWith(statusIcon)
+				? titleLine.slice(statusIcon.length).trimStart()
+				: titleLine;
+		const separatorIndex = withoutStatus.indexOf(' ');
+		const possibleIcon =
+			separatorIndex === -1 ? '' : withoutStatus.slice(0, separatorIndex);
+		const withoutToolIcon =
+			possibleIcon && /^\[[\x21-\x7E]+\]$/.test(possibleIcon)
+				? withoutStatus.slice(separatorIndex + 1).trimStart()
+				: withoutStatus;
+		return withoutToolIcon.trim();
+	};
+
+	type CommandResultSegment = {
+		text: string;
+		color?: string;
+	};
+
+	const parseAnsiCommandLine = (line: string): CommandResultSegment[] => {
+		const segments: CommandResultSegment[] = [];
+		const ansiPattern = /\x1b\[([0-9;]*)m/g;
+		let cursor = 0;
+		let activeColor: string | undefined;
+		let match: RegExpExecArray | null;
+
+		const pushText = (text: string): void => {
+			const cleanText = removeAnsiCodes(text);
+			if (cleanText) {
+				segments.push({text: cleanText, color: activeColor});
+			}
+		};
+
+		while ((match = ansiPattern.exec(line)) !== null) {
+			pushText(line.slice(cursor, match.index));
+			const codes = (match[1] || '0').split(';');
+			if (codes.includes('33') || codes.includes('93')) {
+				activeColor = 'yellow';
+			} else if (codes.includes('0') || codes.includes('39')) {
+				activeColor = undefined;
+			}
+
+			cursor = match.index + match[0].length;
+		}
+
+		pushText(line.slice(cursor));
+		return segments.length > 0 ? segments : [{text: ' '}];
+	};
+
 	const getDisplayContent = (content: string): string => {
 		// 只做视觉隐藏：保留原始 message.content 用于请求体/持久化。
-		return maskSkillInjectedText(removeAnsiCodes(content || '')).displayText;
+		// 先折叠 Skill / GitLine，再剥离 onUserMessage hook 注入（snow-mode 等）。
+		const afterSkill = maskSkillInjectedText(removeAnsiCodes(content || ''));
+		const afterGit = maskGitLineText(afterSkill.displayText).displayText;
+		return maskHookInjectedText(afterGit).displayText;
 	};
 
 	const wrapTextToVisualWidth = (text: string, maxWidth: number): string[] => {
@@ -131,11 +235,122 @@ export default function MessageRenderer({
 		});
 	};
 
-	const formatCommandResultLines = (content: string): string[] => {
-		return getDisplayContent(content)
+	const formatCommandResultLines = (
+		content: string,
+	): CommandResultSegment[][] => {
+		const afterSkill = maskSkillInjectedText(content || '');
+		const displayContent = maskGitLineText(afterSkill.displayText).displayText;
+		return displayContent
 			.split('\n')
-			.map((line, index) => `${index === 0 ? '└─ ' : '   '}${line || ' '}`);
+			.map((line, index) =>
+				parseAnsiCommandLine(`${index === 0 ? '└─ ' : '   '}${line || ' '}`),
+			);
 	};
+
+	const formatCompactCount = (value: number): string => {
+		if (value >= 1000) {
+			return `${(value / 1000).toFixed(1)}K`;
+		}
+
+		return String(value);
+	};
+
+	const formatCompressionSummaryBubbleLines = (
+		content: string,
+		totalWidth: number,
+	): string[] | null => {
+		const summaryDisplay = getCompressionSummaryDisplay(
+			getDisplayContent(content),
+			{
+				maxPreviewWidth: Math.max(totalWidth - 6, 24),
+			},
+		);
+		if (!summaryDisplay) {
+			return null;
+		}
+
+		const title =
+			summaryDisplay.kind === 'auto'
+				? t.chatScreen.compressionSummaryAutoTitle
+				: t.chatScreen.compressionSummaryManualTitle;
+		const stats = t.chatScreen.compressionSummaryStats
+			.replace('{lines}', formatCompactCount(summaryDisplay.lineCount))
+			.replace('{chars}', formatCompactCount(summaryDisplay.charCount));
+		const previewLines =
+			summaryDisplay.previewLines.length > 0
+				? [
+						`${t.chatScreen.compressionSummaryPreviewPrefix}: ${summaryDisplay.previewLines[0]}`,
+						...summaryDisplay.previewLines.slice(1).map(line => `  ${line}`),
+				  ]
+				: [];
+
+		return formatUserBubbleLines(
+			[
+				title,
+				stats,
+				...previewLines,
+				t.chatScreen.compressionSummaryOriginalSaved,
+			].join('\n'),
+			totalWidth,
+		);
+	};
+
+	const formatAiCompletionTime = (value: Date | string): string => {
+		const date = value instanceof Date ? value : new Date(value);
+
+		if (Number.isNaN(date.getTime())) {
+			return String(value);
+		}
+
+		return date.toLocaleTimeString(undefined, {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: false,
+		});
+	};
+
+	const formatAiCompletionDuration = (ms: number): string => {
+		if (!Number.isFinite(ms) || ms < 0) {
+			return '';
+		}
+		const totalSeconds = Math.floor(ms / 1000);
+		if (totalSeconds < 60) {
+			return `${totalSeconds}s`;
+		}
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = totalSeconds % 60;
+		if (minutes < 60) {
+			return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+		}
+		const hours = Math.floor(minutes / 60);
+		const remainMinutes = minutes % 60;
+		return `${hours}h${remainMinutes.toString().padStart(2, '0')}m`;
+	};
+
+	if (message.aiCompletionTime) {
+		const completionTime = formatAiCompletionTime(message.aiCompletionTime);
+		const durationStr =
+			typeof message.aiCompletionDurationMs === 'number' &&
+			Number.isFinite(message.aiCompletionDurationMs) &&
+			message.aiCompletionDurationMs >= 0
+				? formatAiCompletionDuration(message.aiCompletionDurationMs)
+				: '';
+
+		const displayText = durationStr
+			? t.chatScreen.aiCompletionTimeWithDurationMessage
+					.replace('{time}', completionTime)
+					.replace('{duration}', durationStr)
+			: t.chatScreen.aiCompletionTimeMessage.replace('{time}', completionTime);
+
+		return (
+			<Box paddingX={1} width={terminalWidth} marginBottom={1}>
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{displayText}
+				</Text>
+			</Box>
+		);
+	}
 
 	// Determine tool message type and color
 	let toolStatusColor: string = 'cyan';
@@ -152,26 +367,14 @@ export default function MessageRenderer({
 	// Only show parallel group indicators for non-time-consuming tools
 	const shouldShowParallelIndicator = isInParallelGroup && !isTimeConsumingTool;
 
-	const isFirstInGroup =
-		shouldShowParallelIndicator &&
-		(index === 0 ||
-			filteredMessages[index - 1]?.parallelGroup !== message.parallelGroup ||
-			// Previous message is time-consuming tool, so this is the first non-time-consuming one
-			filteredMessages[index - 1]?.toolPending ||
-			filteredMessages[index - 1]?.messageStatus === 'pending');
-
-	// Check if this is the last message in the parallel group
-	// Show end indicator if next message is not in the same parallel group
-	const nextMessage = filteredMessages[index + 1];
-	const nextInSameGroup =
-		nextMessage &&
-		nextMessage.parallelGroup !== undefined &&
-		nextMessage.parallelGroup !== null &&
-		nextMessage.parallelGroup === message.parallelGroup;
-	const isLastInGroup = shouldShowParallelIndicator && !nextInSameGroup;
+	// isFirstInGroup / isLastInGroup are now passed as props from the parent
+	// (pre-computed via computeParallelGroupEdges), so we only need to apply
+	// the shouldShowParallelIndicator gate here.
+	const effectiveIsFirstInGroup = shouldShowParallelIndicator && isFirstInGroup;
+	const effectiveIsLastInGroup = shouldShowParallelIndicator && isLastInGroup;
 
 	const leadingIndicator =
-		shouldShowParallelIndicator && !isFirstInGroup ? '│' : '';
+		shouldShowParallelIndicator && !effectiveIsFirstInGroup ? '│' : '';
 	const messageIcon =
 		message.role === 'user'
 			? message.subAgentDirected
@@ -185,6 +388,7 @@ export default function MessageRenderer({
 		terminalWidth - 2 - visualWidth(messagePrefix) - 1,
 		1,
 	);
+	const userBubbleWidth = Math.max(contentColumnWidth - visualWidth('│ '), 2);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
@@ -196,10 +400,7 @@ export default function MessageRenderer({
 			toolStatusColor = 'red';
 		} else {
 			// subAgentInternal 消息使用 cyan，其他 subagent 消息使用 magenta
-			if (
-				message.subAgentContent === true ||
-				(message.role === 'subagent' && message.subAgentInternal === true)
-			) {
+			if (message.role === 'subagent' && message.subAgentInternal === true) {
 				toolStatusColor = 'cyan';
 			} else {
 				toolStatusColor = message.role === 'subagent' ? 'magenta' : 'blue';
@@ -209,7 +410,6 @@ export default function MessageRenderer({
 
 	return (
 		<Box
-			key={`msg-${index}`}
 			marginTop={message.role === 'user' ? 1 : 0}
 			marginBottom={1}
 			paddingX={1}
@@ -217,13 +417,19 @@ export default function MessageRenderer({
 			width={terminalWidth}
 		>
 			{message.plainOutput ? (
-				<Text color={message.role === 'user' ? 'white' : toolStatusColor}>
+				<Text
+					color={
+						message.role === 'user'
+							? theme.colors.userMessageText
+							: toolStatusColor
+					}
+				>
 					{getDisplayContent(message.content)}
 				</Text>
 			) : (
 				<>
 					{/* Show parallel group indicator */}
-					{isFirstInGroup && (
+					{effectiveIsFirstInGroup && (
 						<Box marginBottom={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
 								{t.chatScreen.parallelStart}
@@ -237,7 +443,9 @@ export default function MessageRenderer({
 								message.role === 'user'
 									? message.subAgentDirected
 										? 'magenta'
-										: 'green'
+										: theme.colors.userMessageBackground ||
+										  theme.colors.menuSelected ||
+										  'green'
 									: message.role === 'command'
 									? theme.colors.menuSecondary
 									: toolStatusColor
@@ -286,14 +494,20 @@ export default function MessageRenderer({
 									{message.content && (
 										<Box flexDirection="column">
 											{formatCommandResultLines(message.content).map(
-												(line, lineIndex) => (
-													<Text
-														key={lineIndex}
-														color={theme.colors.menuSecondary}
-														dimColor
-													>
-														{line}
-													</Text>
+												(lineSegments, lineIndex) => (
+													<Box key={lineIndex}>
+														{lineSegments.map((segment, segmentIndex) => (
+															<Text
+																key={segmentIndex}
+																color={
+																	segment.color ?? theme.colors.menuSecondary
+																}
+																dimColor={!segment.color}
+															>
+																{segment.text}
+															</Text>
+														))}
+													</Box>
 												),
 											)}
 										</Box>
@@ -304,7 +518,9 @@ export default function MessageRenderer({
 									{message.plainOutput ? (
 										<Text
 											color={
-												message.role === 'user' ? 'white' : toolStatusColor
+												message.role === 'user'
+													? theme.colors.userMessageText
+													: toolStatusColor
 											}
 											backgroundColor={
 												message.role === 'user'
@@ -346,12 +562,9 @@ export default function MessageRenderer({
 											const hasToolStatus = message.messageStatus !== undefined;
 											const isSubAgentInternal =
 												message.subAgentInternal === true;
-											const isSubAgentContent =
-												message.subAgentContent === true;
 
 											if (
-												(hasToolStatus ||
-													(isSubAgentInternal && !isSubAgentContent)) &&
+												(hasToolStatus || isSubAgentInternal) &&
 												(message.role === 'assistant' ||
 													message.role === 'subagent')
 											) {
@@ -368,6 +581,20 @@ export default function MessageRenderer({
 													<>
 														<Text color={toolStatusColor}>
 															{removeAnsiCodes(titleLine)}
+															{/* compact mode: append brief result summary */}
+															{toolDisplayMode === 'compact' &&
+																message.messageStatus === 'success' &&
+																message.toolResult &&
+																(() => {
+																	const toolName = getMessageToolName(
+																		removeAnsiCodes(titleLine),
+																	);
+																	const summary = getToolResultSummary(
+																		toolName,
+																		message.toolResult,
+																	);
+																	return summary ? ` — ${summary}` : null;
+																})()}
 														</Text>
 														{treeLines.length > 0 && (
 															<Text color={theme.colors.menuSecondary}>
@@ -420,29 +647,44 @@ export default function MessageRenderer({
 																dimColor
 																italic
 															>
-																{cleanThinkingContent(message.thinking)}
+																{thinkDisplayMode === 'compact'
+																	? compactThinkingContent(
+																			cleanThinkingContent(message.thinking),
+																	  )
+																	: cleanThinkingContent(message.thinking)}
 															</Text>
 														</Box>
 													)}
 													{message.role === 'user' ? (
-														<Box
-															flexDirection="column"
-															width={contentColumnWidth}
-														>
-															{formatUserBubbleLines(
-																getDisplayContent(message.content),
-																contentColumnWidth,
-															).map((line, lineIndex) => (
-																<Text
-																	key={lineIndex}
-																	color="white"
-																	backgroundColor={
-																		theme.colors.userMessageBackground
-																	}
-																>
-																	{line}
-																</Text>
-															))}
+														<Box width={contentColumnWidth}>
+															{(() => {
+																const accentColor = message.subAgentDirected
+																	? 'magenta'
+																	: theme.colors.userMessageBackground ||
+																	  theme.colors.menuSelected ||
+																	  theme.colors.success ||
+																	  'green';
+																const lines =
+																	formatCompressionSummaryBubbleLines(
+																		message.content,
+																		userBubbleWidth,
+																	) ??
+																	formatUserBubbleLines(
+																		getDisplayContent(message.content),
+																		userBubbleWidth,
+																	);
+
+																return (
+																	<>
+																		<Text color={accentColor}>
+																			{lines.map(() => '│').join('\n')}
+																		</Text>
+																		<Text color={theme.colors.userMessageText}>
+																			{` ${lines.join('\n ')}`}
+																		</Text>
+																	</>
+																);
+															})()}
 														</Box>
 													) : message.content ? (
 														<MarkdownRenderer
@@ -485,7 +727,9 @@ export default function MessageRenderer({
 									{message.toolDisplay &&
 										message.toolDisplay.args.length > 0 &&
 										// Hide tool arguments for sub-agent internal tools
-										!message.subAgentInternal && (
+										!message.subAgentInternal &&
+										// Hide tool arguments in compact mode
+										toolDisplayMode === 'full' && (
 											<Box flexDirection="column">
 												{message.toolDisplay.args.map((arg, argIndex) => (
 													<Text
@@ -500,7 +744,9 @@ export default function MessageRenderer({
 										)}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
-										message.toolCall.arguments.content && (
+										!message.toolCall.arguments.isBatch &&
+										message.toolCall.arguments.content &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1}>
 												<DiffViewer
 													newContent={message.toolCall.arguments.content}
@@ -508,40 +754,44 @@ export default function MessageRenderer({
 												/>
 											</Box>
 										)}
-								{message.toolCall &&
-									message.toolCall.name === 'filesystem-edit' &&
-									message.toolCall.arguments.oldContent &&
-									message.toolCall.arguments.newContent && (
-										<Box marginTop={1}>
-											<DiffViewer
-												oldContent={message.toolCall.arguments.oldContent}
-												newContent={message.toolCall.arguments.newContent}
-												filename={message.toolCall.arguments.filename}
-												completeOldContent={
-													message.toolCall.arguments.completeOldContent
-												}
-												completeNewContent={
-													message.toolCall.arguments.completeNewContent
-												}
-												startLineNumber={
-													message.toolCall.arguments.contextStartLine
-												}
-											/>
-										</Box>
-									)}
-								{/* Show batch edit results */}
-								{message.toolCall &&
-									message.toolCall.name === 'filesystem-edit' &&
+									{message.toolCall &&
+										(message.toolCall.name === 'filesystem-edit' ||
+											message.toolCall.name === 'filesystem-replaceedit') &&
+										typeof message.toolCall.arguments.oldContent === 'string' &&
+										typeof message.toolCall.arguments.newContent === 'string' &&
+										message.messageStatus === 'pending' && (
+											<Box marginTop={1}>
+												<DiffViewer
+													oldContent={message.toolCall.arguments.oldContent}
+													newContent={message.toolCall.arguments.newContent}
+													filename={message.toolCall.arguments.filename}
+													completeOldContent={
+														message.toolCall.arguments.completeOldContent
+													}
+													completeNewContent={
+														message.toolCall.arguments.completeNewContent
+													}
+													startLineNumber={
+														message.toolCall.arguments.contextStartLine
+													}
+												/>
+											</Box>
+										)}
+									{/* Show batch edit results (pending only — success uses tool result) */}
+									{message.toolCall &&
+										(message.toolCall.name === 'filesystem-edit' ||
+											message.toolCall.name === 'filesystem-replaceedit') &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
-										Array.isArray(message.toolCall.arguments.batchResults) && (
+										Array.isArray(message.toolCall.arguments.batchResults) &&
+										message.messageStatus === 'pending' && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {
 														if (
 															fileResult.success &&
-															fileResult.oldContent &&
-															fileResult.newContent
+															typeof fileResult.oldContent === 'string' &&
+															typeof fileResult.newContent === 'string'
 														) {
 															return (
 																<Box
@@ -556,6 +806,7 @@ export default function MessageRenderer({
 																		oldContent={fileResult.oldContent}
 																		newContent={fileResult.newContent}
 																		filename={fileResult.path}
+																		showFilenameInHeader={false}
 																		completeOldContent={
 																			fileResult.completeOldContent
 																		}
@@ -574,6 +825,39 @@ export default function MessageRenderer({
 												)}
 											</Box>
 										)}
+									{/* Show batch create results (pending only — success uses tool result) */}
+									{message.toolCall &&
+										message.toolCall.name === 'filesystem-create' &&
+										message.toolCall.arguments.isBatch &&
+										message.toolCall.arguments.batchResults &&
+										Array.isArray(message.toolCall.arguments.batchResults) &&
+										message.messageStatus === 'pending' && (
+											<Box marginTop={1} flexDirection="column">
+												{message.toolCall.arguments.batchResults.map(
+													(fileResult: any, index: number) => {
+														if (fileResult.success && fileResult.content) {
+															return (
+																<Box
+																	key={index}
+																	flexDirection="column"
+																	marginBottom={1}
+																>
+																	<Text bold color="cyan">
+																		{`File ${index + 1}: ${fileResult.path}`}
+																	</Text>
+																	<DiffViewer
+																		newContent={fileResult.content}
+																		filename={fileResult.path}
+																		showFilenameInHeader={false}
+																	/>
+																</Box>
+															);
+														}
+														return null;
+													},
+												)}
+											</Box>
+										)}
 									{/* Show tool result preview for successful tool executions */}
 									{message.messageStatus === 'success' &&
 										message.toolResult &&
@@ -581,18 +865,17 @@ export default function MessageRenderer({
 										!(
 											message.toolCall &&
 											(message.toolCall.arguments?.oldContent ||
+												message.toolCall.arguments?.content ||
 												message.toolCall.arguments?.batchResults)
-										) && (
+										) &&
+										// Hide result preview in compact mode
+										toolDisplayMode === 'full' && (
 											<ToolResultPreview
-												toolName={
-													(message.content || '')
-														.replace(/^✓\s*/, '') // Remove leading ✓
-														.replace(/^⚇✓\s*/, '') // Remove leading ⚇✓
-														.replace(/.*⚇✓\s*/, '') // Remove any prefix before ⚇✓
-														.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI color codes
-														.split('\n')[0]
-														?.trim() || ''
-												}
+												toolName={getMessageToolName(
+													removeAnsiCodes(
+														(message.content || '').split('\n')[0] || '',
+													),
+												)}
 												result={message.toolResult}
 												maxLines={5}
 												isSubAgentInternal={
@@ -645,7 +928,7 @@ export default function MessageRenderer({
 					</Box>
 
 					{/* Show parallel group end indicator */}
-					{!message.plainOutput && isLastInGroup && (
+					{!message.plainOutput && effectiveIsLastInGroup && (
 						<Box marginTop={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
 								{t.chatScreen.parallelEnd}
@@ -656,4 +939,65 @@ export default function MessageRenderer({
 			)}
 		</Box>
 	);
+}
+
+/**
+ * Custom memo comparator for MessageRenderer.
+ * Skips re-render when message reference is unchanged and no display-affecting props changed.
+ */
+function areMessageRendererPropsEqual(prev: Props, next: Props): boolean {
+	if (prev.message !== next.message) return false;
+	if (prev.terminalWidth !== next.terminalWidth) return false;
+	if (prev.showThinking !== next.showThinking) return false;
+	if (prev.toolDisplayMode !== next.toolDisplayMode) return false;
+	if (prev.thinkDisplayMode !== next.thinkDisplayMode) return false;
+	if (prev.isFirstInGroup !== next.isFirstInGroup) return false;
+	if (prev.isLastInGroup !== next.isLastInGroup) return false;
+	return true;
+}
+
+const MessageRenderer = memo(MessageRendererImpl, areMessageRendererPropsEqual);
+MessageRenderer.displayName = 'MessageRenderer';
+export default MessageRenderer;
+
+/**
+ * Pre-compute parallel group edges for a list of messages.
+ * Returns isFirstInGroup[] and isLastInGroup[] arrays to pass as props.
+ */
+export function computeParallelGroupEdges(messages: Message[]): {
+	isFirstInGroup: boolean[];
+	isLastInGroup: boolean[];
+} {
+	const len = messages.length;
+	const isFirstInGroup = new Array<boolean>(len).fill(false);
+	const isLastInGroup = new Array<boolean>(len).fill(false);
+
+	for (let i = 0; i < len; i++) {
+		const msg = messages[i]!;
+		const isInParallelGroup =
+			msg.parallelGroup !== undefined && msg.parallelGroup !== null;
+		const isTimeConsumingTool =
+			msg.toolPending || msg.messageStatus === 'pending';
+		const shouldShowParallelIndicator =
+			isInParallelGroup && !isTimeConsumingTool;
+
+		if (!shouldShowParallelIndicator) continue;
+
+		const prev = i > 0 ? messages[i - 1] : undefined;
+		isFirstInGroup[i] =
+			!prev ||
+			prev.parallelGroup !== msg.parallelGroup ||
+			prev.toolPending ||
+			prev.messageStatus === 'pending';
+
+		const next = i < len - 1 ? messages[i + 1] : undefined;
+		const nextInSameGroup =
+			next &&
+			next.parallelGroup !== undefined &&
+			next.parallelGroup !== null &&
+			next.parallelGroup === msg.parallelGroup;
+		isLastInGroup[i] = !nextInSameGroup;
+	}
+
+	return {isFirstInGroup, isLastInGroup};
 }

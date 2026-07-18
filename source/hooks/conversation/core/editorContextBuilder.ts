@@ -1,3 +1,5 @@
+import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
+
 /**
  * Editor context structure
  */
@@ -6,6 +8,28 @@ export interface EditorContext {
 	activeFile?: string;
 	cursorPosition?: {line: number; character: number};
 	selectedText?: string;
+}
+
+/**
+ * Resolve the human-readable name of the currently connected IDE
+ * (e.g. "VSCode", "Cursor", "IntelliJ IDEA"). Falls back to a generic
+ * "IDE" label when no matching IDE entry can be found — this keeps the
+ * context informative without hard-coding any specific editor.
+ */
+function resolveConnectedIdeName(): string {
+	try {
+		const port = vscodeConnection.getPort();
+		if (!port) {
+			return 'IDE';
+		}
+		const {matched, unmatched} = vscodeConnection.getAvailableIDEs();
+		const found =
+			matched.find(ide => ide.port === port) ||
+			unmatched.find(ide => ide.port === port);
+		return found?.name || 'IDE';
+	} catch {
+		return 'IDE';
+	}
 }
 
 /**
@@ -29,7 +53,10 @@ export function buildEditorContextContent(
 	const editorLines: string[] = [];
 
 	if (editorContext.workspaceFolder) {
-		editorLines.push(`└─ VSCode Workspace: ${editorContext.workspaceFolder}`);
+		const ideName = resolveConnectedIdeName();
+		editorLines.push(
+			`└─ ${ideName} Workspace: ${editorContext.workspaceFolder}`,
+		);
 	}
 
 	if (editorContext.activeFile) {

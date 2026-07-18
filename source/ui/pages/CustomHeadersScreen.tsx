@@ -11,6 +11,7 @@ import {
 } from '../../utils/config/apiConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
+import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 type Props = {
 	onBack: () => void;
@@ -27,6 +28,7 @@ type ListAction =
 
 export default function CustomHeadersScreen({onBack}: Props) {
 	const {t} = useI18n();
+	useTerminalTitle(`Snow CLI - ${t.customHeaders.title}`);
 	const {theme} = useTheme();
 	const [config, setConfig] = useState<CustomHeadersConfig>(() => {
 		return (
@@ -235,13 +237,13 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		setHeaderEditingField('key');
 	};
 
-	const saveHeaderEdit = () => {
+	const saveHeaderEdit = (): Record<string, string> => {
 		const trimmedKey = headerEditKey.trim();
 		const trimmedValue = headerEditValue.trim();
 
 		if (!trimmedKey) {
 			setHeaderEditingIndex(-1);
-			return;
+			return editHeaders;
 		}
 
 		const newHeaders = {...editHeaders};
@@ -258,6 +260,43 @@ export default function CustomHeadersScreen({onBack}: Props) {
 		setEditHeaders(newHeaders);
 		setHeaderKeys(Object.keys(newHeaders));
 		setHeaderEditingIndex(-1);
+		return newHeaders;
+	};
+
+	const persistScheme = (headers: Record<string, string>) => {
+		if (previousView === 'add') {
+			const newScheme: CustomHeadersItem = {
+				id: Date.now().toString(),
+				name: editName.trim() || 'Unnamed Scheme',
+				headers,
+				createdAt: new Date().toISOString(),
+			};
+			const newConfig: CustomHeadersConfig = {
+				...config,
+				schemes: [...config.schemes, newScheme],
+				active: config.schemes.length === 0 ? newScheme.id : config.active,
+			};
+			if (saveAndRefresh(newConfig)) {
+				setSelectedIndex(config.schemes.length);
+				setPreviousView('edit');
+			}
+		} else {
+			if (config.schemes.length === 0 || selectedIndex >= config.schemes.length)
+				return;
+			const newConfig: CustomHeadersConfig = {
+				...config,
+				schemes: config.schemes.map((s, i) =>
+					i === selectedIndex
+						? {
+								...s,
+								name: editName.trim() || 'Unnamed Scheme',
+								headers,
+						  }
+						: s,
+				),
+			};
+			saveAndRefresh(newConfig);
+		}
 	};
 
 	const deleteHeaderAtIndex = (index: number) => {
@@ -376,6 +415,8 @@ export default function CustomHeadersScreen({onBack}: Props) {
 					if (headerSelectedIndex < headerKeys.length) {
 						deleteHeaderAtIndex(headerSelectedIndex);
 					}
+				} else if (input === 's' && (key.ctrl || key.meta)) {
+					persistScheme(editHeaders);
 				}
 			} else {
 				// 编辑模式
@@ -392,7 +433,8 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						setIsEditing(true);
 					}
 				} else if (input === 's' && (key.ctrl || key.meta)) {
-					saveHeaderEdit();
+					const newHeaders = saveHeaderEdit();
+					persistScheme(newHeaders);
 				}
 			}
 		},
@@ -604,6 +646,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						{t.customHeaders.editingHint}
 					</Text>
 				</Box>
+				<Box marginTop={1}>
+					<Text color={theme.colors.menuInfo} dimColor>
+						{t.customHeaders.placeholderHint}
+					</Text>
+				</Box>
 			</Box>
 		);
 	}
@@ -666,6 +713,11 @@ export default function CustomHeadersScreen({onBack}: Props) {
 						<Box marginTop={1}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.customHeaders.headerNavigationHint}
+							</Text>
+						</Box>
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuInfo} dimColor>
+								{t.customHeaders.placeholderHint}
 							</Text>
 						</Box>
 					</>

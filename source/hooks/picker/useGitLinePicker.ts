@@ -7,12 +7,13 @@ export type GitLineCommit = {
 	subject: string;
 	authorName: string;
 	dateIso: string;
-	kind: 'commit' | 'staged';
+	kind: 'commit' | 'staged' | 'unstaged';
 	fileCount?: number;
 };
 
 const PAGE_SIZE = 30;
 const STAGED_ENTRY_SHA = 'staged';
+const UNSTAGED_ENTRY_SHA = 'unstaged';
 
 function createStagedEntry(fileCount: number): GitLineCommit {
 	return {
@@ -25,16 +26,23 @@ function createStagedEntry(fileCount: number): GitLineCommit {
 	};
 }
 
+function createUnstagedEntry(fileCount: number): GitLineCommit {
+	return {
+		sha: UNSTAGED_ENTRY_SHA,
+		subject: 'Unstaged changes',
+		authorName: '',
+		dateIso: '',
+		kind: 'unstaged',
+		fileCount,
+	};
+}
+
 function buildInjectedGitLineText(
 	commit: GitLineCommit,
 	gitRoot: string,
 ): string {
-	const patch =
-		commit.kind === 'staged'
-			? reviewAgent.getStagedDiff(gitRoot).trim()
-			: reviewAgent.getCommitPatch(gitRoot, commit.sha).trim();
-
 	if (commit.kind === 'staged') {
+		const patch = reviewAgent.getStagedDiff(gitRoot).trim();
 		return [
 			'# GitLine: staged',
 			'Type: staged',
@@ -50,6 +58,24 @@ function buildInjectedGitLineText(
 			.join('\n');
 	}
 
+	if (commit.kind === 'unstaged') {
+		const patch = reviewAgent.getUnstagedDiff(gitRoot).trim();
+		return [
+			'# GitLine: unstaged',
+			'Type: unstaged',
+			commit.fileCount !== undefined ? `Files: ${commit.fileCount}` : undefined,
+			'',
+			'```git',
+			patch,
+			'```',
+			'# GitLine End',
+			'',
+		]
+			.filter((line): line is string => line !== undefined)
+			.join('\n');
+	}
+
+	const patch = reviewAgent.getCommitPatch(gitRoot, commit.sha).trim();
 	return [
 		`# GitLine: ${commit.sha}`,
 		`Commit: ${commit.sha}`,
@@ -73,6 +99,9 @@ export function useGitLinePicker(
 	const [gitLineSelectedIndex, setGitLineSelectedIndex] = useState(0);
 	const [commits, setCommits] = useState<GitLineCommit[]>([]);
 	const [stagedEntry, setStagedEntry] = useState<GitLineCommit | null>(null);
+	const [unstagedEntry, setUnstagedEntry] = useState<GitLineCommit | null>(
+		null,
+	);
 	const [selectedCommits, setSelectedCommits] = useState<Set<string>>(
 		new Set(),
 	);
@@ -83,10 +112,21 @@ export function useGitLinePicker(
 	const [searchQuery, setSearchQuery] = useState('');
 	const [error, setError] = useState<string | null>(null);
 	const [gitRoot, setGitRoot] = useState<string | null>(null);
+	const [insertionRange, setInsertionRange] = useState<{
+		start: number;
+		end: number;
+	} | null>(null);
 
 	const allCommits = useMemo(() => {
-		return stagedEntry ? [stagedEntry, ...commits] : commits;
-	}, [commits, stagedEntry]);
+		const entries: GitLineCommit[] = [];
+		if (stagedEntry) {
+			entries.push(stagedEntry);
+		}
+		if (unstagedEntry) {
+			entries.push(unstagedEntry);
+		}
+		return [...entries, ...commits];
+	}, [commits, stagedEntry, unstagedEntry]);
 
 	const filteredCommits = useMemo(() => {
 		const query = searchQuery.trim().toLowerCase();
@@ -106,6 +146,10 @@ export function useGitLinePicker(
 				searchableFields.push('staged', 'staged changes');
 			}
 
+			if (commit.kind === 'unstaged') {
+				searchableFields.push('unstaged', 'unstaged changes');
+			}
+
 			return searchableFields.some(field =>
 				field.toLowerCase().includes(query),
 			);
@@ -123,6 +167,7 @@ export function useGitLinePicker(
 				setGitRoot(null);
 				setCommits([]);
 				setStagedEntry(null);
+				setUnstagedEntry(null);
 				setHasMore(false);
 				setSkip(0);
 				setError(gitCheck.error || 'Not a git repository');
@@ -140,6 +185,11 @@ export function useGitLinePicker(
 			setStagedEntry(
 				status.hasStaged ? createStagedEntry(status.stagedFileCount) : null,
 			);
+			setUnstagedEntry(
+				status.hasUnstaged
+					? createUnstagedEntry(status.unstagedFileCount)
+					: null,
+			);
 			setCommits(
 				result.commits.map(commit => ({
 					...commit,
@@ -153,6 +203,7 @@ export function useGitLinePicker(
 			setGitRoot(null);
 			setCommits([]);
 			setStagedEntry(null);
+			setUnstagedEntry(null);
 			setHasMore(false);
 			setSkip(0);
 			setError(
@@ -229,6 +280,15 @@ export function useGitLinePicker(
 		showGitLinePicker,
 	]);
 
+	const openGitLinePicker = useCallback(
+		(range?: {start: number; end: number}) => {
+			setInsertionRange(range ?? null);
+			setShowGitLinePicker(true);
+			triggerUpdate();
+		},
+		[triggerUpdate],
+	);
+
 	const closeGitLinePicker = useCallback(() => {
 		setShowGitLinePicker(false);
 		setGitLineSelectedIndex(0);
@@ -239,6 +299,8 @@ export function useGitLinePicker(
 		setSkip(0);
 		setIsLoadingMore(false);
 		setStagedEntry(null);
+		setUnstagedEntry(null);
+		setInsertionRange(null);
 		triggerUpdate();
 	}, [triggerUpdate]);
 
@@ -282,7 +344,11 @@ export function useGitLinePicker(
 			return;
 		}
 
-		buffer.setText('');
+		if (insertionRange) {
+			buffer.replaceRange(insertionRange.start, insertionRange.end, '');
+		} else {
+			buffer.setText('');
+		}
 		for (const commit of commitsToInsert) {
 			buffer.insertTextPlaceholder(
 				buildInjectedGitLineText(commit, gitRoot),
@@ -299,6 +365,8 @@ export function useGitLinePicker(
 		setSkip(0);
 		setIsLoadingMore(false);
 		setStagedEntry(null);
+		setUnstagedEntry(null);
+		setInsertionRange(null);
 		triggerUpdate();
 	}, [
 		allCommits,
@@ -308,12 +376,14 @@ export function useGitLinePicker(
 		gitLineSelectedIndex,
 		gitRoot,
 		selectedCommits,
+		insertionRange,
 		triggerUpdate,
 	]);
 
 	return {
 		showGitLinePicker,
 		setShowGitLinePicker,
+		openGitLinePicker,
 		gitLineSelectedIndex,
 		setGitLineSelectedIndex,
 		gitLineCommits: filteredCommits,

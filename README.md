@@ -9,11 +9,13 @@
 [![license](https://img.shields.io/npm/l/snow-ai.svg)](https://github.com/MayDay-wpf/snow-cli/blob/main/LICENSE)
 [![node](https://img.shields.io/node/v/snow-ai.svg)](https://nodejs.org/)
 
+<a href="https://www.producthunt.com/products/snow-cli/launches/snow-cli?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-snow-cli" target="_blank" rel="noopener noreferrer"><img alt="Snow CLI - Agentic coding in your terminal | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1084735&amp;theme=light&amp;t=1776848197707"></a>
+
 **English** | [中文](README_zh.md)
 
 **QQ Group**: 910298558
 
-**LinuxDO AI Community**: [https://linux.do](https://linux.do)
+**Telegram**: [https://t.me/snow_cli](https://t.me/snow_cli)
 
 _Agentic coding in your terminal_
 
@@ -25,15 +27,75 @@ _Agentic coding in your terminal_
   <img src="https://contrib.rocks/image?repo=MayDay-wpf/snow-cli" />
 </a>
 
+## Sponsors
+
+<table width="100%" align="center">
+  <thead>
+    <tr>
+      <th width="50%">Sponsor</th>
+      <th width="50%">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">
+        <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><img src="docs/images/bloome-home.png" alt="Bloome" width="360"/></a>
+        <br/>
+        ☁️ <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><b>Bloome</b></a>
+      </td>
+      <td>AI-agent IM platform — multiple AI agents (Claude, ChatGPT, DeepSeek…) collaborate in one shared chat: they hand off tasks, cross-check each other, and refine until it's right. Zero setup, runs in the cloud, shareable with your team. Try it 👉 <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607">Bloome</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://www.jetbrains.com/">JetBrains</a></td>
+      <td>Open Source Project Sponsor, providing free IDE licenses</td>
+    </tr>
+  </tbody>
+</table>
+
+## Relay Station Recommendations
+
+> The relay stations listed here are mutual recommendation partnerships, not commercial sponsorships. Any relay station that provides a Snow CLI usage tutorial and a test account for availability verification is welcome to join.
+
+| Relay Station | Link                                                   |
+| ------------- | ------------------------------------------------------ |
+| ccapi         | [https://ccapi.ztxfkw.top/](https://ccapi.ztxfkw.top/) |
+
 ![alt text](docs/images/image.png)
+
+![alt text](docs/images/image2.png)
 
 <h3>Recommend using fonts: <a href="https://github.com/SpaceTimee/Fusion-JetBrainsMapleMono">JetBrains Maple Mono NF</a> </3>
 
-## Thanks to the community
+<h3>Recommended Terminal Combination for Windows Users</h3>
 
-<a href="https://linux.do">
-  <img width="360" height="120" alt="LINUXDO" src="https://github.com/user-attachments/assets/e09aab70-2daf-45d0-b49d-770086ad6c08" />
-</a>
+- **PowerShell 7+**: Modern cross-platform PowerShell, offering stronger features and better compatibility
+  - GitHub: https://github.com/PowerShell/PowerShell
+- **Windows Terminal**: Modern terminal application, supporting multi-tab, split-screen, and GPU accelerated rendering
+  - GitHub: https://github.com/microsoft/terminal
+
+**Installation**:
+
+```bash
+# Install using winget (built-in for Windows 10/11)
+winget install Microsoft.PowerShell
+winget install Microsoft.WindowsTerminal
+
+# Or install using the Microsoft Store
+```
+
+## Installation
+
+Install Snow CLI globally via npm:
+
+```bash
+npm install -g snow-ai
+```
+
+After installation, run:
+
+```bash
+snow
+```
 
 ## Documentation
 
@@ -45,15 +107,15 @@ _Agentic coding in your terminal_
 
 - [Proxy and Browser Settings](docs/usage/en/03.Proxy%20and%20Browser%20Settings.md) - Network proxy configuration, browser usage settings
 - [Codebase Setup](docs/usage/en/04.Codebase%20Setup.md) - Codebase integration, search configuration
-- [Sub-Agent Configuration](docs/usage/en/05.Sub-Agent%20Configuration.md) - Sub-agent management, custom sub-agent configuration
+- [Sub-Agent Configuration](docs/usage/en/05.Sub-Agent%20Configuration.md) - Sub-agent management, custom agents, **project Markdown agents (#194)**
 - [Sensitive Commands Configuration](docs/usage/en/06.Sensitive%20Commands%20Configuration.md) - Sensitive command protection, custom command rules
-- [Hooks Configuration](docs/usage/en/07.Hooks%20Configuration.md) - Workflow automation, hook types explanation, practical configuration examples
+- [Hooks Configuration](docs/usage/en/07.Hooks%20Configuration.md) - Workflow automation, **additionalContext inject / beforeSubAgentStart / type:context (#194)**
 - [Theme Settings](docs/usage/en/08.Theme%20Settings.md) - Interface theme configuration, custom color schemes, simplified mode
 - [Third-Party Relay Configuration](docs/usage/en/16.Third-Party%20Relay%20Configuration.md) - Claude Code relay, Codex relay, custom headers configuration
 
 ### Feature Guide
 
-- [Command Panel Guide](docs/usage/en/09.Command%20Panel%20Guide.md) - Detailed description of all available commands, usage tips, shortcut key reference
+- [Command Panel Guide](docs/usage/en/09.0.Command%20Panel%20Guide.md) - Detailed description of all available commands, usage tips, shortcut key reference (split into 09.1~09.7 sub-documents by category)
 - [Command Injection Mode](docs/usage/en/10.Command%20Injection%20Mode.md) - Execute commands directly in messages, syntax explanation, security mechanisms, use cases
 - [Vulnerability Hunting Mode](docs/usage/en/11.Vulnerability%20Hunting%20Mode.md) - Professional security analysis, vulnerability detection, verification scripts, detailed reports
 - [Headless Mode](docs/usage/en/12.Headless%20Mode.md) - Command line quick conversations, session management, script integration, third-party tool integration
@@ -61,10 +123,13 @@ _Agentic coding in your terminal_
 - [MCP Configuration](docs/usage/en/14.MCP%20Configuration.md) - MCP service management, configure external services, enable/disable services, troubleshooting
 - [Async Task Management](docs/usage/en/15.Async%20Task%20Management.md) - Background task creation, task management interface, sensitive command approval, task to session conversion
 - [Skills Command Detailed Guide](docs/usage/en/18.Skills%20Command%20Detailed%20Guide.md) - Skill creation, usage methods, Claude Code Skills compatibility, tool restrictions
-- [LSP Configuration and Usage](docs/usage/en/19.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
+- [LSP Configuration and Usage](docs/usage/en/17.LSP%20Configuration.md) - LSP config file, language server installation, ACE tool usage (definition/outline)
 - [SSE Service Mode](docs/usage/en/20.SSE%20Service%20Mode.md) - SSE server startup, API endpoints explanation, tool confirmation flow, permission configuration, YOLO mode, client integration examples
 - [Custom StatusLine Guide](docs/usage/en/21.Custom%20StatusLine%20Guide.md) - User-level StatusLine plugins, hook structure, override behavior, bilingual examples
 - [Team Mode Guide](docs/usage/en/22.Team%20Mode%20Guide.md) - Multi-agent collaboration, parallel task execution, team management
+- [Custom Search Engine Guide](docs/usage/en/23.Custom%20Search%20Engine%20Guide.md) - User-level search engine plugins, engine contract, enable flag, minimal template
+- [Privacy Settings Guide](docs/usage/en/24.Privacy%20Settings%20Guide.md) - Local privacy filter API deployment, Snow CLI privacy configuration, tool result redaction, and troubleshooting
+- [Buddy Companion Guide](docs/usage/en/25.Buddy%20Companion%20Guide.md) - Terminal buddy companion commands, hatching, species selection, interaction, mute, and reset
 
 ### Recommended ROLE.md
 
@@ -154,7 +219,7 @@ After running snow, `.snow/` directory is created in your home folder:
 ├── tasks/                  # Async tasks
 ├── hooks/                  # Workflow hooks
 ├── config.json             # API configuration
-├── mcp-config.json         # MCP configuration
+├── settings.json           # Unified settings (includes mcpServers)
 └── ...                     # Other config files
 ```
 

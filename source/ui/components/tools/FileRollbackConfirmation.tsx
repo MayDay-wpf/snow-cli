@@ -12,6 +12,7 @@ type Props = {
 	filePaths: string[];
 	notebookCount?: number;
 	teamCount?: number;
+	todoCount?: number;
 	previewSessionId?: string;
 	previewTargetMessageIndex?: number;
 	terminalWidth: number;
@@ -23,6 +24,7 @@ export default function FileRollbackConfirmation({
 	filePaths,
 	notebookCount,
 	teamCount,
+	todoCount,
 	previewSessionId,
 	previewTargetMessageIndex,
 	terminalWidth,
@@ -78,8 +80,8 @@ export default function FileRollbackConfirmation({
 					.then(preview =>
 						vscodeConnection.showDiff(
 							preview.absolutePath,
-							preview.currentContent,
 							preview.rollbackContent,
+							preview.currentContent,
 							'Rollback Preview',
 						),
 					)
@@ -107,6 +109,8 @@ export default function FileRollbackConfirmation({
 		previewTargetMessageIndex,
 	]);
 
+	const hasFiles = fileCount > 0;
+
 	const options: Array<{label: string; value: RollbackMode}> = [
 		{label: t.fileRollback.conversationAndFiles, value: 'both'},
 		{label: t.fileRollback.conversationOnly, value: 'conversation'},
@@ -123,6 +127,21 @@ export default function FileRollbackConfirmation({
 			setShowFullList(prev => !prev);
 			setFileScrollIndex(0); // Reset scroll when toggling
 			setHighlightedFileIndex(0); // Reset highlight when toggling
+			return;
+		}
+
+		if (!hasFiles) {
+			if (key.return) {
+				onConfirm('both');
+				return;
+			}
+
+			if (key.escape) {
+				closePreviewDiff();
+				onConfirm(null);
+				return;
+			}
+
 			return;
 		}
 
@@ -245,9 +264,6 @@ export default function FileRollbackConfirmation({
 
 	const selectedCount = selectedFiles.size;
 
-	// Check if there are any files to rollback
-	const hasFiles = fileCount > 0;
-
 	return (
 		<Box flexDirection="column" marginX={1} marginBottom={1}>
 			{/* Top border separator */}
@@ -259,7 +275,7 @@ export default function FileRollbackConfirmation({
 			<Box flexDirection="column" paddingX={1}>
 				<Box marginBottom={1}>
 					<Text color="yellow" bold>
-						⚠ {t.fileRollback.title}
+						{t.fileRollback.title}
 					</Text>
 				</Box>
 
@@ -276,6 +292,32 @@ export default function FileRollbackConfirmation({
 							</Text>
 						</Box>
 					</>
+				)}
+
+				{/* Additional rollback info */}
+				{notebookCount !== undefined && notebookCount > 0 && (
+					<Box marginBottom={1} marginLeft={2}>
+						<Text color="magenta">
+							{t.fileRollback.notebookCount.replace(
+								'{count}',
+								String(notebookCount),
+							)}
+						</Text>
+					</Box>
+				)}
+				{todoCount !== undefined && todoCount > 0 && (
+					<Box marginBottom={1} marginLeft={2}>
+						<Text color="yellow">
+							{t.fileRollback.todoCount.replace('{count}', String(todoCount))}
+						</Text>
+					</Box>
+				)}
+				{teamCount !== undefined && teamCount > 0 && (
+					<Box marginBottom={1} marginLeft={2}>
+						<Text color="cyan">
+							{t.fileRollback.teamCount.replace('{count}', String(teamCount))}
+						</Text>
+					</Box>
 				)}
 
 				{/* Has files mode - full file rollback UI */}
@@ -315,11 +357,7 @@ export default function FileRollbackConfirmation({
 									<Box key={index}>
 										<Text
 											color={
-												isHighlighted
-													? 'green'
-													: isSelected
-														? 'cyan'
-														: 'gray'
+												isHighlighted ? 'green' : isSelected ? 'cyan' : 'gray'
 											}
 											dimColor={!isHighlighted && !isSelected}
 											bold={isHighlighted}
@@ -344,31 +382,6 @@ export default function FileRollbackConfirmation({
 								</Text>
 							)}
 						</Box>
-
-						{/* Notebook rollback info */}
-						{notebookCount !== undefined && notebookCount > 0 && (
-							<Box marginBottom={1} marginLeft={2}>
-								<Text color="magenta">
-									{t.fileRollback.notebookCount.replace(
-										'{count}',
-										String(notebookCount),
-									)}
-								</Text>
-							</Box>
-						)}
-
-						{/* Team cleanup info */}
-						{teamCount !== undefined && teamCount > 0 && (
-							<Box marginBottom={1} marginLeft={2}>
-								<Text color="cyan">
-									⚑{' '}
-									{t.fileRollback.teamCount.replace(
-										'{count}',
-										String(teamCount),
-									)}
-								</Text>
-							</Box>
-						)}
 
 						{!showFullList && (
 							<>

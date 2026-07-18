@@ -9,13 +9,15 @@ import {
 	type Model,
 } from '../../../api/models.js';
 import {
-	getOpenAiConfig,
-	updateOpenAiConfig,
+	getSnowConfig,
+	updateSnowConfig,
 	type RequestMethod,
+	type ResponsesReasoningMode,
 } from '../../../utils/config/apiConfig.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {configEvents} from '../../../utils/config/configEvents.js';
+import {setPickerActive} from '../../../utils/ui/pickerState.js';
 
 interface Props {
 	advancedModel: string;
@@ -28,9 +30,13 @@ type Tab = 'advanced' | 'basic' | 'thinking';
 
 type ThinkingInputMode =
 	| null
-	| 'anthropicBudgetTokens';
+	| 'anthropicBudgetTokens'
+	| 'thinkingEffort'
+	| 'geminiThinkingLevel'
+	| 'responsesReasoningEffort'
+	| 'chatReasoningEffort';
 
-type ResponsesReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+type ResponsesReasoningEffort = string;
 type ResponsesVerbosity = 'low' | 'medium' | 'high';
 
 export const ModelsPanel: React.FC<Props> = ({
@@ -41,6 +47,11 @@ export const ModelsPanel: React.FC<Props> = ({
 }) => {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+
+	const closePanel = useCallback(() => {
+		setPickerActive(false);
+		onClose();
+	}, [onClose]);
 
 	const [activeTab, setActiveTab] = useState<Tab>('advanced');
 
@@ -60,6 +71,7 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [hasStartedLoading, setHasStartedLoading] = useState(false);
+	const [highlightedModelIndex, setHighlightedModelIndex] = useState(0);
 
 	// 使用 ref 同步追踪选择状态，解决 ESC 键需要按两次的问题
 	const isSelectingRef = useRef(false);
@@ -73,18 +85,18 @@ export const ModelsPanel: React.FC<Props> = ({
 		'tokens',
 	);
 	const [thinkingBudgetTokens, setThinkingBudgetTokens] = useState(10000);
-	const [thinkingEffort, setThinkingEffort] = useState<
-		'low' | 'medium' | 'high' | 'max'
-	>('high');
+	const [thinkingEffort, setThinkingEffort] = useState<string>('high');
 	const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(false);
-	const [geminiThinkingLevel, setGeminiThinkingLevel] = useState<
-		'minimal' | 'low' | 'medium' | 'high'
-	>('high');
+	const [geminiThinkingLevel, setGeminiThinkingLevel] =
+		useState<string>('high');
 	const [isGeminiLevelSelecting, setIsGeminiLevelSelecting] = useState(false);
 	const [responsesReasoningEnabled, setResponsesReasoningEnabled] =
 		useState(false);
 	const [responsesReasoningEffort, setResponsesReasoningEffort] =
 		useState<ResponsesReasoningEffort>('high');
+	const [responsesReasoningMode, setResponsesReasoningMode] = useState<
+		ResponsesReasoningMode | undefined
+	>(undefined);
 	const [responsesFastMode, setResponsesFastMode] = useState(false);
 	const [responsesVerbosity, setResponsesVerbosity] =
 		useState<ResponsesVerbosity>('medium');
@@ -97,11 +109,17 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [isThinkingModeSelecting, setIsThinkingModeSelecting] = useState(false);
 	const [isThinkingEffortSelecting, setIsThinkingEffortSelecting] =
 		useState(false);
+	const [isResponsesModeSelecting, setIsResponsesModeSelecting] =
+		useState(false);
 	const [isVerbositySelecting, setIsVerbositySelecting] = useState(false);
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
 		'fast' | 'standard' | undefined
 	>(undefined);
 	const [isSpeedSelecting, setIsSpeedSelecting] = useState(false);
+	const [chatThinkingEnabled, setChatThinkingEnabled] = useState(false);
+	const [chatReasoningEffort, setChatReasoningEffort] =
+		useState<string>('high');
+	const [isChatEffortSelecting, setIsChatEffortSelecting] = useState(false);
 
 	useEffect(() => {
 		if (!visible) {
@@ -120,16 +138,18 @@ export const ModelsPanel: React.FC<Props> = ({
 		manualInputModeRef.current = false;
 		setManualInputValue('');
 		setHasStartedLoading(false);
+		setHighlightedModelIndex(0);
 		setThinkingFocusIndex(0);
 		setThinkingInputMode(null);
 		setThinkingInputValue('');
 		setIsThinkingEffortSelecting(false);
+		setIsResponsesModeSelecting(false);
 		setIsVerbositySelecting(false);
 		setIsSpeedSelecting(false);
 		setErrorMessage('');
 
 		// Load thinking-related config on open
-		const cfg = getOpenAiConfig();
+		const cfg = getSnowConfig();
 		setRequestMethod(cfg.requestMethod || 'chat');
 		setShowThinking(cfg.showThinking !== false); // default true
 		setThinkingEnabled(
@@ -141,7 +161,9 @@ export const ModelsPanel: React.FC<Props> = ({
 		setThinkingBudgetTokens(cfg.thinking?.budget_tokens || 10000);
 		setThinkingEffort(cfg.thinking?.effort || 'high');
 		setGeminiThinkingEnabled((cfg as any).geminiThinking?.enabled || false);
-		setGeminiThinkingLevel((cfg as any).geminiThinking?.thinkingLevel || 'high');
+		setGeminiThinkingLevel(
+			(cfg as any).geminiThinking?.thinkingLevel || 'high',
+		);
 		setIsGeminiLevelSelecting(false);
 		setResponsesReasoningEnabled(
 			(cfg as any).responsesReasoning?.enabled || false,
@@ -149,9 +171,20 @@ export const ModelsPanel: React.FC<Props> = ({
 		setResponsesReasoningEffort(
 			(cfg as any).responsesReasoning?.effort || 'high',
 		);
+		setResponsesReasoningMode(
+			(cfg as any).responsesReasoning?.mode === 'standard' ||
+				(cfg as any).responsesReasoning?.mode === 'pro'
+				? (cfg as any).responsesReasoning.mode
+				: undefined,
+		);
 		setResponsesFastMode((cfg as any).responsesFastMode || false);
 		setResponsesVerbosity((cfg as any).responsesVerbosity || 'medium');
 		setAnthropicSpeed((cfg as any).anthropicSpeed);
+		setChatThinkingEnabled((cfg as any).chatThinking?.enabled || false);
+		setChatReasoningEffort(
+			(cfg as any).chatThinking?.reasoning_effort || 'high',
+		);
+		setIsChatEffortSelecting(false);
 	}, [visible, advancedModel, basicModel]);
 
 	// Auto-hide error message after 3 seconds
@@ -207,10 +240,10 @@ export const ModelsPanel: React.FC<Props> = ({
 			setErrorMessage('');
 			try {
 				if (target === 'advanced') {
-					await updateOpenAiConfig({advancedModel: value});
+					await updateSnowConfig({advancedModel: value});
 					setLocalAdvancedModel(value);
 				} else {
-					await updateOpenAiConfig({basicModel: value});
+					await updateSnowConfig({basicModel: value});
 					setLocalBasicModel(value);
 				}
 			} catch (err) {
@@ -227,16 +260,21 @@ export const ModelsPanel: React.FC<Props> = ({
 		[models, searchTerm],
 	);
 
-	const currentOptions = useMemo(
-		() => [
+	const currentOptions = useMemo(() => {
+		const seen = new Set<string>();
+		const uniqueModels = filteredModels.filter(model => {
+			if (seen.has(model.id)) return false;
+			seen.add(model.id);
+			return true;
+		});
+		return [
 			{label: t.modelsPanel.manualInputOption, value: '__MANUAL_INPUT__'},
-			...filteredModels.map(model => ({
+			...uniqueModels.map(model => ({
 				label: model.id,
 				value: model.id,
 			})),
-		],
-		[filteredModels, t],
-	);
+		];
+	}, [filteredModels, t]);
 
 	const handleModelSelect = useCallback(
 		(value: string) => {
@@ -285,12 +323,16 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (requestMethod === 'responses') {
 			return responsesReasoningEnabled;
 		}
+		if (requestMethod === 'chat') {
+			return chatThinkingEnabled;
+		}
 		return false;
 	}, [
 		requestMethod,
 		thinkingEnabled,
 		geminiThinkingEnabled,
 		responsesReasoningEnabled,
+		chatThinkingEnabled,
 	]);
 
 	const thinkingStrengthValue = useMemo(() => {
@@ -305,6 +347,9 @@ export const ModelsPanel: React.FC<Props> = ({
 		if (requestMethod === 'responses') {
 			return responsesReasoningEffort;
 		}
+		if (requestMethod === 'chat') {
+			return chatReasoningEffort.toUpperCase();
+		}
 		return t.modelsPanel.notSupported;
 	}, [
 		requestMethod,
@@ -313,6 +358,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		thinkingEffort,
 		geminiThinkingLevel,
 		responsesReasoningEffort,
+		chatReasoningEffort,
 		t,
 	]);
 
@@ -320,7 +366,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		setErrorMessage('');
 		try {
 			setShowThinking(next);
-			await updateOpenAiConfig({showThinking: next});
+			await updateSnowConfig({showThinking: next});
 			// Emit config change event for real-time sync
 			configEvents.emitConfigChange({
 				type: 'showThinking',
@@ -333,6 +379,30 @@ export const ModelsPanel: React.FC<Props> = ({
 		}
 	}, []);
 
+	const applyChatThinkingEnabled = useCallback(
+		async (next: boolean) => {
+			setErrorMessage('');
+			try {
+				if (!next && showThinking) {
+					setShowThinking(false);
+					await updateSnowConfig({showThinking: false});
+					configEvents.emitConfigChange({type: 'showThinking', value: false});
+				}
+				setChatThinkingEnabled(next);
+				await updateSnowConfig({
+					chatThinking: next
+						? {enabled: true, reasoning_effort: chatReasoningEffort}
+						: undefined,
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[showThinking, chatReasoningEffort],
+	);
+
 	const applyThinkingEnabled = useCallback(
 		async (next: boolean) => {
 			setErrorMessage('');
@@ -340,13 +410,13 @@ export const ModelsPanel: React.FC<Props> = ({
 				// Turning off thinking → auto turn off show thinking
 				if (!next && showThinking) {
 					setShowThinking(false);
-					await updateOpenAiConfig({showThinking: false});
+					await updateSnowConfig({showThinking: false});
 					configEvents.emitConfigChange({type: 'showThinking', value: false});
 				}
 
 				if (requestMethod === 'anthropic') {
 					setThinkingEnabled(next);
-					await updateOpenAiConfig({
+					await updateSnowConfig({
 						thinking: next
 							? thinkingMode === 'adaptive'
 								? {type: 'adaptive' as const, effort: thinkingEffort}
@@ -360,7 +430,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (requestMethod === 'gemini') {
 					setGeminiThinkingEnabled(next);
-					await updateOpenAiConfig({
+					await updateSnowConfig({
 						geminiThinking: next
 							? {enabled: true, thinkingLevel: geminiThinkingLevel}
 							: undefined,
@@ -369,12 +439,17 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (requestMethod === 'responses') {
 					setResponsesReasoningEnabled(next);
-					await updateOpenAiConfig({
+					await updateSnowConfig({
 						responsesReasoning: {
 							enabled: next,
 							effort: responsesReasoningEffort,
+							mode: responsesReasoningMode,
 						},
 					} as any);
+					return;
+				}
+				if (requestMethod === 'chat') {
+					void applyChatThinkingEnabled(next);
 					return;
 				}
 
@@ -398,6 +473,9 @@ export const ModelsPanel: React.FC<Props> = ({
 			thinkingEffort,
 			geminiThinkingLevel,
 			responsesReasoningEffort,
+			responsesReasoningMode,
+			applyChatThinkingEnabled,
+			t,
 		],
 	);
 
@@ -406,7 +484,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			setErrorMessage('');
 			try {
 				setThinkingBudgetTokens(next);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					thinking: thinkingEnabled
 						? thinkingMode === 'adaptive'
 							? {type: 'adaptive' as const, effort: thinkingEffort}
@@ -427,7 +505,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			setErrorMessage('');
 			try {
 				setThinkingMode(next);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					thinking: thinkingEnabled
 						? next === 'adaptive'
 							? {type: 'adaptive' as const, effort: thinkingEffort}
@@ -444,11 +522,11 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyThinkingEffort = useCallback(
-		async (next: 'low' | 'medium' | 'high' | 'max') => {
+		async (next: string) => {
 			setErrorMessage('');
 			try {
 				setThinkingEffort(next);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					thinking: thinkingEnabled
 						? {type: 'adaptive' as const, effort: next}
 						: undefined,
@@ -463,11 +541,11 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyGeminiLevel = useCallback(
-		async (next: 'minimal' | 'low' | 'medium' | 'high') => {
+		async (next: string) => {
 			setErrorMessage('');
 			try {
 				setGeminiThinkingLevel(next);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					geminiThinking: geminiThinkingEnabled
 						? {enabled: true, thinkingLevel: next}
 						: undefined,
@@ -482,14 +560,15 @@ export const ModelsPanel: React.FC<Props> = ({
 	);
 
 	const applyResponsesEffort = useCallback(
-		async (effort: ResponsesReasoningEffort) => {
+		async (effort: string) => {
 			setErrorMessage('');
 			try {
 				setResponsesReasoningEffort(effort);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					responsesReasoning: {
 						enabled: responsesReasoningEnabled,
 						effort,
+						mode: responsesReasoningMode,
 					},
 				} as any);
 			} catch (err) {
@@ -498,7 +577,28 @@ export const ModelsPanel: React.FC<Props> = ({
 				setErrorMessage(message);
 			}
 		},
-		[responsesReasoningEnabled],
+		[responsesReasoningEnabled, responsesReasoningMode],
+	);
+
+	const applyResponsesMode = useCallback(
+		async (mode: ResponsesReasoningMode | undefined) => {
+			setErrorMessage('');
+			try {
+				setResponsesReasoningMode(mode);
+				await updateSnowConfig({
+					responsesReasoning: {
+						enabled: responsesReasoningEnabled,
+						effort: responsesReasoningEffort,
+						mode,
+					},
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[responsesReasoningEnabled, responsesReasoningEffort],
 	);
 
 	const applyResponsesVerbosity = useCallback(
@@ -506,7 +606,7 @@ export const ModelsPanel: React.FC<Props> = ({
 			setErrorMessage('');
 			try {
 				setResponsesVerbosity(verbosity);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					responsesVerbosity: verbosity,
 				} as any);
 			} catch (err) {
@@ -518,12 +618,32 @@ export const ModelsPanel: React.FC<Props> = ({
 		[],
 	);
 
+	const applyChatReasoningEffort = useCallback(
+		async (effort: string) => {
+			setErrorMessage('');
+			try {
+				setChatReasoningEffort(effort);
+				await updateSnowConfig({
+					chatThinking: {
+						enabled: chatThinkingEnabled,
+						reasoning_effort: effort,
+					},
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[chatThinkingEnabled],
+	);
+
 	const applyAnthropicSpeed = useCallback(
 		async (next: 'fast' | 'standard' | undefined) => {
 			setErrorMessage('');
 			try {
 				setAnthropicSpeed(next);
-				await updateOpenAiConfig({
+				await updateSnowConfig({
 					anthropicSpeed: next,
 				} as any);
 			} catch (err) {
@@ -539,7 +659,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		setErrorMessage('');
 		try {
 			setResponsesFastMode(next);
-			await updateOpenAiConfig({
+			await updateSnowConfig({
 				responsesFastMode: next,
 			} as any);
 		} catch (err) {
@@ -550,14 +670,16 @@ export const ModelsPanel: React.FC<Props> = ({
 	}, []);
 
 	// 每种请求方案的最大聚焦索引（各自独立）
-	// anthropic: 0=showThinking, 1=enableThinking, 2=thinkingMode, 3=thinkingStrength
+	// anthropic: 0=showThinking, 1=enableThinking, 2=thinkingMode, 3=thinkingStrength, 4=anthropicSpeed
 	// gemini:    0=showThinking, 1=enableThinking, 2=thinkingStrength
-	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=verbosity, 4=fastMode
-	// chat/other: 0=showThinking, 1=enableThinking
+	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=mode, 4=verbosity, 5=fastMode
+	// chat:      0=showThinking, 1=enableThinking, 2=thinkingStrength
+	// other:     0=showThinking, 1=enableThinking
 	const maxThinkingIndex = useMemo(() => {
 		if (requestMethod === 'anthropic') return 4;
-		if (requestMethod === 'responses') return 4;
+		if (requestMethod === 'responses') return 5;
 		if (requestMethod === 'gemini') return 2;
+		if (requestMethod === 'chat') return 2;
 		return 1;
 	}, [requestMethod]);
 
@@ -599,12 +721,20 @@ export const ModelsPanel: React.FC<Props> = ({
 					setIsThinkingEffortSelecting(false);
 					return;
 				}
+				if (isResponsesModeSelecting) {
+					setIsResponsesModeSelecting(false);
+					return;
+				}
 				if (isVerbositySelecting) {
 					setIsVerbositySelecting(false);
 					return;
 				}
 				if (isSpeedSelecting) {
 					setIsSpeedSelecting(false);
+					return;
+				}
+				if (isChatEffortSelecting) {
+					setIsChatEffortSelecting(false);
 					return;
 				}
 				if (manualInputModeRef.current || manualInputMode) {
@@ -629,17 +759,46 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 
 				// 如果在主视图，ESC 才关闭面板
-				onClose();
+				closePanel();
 				return;
 			}
 
 			// Thinking numeric input
 			if (thinkingInputMode) {
-				if (key.return) {
-					const parsed = Number.parseInt(thinkingInputValue.trim(), 10);
-					if (!Number.isNaN(parsed) && parsed >= 0) {
-						if (thinkingInputMode === 'anthropicBudgetTokens') {
+				if (thinkingInputMode === 'anthropicBudgetTokens') {
+					if (key.return) {
+						const parsed = Number.parseInt(thinkingInputValue.trim(), 10);
+						if (!Number.isNaN(parsed) && parsed >= 0) {
 							void applyAnthropicBudgetTokens(parsed);
+						}
+						setThinkingInputMode(null);
+						setThinkingInputValue('');
+						return;
+					}
+
+					if (key.backspace || key.delete) {
+						setThinkingInputValue(prev => prev.slice(0, -1));
+						return;
+					}
+
+					if (input && /[0-9]/.test(input)) {
+						setThinkingInputValue(prev => prev + input);
+					}
+					return;
+				}
+
+				// Text input mode for thinking effort fields
+				if (key.return) {
+					const cleaned = thinkingInputValue.trim();
+					if (cleaned) {
+						if (thinkingInputMode === 'thinkingEffort') {
+							void applyThinkingEffort(cleaned);
+						} else if (thinkingInputMode === 'geminiThinkingLevel') {
+							void applyGeminiLevel(cleaned);
+						} else if (thinkingInputMode === 'responsesReasoningEffort') {
+							void applyResponsesEffort(cleaned);
+						} else if (thinkingInputMode === 'chatReasoningEffort') {
+							void applyChatReasoningEffort(cleaned);
 						}
 					}
 					setThinkingInputMode(null);
@@ -652,7 +811,7 @@ export const ModelsPanel: React.FC<Props> = ({
 					return;
 				}
 
-				if (input && /[0-9]/.test(input)) {
+				if (input && /[a-zA-Z0-9_-]/.test(input)) {
 					setThinkingInputValue(prev => prev + input);
 				}
 				return;
@@ -688,7 +847,15 @@ export const ModelsPanel: React.FC<Props> = ({
 			}
 
 			// In list selection modes, avoid switching tabs or triggering other actions.
-			if (isThinkingModeSelecting || isGeminiLevelSelecting || isThinkingEffortSelecting || isVerbositySelecting || isSpeedSelecting) {
+			if (
+				isThinkingModeSelecting ||
+				isGeminiLevelSelecting ||
+				isThinkingEffortSelecting ||
+				isResponsesModeSelecting ||
+				isVerbositySelecting ||
+				isSpeedSelecting ||
+				isChatEffortSelecting
+			) {
 				return;
 			}
 
@@ -722,13 +889,15 @@ export const ModelsPanel: React.FC<Props> = ({
 						void applyShowThinking(!showThinking);
 					} else if (thinkingFocusIndex === 1) {
 						void applyThinkingEnabled(!thinkingEnabledValue);
-					} else 					if (thinkingFocusIndex === 2) {
+					} else if (thinkingFocusIndex === 2) {
 						if (requestMethod === 'anthropic') {
 							setIsThinkingModeSelecting(true);
 						} else if (requestMethod === 'gemini') {
 							setIsGeminiLevelSelecting(true);
 						} else if (requestMethod === 'responses') {
 							setIsThinkingEffortSelecting(true);
+						} else if (requestMethod === 'chat') {
+							setIsChatEffortSelecting(true);
 						}
 					} else if (thinkingFocusIndex === 3) {
 						if (requestMethod === 'anthropic') {
@@ -739,14 +908,19 @@ export const ModelsPanel: React.FC<Props> = ({
 								setIsThinkingEffortSelecting(true);
 							}
 						} else if (requestMethod === 'responses') {
-							setIsVerbositySelecting(true);
+							setIsResponsesModeSelecting(true);
 						}
 					} else if (thinkingFocusIndex === 4) {
 						if (requestMethod === 'anthropic') {
 							setIsSpeedSelecting(true);
 						} else if (requestMethod === 'responses') {
-							void applyResponsesFastMode(!responsesFastMode);
+							setIsVerbositySelecting(true);
 						}
+					} else if (
+						thinkingFocusIndex === 5 &&
+						requestMethod === 'responses'
+					) {
+						void applyResponsesFastMode(!responsesFastMode);
 					}
 					return;
 				}
@@ -878,7 +1052,8 @@ export const ModelsPanel: React.FC<Props> = ({
 					</Box>
 					{(requestMethod === 'anthropic' ||
 						requestMethod === 'gemini' ||
-						requestMethod === 'responses') && (
+						requestMethod === 'responses' ||
+						requestMethod === 'chat') && (
 						<Box>
 							<Text
 								color={
@@ -918,18 +1093,17 @@ export const ModelsPanel: React.FC<Props> = ({
 					)}
 					{(requestMethod === 'anthropic' ||
 						requestMethod === 'gemini' ||
-						requestMethod === 'responses') && (
+						requestMethod === 'responses' ||
+						requestMethod === 'chat') && (
 						<Box>
 							<Text
 								color={
-									thinkingFocusIndex ===
-									(requestMethod === 'anthropic' ? 3 : 2)
+									thinkingFocusIndex === (requestMethod === 'anthropic' ? 3 : 2)
 										? theme.colors.menuSelected
 										: theme.colors.menuNormal
 								}
 							>
-								{thinkingFocusIndex ===
-								(requestMethod === 'anthropic' ? 3 : 2)
+								{thinkingFocusIndex === (requestMethod === 'anthropic' ? 3 : 2)
 									? '❯ '
 									: '  '}
 								{t.modelsPanel.thinkingStrength}
@@ -972,11 +1146,12 @@ export const ModelsPanel: React.FC<Props> = ({
 								}
 							>
 								{thinkingFocusIndex === 3 ? '❯ ' : '  '}
-								{t.configScreen.responsesVerbosity}
+								{t.configScreen.responsesReasoningMode}
 							</Text>
 							<Text color={theme.colors.menuSelected}>
 								{' '}
-								{responsesVerbosity.toUpperCase()}
+								{responsesReasoningMode ??
+									t.configScreen.responsesReasoningModeNone}
 							</Text>
 						</Box>
 					)}
@@ -990,6 +1165,24 @@ export const ModelsPanel: React.FC<Props> = ({
 								}
 							>
 								{thinkingFocusIndex === 4 ? '❯ ' : '  '}
+								{t.configScreen.responsesVerbosity}
+							</Text>
+							<Text color={theme.colors.menuSelected}>
+								{' '}
+								{responsesVerbosity.toUpperCase()}
+							</Text>
+						</Box>
+					)}
+					{requestMethod === 'responses' && (
+						<Box>
+							<Text
+								color={
+									thinkingFocusIndex === 5
+										? theme.colors.menuSelected
+										: theme.colors.menuNormal
+								}
+							>
+								{thinkingFocusIndex === 5 ? '❯ ' : '  '}
 								{t.configScreen.responsesFastMode}
 							</Text>
 							<Text color={theme.colors.menuSelected}>
@@ -1002,7 +1195,9 @@ export const ModelsPanel: React.FC<Props> = ({
 					{thinkingInputMode && (
 						<Box flexDirection="column" marginTop={1}>
 							<Text color={theme.colors.menuInfo}>
-								{t.modelsPanel.inputNumberHint}
+								{thinkingInputMode === 'anthropicBudgetTokens'
+									? t.modelsPanel.inputNumberHint
+									: t.modelsPanel.manualInputHint}
 							</Text>
 							<Box marginLeft={1}>
 								<Text color={theme.colors.menuSelected}>
@@ -1043,12 +1238,20 @@ export const ModelsPanel: React.FC<Props> = ({
 							<ScrollableSelectInput
 								items={(requestMethod === 'anthropic'
 									? [
+											{
+												label: t.modelsPanel.manualInputOption,
+												value: '__MANUAL_INPUT__',
+											},
 											{label: 'low', value: 'low'},
 											{label: 'medium', value: 'medium'},
 											{label: 'high', value: 'high'},
 											{label: 'max', value: 'max'},
 									  ]
 									: [
+											{
+												label: t.modelsPanel.manualInputOption,
+												value: '__MANUAL_INPUT__',
+											},
 											{label: 'none', value: 'none'},
 											{label: 'low', value: 'low'},
 											{label: 'medium', value: 'medium'},
@@ -1065,24 +1268,71 @@ export const ModelsPanel: React.FC<Props> = ({
 									0,
 									requestMethod === 'anthropic'
 										? (['low', 'medium', 'high', 'max'] as const).indexOf(
-												thinkingEffort,
+												thinkingEffort as 'low' | 'medium' | 'high' | 'max',
 										  )
-										: (['none', 'low', 'medium', 'high', 'xhigh'] as const).indexOf(
-												responsesReasoningEffort,
+										: (
+												['none', 'low', 'medium', 'high', 'xhigh'] as const
+										  ).indexOf(
+												responsesReasoningEffort as
+													| 'none'
+													| 'low'
+													| 'medium'
+													| 'high'
+													| 'xhigh',
 										  ),
 								)}
 								isFocused={true}
 								onSelect={item => {
+									if (item.value === '__MANUAL_INPUT__') {
+										if (requestMethod === 'anthropic') {
+											setIsThinkingEffortSelecting(false);
+											setThinkingInputMode('thinkingEffort');
+											setThinkingInputValue(thinkingEffort);
+										} else {
+											setIsThinkingEffortSelecting(false);
+											setThinkingInputMode('responsesReasoningEffort');
+											setThinkingInputValue(responsesReasoningEffort);
+										}
+										return;
+									}
 									if (requestMethod === 'anthropic') {
-										void applyThinkingEffort(
-											item.value as 'low' | 'medium' | 'high' | 'max',
-										);
+										void applyThinkingEffort(item.value);
 									} else {
-										void applyResponsesEffort(
-											item.value as ResponsesReasoningEffort,
-										);
+										void applyResponsesEffort(item.value);
 									}
 									setIsThinkingEffortSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
+					{isResponsesModeSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{
+										label: t.configScreen.responsesReasoningModeNone,
+										value: 'none',
+									},
+									{label: 'standard', value: 'standard'},
+									{label: 'pro', value: 'pro'},
+								]}
+								limit={3}
+								disableNumberShortcuts={true}
+								initialIndex={Math.max(
+									0,
+									(['none', 'standard', 'pro'] as const).indexOf(
+										responsesReasoningMode ?? 'none',
+									),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									void applyResponsesMode(
+										item.value === 'none'
+											? undefined
+											: (item.value as ResponsesReasoningMode),
+									);
+									setIsResponsesModeSelecting(false);
 								}}
 							/>
 						</Box>
@@ -1119,6 +1369,10 @@ export const ModelsPanel: React.FC<Props> = ({
 						<Box marginTop={1}>
 							<ScrollableSelectInput
 								items={[
+									{
+										label: t.modelsPanel.manualInputOption,
+										value: '__MANUAL_INPUT__',
+									},
 									{label: 'MINIMAL', value: 'minimal'},
 									{label: 'LOW', value: 'low'},
 									{label: 'MEDIUM', value: 'medium'},
@@ -1129,14 +1383,22 @@ export const ModelsPanel: React.FC<Props> = ({
 								initialIndex={Math.max(
 									0,
 									(['minimal', 'low', 'medium', 'high'] as const).indexOf(
-										geminiThinkingLevel,
+										geminiThinkingLevel as
+											| 'minimal'
+											| 'low'
+											| 'medium'
+											| 'high',
 									),
 								)}
 								isFocused={true}
 								onSelect={item => {
-									void applyGeminiLevel(
-										item.value as 'minimal' | 'low' | 'medium' | 'high',
-									);
+									if (item.value === '__MANUAL_INPUT__') {
+										setIsGeminiLevelSelecting(false);
+										setThinkingInputMode('geminiThinkingLevel');
+										setThinkingInputValue(geminiThinkingLevel);
+										return;
+									}
+									void applyGeminiLevel(item.value);
 									setIsGeminiLevelSelecting(false);
 								}}
 							/>
@@ -1147,21 +1409,69 @@ export const ModelsPanel: React.FC<Props> = ({
 						<Box marginTop={1}>
 							<ScrollableSelectInput
 								items={[
-									{label: t.configScreen.anthropicSpeedNotUsed, value: '__NONE__'},
+									{
+										label: t.configScreen.anthropicSpeedNotUsed,
+										value: '__NONE__',
+									},
 									{label: t.configScreen.anthropicSpeedFast, value: 'fast'},
-									{label: t.configScreen.anthropicSpeedStandard, value: 'standard'},
+									{
+										label: t.configScreen.anthropicSpeedStandard,
+										value: 'standard',
+									},
 								]}
 								limit={6}
 								disableNumberShortcuts={true}
 								initialIndex={
-									anthropicSpeed === 'fast' ? 1 : anthropicSpeed === 'standard' ? 2 : 0
+									anthropicSpeed === 'fast'
+										? 1
+										: anthropicSpeed === 'standard'
+										? 2
+										: 0
 								}
 								isFocused={true}
 								onSelect={item => {
 									void applyAnthropicSpeed(
-										item.value === '__NONE__' ? undefined : (item.value as 'fast' | 'standard'),
+										item.value === '__NONE__'
+											? undefined
+											: (item.value as 'fast' | 'standard'),
 									);
 									setIsSpeedSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
+					{isChatEffortSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{
+										label: t.modelsPanel.manualInputOption,
+										value: '__MANUAL_INPUT__',
+									},
+									{label: 'LOW', value: 'low'},
+									{label: 'MEDIUM', value: 'medium'},
+									{label: 'HIGH', value: 'high'},
+									{label: 'MAX', value: 'max'},
+								]}
+								limit={6}
+								disableNumberShortcuts={true}
+								initialIndex={Math.max(
+									0,
+									(['low', 'medium', 'high', 'max'] as const).indexOf(
+										chatReasoningEffort as 'low' | 'medium' | 'high' | 'max',
+									),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									if (item.value === '__MANUAL_INPUT__') {
+										setIsChatEffortSelecting(false);
+										setThinkingInputMode('chatReasoningEffort');
+										setThinkingInputValue(chatReasoningEffort);
+										return;
+									}
+									void applyChatReasoningEffort(item.value);
+									setIsChatEffortSelecting(false);
 								}}
 							/>
 						</Box>
@@ -1171,8 +1481,10 @@ export const ModelsPanel: React.FC<Props> = ({
 						!isThinkingModeSelecting &&
 						!isGeminiLevelSelecting &&
 						!isThinkingEffortSelecting &&
+						!isResponsesModeSelecting &&
 						!isVerbositySelecting &&
-						!isSpeedSelecting && (
+						!isSpeedSelecting &&
+						!isChatEffortSelecting && (
 							<Box marginTop={1}>
 								<Text dimColor color={theme.colors.menuSecondary}>
 									{t.modelsPanel.navigationHint}
@@ -1200,11 +1512,22 @@ export const ModelsPanel: React.FC<Props> = ({
 				</Box>
 			) : isSelecting ? (
 				<Box flexDirection="column" paddingX={1} paddingY={0}>
-					{searchTerm && (
-						<Text color={theme.colors.menuInfo}>
-							{t.modelsPanel.filterLabel} {searchTerm}
+					<Box>
+						{searchTerm && (
+							<Text color={theme.colors.menuInfo}>
+								{t.modelsPanel.filterLabel} {searchTerm}
+								{'  '}
+							</Text>
+						)}
+						<Text color={theme.colors.warning} bold>
+							{t.modelsPanel.modelCount.replace(
+								'{count}',
+								(currentOptions.length - 1).toString(),
+							)}
+							{currentOptions.length > 10 &&
+								` (${highlightedModelIndex + 1}/${currentOptions.length})`}
 						</Text>
-					)}
+					</Box>
 					<ScrollableSelectInput
 						items={currentOptions}
 						limit={10}
@@ -1212,7 +1535,18 @@ export const ModelsPanel: React.FC<Props> = ({
 						initialIndex={selectedIndex}
 						isFocused={isSelecting}
 						onSelect={item => handleModelSelect(item.value)}
+						onHighlight={item => {
+							const idx = currentOptions.findIndex(o => o.value === item.value);
+							if (idx >= 0) setHighlightedModelIndex(idx);
+						}}
 					/>
+					{currentOptions.length > 10 && (
+						<Box>
+							<Text dimColor color={theme.colors.menuSecondary}>
+								{t.modelsPanel.scrollHint}
+							</Text>
+						</Box>
+					)}
 				</Box>
 			) : (
 				<Box flexDirection="column" paddingX={1} paddingY={0}>
@@ -1235,3 +1569,5 @@ export const ModelsPanel: React.FC<Props> = ({
 		</Box>
 	);
 };
+
+export default ModelsPanel;

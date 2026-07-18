@@ -2,17 +2,23 @@ import type {RequestMethod} from '../../../utils/config/apiConfig.js';
 
 export type ConfigField =
 	| 'profile'
+	| 'apiConnectionGroup'
 	| 'baseUrl'
+	| 'baseUrlMode'
 	| 'apiKey'
 	| 'requestMethod'
+	| 'promptHeadersGroup'
 	| 'systemPromptId'
 	| 'customHeadersSchemeId'
+	| 'displayCompressGroup'
 	| 'anthropicBeta'
 	| 'anthropicCacheTTL'
 	| 'anthropicSpeed'
 	| 'enableAutoCompress'
 	| 'autoCompressThreshold'
 	| 'showThinking'
+	| 'streamingDisplay'
+	| 'reasoningGroup'
 	| 'thinkingEnabled'
 	| 'thinkingMode'
 	| 'thinkingBudgetTokens'
@@ -21,15 +27,41 @@ export type ConfigField =
 	| 'geminiThinkingLevel'
 	| 'responsesReasoningEnabled'
 	| 'responsesReasoningEffort'
+	| 'responsesReasoningMode'
 	| 'responsesVerbosity'
 	| 'responsesFastMode'
+	| 'chatThinkingEnabled'
+	| 'chatReasoningEffort'
+	| 'modelGroup'
 	| 'advancedModel'
 	| 'basicModel'
+	| 'supportsVision'
+	| 'visionConfig'
+	| 'tokenTimeoutGroup'
+	| 'visionBaseUrl'
+	| 'visionBaseUrlMode'
+	| 'visionApiKey'
+	| 'visionRequestMethod'
+	| 'visionModel'
 	| 'maxContextTokens'
 	| 'maxTokens'
 	| 'streamIdleTimeoutSec'
 	| 'toolResultTokenLimit'
-	| 'streamingDisplay';
+	| 'streamingDisplay'
+	| 'maxRetries'
+	| 'retryDelayMs';
+
+export const GROUP_FIELDS: ConfigField[] = [
+	'apiConnectionGroup',
+	'promptHeadersGroup',
+	'displayCompressGroup',
+	'reasoningGroup',
+	'modelGroup',
+	'tokenTimeoutGroup',
+];
+
+export const isGroupField = (field: ConfigField) =>
+	GROUP_FIELDS.includes(field);
 
 export type ProfileMode = 'normal' | 'creating' | 'renaming' | 'deleting';
 
@@ -37,6 +69,11 @@ export type ConfigScreenProps = {
 	onBack: () => void;
 	onSave: () => void;
 	inlineMode?: boolean;
+	/**
+	 * 指定要编辑的 profile 名称。
+	 * 提供时配置仅写回该 profile，不会切换或修改全局 active profile。
+	 */
+	targetProfileName?: string;
 };
 
 export const MAX_VISIBLE_FIELDS = 8;
@@ -85,17 +122,23 @@ export const stripFocusArtifacts = (value: string) => {
 
 export const SELECT_FIELDS: ConfigField[] = [
 	'profile',
+	'baseUrlMode',
 	'requestMethod',
 	'systemPromptId',
 	'customHeadersSchemeId',
 	'advancedModel',
 	'basicModel',
+	'visionBaseUrlMode',
+	'visionRequestMethod',
+	'visionModel',
 	'thinkingMode',
 	'thinkingEffort',
 	'geminiThinkingLevel',
 	'responsesReasoningEffort',
+	'responsesReasoningMode',
 	'responsesVerbosity',
 	'anthropicSpeed',
+	'chatReasoningEffort',
 ];
 
 export const isSelectField = (field: ConfigField) =>
@@ -108,6 +151,8 @@ export const NUMERIC_FIELDS: ConfigField[] = [
 	'toolResultTokenLimit',
 	'thinkingBudgetTokens',
 	'autoCompressThreshold',
+	'maxRetries',
+	'retryDelayMs',
 ];
 
 export const TOGGLE_FIELDS: ConfigField[] = [
@@ -119,6 +164,8 @@ export const TOGGLE_FIELDS: ConfigField[] = [
 	'geminiThinkingEnabled',
 	'responsesReasoningEnabled',
 	'responsesFastMode',
+	'chatThinkingEnabled',
+	'supportsVision',
 ];
 
 export type RequestMethodOption = {

@@ -1,52 +1,58 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
     <id>com.snow.plugin</id>
-
-    <!-- Public plugin name should be written in Title Case.
-         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
     <name>Snow CLI</name>
-
-    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
     <vendor email="maymay5jace@gmail.com" url="https://github.com/MayDay-wpf/snow-cli/tree/main/JetBrains">Snow AI</vendor>
 
-    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
-         Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
-         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
     Snow AI CLI integration for JetBrains IDEs. Provides intelligent code navigation and search powered by AI.<br>
     <br>
     Features:<br>
     <ul>
+      <li>AI Inline Code Completion — multi-provider (OpenAI, Anthropic, Gemini, DeepSeek FIM)</li>
+      <li>Next Edit Prediction — Tab-jump to propagate similar edits across the file or workspace</li>
       <li>WebSocket-based integration with Snow CLI</li>
       <li>Real-time editor context sharing</li>
       <li>Code diagnostics integration</li>
       <li>Go to definition support</li>
       <li>Find references support</li>
       <li>Document symbols extraction</li>
-      <li>Automatic reconnection with exponential backoff</li>
+      <li>AI commit message generation</li>
     </ul>
   ]]></description>
 
-    <!-- Product and plugin compatibility requirements.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
 
-    <!-- Extension points defined by the plugin.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <resource-bundle>messages.SnowBundle</resource-bundle>
+
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Snow CLI" displayType="BALLOON"/>
-        <toolWindow id="Snow CLI" 
-                    secondary="false" 
-                    anchor="right" 
+        <toolWindow id="Snow CLI"
+                    secondary="false"
+                    anchor="right"
                     icon="SnowPluginIcons.SnowAction"
                     factoryClass="com.snow.plugin.toolwindow.SnowToolWindowFactory"/>
         <postStartupActivity implementation="com.snow.plugin.SnowProjectActivity"/>
+
+        <!-- Settings Page -->
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.snow.plugin.config.SnowSettingsConfigurable"
+                id="com.snow.plugin.settings"
+                displayName="Snow CLI AI"/>
+
+        <!-- Status Bar Widgets -->
+        <statusBarWidgetFactory implementation="com.snow.plugin.completion.SnowCompletionStatusBarFactory"
+                                id="SnowCompletionStatus"
+                                order="after encodingWidget"/>
+        <statusBarWidgetFactory implementation="com.snow.plugin.nextEdit.SnowNextEditStatusBarFactory"
+                                id="SnowNextEditStatus"
+                                order="after SnowCompletionStatus"/>
     </extensions>
 
     <actions>
-        <!-- Add your actions here -->
+        <!-- Snow CLI Terminal -->
         <action id="snow.OpenTerminal"
                 class="com.snow.plugin.actions.OpenSnowTerminalAction"
                 text="Snow CLI"
@@ -54,6 +60,87 @@
                 icon="SnowPluginIcons.SnowAction">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <keyboard-shortcut first-keystroke="control alt S" keymap="$default"/>
+        </action>
+
+        <!-- Commit Message -->
+        <action id="snow.GenerateCommitMessage"
+                class="com.snow.plugin.actions.GenerateCommitMessageAction"
+                text="Generate Commit Message"
+                description="Generate a commit message with Snow CLI AI">
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
+        </action>
+
+        <!-- Send to Snow CLI -->
+        <action id="snow.SendToSnowCLI"
+                class="com.snow.plugin.actions.SendToSnowCLIAction"
+                text="Send to Snow CLI"
+                description="Send file path to Snow CLI terminal input">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+        </action>
+
+        <!-- Inline Completion Actions -->
+        <action id="snow.completion.toggle"
+                class="com.snow.plugin.actions.SnowCompletionToggleAction"
+                key="action.completion.toggle"
+                description="Enable or disable Snow CLI inline AI code completion">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="snow.completion.trigger"
+                class="com.snow.plugin.actions.SnowCompletionTriggerAction"
+                key="action.completion.trigger"
+                description="Manually trigger inline completion at cursor">
+            <keyboard-shortcut first-keystroke="control alt SLASH" keymap="$default"/>
+        </action>
+
+        <action id="snow.completion.selectModel"
+                class="com.snow.plugin.actions.SnowCompletionSelectModelAction"
+                key="action.completion.selectModel"
+                description="Fetch model list from API and select a completion model">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!-- Next Edit Prediction Actions -->
+        <action id="snow.nextEdit.toggle"
+                class="com.snow.plugin.actions.SnowNextEditToggleAction"
+                key="action.nextEdit.toggle"
+                description="Enable or disable Snow CLI Next Edit Prediction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="snow.nextEdit.trigger"
+                class="com.snow.plugin.actions.SnowNextEditTriggerAction"
+                key="action.nextEdit.trigger"
+                description="Manually trigger Next Edit Prediction at cursor">
+            <keyboard-shortcut first-keystroke="control alt PERIOD" keymap="$default"/>
+        </action>
+
+        <action id="snow.nextEdit.dismiss"
+                class="com.snow.plugin.actions.SnowNextEditDismissAction"
+                key="action.nextEdit.dismiss"
+                description="Dismiss current Next Edit Prediction session">
+        </action>
+
+        <action id="snow.nextEdit.next"
+                class="com.snow.plugin.actions.SnowNextEditNextAction"
+                key="action.nextEdit.next"
+                description="Skip current candidate and show the next one">
+            <keyboard-shortcut first-keystroke="alt CLOSE_BRACKET" keymap="$default"/>
+        </action>
+
+        <!-- Tab / Escape: accept or dismiss inline completion & next edit -->
+        <action id="snow.acceptInline"
+                class="com.snow.plugin.actions.SnowAcceptInlineAction"
+                text="Snow CLI: Accept Inline Suggestion"
+                description="Accept inline completion or predicted edit with Tab">
+            <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
+        </action>
+        <action id="snow.dismissInline"
+                class="com.snow.plugin.actions.SnowDismissInlineAction"
+                text="Snow CLI: Dismiss Inline Suggestion"
+                description="Dismiss inline completion or predicted edit with Escape">
+            <keyboard-shortcut first-keystroke="ESCAPE" keymap="$default"/>
         </action>
     </actions>
 
