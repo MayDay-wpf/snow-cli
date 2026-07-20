@@ -73,8 +73,11 @@ export function resolveContextInjectConfig(
 			DEFAULT_CONTEXT_INJECT.writeBreadcrumb,
 		),
 		primaryFilename: DEFAULT_CONTEXT_INJECT.primaryFilename,
-		compactBudgetChars: DEFAULT_CONTEXT_INJECT.compactBudgetChars,
-		perFileMax: DEFAULT_CONTEXT_INJECT.perFileMax,
+		compactBudgetChars: mergeNumber(
+			user.compactBudgetChars,
+			DEFAULT_CONTEXT_INJECT.compactBudgetChars,
+		),
+		perFileMax: mergeNumber(user.perFileMax, DEFAULT_CONTEXT_INJECT.perFileMax),
 	};
 }
 

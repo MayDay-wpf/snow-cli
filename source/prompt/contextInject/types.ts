@@ -10,6 +10,10 @@ export interface ContextInjectSettings {
 	enabled?: boolean;
 	/** Total injected body budget (chars). Default 32000 (~Codex 32KiB). */
 	budgetChars?: number;
+	/** Budget cap when profile is `compact`. Default 8000. */
+	compactBudgetChars?: number;
+	/** Max chars loaded from a single AGENTS file before summary. Default 16000. */
+	perFileMax?: number;
 	profile?: ContextInjectProfile;
 	/** Extra project filenames after AGENTS.md (e.g. CLAUDE.md). */
 	fallbackFilenames?: string[];

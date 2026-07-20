@@ -51,6 +51,12 @@ export {applyBudget} from './budget.js';
 export {dedupeLoadedSources} from './dedupe.js';
 export {renderInjectedRulesSection} from './render.js';
 export {resolveContextInjectConfig, applyProfile} from './defaults.js';
+export {
+	AGENTS_CONTEXT_HEADING,
+	AGENTS_INJECT_END_MARKER,
+	resolvePersistedUserContent,
+	stripPersistedAgentsContext,
+} from './stripPersistedAgents.js';
 
 function emptyResult(): InjectRenderResult {
 	return {
