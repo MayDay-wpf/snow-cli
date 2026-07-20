@@ -30,6 +30,11 @@ export type BuddyProgressEvent = {
 
 export type ConversationHandlerOptions = {
 	userContent: string;
+	/**
+	 * Hook prepend context for this turn only (API payload).
+	 * Not persisted to session history; applied before AGENTS inject.
+	 */
+	hookApiOnlyContext?: string;
 	editorContext?: {
 		workspaceFolder?: string;
 		activeFile?: string;

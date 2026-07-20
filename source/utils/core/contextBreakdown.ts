@@ -238,10 +238,9 @@ export async function buildContextBreakdown(options?: {
 		const roleTokens = roleFileItems.reduce((sum, f) => sum + f.tokens, 0);
 		const roleChars = roleFileItems.reduce((sum, f) => sum + f.chars, 0);
 
-		// --- AGENTS inject (user-message path) ---
+		// --- AGENTS inject (user-message path; settings profile) ---
 		const agentsDetails = getInjectedRulesDetails({
 			cwd,
-			profile: 'full',
 			writeBreadcrumb: false,
 		});
 		const agentsTokens = count(agentsDetails.section);

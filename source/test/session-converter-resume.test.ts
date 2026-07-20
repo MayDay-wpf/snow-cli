@@ -88,6 +88,49 @@ test('resume completed two-step tools only shows success rows, not live pending'
 	t.is(pendingStatuses.length, 0);
 });
 
+test('resume user bubble prefers originalContent over injected content', async t => {
+	const {convertSessionMessagesToUI} = await import(
+		'../utils/session/sessionConverter.js'
+	);
+
+	const sessionMessages = [
+		{
+			role: 'user',
+			content: '## Project Context (AGENTS.md)\n\ninjected\n\nreal user text',
+			originalContent: 'real user text',
+		},
+		{
+			role: 'assistant',
+			content: 'ok',
+		},
+	] as any[];
+
+	const uiMessages = convertSessionMessagesToUI(sessionMessages);
+	const user = uiMessages.find((m: any) => m.role === 'user');
+	t.is(user?.content, 'real user text');
+});
+
+test('resume strips legacy AGENTS inject when originalContent is missing', async t => {
+	const {convertSessionMessagesToUI} = await import(
+		'../utils/session/sessionConverter.js'
+	);
+
+	const sessionMessages = [
+		{
+			role: 'user',
+			content: '## Project Context (AGENTS.md)\n\ninjected\n\nreal user text',
+		},
+		{
+			role: 'assistant',
+			content: 'ok',
+		},
+	] as any[];
+
+	const uiMessages = convertSessionMessagesToUI(sessionMessages);
+	const user = uiMessages.find((m: any) => m.role === 'user');
+	t.is(user?.content, 'real user text');
+});
+
 test('resume incomplete two-step tool keeps static pending, not live spinner flag', async t => {
 	const {convertSessionMessagesToUI} = await import(
 		'../utils/session/sessionConverter.js'

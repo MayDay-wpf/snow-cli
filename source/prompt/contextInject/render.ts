@@ -1,4 +1,5 @@
 import type {LoadedSource} from './types.js';
+import {AGENTS_INJECT_END_MARKER} from './stripPersistedAgents.js';
 
 function kindHeading(kind: LoadedSource['kind']): string {
 	switch (kind) {
@@ -44,6 +45,9 @@ export function renderInjectedRulesSection(
 			`_Note: AGENTS context was truncated to fit budget.${pathNote}_\n`,
 		);
 	}
+
+	// End marker enables read-time strip if this block is ever persisted.
+	parts.push(AGENTS_INJECT_END_MARKER);
 
 	return parts.join('\n').trimEnd() + '\n';
 }

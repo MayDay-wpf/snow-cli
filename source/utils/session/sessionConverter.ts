@@ -7,6 +7,7 @@ import {
 } from '../config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../ui/diffPreview.js';
 import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
+import {resolvePersistedUserContent} from '../../prompt/contextInject/stripPersistedAgents.js';
 
 /**
  * 从后续的 tool result 消息中提取 editDiffData。
@@ -769,9 +770,12 @@ export function convertSessionMessagesToUI(
 
 		// Handle regular user and assistant messages
 		if (msg.role === 'user' || msg.role === 'assistant') {
+			// Prefer originalContent, then strip legacy AGENTS inject from content.
+			const displayContent =
+				msg.role === 'user' ? resolvePersistedUserContent(msg) : msg.content;
 			uiMessages.push({
 				role: msg.role,
-				content: msg.content,
+				content: displayContent,
 				streaming: false,
 				images: msg.images,
 				thinking: extractThinkingFromMessage(msg),
