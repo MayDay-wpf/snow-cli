@@ -32,11 +32,7 @@ import type {
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
 import {GradientText} from './statusline/GradientText.js';
-import {
-	formatTokenBar,
-	formatTokens,
-	pctColorName,
-} from '../../utils/formatTokens.js';
+import {formatTokens, pctColorName} from '../../utils/formatTokens.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
@@ -558,7 +554,6 @@ export default function StatusLine({
 
 		const colorKey = pctColorName(percentage);
 		const color = theme.colors[colorKey];
-		const miniBar = formatTokenBar(percentage, simpleMode ? 8 : 12);
 		const maxLabel =
 			typeof maxContextTokens === 'number' && maxContextTokens > 0
 				? formatTokens(maxContextTokens, true)
@@ -566,10 +561,8 @@ export default function StatusLine({
 
 		return (
 			<Text color={theme.colors.menuSecondary} dimColor>
-				<Text color={color}>{miniBar}</Text>
-				<Text> </Text>
 				<Text color={color} bold>
-					{percentage.toFixed(0)}%
+					{percentage.toFixed(1)}%
 				</Text>
 				<Text> · </Text>
 				<Text color={color}>{formatTokens(totalInputTokens, true)}</Text>
