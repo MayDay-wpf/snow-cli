@@ -241,7 +241,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 						<UserMessagePreview
 							content={
 								t.customTheme?.userMessageSample ||
-								'这个预览用于检查用户消息左侧强调条（userMessageBackground）是否合适'
+								'这个预览用于检查 userMessageBackground 是否合适'
 							}
 						/>
 					</Box>

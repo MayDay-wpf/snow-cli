@@ -388,7 +388,7 @@ function MessageRendererImpl({
 		terminalWidth - 2 - visualWidth(messagePrefix) - 1,
 		1,
 	);
-	const userBubbleWidth = Math.max(contentColumnWidth - visualWidth('│ '), 2);
+	const userBubbleWidth = Math.max(contentColumnWidth, 2);
 
 	if (message.role === 'assistant' || message.role === 'subagent') {
 		// 优先使用结构化状态字段（用于持久化/恢复时避免硬编码匹配颜色）
@@ -443,9 +443,7 @@ function MessageRendererImpl({
 								message.role === 'user'
 									? message.subAgentDirected
 										? 'magenta'
-										: theme.colors.userMessageBackground ||
-										  theme.colors.menuSelected ||
-										  'green'
+										: 'green'
 									: message.role === 'command'
 									? theme.colors.menuSecondary
 									: toolStatusColor
@@ -658,12 +656,6 @@ function MessageRendererImpl({
 													{message.role === 'user' ? (
 														<Box width={contentColumnWidth}>
 															{(() => {
-																const accentColor = message.subAgentDirected
-																	? 'magenta'
-																	: theme.colors.userMessageBackground ||
-																	  theme.colors.menuSelected ||
-																	  theme.colors.success ||
-																	  'green';
 																const lines =
 																	formatCompressionSummaryBubbleLines(
 																		message.content,
@@ -674,15 +666,18 @@ function MessageRendererImpl({
 																		userBubbleWidth,
 																	);
 
+																// Full-line background fill (single multi-line Text to
+																// avoid per-line gaps). userMessageBackground is the
+																// bubble background, userMessageText the foreground.
 																return (
-																	<>
-																		<Text color={accentColor}>
-																			{lines.map(() => '│').join('\n')}
-																		</Text>
-																		<Text color={theme.colors.userMessageText}>
-																			{` ${lines.join('\n ')}`}
-																		</Text>
-																	</>
+																	<Text
+																		color={theme.colors.userMessageText}
+																		backgroundColor={
+																			theme.colors.userMessageBackground
+																		}
+																	>
+																		{lines.join('\n')}
+																	</Text>
 																);
 															})()}
 														</Box>
