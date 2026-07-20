@@ -163,8 +163,11 @@ export default function PanelsManager({
 
 	const loadingFallback = (
 		<Box>
-			<Text>
-				<Spinner type="dots" /> Loading...
+			<Text color={theme.colors.menuSecondary}>
+				<Spinner type="dots" />{' '}
+				{(t as any).panelChrome?.loading ||
+					t.workingDirectoryPanel.loading ||
+					'Loading…'}
 			</Text>
 		</Box>
 	);

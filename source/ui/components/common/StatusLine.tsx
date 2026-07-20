@@ -32,6 +32,11 @@ import type {
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
 import {GradientText} from './statusline/GradientText.js';
+import {
+	formatTokenBar,
+	formatTokens,
+	pctColorName,
+} from '../../utils/formatTokens.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
@@ -541,31 +546,38 @@ export default function StatusLine({
 		const {
 			percentage,
 			totalInputTokens,
+			maxContextTokens,
 			hasAnthropicCache,
 			hasOpenAICache,
 			hasAnyCache,
 			cacheReadTokens = 0,
 			cacheCreationTokens = 0,
 			cachedTokens = 0,
-		} = contextWindowState;
+		} = contextWindowState as StatusLineContextUsage &
+			StatusLineContextWindowMetrics & {maxContextTokens?: number};
 
-		let color: string;
-		if (percentage < 50) color = theme.colors.success;
-		else if (percentage < 75) color = theme.colors.warning;
-		else if (percentage < 90) color = theme.colors.warning;
-		else color = theme.colors.error;
-
-		const formatNumber = (num: number) => {
-			if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-			return num.toString();
-		};
+		const colorKey = pctColorName(percentage);
+		const color = theme.colors[colorKey];
+		const miniBar = formatTokenBar(percentage, simpleMode ? 8 : 12);
+		const maxLabel =
+			typeof maxContextTokens === 'number' && maxContextTokens > 0
+				? formatTokens(maxContextTokens, true)
+				: null;
 
 		return (
 			<Text color={theme.colors.menuSecondary} dimColor>
-				<Text color={color}>{percentage.toFixed(1)}%</Text>
+				<Text color={color}>{miniBar}</Text>
+				<Text> </Text>
+				<Text color={color} bold>
+					{percentage.toFixed(0)}%
+				</Text>
 				<Text> · </Text>
-				<Text color={color}>{formatNumber(totalInputTokens)}</Text>
-				<Text>{t.chatScreen.tokens}</Text>
+				<Text color={color}>{formatTokens(totalInputTokens, true)}</Text>
+				{maxLabel ? (
+					<Text color={theme.colors.menuSecondary}>/{maxLabel}</Text>
+				) : (
+					<Text>{t.chatScreen.tokens}</Text>
+				)}
 				{hasAnyCache && (
 					<>
 						<Text> · </Text>
@@ -573,14 +585,15 @@ export default function StatusLine({
 							<>
 								{cacheReadTokens > 0 && (
 									<Text color={theme.colors.menuInfo}>
-										↯ {formatNumber(cacheReadTokens)} {t.chatScreen.cached}
+										↯ {formatTokens(cacheReadTokens, true)}{' '}
+										{t.chatScreen.cached}
 									</Text>
 								)}
 								{cacheCreationTokens > 0 && (
 									<>
 										{cacheReadTokens > 0 && <Text> · </Text>}
 										<Text color={theme.colors.warning}>
-											◆ {formatNumber(cacheCreationTokens)}{' '}
+											◆ {formatTokens(cacheCreationTokens, true)}{' '}
 											{t.chatScreen.newCache}
 										</Text>
 									</>
@@ -589,7 +602,7 @@ export default function StatusLine({
 						)}
 						{hasOpenAICache && (
 							<Text color={theme.colors.menuInfo}>
-								↯ {formatNumber(cachedTokens)} {t.chatScreen.cached}
+								↯ {formatTokens(cachedTokens, true)} {t.chatScreen.cached}
 							</Text>
 						)}
 					</>
