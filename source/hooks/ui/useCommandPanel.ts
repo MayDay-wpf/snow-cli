@@ -630,7 +630,8 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			if (!trigger) {
 				setShowCommands(false);
 				setCommandSelectedIndex(0);
-				setCommandCategoryFilter('all');
+				// Match default open tab (frequent), not full "all" list.
+				setCommandCategoryFilter('frequent');
 				return;
 			}
 

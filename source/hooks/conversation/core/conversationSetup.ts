@@ -64,18 +64,23 @@ export async function prepareConversationSetup(
 export async function appendUserMessageAndSyncContext(options: {
 	conversationMessages: ChatMessage[];
 	userContent: string;
+	hookApiOnlyContext?: string;
 	editorContext: ConversationHandlerOptions['editorContext'];
 	imageContents: ConversationHandlerOptions['imageContents'];
 	saveMessage: ConversationHandlerOptions['saveMessage'];
 	abortSignal?: AbortSignal;
+	/** Optional cwd for AGENTS discovery (defaults to process.cwd()). */
+	cwd?: string;
 }): Promise<void> {
 	const {
 		conversationMessages,
 		userContent,
+		hookApiOnlyContext,
 		editorContext,
 		imageContents,
 		saveMessage,
 		abortSignal,
+		cwd,
 	} = options;
 
 	const processedVisionContent =
@@ -85,21 +90,51 @@ export async function appendUserMessageAndSyncContext(options: {
 			{source: 'user', abortSignal},
 		);
 
-	const finalUserContent = buildEditorContextContent(
+	// Session / history keep the clean user body (no AGENTS / no hook prepend).
+	// Editor context + hook additionalContext + AGENTS only on live API payload.
+	const persistedUserContent = processedVisionContent.content;
+	const withEditorContext = buildEditorContextContent(
 		editorContext,
-		processedVisionContent.content,
+		persistedUserContent,
 	);
+
+	let apiUserContent = withEditorContext;
+	if (hookApiOnlyContext && hookApiOnlyContext.trim()) {
+		try {
+			const {prependAdditionalContext} = await import(
+				'../../../utils/execution/hookContextInject.js'
+			);
+			apiUserContent = prependAdditionalContext(
+				apiUserContent,
+				hookApiOnlyContext,
+			);
+		} catch (error) {
+			console.error('Failed to prepend hook additionalContext:', error);
+		}
+	}
+
+	try {
+		const {prependAgentsContext} = await import(
+			'../../../prompt/contextInject/index.js'
+		);
+		// Respect settings profile (full/compact/off); enabled still gates inject.
+		apiUserContent = prependAgentsContext(apiUserContent, {
+			...(cwd ? {cwd} : {}),
+		});
+	} catch (error) {
+		console.error('Failed to prepend AGENTS.md context:', error);
+	}
 
 	conversationMessages.push({
 		role: 'user',
-		content: finalUserContent,
+		content: apiUserContent,
 		images: processedVisionContent.images,
 	});
 
 	try {
 		await saveMessage({
 			role: 'user',
-			content: processedVisionContent.content,
+			content: persistedUserContent,
 			images: processedVisionContent.images,
 		});
 	} catch (error) {

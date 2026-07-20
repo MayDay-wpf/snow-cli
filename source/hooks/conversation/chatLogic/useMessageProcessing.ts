@@ -113,6 +113,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				images?: Array<{data: string; mimeType: string}>,
 				useBasicModel?: boolean,
 				hideUserMessage?: boolean,
+				displayMessage?: string,
+				hookApiOnlyContext?: string,
 		  ) => Promise<void>)
 		| null
 	>(null);
@@ -170,9 +172,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		/**
 		 * Optional text for the chat bubble only.
 		 * When onUserMessage hooks replace the prompt (exit 1 inject), keep the
-		 * user-typed text visible while `message` (possibly enriched) goes to the AI.
+		 * user-typed text visible while `message` (possibly rewritten) goes to the AI.
 		 */
 		displayMessage?: string,
+		/** Prepend-only hook context for live API payload (not session history). */
+		hookApiOnlyContext?: string,
 	) => {
 		const turnStartTime = Date.now();
 		const autoCompressConfig = getSnowConfig();
@@ -377,6 +381,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			try {
 				await handleConversationWithTools({
 					userContent: messageForAI.content,
+					hookApiOnlyContext,
 					editorContext: messageForAI.editorContext,
 					imageContents,
 					controller,
@@ -676,7 +681,9 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		const sessionId = current?.id ?? sessionManager.reserveNewSessionId();
 
 		// Keep user-typed text for the bubble; hook replace only rewrites AI input.
+		// Prepend additionalContext stays API-only (not in message body).
 		const typedMessage = message;
+		let hookApiOnlyContext: string | undefined;
 		try {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
@@ -718,11 +725,13 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {applyOnUserMessageHookResult} = await import(
 				'../../../utils/execution/hookContextInject.js'
 			);
-			message = applyOnUserMessageHookResult(
+			const applied = applyOnUserMessageHookResult(
 				message,
 				interpreted,
 				pending.context,
 			);
+			message = applied.content;
+			hookApiOnlyContext = applied.apiOnlyContext;
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
@@ -815,19 +824,17 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			console.error('Failed to process bash commands:', error);
 		}
 
-		// AGENTS.md (global + project) — after hooks/bash, before model send.
-		// UI keeps typedMessage clean; separate from hook additionalContext.
-		try {
-			const {prependAgentsContext} = await import(
-				'../../../prompt/contextInject/index.js'
-			);
-			message = prependAgentsContext(message, {profile: 'full'});
-		} catch (error) {
-			console.error('Failed to prepend AGENTS.md context:', error);
-		}
-
-		// typedMessage = bubble text; message may include AGENTS + hook context for model.
-		await processMessage(message, images, undefined, undefined, typedMessage);
+		// AGENTS.md + hook additionalContext are API-only inside
+		// appendUserMessageAndSyncContext (not stored in session history).
+		// typedMessage = bubble text; message is replace body or clean typed text.
+		await processMessage(
+			message,
+			images,
+			undefined,
+			undefined,
+			typedMessage,
+			hookApiOnlyContext,
+		);
 	};
 
 	const processPendingMessages = async () => {
@@ -842,9 +849,10 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 		const combinedMessage = messagesToProcess.map(m => m.text).join('\n\n');
 
-		// Bubble shows user-typed combined text; AI may get hook inject.
+		// Bubble shows user-typed combined text; prepend inject is API-only.
 		const typedPending = combinedMessage;
 		let messageToSend = combinedMessage;
+		let pendingHookApiOnlyContext: string | undefined;
 		try {
 			const {unifiedHooksExecutor} = await import(
 				'../../../utils/execution/unifiedHooksExecutor.js'
@@ -887,25 +895,18 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			const {applyOnUserMessageHookResult} = await import(
 				'../../../utils/execution/hookContextInject.js'
 			);
-			messageToSend = applyOnUserMessageHookResult(
+			const applied = applyOnUserMessageHookResult(
 				messageToSend,
 				interpreted,
 				pending.context,
 			);
+			messageToSend = applied.content;
+			pendingHookApiOnlyContext = applied.apiOnlyContext;
 		} catch (error) {
 			console.error('Failed to execute onUserMessage hook:', error);
 		}
 
-		// AGENTS.md (global + project) — separate from hooks; bubble uses typedPending.
-		try {
-			const {prependAgentsContext} = await import(
-				'../../../prompt/contextInject/index.js'
-			);
-			messageToSend = prependAgentsContext(messageToSend, {profile: 'full'});
-		} catch (error) {
-			console.error('Failed to prepend AGENTS.md context:', error);
-		}
-
+		// AGENTS.md inject happens in appendUserMessageAndSyncContext (API-only).
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
 			typedPending,
 		);
@@ -957,14 +958,33 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				vscodeState.vscodeConnected ? vscodeState.editorContext : undefined,
 			);
 
+			// Match processMessage: if hooks rewrote the AI body, keep typed text
+			// as originalContent for resume/export (AGENTS inject is API-only now).
+			const saveMessageWithOriginal = async (msg: any) => {
+				if (msg.role === 'user' && messageToSend !== typedPending) {
+					await saveMessage({
+						...msg,
+						originalContent: typedPending,
+						editorContext: messageForAI.editorContext,
+					});
+				} else {
+					await saveMessage({
+						...msg,
+						editorContext:
+							msg.role === 'user' ? messageForAI.editorContext : undefined,
+					});
+				}
+			};
+
 			try {
 				await handleConversationWithTools({
 					userContent: messageForAI.content,
+					hookApiOnlyContext: pendingHookApiOnlyContext,
 					editorContext: messageForAI.editorContext,
 					imageContents,
 					controller,
 					messages,
-					saveMessage,
+					saveMessage: saveMessageWithOriginal,
 					setMessages,
 					setStreamTokenCount: streamingState.setStreamTokenCount,
 					requestToolConfirmation,

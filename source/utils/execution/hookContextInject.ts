@@ -1,6 +1,9 @@
 /**
  * Helpers for applying hook additionalContext to model-bound messages.
  * UI bubbles should keep the user-typed text separately (typedMessage).
+ *
+ * Prepend-style additionalContext is API-only (same layer as AGENTS inject).
+ * Exit-1 replace remains a session fact and is persisted.
  */
 
 /**
@@ -34,9 +37,21 @@ export function mergeInjectedContexts(
 	return `${blocks.join('\n\n')}\n\n${message}`;
 }
 
+export type OnUserMessageHookApplyResult = {
+	/** Base user body for UI / session / bash (no prepend inject). */
+	content: string;
+	/** Exit-1 full rewrite — persist as session content. */
+	isReplace: boolean;
+	/** Prepend-only contexts for the live API payload (not persisted). */
+	apiOnlyContext?: string;
+};
+
 /**
  * Apply one onUserMessage result after the session-start context has been
- * consumed. Exit-1 replacement intentionally discards both prepend contexts.
+ * consumed.
+ *
+ * - exit 1 replace → content is rewritten; no API-only prepend
+ * - additionalContext / session pending → stay on apiOnlyContext (not content)
  */
 export function applyOnUserMessageHookResult(
 	message: string,
@@ -46,13 +61,22 @@ export function applyOnUserMessageHookResult(
 		additionalContext?: string;
 	},
 	pendingContext?: string,
-): string {
+): OnUserMessageHookApplyResult {
 	if (result.action === 'replace' && result.replacedContent) {
-		return result.replacedContent;
+		// Exit-1 replacement intentionally discards both prepend contexts.
+		return {
+			content: result.replacedContent,
+			isReplace: true,
+		};
 	}
 
-	return mergeInjectedContexts(message, [
-		pendingContext,
-		result.additionalContext,
-	]);
+	const blocks = [pendingContext, result.additionalContext]
+		.map(p => (p && p.trim() ? p.trim() : ''))
+		.filter(Boolean);
+
+	return {
+		content: message,
+		isReplace: false,
+		...(blocks.length > 0 ? {apiOnlyContext: blocks.join('\n\n')} : {}),
+	};
 }

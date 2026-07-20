@@ -4,6 +4,7 @@ import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {formatTodoContext} from '../../../utils/core/todoPreprocessor.js';
 import {getSystemPromptForMode} from '../../../prompt/systemPrompt.js';
 import {getCompanionSystemPromptAddon} from '../../../buddy/prompt.js';
+import {resolvePersistedUserContent} from '../../../prompt/contextInject/stripPersistedAgents.js';
 
 /**
  * Initialize conversation session and TODO context
@@ -71,9 +72,17 @@ export async function initializeConversationSession(
 	}
 
 	if (session && session.messages.length > 0) {
-		const filteredMessages = session.messages.filter(
-			msg => !msg.subAgentInternal,
-		);
+		const filteredMessages = session.messages
+			.filter(msg => !msg.subAgentInternal)
+			.map(msg => {
+				if (msg.role !== 'user') {
+					return msg;
+				}
+				// Read-time strip of historical AGENTS inject for API history only.
+				// Session files on disk are left unchanged.
+				const cleaned = resolvePersistedUserContent(msg);
+				return cleaned === msg.content ? msg : {...msg, content: cleaned};
+			});
 		conversationMessages.push(...filteredMessages);
 	}
 
