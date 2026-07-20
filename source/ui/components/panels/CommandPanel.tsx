@@ -45,7 +45,7 @@ const CommandPanel = memo(
 	}: Props) => {
 		const {t} = useI18n();
 		const {theme} = useTheme();
-		const showTabs = !query?.trim();
+		const showTabs = visible && !query?.trim();
 		const categoryLabels = t.commandPanel.categories;
 
 		return (
@@ -54,8 +54,7 @@ const CommandPanel = memo(
 					<Box marginBottom={0}>
 						<Text color={theme.colors.menuSecondary} dimColor>
 							{COMMAND_CATEGORY_TABS.map((tab, index) => {
-								const label =
-									categoryLabels?.[TAB_LABEL_KEYS[tab]] ?? tab;
+								const label = categoryLabels?.[TAB_LABEL_KEYS[tab]] ?? tab;
 								const active = tab === categoryFilter;
 								return (
 									<Text key={tab}>
