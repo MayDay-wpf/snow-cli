@@ -1,6 +1,13 @@
 export type {Language} from '../utils/config/languageConfig.js';
 
 export type TranslationKeys = {
+	panelChrome: {
+		loading: string;
+		escHint: string;
+	};
+	todoTree: {
+		more: string;
+	};
 	welcome: {
 		title: string;
 		subtitle: string;
@@ -1947,6 +1954,13 @@ export type TranslationKeys = {
 	};
 	usagePanel: {
 		title: string;
+		overview: {
+			total: string;
+			cacheHit: string;
+			create: string;
+			models: string;
+			modelsPlural: string;
+		};
 		granularity: {
 			last24h: string;
 			last7d: string;
@@ -1988,12 +2002,25 @@ export type TranslationKeys = {
 		colBucket: string;
 		colTokens: string;
 		colShare: string;
+		estimatedByCategory: string;
+		autoCompactWindow: string;
+		autoCompressOff: string;
+		categories: {
+			system: string;
+			tools: string;
+			memory: string;
+			skills: string;
+			messages: string;
+			free: string;
+			autocompact: string;
+		};
 		buckets: {
 			system: string;
 			role: string;
 			agents: string;
 			hooks: string;
 			tools: string;
+			skills: string;
 			messages: string;
 		};
 	};

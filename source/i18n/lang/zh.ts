@@ -917,8 +917,7 @@ export const zh: TranslationKeys = {
 				sourceProject: '来源: 项目设置',
 				sourceGlobal: '来源: 全局设置',
 				sourceDefault: '来源: 默认（opt-in）',
-				invalid:
-					'参数无效。用法: /agents-inject [on|off|status]',
+				invalid: '参数无效。用法: /agents-inject [on|off|status]',
 			},
 			// 工具显示模式命令消息
 			toolDisplay: {
@@ -1516,6 +1515,13 @@ export const zh: TranslationKeys = {
 		saveSuccessMessage:
 			"自定义命令 '{name}' 保存成功！\n类型: {type}\n位置: {location}\n你现在可以使用 /{name}",
 	},
+	panelChrome: {
+		loading: '加载中…',
+		escHint: '按 ESC 关闭',
+	},
+	todoTree: {
+		more: '更多',
+	},
 	chatScreen: {
 		// Header
 		headerTitle: '编程效率 x10!',
@@ -2104,11 +2110,11 @@ export const zh: TranslationKeys = {
 		noFilesConfirmHint: 'Enter 确认 · ESC 取消',
 	},
 	contextPanel: {
-		title: '上下文拆解',
-		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
-		loading: '正在加载上下文拆解…',
+		title: '上下文用量',
+		subtitle: 'system · tools · memory · skills · messages',
+		loading: '正在加载上下文用量…',
 		error: '失败: {error}',
-		hint: '默认已展开可直接看 · ↑↓ 选择 · Enter 展开 · A/C 全开/收起 · ESC 关闭',
+		hint: '↑↓ 选择 · Enter/空格 展开 · A 全开 · C 收起 · ESC 关闭',
 		apiLast: '上次 API prompt',
 		displayOnly: '计入sys',
 		truncated: '[截断]',
@@ -2120,17 +2126,37 @@ export const zh: TranslationKeys = {
 		colBucket: '分桶',
 		colTokens: 'Tokens',
 		colShare: '占比',
+		estimatedByCategory: '按类别估算用量',
+		autoCompactWindow: '自动压缩窗口',
+		autoCompressOff: '自动压缩关闭',
+		categories: {
+			system: 'System prompt',
+			tools: 'System tools',
+			memory: 'Memory files',
+			skills: 'Skills',
+			messages: 'Messages',
+			free: 'Free space',
+			autocompact: 'Autocompact buffer',
+		},
 		buckets: {
 			system: 'System prompt',
 			role: 'ROLE.md',
 			agents: 'AGENTS.md 注入',
 			hooks: 'Hooks 上下文',
-			tools: '工具定义',
-			messages: '对话历史',
+			tools: 'System tools',
+			skills: 'Skills',
+			messages: 'Messages',
 		},
 	},
 	usagePanel: {
 		title: 'Token 使用统计',
+		overview: {
+			total: '总计',
+			cacheHit: '缓存命中',
+			create: '创建',
+			models: '{count} 个模型',
+			modelsPlural: '{count} 个模型',
+		},
 		granularity: {
 			last24h: '最近24小时',
 			last7d: '最近7天',

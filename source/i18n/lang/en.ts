@@ -973,8 +973,7 @@ export const en: TranslationKeys = {
 				sourceProject: 'source: project settings',
 				sourceGlobal: 'source: global settings',
 				sourceDefault: 'source: default (opt-in)',
-				invalid:
-					'Invalid args. Usage: /agents-inject [on|off|status]',
+				invalid: 'Invalid args. Usage: /agents-inject [on|off|status]',
 			},
 			// Tool display mode command messages
 			toolDisplay: {
@@ -1605,6 +1604,13 @@ export const en: TranslationKeys = {
 		saveSuccessMessage:
 			"Custom command '{name}' saved successfully!\nType: {type}\nLocation: {location}\nYou can now use /{name}",
 	},
+	panelChrome: {
+		loading: 'Loading…',
+		escHint: 'Press ESC to close',
+	},
+	todoTree: {
+		more: 'more',
+	},
 	chatScreen: {
 		// Header
 		headerTitle: 'Programming efficiency x10!',
@@ -2225,11 +2231,11 @@ export const en: TranslationKeys = {
 		noFilesConfirmHint: 'Enter confirm · ESC cancel',
 	},
 	contextPanel: {
-		title: 'Context Breakdown',
-		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
-		loading: 'Loading context breakdown…',
+		title: 'Context Usage',
+		subtitle: 'system · tools · memory · skills · messages',
+		loading: 'Loading context usage…',
 		error: 'Failed: {error}',
-		hint: 'Already expanded for viewing · ↑↓ select · Enter expand · A/C all · ESC close',
+		hint: '↑↓ select · Enter/Space expand · A all · C collapse · ESC close',
 		apiLast: 'Last API prompt',
 		displayOnly: 'in sys',
 		truncated: '[trunc]',
@@ -2241,17 +2247,37 @@ export const en: TranslationKeys = {
 		colBucket: 'Bucket',
 		colTokens: 'Tokens',
 		colShare: 'Share',
+		estimatedByCategory: 'Estimated usage by category',
+		autoCompactWindow: 'Auto-compact window',
+		autoCompressOff: 'auto-compress off',
+		categories: {
+			system: 'System prompt',
+			tools: 'System tools',
+			memory: 'Memory files',
+			skills: 'Skills',
+			messages: 'Messages',
+			free: 'Free space',
+			autocompact: 'Autocompact buffer',
+		},
 		buckets: {
 			system: 'System prompt',
 			role: 'ROLE.md',
 			agents: 'AGENTS.md inject',
 			hooks: 'Hooks context',
-			tools: 'Tool definitions',
-			messages: 'Conversation',
+			tools: 'System tools',
+			skills: 'Skills',
+			messages: 'Messages',
 		},
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',
+		overview: {
+			total: 'total',
+			cacheHit: 'cache hit',
+			create: 'create',
+			models: '{count} model',
+			modelsPlural: '{count} models',
+		},
 		granularity: {
 			last24h: 'Last 24h',
 			last7d: 'Last 7d',

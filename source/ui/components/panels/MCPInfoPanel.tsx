@@ -29,6 +29,8 @@ interface ToolsListProps {
 	disabledLabel?: string;
 	scopeLabels?: Record<string, string>;
 	toolScopeMap?: Record<string, string>;
+	moreAboveLabel?: string;
+	moreBelowLabel?: string;
 }
 
 function ToolsList({
@@ -39,6 +41,8 @@ function ToolsList({
 	disabledLabel,
 	scopeLabels,
 	toolScopeMap,
+	moreAboveLabel,
+	moreBelowLabel,
 }: ToolsListProps) {
 	const {theme} = useTheme();
 	// Calculate display window for scrolling
@@ -74,7 +78,10 @@ function ToolsList({
 		<Box flexDirection="column">
 			{displayWindow.hiddenAbove > 0 && (
 				<Text color={theme.colors.menuSecondary} dimColor>
-					↑ {displayWindow.hiddenAbove} more above
+					{(moreAboveLabel || '↑ {count} more above').replace(
+						'{count}',
+						String(displayWindow.hiddenAbove),
+					)}
 				</Text>
 			)}
 			{displayWindow.tools.map((tool, displayIdx) => {
@@ -140,7 +147,10 @@ function ToolsList({
 			})}
 			{displayWindow.hiddenBelow > 0 && (
 				<Text color={theme.colors.menuSecondary} dimColor>
-					↓ {displayWindow.hiddenBelow} more below
+					{(moreBelowLabel || '↓ {count} more below').replace(
+						'{count}',
+						String(displayWindow.hiddenBelow),
+					)}
 				</Text>
 			)}
 		</Box>
@@ -555,6 +565,8 @@ export default function MCPInfoPanel({onClose}: Props) {
 									project: t.mcpInfoPanel.toolScopeProject,
 								}}
 								toolScopeMap={toolScopeMap}
+								moreAboveLabel={t.mcpInfoPanel.moreAbove}
+								moreBelowLabel={t.mcpInfoPanel.moreBelow}
 							/>
 						)}
 						{togglingTool && (
@@ -584,7 +596,7 @@ export default function MCPInfoPanel({onClose}: Props) {
 								: t.mcpInfoPanel.title}
 							{!isReconnecting &&
 								!togglingService &&
-								selectItems.length > MAX_DISPLAY_ITEMS &&
+								selectItems.length > 1 &&
 								` (${selectedIndex + 1}/${selectItems.length})`}
 						</Text>
 						{!isReconnecting &&
@@ -621,12 +633,16 @@ export default function MCPInfoPanel({onClose}: Props) {
 										: !item.isBuiltIn && item.source === 'global'
 										? t.mcpInfoPanel.mcpSourceGlobal
 										: '';
+								const service = mcpStatus.find(s => s.name === item.value);
+								const toolCount = service?.tools?.length ?? 0;
+								const toolBadge =
+									isEnabled && toolCount > 0 ? ` · ${toolCount} tools` : '';
 								const suffix = !isEnabled
 									? t.mcpInfoPanel.statusDisabled
 									: item.isBuiltIn
-									? t.mcpInfoPanel.statusSystem
+									? `${t.mcpInfoPanel.statusSystem}${toolBadge}`
 									: item.connected
-									? `${t.mcpInfoPanel.statusExternal}${sourceSuffix}`
+									? `${t.mcpInfoPanel.statusExternal}${sourceSuffix}${toolBadge}`
 									: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
 
 								return (

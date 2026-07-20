@@ -366,7 +366,7 @@ export default function SkillsListPanel({onClose}: Props) {
 	if (isLoading) {
 		return (
 			<Text color={theme.colors.menuSecondary}>
-				{t.skillsListPanel?.loading || 'Loading skills...'}
+				{t.skillsListPanel.loading}
 			</Text>
 		);
 	}
@@ -380,10 +380,7 @@ export default function SkillsListPanel({onClose}: Props) {
 				paddingY={0}
 			>
 				<Text color={theme.colors.error} dimColor>
-					{(t.skillsListPanel?.error || 'Error: {message}').replace(
-						'{message}',
-						errorMessage,
-					)}
+					{t.skillsListPanel.error.replace('{message}', errorMessage)}
 				</Text>
 			</Box>
 		);
@@ -399,7 +396,7 @@ export default function SkillsListPanel({onClose}: Props) {
 			>
 				<Box flexDirection="column">
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.skillsListPanel?.noSkills || 'No skills available'}
+						{t.skillsListPanel.noSkills}
 					</Text>
 					{updateStatus !== 'idle' && updateMessage && (
 						<Box marginTop={1} flexDirection="column">
@@ -421,8 +418,7 @@ export default function SkillsListPanel({onClose}: Props) {
 					)}
 					<Box marginTop={1}>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.skillsListPanel?.navigationHint ||
-								'↑↓ Navigate • Tab/Space/Enter Toggle • U Update Selected • A Update All • ESC Close'}
+							{t.skillsListPanel.navigationHint}
 						</Text>
 					</Box>
 				</Box>
@@ -439,14 +435,14 @@ export default function SkillsListPanel({onClose}: Props) {
 		>
 			<Box flexDirection="column">
 				<Text color={theme.colors.menuInfo} bold>
-					{t.skillsListPanel?.title || 'Skills'}
-					{skills.length > MAX_DISPLAY_ITEMS &&
+					{t.skillsListPanel.title}
+					{skills.length > 0 &&
 						` (${selectedIndex + 1}/${skills.length})`}
 				</Text>
 
 				{hiddenAboveCount > 0 && (
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{(t.skillsListPanel?.moreAbove || '↑ {count} more above').replace(
+						{t.skillsListPanel.moreAbove.replace(
 							'{count}',
 							String(hiddenAboveCount),
 						)}
@@ -459,8 +455,8 @@ export default function SkillsListPanel({onClose}: Props) {
 					const isEnabled = skillEnabledMap[skill.id] !== false;
 					const locationSuffix =
 						skill.location === 'project'
-							? t.skillsListPanel?.locationProject || '(Project)'
-							: t.skillsListPanel?.locationGlobal || '(Global)';
+							? t.skillsListPanel.locationProject
+							: t.skillsListPanel.locationGlobal;
 					const skillDescription = (skill.description || '').trim();
 					const hasDescription = Boolean(skillDescription);
 					const renderedDescription = hasDescription
@@ -478,7 +474,7 @@ export default function SkillsListPanel({onClose}: Props) {
 											: theme.colors.menuSecondary
 									}
 								>
-									◆{' '}
+									●{' '}
 								</Text>
 								<Text
 									color={
@@ -495,7 +491,7 @@ export default function SkillsListPanel({onClose}: Props) {
 									{' '}
 									{isEnabled
 										? locationSuffix
-										: t.skillsListPanel?.statusDisabled || '(Disabled)'}
+										: t.skillsListPanel.statusDisabled}
 								</Text>
 							</Text>
 							{isEnabled && hasDescription ? (
@@ -511,7 +507,7 @@ export default function SkillsListPanel({onClose}: Props) {
 
 				{hiddenBelowCount > 0 && (
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{(t.skillsListPanel?.moreBelow || '↓ {count} more below').replace(
+						{t.skillsListPanel.moreBelow.replace(
 							'{count}',
 							String(hiddenBelowCount),
 						)}
@@ -550,8 +546,7 @@ export default function SkillsListPanel({onClose}: Props) {
 
 				<Box marginTop={1}>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{t.skillsListPanel?.navigationHint ||
-							'↑↓ Navigate • Tab/Space/Enter Toggle • U Update Selected • A Update All • ESC Close'}
+						{t.skillsListPanel.navigationHint}
 					</Text>
 				</Box>
 			</Box>

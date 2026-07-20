@@ -47,7 +47,7 @@ const SkillsPickerPanel = memo(
 				<Box flexDirection="column">
 					<Box width="100%" flexDirection="column">
 						<Box>
-							<Text color={theme.colors.warning} bold>
+							<Text color={theme.colors.menuInfo} bold>
 								{t.skillsPickerPanel.title}
 							</Text>
 						</Box>
@@ -70,7 +70,7 @@ const SkillsPickerPanel = memo(
 				getItemKey={(skill: SkillsPickerItem) => skill.id}
 				title={
 					<>
-						<Text color={theme.colors.warning} bold>
+						<Text color={theme.colors.menuInfo} bold>
 							{t.skillsPickerPanel.title}{' '}
 							{skills.length > 5 && `(${selectedIndex + 1}/${skills.length})`}
 						</Text>
@@ -100,7 +100,7 @@ const SkillsPickerPanel = memo(
 				emptyContent={
 					<Box width="100%" flexDirection="column">
 						<Box>
-							<Text color={theme.colors.warning} bold>
+							<Text color={theme.colors.menuInfo} bold>
 								{t.skillsPickerPanel.title}
 							</Text>
 							<Text color={theme.colors.menuSecondary} dimColor>
@@ -162,7 +162,9 @@ const SkillsPickerPanel = memo(
 							bold
 						>
 							{isSelected ? '❯ ' : '  '}#{skill.id}{' '}
-							<Text dimColor>({skill.location})</Text>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								[{skill.location}]
+							</Text>
 						</Text>
 						<Box marginLeft={3} overflow="hidden">
 							<Text

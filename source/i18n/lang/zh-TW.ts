@@ -918,8 +918,7 @@ export const zhTW: TranslationKeys = {
 				sourceProject: '來源: 專案設定',
 				sourceGlobal: '來源: 全域設定',
 				sourceDefault: '來源: 預設（opt-in）',
-				invalid:
-					'參數無效。用法: /agents-inject [on|off|status]',
+				invalid: '參數無效。用法: /agents-inject [on|off|status]',
 			},
 			// 工具顯示模式命令訊息
 			toolDisplay: {
@@ -1517,6 +1516,13 @@ export const zhTW: TranslationKeys = {
 		saveSuccessMessage:
 			"自訂命令 '{name}' 儲存成功！\n類型: {type}\n位置: {location}\n你現在可以使用 /{name}",
 	},
+	panelChrome: {
+		loading: '載入中…',
+		escHint: '按 ESC 關閉',
+	},
+	todoTree: {
+		more: '更多',
+	},
 	chatScreen: {
 		// Header
 		headerTitle: '程式設計效率 x10!',
@@ -2104,11 +2110,11 @@ export const zhTW: TranslationKeys = {
 		noFilesConfirmHint: 'Enter 確認 · ESC 取消',
 	},
 	contextPanel: {
-		title: '上下文拆解',
-		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
-		loading: '正在載入上下文拆解…',
+		title: '上下文用量',
+		subtitle: 'system · tools · memory · skills · messages',
+		loading: '正在載入上下文用量…',
 		error: '失敗: {error}',
-		hint: '預設已展開可直接看 · ↑↓ 選擇 · Enter 展開 · A/C 全開/收起 · ESC 關閉',
+		hint: '↑↓ 選擇 · Enter/空白鍵 展開 · A 全開 · C 收起 · ESC 關閉',
 		apiLast: '上次 API prompt',
 		displayOnly: '計入sys',
 		truncated: '[截斷]',
@@ -2120,17 +2126,37 @@ export const zhTW: TranslationKeys = {
 		colBucket: '分桶',
 		colTokens: 'Tokens',
 		colShare: '佔比',
+		estimatedByCategory: '按類別估算用量',
+		autoCompactWindow: '自動壓縮視窗',
+		autoCompressOff: '自動壓縮關閉',
+		categories: {
+			system: 'System prompt',
+			tools: 'System tools',
+			memory: 'Memory files',
+			skills: 'Skills',
+			messages: 'Messages',
+			free: 'Free space',
+			autocompact: 'Autocompact buffer',
+		},
 		buckets: {
 			system: 'System prompt',
 			role: 'ROLE.md',
 			agents: 'AGENTS.md 注入',
 			hooks: 'Hooks 上下文',
-			tools: '工具定義',
-			messages: '對話歷史',
+			tools: 'System tools',
+			skills: 'Skills',
+			messages: 'Messages',
 		},
 	},
 	usagePanel: {
 		title: 'Token 使用統計',
+		overview: {
+			total: '總計',
+			cacheHit: '快取命中',
+			create: '建立',
+			models: '{count} 個模型',
+			modelsPlural: '{count} 個模型',
+		},
 		granularity: {
 			last24h: '最近24小時',
 			last7d: '最近7天',
