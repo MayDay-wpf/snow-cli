@@ -8,6 +8,8 @@ import {
 	type ContextBreakdown,
 	type ContextBucket,
 	type ContextBucketId,
+	type ContextCategory,
+	type ContextCategoryId,
 } from '../../../utils/core/contextBreakdown.js';
 
 function formatTokens(n: number): string {
@@ -29,6 +31,36 @@ function bar(
 	);
 }
 
+/** Dot-grid visualization similar to the screenshot reference. */
+function dotGrid(
+	categories: ContextCategory[],
+	totalDots: number,
+): Array<{id: ContextCategoryId; char: string}> {
+	const dots: Array<{id: ContextCategoryId; char: string}> = [];
+	const usable = categories.filter(c => c.tokens > 0 || c.synthetic);
+	let assigned = 0;
+	for (let i = 0; i < usable.length; i++) {
+		const cat = usable[i]!;
+		const isLast = i === usable.length - 1;
+		const count = isLast
+			? Math.max(0, totalDots - assigned)
+			: Math.max(
+					cat.percentage > 0 ? 1 : 0,
+					Math.round((cat.percentage / 100) * totalDots),
+			  );
+		const capped = Math.min(count, totalDots - assigned);
+		for (let d = 0; d < capped; d++) {
+			dots.push({id: cat.id, char: '●'});
+		}
+		assigned += capped;
+		if (assigned >= totalDots) break;
+	}
+	while (dots.length < totalDots) {
+		dots.push({id: 'free', char: '○'});
+	}
+	return dots;
+}
+
 function pctColor(
 	pct: number,
 	theme: {colors: {success: string; warning: string; error: string}},
@@ -38,9 +70,38 @@ function pctColor(
 	return theme.colors.error;
 }
 
-function bucketShare(bucket: ContextBucket, total: number): number {
-	if (bucket.displayOnly || total <= 0) return 0;
-	return (bucket.tokens / total) * 100;
+function categoryColor(
+	id: ContextCategoryId,
+	theme: {
+		colors: {
+			success: string;
+			warning: string;
+			error: string;
+			menuInfo: string;
+			menuSecondary: string;
+			cyan: string;
+			diffModified: string;
+		};
+	},
+): string {
+	switch (id) {
+		case 'system':
+			return theme.colors.menuInfo;
+		case 'tools':
+			return theme.colors.cyan;
+		case 'memory':
+			return theme.colors.warning;
+		case 'skills':
+			return theme.colors.diffModified || theme.colors.menuInfo;
+		case 'messages':
+			return theme.colors.success;
+		case 'free':
+			return theme.colors.menuSecondary;
+		case 'autocompact':
+			return theme.colors.warning;
+		default:
+			return theme.colors.menuSecondary;
+	}
 }
 
 function pad(text: string, width: number): string {
@@ -54,6 +115,12 @@ function padLeft(text: string, width: number): string {
 }
 
 type Row =
+	| {
+			kind: 'category';
+			key: string;
+			category: ContextCategory;
+			canExpand: boolean;
+	  }
 	| {
 			kind: 'bucket';
 			key: string;
@@ -87,14 +154,21 @@ export default function ContextPanel() {
 	// Only show selection cursor after user presses keys (view-first UX)
 	const [navActive, setNavActive] = useState(false);
 	const [scrollOffset, setScrollOffset] = useState(0);
-	// Default expand AGENTS/tools/ROLE so pure viewing shows content
+	// Default: collapsed summary (screenshot style). Expand on demand.
 	const [expanded, setExpanded] = useState<Record<string, boolean>>({
-		agents: true,
-		tools: true,
-		role: true,
 		system: false,
+		role: false,
+		agents: false,
 		hooks: false,
+		tools: false,
+		skills: false,
 		messages: false,
+		// category-level expand keys
+		'cat-system': false,
+		'cat-tools': false,
+		'cat-memory': false,
+		'cat-skills': false,
+		'cat-messages': false,
 	});
 
 	const tp = (t as any).contextPanel || {};
@@ -123,42 +197,80 @@ export default function ContextPanel() {
 		};
 	}, []);
 
+	const bucketById = useMemo(() => {
+		const map = new Map<ContextBucketId, ContextBucket>();
+		if (!data) return map;
+		for (const b of data.buckets) map.set(b.id, b);
+		return map;
+	}, [data]);
+
 	const rows: Row[] = useMemo(() => {
 		if (!data) return [];
 		const out: Row[] = [];
-		for (const bucket of data.buckets) {
-			const canExpand = Boolean(bucket.files && bucket.files.length > 0);
+
+		for (const category of data.categories) {
+			const sourceIds = category.sourceBucketIds || [];
+			const canExpand =
+				!category.synthetic &&
+				sourceIds.some(id => {
+					const b = bucketById.get(id);
+					return Boolean(b && ((b.files && b.files.length > 0) || b.meta));
+				});
 			out.push({
-				kind: 'bucket',
-				key: `b-${bucket.id}`,
-				bucket,
+				kind: 'category',
+				key: `c-${category.id}`,
+				category,
 				canExpand,
 			});
-			const isOpen = expanded[bucket.id] ?? false;
-			if (canExpand && isOpen && bucket.files) {
-				if (bucket.meta) {
+
+			const catOpen = expanded[`cat-${category.id}`] ?? false;
+			if (!canExpand || !catOpen) continue;
+
+			for (const bucketId of sourceIds) {
+				const bucket = bucketById.get(bucketId);
+				if (!bucket) continue;
+				const bucketCanExpand = Boolean(
+					bucket.files && bucket.files.length > 0,
+				);
+				out.push({
+					kind: 'bucket',
+					key: `b-${bucket.id}`,
+					bucket,
+					canExpand: bucketCanExpand,
+				});
+
+				const isOpen = expanded[bucket.id] ?? false;
+				if (bucketCanExpand && isOpen && bucket.files) {
+					if (bucket.meta) {
+						out.push({
+							kind: 'meta',
+							key: `m-${bucket.id}`,
+							text: bucket.meta,
+						});
+					}
+					for (const file of bucket.files) {
+						out.push({
+							kind: 'file',
+							key: `f-${bucket.id}-${file.label}`,
+							bucketId: bucket.id,
+							label: file.label,
+							tokens: file.tokens,
+							included: file.included,
+							truncated: file.truncated,
+							note: file.note,
+						});
+					}
+				} else if (!isOpen && bucket.meta) {
 					out.push({
 						kind: 'meta',
-						key: `m-${bucket.id}`,
-						text: bucket.meta,
-					});
-				}
-				for (const file of bucket.files) {
-					out.push({
-						kind: 'file',
-						key: `f-${bucket.id}-${file.label}`,
-						bucketId: bucket.id,
-						label: file.label,
-						tokens: file.tokens,
-						included: file.included,
-						truncated: file.truncated,
-						note: file.note,
+						key: `m-${bucket.id}-closed`,
+						text: bucket.meta + (bucket.detail ? ` · ${bucket.detail}` : ''),
 					});
 				}
 			}
 		}
 		return out;
-	}, [data, expanded]);
+	}, [data, expanded, bucketById]);
 
 	// Keep cursor in range when rows change
 	useEffect(() => {
@@ -168,16 +280,12 @@ export default function ContextPanel() {
 	}, [rows.length, cursor]);
 
 	const panelWidth = Math.min(Math.max(terminalWidth - 4, 56), 96);
-	const labelWidth = 20;
-	const tokenWidth = 7;
+	const labelWidth = 22;
+	const tokenWidth = 8;
 	const pctWidth = 7;
-	const barWidth = Math.max(
-		10,
-		Math.min(28, panelWidth - labelWidth - tokenWidth - pctWidth - 10),
-	);
 
-	// Header takes ~6 lines; leave room for footer hint
-	const visibleRows = Math.max(8, Math.min(terminalHeight - 12, 22));
+	// Header takes ~10 lines (title + model + grid + footer); leave room for hint
+	const visibleRows = Math.max(8, Math.min(terminalHeight - 16, 22));
 
 	// Keep cursor visible in scroll window only when navigating
 	useEffect(() => {
@@ -188,7 +296,7 @@ export default function ContextPanel() {
 		}
 	}, [cursor, scrollOffset, visibleRows, navActive]);
 
-	const toggleBucket = (id: string) => {
+	const toggleKey = (id: string) => {
 		setExpanded(prev => ({
 			...prev,
 			[id]: !Boolean(prev[id]),
@@ -198,6 +306,9 @@ export default function ContextPanel() {
 	const expandAll = (open: boolean) => {
 		if (!data) return;
 		const next: Record<string, boolean> = {};
+		for (const c of data.categories) {
+			if (!c.synthetic) next[`cat-${c.id}`] = open;
+		}
 		for (const b of data.buckets) {
 			if (b.files && b.files.length > 0) next[b.id] = open;
 		}
@@ -220,22 +331,27 @@ export default function ContextPanel() {
 			return;
 		}
 		if (key.return || input === ' ') {
-			// Without prior navigation: toggle the first expandable bucket under viewport
 			if (!navActive) {
 				const firstExpandable = rows.find(
-					r => r.kind === 'bucket' && r.canExpand,
+					r =>
+						(r.kind === 'category' && r.canExpand) ||
+						(r.kind === 'bucket' && r.canExpand),
 				);
-				if (firstExpandable && firstExpandable.kind === 'bucket') {
-					toggleBucket(firstExpandable.bucket.id);
+				if (firstExpandable?.kind === 'category') {
+					toggleKey(`cat-${firstExpandable.category.id}`);
+				} else if (firstExpandable?.kind === 'bucket') {
+					toggleKey(firstExpandable.bucket.id);
 				}
 				return;
 			}
 			const row = rows[cursor];
 			if (!row) return;
-			if (row.kind === 'bucket' && row.canExpand) {
-				toggleBucket(row.bucket.id);
+			if (row.kind === 'category' && row.canExpand) {
+				toggleKey(`cat-${row.category.id}`);
+			} else if (row.kind === 'bucket' && row.canExpand) {
+				toggleKey(row.bucket.id);
 			} else if (row.kind === 'file') {
-				toggleBucket(row.bucketId);
+				toggleKey(row.bucketId);
 			}
 			return;
 		}
@@ -248,10 +364,7 @@ export default function ContextPanel() {
 			return;
 		}
 		if (key.tab) {
-			// Toggle all expandable sections
-			const anyOpen = data?.buckets.some(
-				b => (b.files?.length ?? 0) > 0 && (expanded[b.id] ?? false),
-			);
+			const anyOpen = Object.values(expanded).some(Boolean);
 			expandAll(!anyOpen);
 		}
 	});
@@ -260,7 +373,7 @@ export default function ContextPanel() {
 		return (
 			<Box borderStyle="round" borderColor={theme.colors.menuInfo} paddingX={2}>
 				<Text color={theme.colors.menuSecondary}>
-					{tp.loading || 'Loading context breakdown…'}
+					{tp.loading || 'Loading context usage…'}
 				</Text>
 			</Box>
 		);
@@ -290,6 +403,20 @@ export default function ContextPanel() {
 			? tp.precise || 'precise'
 			: tp.estimate || 'estimate';
 
+	const gridCols = Math.min(20, Math.max(12, Math.floor((panelWidth - 6) / 2)));
+	const gridRows = 4;
+	const gridDots = dotGrid(data.categories, gridCols * gridRows);
+
+	const categoryLabel = (cat: ContextCategory) => {
+		const fromI18n = tp.categories?.[cat.id];
+		if (fromI18n) return fromI18n;
+		return cat.label;
+	};
+
+	const bucketLabel = (bucket: ContextBucket) => {
+		return (tp.buckets && tp.buckets[bucket.id]) || bucket.label;
+	};
+
 	return (
 		<Box
 			borderStyle="round"
@@ -302,24 +429,50 @@ export default function ContextPanel() {
 			{/* Title */}
 			<Box>
 				<Text color={theme.colors.menuInfo} bold>
-					{tp.title || 'Context Breakdown'}
+					/context
 				</Text>
 				<Text color={theme.colors.menuSecondary} dimColor>
+					{'  '}
+					{tp.title || 'Context Usage'}
 					{'  '}[{estimateLabel}]
 				</Text>
 			</Box>
 
-			{/* Window usage */}
+			{/* Model + used/max */}
 			<Box marginTop={1}>
+				<Text color={theme.colors.menuInfo} bold>
+					{data.modelName}
+				</Text>
+			</Box>
+			<Box>
 				<Text color={headerColor} bold>
-					{padLeft(data.percentage.toFixed(1) + '%', 6)}
+					{formatTokens(data.totalEstimatedTokens)}/
+					{formatTokens(data.maxContextTokens)} tokens
 				</Text>
-				<Text color={headerColor}> {bar(data.percentage, windowBarWidth)}</Text>
-				<Text color={theme.colors.menuSecondary}>
-					{' '}
-					{formatTokens(data.totalEstimatedTokens)} /{' '}
-					{formatTokens(data.maxContextTokens)}
+				<Text color={headerColor}>
+					{'  '}({data.percentage.toFixed(0)}%)
 				</Text>
+			</Box>
+			<Box>
+				<Text color={headerColor}>{bar(data.percentage, windowBarWidth)}</Text>
+			</Box>
+
+			{/* Dot grid */}
+			<Box marginTop={1} flexDirection="column">
+				{Array.from({length: gridRows}, (_, rowIdx) => (
+					<Box key={`grid-row-${rowIdx}`}>
+						{gridDots
+							.slice(rowIdx * gridCols, rowIdx * gridCols + gridCols)
+							.map((dot, colIdx) => (
+								<Text
+									key={`d-${rowIdx}-${colIdx}`}
+									color={categoryColor(dot.id, theme)}
+								>
+									{dot.char}{' '}
+								</Text>
+							))}
+					</Box>
+				))}
 			</Box>
 
 			{typeof data.apiPromptTokens === 'number' && (
@@ -332,22 +485,12 @@ export default function ContextPanel() {
 				</Text>
 			)}
 
-			{/* Column header */}
+			{/* Category legend header */}
 			<Box marginTop={1}>
 				<Text color={theme.colors.menuSecondary} dimColor>
-					{pad(tp.colBucket || 'Bucket', labelWidth)} {pad('', barWidth)}{' '}
-					{padLeft(tp.colTokens || 'Tokens', tokenWidth)}{' '}
-					{padLeft(tp.colShare || 'Share', pctWidth)}
+					{tp.estimatedByCategory || 'Estimated usage by category'}
 				</Text>
 			</Box>
-			<Text color={theme.colors.menuSecondary} dimColor>
-				{'─'.repeat(
-					Math.min(
-						panelWidth - 4,
-						labelWidth + barWidth + tokenWidth + pctWidth + 4,
-					),
-				)}
-			</Text>
 
 			{hiddenAbove > 0 && (
 				<Text color={theme.colors.menuSecondary} dimColor>
@@ -400,52 +543,52 @@ export default function ContextPanel() {
 					);
 				}
 
-				// bucket row
-				const bucket = row.bucket;
-				const share = bucketShare(bucket, data.totalEstimatedTokens);
-				const ofWindow =
-					data.maxContextTokens > 0
-						? (bucket.tokens / data.maxContextTokens) * 100
-						: 0;
-				const color = bucket.displayOnly
-					? theme.colors.menuSecondary
-					: selected
-					? theme.colors.menuInfo
-					: pctColor(ofWindow, theme);
-				const label = (tp.buckets && tp.buckets[bucket.id]) || bucket.label;
-				const isOpen = expanded[bucket.id] ?? false;
-				const chevron = row.canExpand ? (isOpen ? '▼' : '▶') : ' ';
-				const shareText = bucket.displayOnly
-					? tp.displayOnly || 'in sys'
-					: `${share.toFixed(1)}%`;
-
-				return (
-					<Box key={row.key} flexDirection="column">
-						<Box>
-							<Text color={color} bold={selected || !bucket.displayOnly}>
-								{marker}
-								{chevron} {pad(label, labelWidth - 2)}
-							</Text>
-							<Text color={color}>
-								{bar(bucket.displayOnly ? 0 : share, barWidth)}
-							</Text>
-							<Text color={color}>
-								{' '}
-								{padLeft(formatTokens(bucket.tokens), tokenWidth)}
+				if (row.kind === 'bucket') {
+					const bucket = row.bucket;
+					const isOpen = expanded[bucket.id] ?? false;
+					const chevron = row.canExpand ? (isOpen ? '▼' : '▶') : ' ';
+					const color = bucket.displayOnly
+						? theme.colors.menuSecondary
+						: selected
+						? theme.colors.menuInfo
+						: theme.colors.menuSecondary;
+					return (
+						<Box key={row.key}>
+							<Text color={color} bold={selected}>
+								{marker} {chevron} {bucketLabel(bucket)}
 							</Text>
 							<Text color={theme.colors.menuSecondary} dimColor>
-								{' '}
-								{padLeft(shareText, pctWidth)}
+								{'  '}
+								{formatTokens(bucket.tokens)}
+								{bucket.displayOnly ? ` · ${tp.displayOnly || 'in sys'}` : ''}
 							</Text>
 						</Box>
-						{/* Compact meta under closed buckets only when not expanded */}
-						{!isOpen && bucket.meta && (
-							<Text color={theme.colors.menuSecondary} dimColor>
-								{'    '}
-								{bucket.meta}
-								{bucket.detail ? ` · ${bucket.detail}` : ''}
-							</Text>
-						)}
+					);
+				}
+
+				// category row (screenshot-style)
+				const cat = row.category;
+				const color = selected
+					? theme.colors.menuInfo
+					: categoryColor(cat.id, theme);
+				const isOpen = expanded[`cat-${cat.id}`] ?? false;
+				const chevron = row.canExpand ? (isOpen ? '▼' : '▶') : ' ';
+				const icon =
+					cat.id === 'free' ? '○' : cat.id === 'autocompact' ? '◌' : '●';
+
+				return (
+					<Box key={row.key}>
+						<Text color={color} bold={selected || !cat.synthetic}>
+							{marker}
+							{chevron} {icon} {pad(categoryLabel(cat), labelWidth - 4)}
+						</Text>
+						<Text color={color}>
+							{padLeft(formatTokens(cat.tokens), tokenWidth)}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{' '}
+							{padLeft(`${cat.percentage.toFixed(1)}%`, pctWidth)}
+						</Text>
 					</Box>
 				);
 			})}
@@ -456,7 +599,15 @@ export default function ContextPanel() {
 				</Text>
 			)}
 
-			<Box marginTop={1}>
+			{/* Footer: auto-compact window */}
+			<Box marginTop={1} flexDirection="column">
+				<Text color={theme.colors.menuSecondary} dimColor>
+					{(tp.autoCompactWindow || 'Auto-compact window') + ': '}
+					{formatTokens(data.maxContextTokens)} tokens
+					{data.enableAutoCompress
+						? ` · threshold ${data.autoCompressThreshold}%`
+						: ` · ${tp.autoCompressOff || 'off'}`}
+				</Text>
 				<Text color={theme.colors.menuSecondary} dimColor>
 					{tp.hint ||
 						'↑↓ select · Enter/Space expand · A all · C collapse · ESC close'}

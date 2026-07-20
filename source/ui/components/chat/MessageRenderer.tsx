@@ -478,12 +478,14 @@ function MessageRendererImpl({
 											const branch = isLast ? '└─' : '├─';
 											return (
 												<Box key={ti}>
-													<Text color="magenta" dimColor>
+													<Text color={theme.colors.menuInfo} dimColor>
 														{branch}{' '}
 													</Text>
-													<Text color="magenta">{target.agentName}</Text>
+													<Text color={theme.colors.menuInfo}>
+														{target.agentName}
+													</Text>
 													{target.promptSnippet ? (
-														<Text color="gray" dimColor>
+														<Text color={theme.colors.menuSecondary} dimColor>
 															{' '}
 															{target.promptSnippet}
 														</Text>
@@ -625,12 +627,12 @@ function MessageRendererImpl({
 																	'\u2591'.repeat(empty);
 																const barColor =
 																	pct >= 80
-																		? 'red'
+																		? theme.colors.error
 																		: pct >= 65
-																		? 'yellow'
+																		? theme.colors.warning
 																		: pct >= 50
-																		? 'cyan'
-																		: 'gray';
+																		? theme.colors.cyan
+																		: theme.colors.menuSecondary;
 																return (
 																	<Text color={barColor} dimColor>
 																		{'└─ Context: '}
@@ -748,11 +750,17 @@ function MessageRendererImpl({
 												))}
 											</Box>
 										)}
+									{/* DiffViewer for create/edit: full mode only (pending + success).
+                                                                    Success attaches editDiffData as toolCall.arguments; without success support,
+                                                                    full mode suppresses ToolResultPreview (has diff) but never shows DiffViewer.
+                                                                    compact = title + summary only; hidden = no tools. Do not invent a 4th tier. */}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
 										!message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.content &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.messageStatus === 'success') &&
+										toolDisplayMode === 'full' && (
 											<Box marginTop={1}>
 												<DiffViewer
 													newContent={message.toolCall.arguments.content}
@@ -765,7 +773,9 @@ function MessageRendererImpl({
 											message.toolCall.name === 'filesystem-replaceedit') &&
 										typeof message.toolCall.arguments.oldContent === 'string' &&
 										typeof message.toolCall.arguments.newContent === 'string' &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.messageStatus === 'success') &&
+										toolDisplayMode === 'full' && (
 											<Box marginTop={1}>
 												<DiffViewer
 													oldContent={message.toolCall.arguments.oldContent}
@@ -783,14 +793,16 @@ function MessageRendererImpl({
 												/>
 											</Box>
 										)}
-									{/* Show batch edit results (pending only — success uses tool result) */}
+									{/* Batch edit results — pending preview + success final diff */}
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
 											message.toolCall.name === 'filesystem-replaceedit') &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.messageStatus === 'success') &&
+										toolDisplayMode === 'full' && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {
@@ -831,13 +843,15 @@ function MessageRendererImpl({
 												)}
 											</Box>
 										)}
-									{/* Show batch create results (pending only — success uses tool result) */}
+									{/* Batch create results — pending preview + success final diff */}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.messageStatus === 'success') &&
+										toolDisplayMode === 'full' && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {

@@ -1,8 +1,8 @@
 import React, {useState, useMemo} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {useI18n} from '../../../i18n/index.js';
-
-const MAX_VISIBLE_LINES = 10;
+import {useTheme} from '../../contexts/ThemeContext.js';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 
 // Get platform-specific paste key
 const getPasteKey = () => {
@@ -10,23 +10,47 @@ const getPasteKey = () => {
 };
 
 type HelpLine =
-	| {type: 'title'; text: string; color: string}
+	| {
+			type: 'title';
+			text: string;
+			colorKey: 'info' | 'warning' | 'success' | 'cyan' | 'menu';
+	  }
 	| {type: 'item'; text: string; dim?: boolean}
 	| {type: 'spacer'};
 
 export default function HelpPanel() {
 	const pasteKey = getPasteKey();
 	const {t} = useI18n();
+	const {theme} = useTheme();
+	const {rows: terminalHeight} = useTerminalSize();
+
+	const colorFor = (
+		key: 'info' | 'warning' | 'success' | 'cyan' | 'menu',
+	): string => {
+		switch (key) {
+			case 'warning':
+				return theme.colors.warning;
+			case 'success':
+				return theme.colors.success;
+			case 'cyan':
+				return theme.colors.cyan;
+			case 'menu':
+				return theme.colors.menuInfo;
+			case 'info':
+			default:
+				return theme.colors.menuInfo;
+		}
+	};
 
 	const lines: HelpLine[] = useMemo(() => {
 		const result: HelpLine[] = [];
-		result.push({type: 'title', text: t.helpPanel.title, color: 'cyan'});
+		result.push({type: 'title', text: t.helpPanel.title, colorKey: 'info'});
 		result.push({type: 'spacer'});
 
 		result.push({
 			type: 'title',
 			text: t.helpPanel.textEditingTitle,
-			color: 'yellow',
+			colorKey: 'warning',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.deleteToStart}`});
 		result.push({type: 'item', text: ` • ${t.helpPanel.deleteToEnd}`});
@@ -41,7 +65,7 @@ export default function HelpPanel() {
 		result.push({
 			type: 'title',
 			text: t.helpPanel.readlineTitle,
-			color: 'cyan',
+			colorKey: 'cyan',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.moveToLineStart}`});
 		result.push({type: 'item', text: ` • ${t.helpPanel.moveToLineEnd}`});
@@ -56,7 +80,7 @@ export default function HelpPanel() {
 		result.push({
 			type: 'title',
 			text: t.helpPanel.quickAccessTitle,
-			color: 'green',
+			colorKey: 'success',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.insertFiles}`});
 		result.push({type: 'item', text: ` • ${t.helpPanel.searchContent}`});
@@ -67,7 +91,7 @@ export default function HelpPanel() {
 		result.push({
 			type: 'title',
 			text: t.helpPanel.bashModeTitle,
-			color: 'yellow',
+			colorKey: 'warning',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.bashModeTrigger}`});
 		result.push({
@@ -80,7 +104,7 @@ export default function HelpPanel() {
 		result.push({
 			type: 'title',
 			text: t.helpPanel.navigationTitle,
-			color: 'blue',
+			colorKey: 'menu',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.navigateHistory}`});
 		result.push({type: 'item', text: ` • ${t.helpPanel.selectItem}`});
@@ -91,7 +115,7 @@ export default function HelpPanel() {
 		result.push({
 			type: 'title',
 			text: t.helpPanel.tipsTitle,
-			color: 'magenta',
+			colorKey: 'info',
 		});
 		result.push({type: 'item', text: ` • ${t.helpPanel.tipUseHelp}`});
 		result.push({type: 'item', text: ` • ${t.helpPanel.tipShowCommands}`});
@@ -100,7 +124,11 @@ export default function HelpPanel() {
 		return result;
 	}, [t, pasteKey]);
 
-	const maxVisible = Math.min(lines.length, MAX_VISIBLE_LINES);
+	// Adaptive height: leave room for chrome + scroll hints
+	const maxVisible = Math.max(
+		8,
+		Math.min(lines.length, Math.max(10, terminalHeight - 8)),
+	);
 	const canScroll = lines.length > maxVisible;
 
 	const [offset, setOffset] = useState(0);
@@ -132,13 +160,17 @@ export default function HelpPanel() {
 		}
 		if (line.type === 'title') {
 			return (
-				<Text key={`line-${index}`} bold color={line.color}>
+				<Text key={`line-${index}`} bold color={colorFor(line.colorKey)}>
 					{line.text}
 				</Text>
 			);
 		}
 		return (
-			<Text key={`line-${index}`} dimColor={line.dim}>
+			<Text
+				key={`line-${index}`}
+				color={theme.colors.menuSecondary}
+				dimColor={line.dim}
+			>
 				{line.text}
 			</Text>
 		);
@@ -147,19 +179,19 @@ export default function HelpPanel() {
 	return (
 		<Box flexDirection="column" paddingX={1}>
 			{canScroll && hiddenAbove > 0 && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					↑ {t.commandPanel.moreAbove.replace('{count}', String(hiddenAbove))}
 				</Text>
 			)}
 			{visibleLines.map((line, idx) => renderLine(line, clampedOffset + idx))}
 			{canScroll && hiddenBelow > 0 && (
-				<Text color="gray" dimColor>
+				<Text color={theme.colors.menuSecondary} dimColor>
 					↓ {t.commandPanel.moreBelow.replace('{count}', String(hiddenBelow))}
 				</Text>
 			)}
 			{canScroll && (
 				<Box marginTop={1}>
-					<Text color="gray" dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.commandPanel.scrollHint}
 					</Text>
 				</Box>

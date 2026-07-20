@@ -423,7 +423,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -447,7 +447,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -466,7 +466,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -539,7 +539,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -561,7 +561,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -586,7 +586,7 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> Loading...
+									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}

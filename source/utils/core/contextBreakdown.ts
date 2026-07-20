@@ -8,7 +8,10 @@
  * so totals are not double-counted.
  */
 
-import {getSnowConfig} from '../config/apiConfig.js';
+import {
+	DEFAULT_AUTO_COMPRESS_THRESHOLD,
+	getSnowConfig,
+} from '../config/apiConfig.js';
 import {
 	getPlanMode,
 	getTeamMode,
@@ -24,13 +27,28 @@ import {
 	type RoleSource,
 } from '../../prompt/shared/promptHelpers.js';
 
+/** Expandable detail buckets (ROLE is display-only; already inside system). */
 export type ContextBucketId =
 	| 'system'
 	| 'role'
 	| 'agents'
 	| 'hooks'
 	| 'tools'
+	| 'skills'
 	| 'messages';
+
+/**
+ * Summary categories shown in the /context overview (screenshot-style).
+ * free / autocompact are synthetic residual buckets (not double-counted in used).
+ */
+export type ContextCategoryId =
+	| 'system'
+	| 'tools'
+	| 'memory'
+	| 'skills'
+	| 'messages'
+	| 'free'
+	| 'autocompact';
 
 export interface ContextFileItem {
 	label: string;
@@ -57,12 +75,33 @@ export interface ContextBucket {
 	detail?: string;
 }
 
+export interface ContextCategory {
+	id: ContextCategoryId;
+	label: string;
+	tokens: number;
+	/** Share of the full context window (0-100). */
+	percentage: number;
+	/** Synthetic residual row (free space / autocompact buffer). */
+	synthetic?: boolean;
+	/** Maps to expandable detail bucket(s). */
+	sourceBucketIds?: ContextBucketId[];
+}
+
 export interface ContextBreakdown {
+	modelName: string;
 	maxContextTokens: number;
 	totalEstimatedTokens: number;
 	percentage: number;
+	freeTokens: number;
+	freePercentage: number;
+	autocompactBufferTokens: number;
+	autocompactBufferPercentage: number;
+	autoCompressThreshold: number;
+	enableAutoCompress: boolean;
 	apiPromptTokens?: number;
 	apiPercentage?: number;
+	/** Screenshot-style category summary (includes free + autocompact). */
+	categories: ContextCategory[];
 	buckets: ContextBucket[];
 	mode: {
 		planMode: boolean;
@@ -73,6 +112,14 @@ export interface ContextBreakdown {
 	/** 'fast' = chars/4; 'precise' = tiktoken when available. */
 	estimateMode: 'fast' | 'precise';
 	generatedAt: number;
+}
+
+function isSkillToolName(name: string): boolean {
+	return name === 'skill-execute' || name.startsWith('skill-');
+}
+
+function toolNameOf(tool: {name?: string; function?: {name?: string}}): string {
+	return tool?.function?.name || tool?.name || '';
 }
 
 type TokenCounter = (text: string) => number;
@@ -277,63 +324,93 @@ export async function buildContextBreakdown(options?: {
 		const hooksText = pendingHooks?.trim() ?? '';
 		const hooksTokens = count(hooksText);
 
-		// --- Tool definitions ---
-		// Start tools fetch early so it overlaps with other work above.
+		// --- Tool definitions (split skills out so they are not double-counted) ---
 		// Never zero tools just because the first open is slow — wait for real cache.
 		let toolsJson = '[]';
+		let skillsJson = '[]';
 		let toolCount = 0;
+		let skillCount = 0;
 		let toolsTokens = 0;
+		let skillsTokens = 0;
 		const toolItems: ContextFileItem[] = [];
+		const skillItems: ContextFileItem[] = [];
 		try {
 			const tools = await toolsPromise;
-			toolCount = tools.length;
+			const regularTools: any[] = [];
+			const skillTools: any[] = [];
+			for (const tool of tools) {
+				const name = toolNameOf(tool as any);
+				if (isSkillToolName(name)) skillTools.push(tool);
+				else regularTools.push(tool);
+			}
+			toolCount = regularTools.length;
+			skillCount = skillTools.length;
+
 			// Cap stringify work for very large tool lists
 			const MAX_TOOLS_FOR_JSON = 120;
 			const toolsForJson =
-				tools.length > MAX_TOOLS_FOR_JSON
-					? tools.slice(0, MAX_TOOLS_FOR_JSON)
-					: tools;
+				regularTools.length > MAX_TOOLS_FOR_JSON
+					? regularTools.slice(0, MAX_TOOLS_FOR_JSON)
+					: regularTools;
 			toolsJson = JSON.stringify(toolsForJson);
 			const sampleTokens = count(toolsJson);
 			toolsTokens =
-				tools.length > MAX_TOOLS_FOR_JSON && toolsForJson.length > 0
-					? Math.round((sampleTokens / toolsForJson.length) * tools.length)
+				regularTools.length > MAX_TOOLS_FOR_JSON && toolsForJson.length > 0
+					? Math.round(
+							(sampleTokens / toolsForJson.length) * regularTools.length,
+					  )
 					: sampleTokens;
 
+			// Skills schema is usually a single skill-execute tool with a large description.
+			skillsJson = skillTools.length > 0 ? JSON.stringify(skillTools) : '[]';
+			skillsTokens = skillTools.length > 0 ? count(skillsJson) : 0;
+
+			const pushToolRows = (
+				list: any[],
+				out: ContextFileItem[],
+				maxRows: number,
+				moreLabel: string,
+			) => {
+				for (let i = 0; i < Math.min(list.length, maxRows); i++) {
+					// MCPTool is OpenAI-style: {type:'function', function:{name,description,parameters}}
+					const tool = list[i] as {
+						name?: string;
+						description?: string;
+						function?: {name?: string; description?: string};
+					};
+					const name = tool?.function?.name || tool?.name || `tool-${i + 1}`;
+					const description =
+						tool?.function?.description || tool?.description || '';
+					const desc =
+						typeof description === 'string' ? description.slice(0, 48) : '';
+					const raw = JSON.stringify(tool ?? {});
+					out.push({
+						label: name,
+						chars: raw.length,
+						tokens: estimateTokensFast(raw),
+						included: true,
+						note: desc || undefined,
+					});
+				}
+				if (list.length > maxRows) {
+					out.push({
+						label: `… +${list.length - maxRows} ${moreLabel}`,
+						chars: 0,
+						tokens: 0,
+						included: true,
+						note: 'truncated list',
+					});
+				}
+			};
+
 			const MAX_TOOL_ROWS = 40;
-			for (let i = 0; i < Math.min(tools.length, MAX_TOOL_ROWS); i++) {
-				// MCPTool is OpenAI-style: {type:'function', function:{name,description,parameters}}
-				const tool = tools[i] as {
-					name?: string;
-					description?: string;
-					function?: {name?: string; description?: string};
-				};
-				const name = tool?.function?.name || tool?.name || `tool-${i + 1}`;
-				const description =
-					tool?.function?.description || tool?.description || '';
-				const desc =
-					typeof description === 'string' ? description.slice(0, 48) : '';
-				const raw = JSON.stringify(tool ?? {});
-				toolItems.push({
-					label: name,
-					chars: raw.length,
-					tokens: estimateTokensFast(raw),
-					included: true,
-					note: desc || undefined,
-				});
-			}
-			if (tools.length > MAX_TOOL_ROWS) {
-				toolItems.push({
-					label: `… +${tools.length - MAX_TOOL_ROWS} more tools`,
-					chars: 0,
-					tokens: 0,
-					included: true,
-					note: 'truncated list',
-				});
-			}
+			pushToolRows(regularTools, toolItems, MAX_TOOL_ROWS, 'more tools');
+			pushToolRows(skillTools, skillItems, MAX_TOOL_ROWS, 'more skills');
 		} catch {
 			toolsJson = '[]';
+			skillsJson = '[]';
 			toolsTokens = 0;
+			skillsTokens = 0;
 		}
 
 		// --- Conversation messages ---
@@ -463,7 +540,7 @@ export async function buildContextBreakdown(options?: {
 			},
 			{
 				id: 'tools',
-				label: 'Tool definitions',
+				label: 'System tools',
 				chars: toolsJson.length,
 				tokens: toolsTokens,
 				files: toolItems,
@@ -473,8 +550,20 @@ export async function buildContextBreakdown(options?: {
 				detail: toolItems.length ? 'expand for names' : undefined,
 			},
 			{
+				id: 'skills',
+				label: 'Skills',
+				chars: skillsJson.length,
+				tokens: skillsTokens,
+				files: skillItems,
+				meta:
+					skillCount > 0
+						? `${skillCount} skill tool(s) · schema only`
+						: 'no skill tools loaded',
+				detail: skillItems.length ? 'SKILL.md body loads on invoke' : undefined,
+			},
+			{
 				id: 'messages',
-				label: 'Conversation',
+				label: 'Messages',
 				chars: messagesText.length,
 				tokens: messagesTokens,
 				files: messageItems,
@@ -494,6 +583,83 @@ export async function buildContextBreakdown(options?: {
 				: 0,
 		);
 
+		const autoCompressThreshold =
+			config.autoCompressThreshold ?? DEFAULT_AUTO_COMPRESS_THRESHOLD;
+		const enableAutoCompress = config.enableAutoCompress !== false;
+		// Reserved headroom: from threshold% to 100% of the window.
+		// e.g. threshold 80% on 200k → 40k buffer kept for safe auto-compact.
+		const autocompactBufferTokens = enableAutoCompress
+			? Math.max(
+					0,
+					Math.floor((maxContextTokens * (100 - autoCompressThreshold)) / 100),
+			  )
+			: 0;
+		const freeTokens = Math.max(0, maxContextTokens - totalEstimatedTokens);
+		// Free space excludes the reserved autocompact buffer when buffer fits.
+		const freeUsableTokens = Math.max(0, freeTokens - autocompactBufferTokens);
+		const freePercentage =
+			maxContextTokens > 0 ? (freeUsableTokens / maxContextTokens) * 100 : 0;
+		const autocompactBufferPercentage =
+			maxContextTokens > 0
+				? (autocompactBufferTokens / maxContextTokens) * 100
+				: 0;
+
+		const windowPct = (tokens: number) =>
+			maxContextTokens > 0 ? (tokens / maxContextTokens) * 100 : 0;
+
+		const memoryTokens = agentsTokens + hooksTokens;
+		const categories: ContextCategory[] = [
+			{
+				id: 'system',
+				label: 'System prompt',
+				tokens: systemTokens,
+				percentage: windowPct(systemTokens),
+				sourceBucketIds: ['system', 'role'],
+			},
+			{
+				id: 'tools',
+				label: 'System tools',
+				tokens: toolsTokens,
+				percentage: windowPct(toolsTokens),
+				sourceBucketIds: ['tools'],
+			},
+			{
+				id: 'memory',
+				label: 'Memory files',
+				tokens: memoryTokens,
+				percentage: windowPct(memoryTokens),
+				sourceBucketIds: ['agents', 'hooks'],
+			},
+			{
+				id: 'skills',
+				label: 'Skills',
+				tokens: skillsTokens,
+				percentage: windowPct(skillsTokens),
+				sourceBucketIds: ['skills'],
+			},
+			{
+				id: 'messages',
+				label: 'Messages',
+				tokens: messagesTokens,
+				percentage: windowPct(messagesTokens),
+				sourceBucketIds: ['messages'],
+			},
+			{
+				id: 'free',
+				label: 'Free space',
+				tokens: freeUsableTokens,
+				percentage: freePercentage,
+				synthetic: true,
+			},
+			{
+				id: 'autocompact',
+				label: 'Autocompact buffer',
+				tokens: autocompactBufferTokens,
+				percentage: autocompactBufferPercentage,
+				synthetic: true,
+			},
+		];
+
 		// Optional: last API-reported usage for comparison
 		let apiPromptTokens: number | undefined;
 		let apiPercentage: number | undefined;
@@ -510,12 +676,25 @@ export async function buildContextBreakdown(options?: {
 			apiPercentage = Math.min(100, (apiPromptTokens / maxContextTokens) * 100);
 		}
 
+		const modelName =
+			(config.advancedModel && config.advancedModel.trim()) ||
+			(config.basicModel && config.basicModel.trim()) ||
+			'unknown model';
+
 		return {
+			modelName,
 			maxContextTokens,
 			totalEstimatedTokens,
 			percentage,
+			freeTokens: freeUsableTokens,
+			freePercentage,
+			autocompactBufferTokens,
+			autocompactBufferPercentage,
+			autoCompressThreshold,
+			enableAutoCompress,
 			apiPromptTokens,
 			apiPercentage,
+			categories,
 			buckets,
 			mode,
 			estimateMode: counter.mode,

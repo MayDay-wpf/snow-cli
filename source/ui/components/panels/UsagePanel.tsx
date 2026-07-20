@@ -4,6 +4,7 @@ import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import type {Theme} from '../../themes/index.js';
+import {formatTokens as sharedFormatTokens} from '../../utils/formatTokens.js';
 import {
 	loadUsageData,
 	filterByPeriod,
@@ -133,17 +134,7 @@ function getModelShortName(modelName: string, maxLength = 20): string {
 }
 
 function formatTokens(tokens: number, compact = false): string {
-	if (tokens >= 1000000) {
-		return compact
-			? `${(tokens / 1000000).toFixed(1)}M`
-			: `${(tokens / 1000000).toFixed(2)}M`;
-	}
-	if (tokens >= 1000) {
-		return compact
-			? `${Math.round(tokens / 1000)}K`
-			: `${(tokens / 1000).toFixed(1)}K`;
-	}
-	return String(tokens);
+	return sharedFormatTokens(tokens, compact);
 }
 
 function renderStackedBarChart(
@@ -490,6 +481,24 @@ export default function UsagePanel() {
 		);
 	}
 
+	const modelCount = stats.models.size;
+	const totalCacheRead = Array.from(stats.models.values()).reduce(
+		(sum, s) => sum + s.cacheRead,
+		0,
+	);
+	const totalCacheCreate = Array.from(stats.models.values()).reduce(
+		(sum, s) => sum + s.cacheCreation,
+		0,
+	);
+	const totalIO = Array.from(stats.models.values()).reduce(
+		(sum, s) => sum + s.input + s.output,
+		0,
+	);
+	const cacheHitPct =
+		totalIO + totalCacheRead > 0
+			? (totalCacheRead / (totalIO + totalCacheRead)) * 100
+			: 0;
+
 	return (
 		<Box
 			borderColor={theme.colors.menuInfo}
@@ -512,6 +521,46 @@ export default function UsagePanel() {
 					{t.usagePanel.tabToSwitch}
 				</Text>
 			</Box>
+
+			{/* Overview summary card */}
+			{modelCount > 0 && (
+				<Box marginBottom={1} flexDirection="column">
+					<Box>
+						<Text color={theme.colors.menuInfo} bold>
+							{formatTokens(stats.grandTotal)}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{' '}
+							{t.usagePanel.overview.total}
+						</Text>
+						<Text color={theme.colors.menuSecondary}> · </Text>
+						<Text color={theme.colors.success}>{cacheHitPct.toFixed(0)}%</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{' '}
+							{t.usagePanel.overview.cacheHit}
+						</Text>
+						{totalCacheCreate > 0 && (
+							<>
+								<Text color={theme.colors.menuSecondary}> · </Text>
+								<Text color={theme.colors.warning}>
+									{formatTokens(totalCacheCreate, true)}
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{' '}
+									{t.usagePanel.overview.create}
+								</Text>
+							</>
+						)}
+						<Text color={theme.colors.menuSecondary}> · </Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{(modelCount === 1
+								? t.usagePanel.overview.models
+								: t.usagePanel.overview.modelsPlural
+							).replace('{count}', String(modelCount))}
+						</Text>
+					</Box>
+				</Box>
+			)}
 
 			{stats.models.size === 0 ? (
 				<Text color={theme.colors.menuSecondary} dimColor>

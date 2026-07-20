@@ -400,9 +400,10 @@ export default function SessionListPanel({
 					{selectedIndex + 1}/{sessions.length}
 					{totalCount > sessions.length && ` of ${totalCount}`})
 					{currentSession &&
-						` • ${
-							currentSession.messageCount
-						} ${t.sessionListPanel.messages.replace('{count}', '')}`}
+						` • ${t.sessionListPanel.messages.replace(
+							'{count}',
+							String(currentSession.messageCount),
+						)}`}
 					{markedSessions.size > 0 && (
 						<Text color={theme.colors.warning}>
 							{' '}
@@ -515,18 +516,19 @@ export default function SessionListPanel({
 
 						// goalOnly 模式：额外渲染 goalStatus + objective 摘要，
 						// 用 dimColor 视觉上和会话标题区分开。
-						const goalSuffix =
-							goalOnly && session.goalStatus
-								? ` [${session.goalStatus}${
-										session.goalObjective
-											? ` • ${
-													session.goalObjective.length > 40
-														? session.goalObjective.slice(0, 37) + '...'
-														: session.goalObjective
-											  }`
-											: ''
-								  }]`
-								: '';
+						const goalStatusColor =
+							session.goalStatus === 'pursuing'
+								? theme.colors.warning
+								: session.goalStatus === 'achieved'
+								? theme.colors.success
+								: session.goalStatus === 'unmet' ||
+								  session.goalStatus === 'budget-limited'
+								? theme.colors.error
+								: theme.colors.menuSecondary;
+						const goalObj =
+							session.goalObjective && session.goalObjective.length > 40
+								? session.goalObjective.slice(0, 37) + '...'
+								: session.goalObjective;
 
 						return (
 							<Box key={session.id}>
@@ -560,8 +562,20 @@ export default function SessionListPanel({
 								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
 									• {timeStr}
-									{goalSuffix}
+									{session.messageCount > 0
+										? ` · ${t.sessionListPanel.messages.replace(
+												'{count}',
+												String(session.messageCount),
+										  )}`
+										: ''}
 								</Text>
+								{goalOnly && session.goalStatus ? (
+									<Text color={goalStatusColor} dimColor>
+										{' '}
+										[{session.goalStatus}
+										{goalObj ? ` • ${goalObj}` : ''}]
+									</Text>
+								) : null}
 							</Box>
 						);
 					})}

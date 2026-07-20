@@ -106,7 +106,12 @@ export default function TodoTree({todos}: TodoTreeProps) {
 					{' '}
 					[{pageIndex + 1}/{pageCount}] {t.toolConfirmation.commandPagerHint}
 				</Text>
-				{hiddenCount > 0 && <Text dimColor> +{hiddenCount} more</Text>}
+				{hiddenCount > 0 && (
+					<Text dimColor>
+						{' '}
+						+{hiddenCount} {(t as any).todoTree?.more || 'more'}
+					</Text>
+				)}
 			</Text>
 			{visibleTodos.map((todo, index) => renderTodoLine(todo, index))}
 		</Box>
