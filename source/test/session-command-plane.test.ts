@@ -42,6 +42,7 @@ test('allowlist includes buddy and display commands', t => {
 	t.true(ids.includes('hybrid-compress'));
 	t.true(ids.includes('auto-format'));
 	t.true(ids.includes('image-compress'));
+	t.true(ids.includes('agents-inject'));
 	t.true(ids.includes('subagent-depth'));
 	t.true(ids.includes('file-list-display'));
 	t.true(ids.includes('language'));

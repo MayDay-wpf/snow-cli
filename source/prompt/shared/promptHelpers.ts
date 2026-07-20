@@ -7,28 +7,119 @@ import path from 'path';
 import os from 'os';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {readSettings} from '../../utils/config/unifiedSettings.js';
+import {contentFingerprint, dedupeByContentOrder} from './contentDedupe.js';
+
+export type RoleScope = 'global' | 'project';
+
+export interface RoleSource {
+	scope: RoleScope;
+	absPath: string;
+	relLabel: string;
+	content: string;
+}
+
+function tryReadRole(rolePath: string): string | null {
+	try {
+		if (!fs.existsSync(rolePath)) return null;
+		const content = fs.readFileSync(rolePath, 'utf-8').trim();
+		return content || null;
+	} catch {
+		return null;
+	}
+}
+
+function getActiveRolePath(location: RoleScope): string | null {
+	try {
+		// ROLE.md / ROLE-<id>.md: project root or ~/.snow
+		// activeRoleId lives in unified settings.json.
+		const baseDir =
+			location === 'project' ? process.cwd() : path.join(os.homedir(), '.snow');
+
+		const settings = readSettings(location);
+		const activeRoleId = settings.role?.activeRoleId;
+
+		if (!activeRoleId || activeRoleId === 'active') {
+			return path.join(baseDir, 'ROLE.md');
+		}
+		return path.join(baseDir, `ROLE-${activeRoleId}.md`);
+	} catch {
+		return null;
+	}
+}
+
+function roleRelLabel(scope: RoleScope, absPath: string): string {
+	if (scope === 'global') {
+		return `~/.snow/${path.basename(absPath)}`;
+	}
+	return path.basename(absPath);
+}
 
 /**
- * Get the system prompt with ROLE.md content if it exists
- * Priority: Project ROLE.md > Global ROLE.md > Default prompt
- * @param basePrompt - The base prompt template to modify
- * @param defaultRoleText - The default role text to replace (e.g., "You are Snow AI CLI")
- * @returns The prompt with ROLE.md content or original prompt
+ * Load global + project active ROLE files (both when present).
+ * Order: global first, then project. Does not dedupe.
+ */
+export function collectRoleSources(): RoleSource[] {
+	const out: RoleSource[] = [];
+	for (const scope of ['global', 'project'] as const) {
+		const absPath = getActiveRolePath(scope);
+		if (!absPath) continue;
+		const content = tryReadRole(absPath);
+		if (!content) continue;
+		out.push({
+			scope,
+			absPath,
+			relLabel: roleRelLabel(scope, absPath),
+			content,
+		});
+	}
+	return out;
+}
+
+/**
+ * Global + project ROLE sources with content-level dedupe (first wins).
+ * Identical project/global bodies keep a single copy.
+ */
+export function collectUniqueRoleSources(): RoleSource[] {
+	return dedupeByContentOrder(collectRoleSources()).kept;
+}
+
+/** Fingerprints of active ROLE bodies — used to drop duplicate AGENTS blocks. */
+export function getActiveRoleContentFingerprints(): Set<string> {
+	const fps = new Set<string>();
+	for (const source of collectUniqueRoleSources()) {
+		const fp = contentFingerprint(source.content);
+		if (fp) fps.add(fp);
+	}
+	return fps;
+}
+
+/** Render ROLE blocks for system inject (already deduped). */
+export function renderRoleSourcesSection(sources: RoleSource[]): string {
+	if (!sources.length) return '';
+
+	if (sources.length === 1) {
+		return sources[0]!.content.trim();
+	}
+
+	const parts: string[] = [];
+	for (const source of sources) {
+		const heading =
+			source.scope === 'global'
+				? `### Global ROLE — \`${source.relLabel}\``
+				: `### Project ROLE — \`${source.relLabel}\``;
+		parts.push(heading, '', source.content.trim(), '');
+	}
+	return parts.join('\n').trim();
+}
+
+/**
+ * Get the system prompt with ROLE.md content if it exists.
+ * Injects global + project ROLE when both exist; content-dedupes identical bodies.
  */
 export function getSystemPromptWithRole(
 	basePrompt: string,
 	defaultRoleText: string,
 ): string {
-	const tryReadRole = (rolePath: string): string | null => {
-		try {
-			if (!fs.existsSync(rolePath)) return null;
-			const content = fs.readFileSync(rolePath, 'utf-8').trim();
-			return content || null;
-		} catch {
-			return null;
-		}
-	};
-
 	const buildRoleOverride = (roleContent: string): string =>
 		[
 			'These are the rules emphasized by the user, which must be adhered to 100%:',
@@ -38,43 +129,14 @@ export function getSystemPromptWithRole(
 	const applyRoleOverride = (roleContent: string): string =>
 		basePrompt.replace(defaultRoleText, () => buildRoleOverride(roleContent));
 
-	const getActiveRolePath = (location: 'project' | 'global'): string | null => {
-		try {
-			// ROLE.md / ROLE-<id>.md live in: project root (project scope) or ~/.snow (global scope).
-			// activeRoleId is now stored in the unified settings.json (.snow/settings.json).
-			const baseDir =
-				location === 'project'
-					? process.cwd()
-					: path.join(os.homedir(), '.snow');
-
-			const settings = readSettings(location);
-			const activeRoleId = settings.role?.activeRoleId;
-
-			if (!activeRoleId || activeRoleId === 'active') {
-				return path.join(baseDir, 'ROLE.md');
-			}
-			return path.join(baseDir, `ROLE-${activeRoleId}.md`);
-		} catch {
-			return null;
-		}
-	};
-
 	try {
-		// Priority: Project active (via .snow/role.json) > Global active (via ~/.snow/role.json)
-		const projectActivePath = getActiveRolePath('project');
-		if (projectActivePath) {
-			const roleContent = tryReadRole(projectActivePath);
-			if (roleContent) {
-				return applyRoleOverride(roleContent);
-			}
+		const unique = collectUniqueRoleSources();
+		if (!unique.length) {
+			return basePrompt;
 		}
-
-		const globalActivePath = getActiveRolePath('global');
-		if (globalActivePath) {
-			const roleContent = tryReadRole(globalActivePath);
-			if (roleContent) {
-				return applyRoleOverride(roleContent);
-			}
+		const merged = renderRoleSourcesSection(unique);
+		if (merged) {
+			return applyRoleOverride(merged);
 		}
 	} catch (error) {
 		console.error('Failed to read ROLE configuration:', error);
@@ -214,26 +276,15 @@ Current Date: ${timeInfo.date}`;
 }
 
 /**
- * Read raw content of the active ROLE file IF it is marked as "override system prompt".
- * Priority: project > global. Returns null if no active role is marked as override
- * or if the role file is missing/empty.
+ * Read raw content of active ROLE file(s) marked as "override system prompt".
+ * Injects global + project override ROLEs when both apply; content-dedupes.
+ * Returns null if no override role is active or files are empty.
  */
 export function getOverrideRoleContent(): string | null {
-	const tryReadRole = (rolePath: string): string | null => {
-		try {
-			if (!fs.existsSync(rolePath)) return null;
-			const content = fs.readFileSync(rolePath, 'utf-8').trim();
-			return content || null;
-		} catch {
-			return null;
-		}
-	};
-
 	const resolveActiveOverride = (
-		location: 'project' | 'global',
+		location: RoleScope,
 	): {path: string; isOverride: boolean} | null => {
 		try {
-			// Role metadata moved to unified settings.json (.snow/settings.json).
 			const baseDir =
 				location === 'project'
 					? process.cwd()
@@ -258,17 +309,24 @@ export function getOverrideRoleContent(): string | null {
 	};
 
 	try {
-		const projectInfo = resolveActiveOverride('project');
-		if (projectInfo && projectInfo.isOverride) {
-			const content = tryReadRole(projectInfo.path);
-			if (content) return content;
+		const sources: RoleSource[] = [];
+		// Global first, then project — same order as non-override merge.
+		for (const scope of ['global', 'project'] as const) {
+			const info = resolveActiveOverride(scope);
+			if (!info?.isOverride) continue;
+			const content = tryReadRole(info.path);
+			if (!content) continue;
+			sources.push({
+				scope,
+				absPath: info.path,
+				relLabel: roleRelLabel(scope, info.path),
+				content,
+			});
 		}
 
-		const globalInfo = resolveActiveOverride('global');
-		if (globalInfo && globalInfo.isOverride) {
-			const content = tryReadRole(globalInfo.path);
-			if (content) return content;
-		}
+		const unique = dedupeByContentOrder(sources).kept;
+		if (!unique.length) return null;
+		return renderRoleSourcesSection(unique) || null;
 	} catch (error) {
 		console.error('Failed to read override ROLE configuration:', error);
 	}

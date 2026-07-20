@@ -2,6 +2,7 @@ import React, {useMemo} from 'react';
 import {Box, Static} from 'ink';
 import type {Message} from '../../components/chat/MessageList.js';
 import PendingMessages from '../../components/chat/PendingMessages.js';
+import PendingToolCalls from '../../components/chat/PendingToolCalls.js';
 import ToolConfirmation from '../../components/tools/ToolConfirmation.js';
 import AskUserQuestion from '../../components/special/AskUserQuestion.js';
 import {
@@ -82,8 +83,9 @@ export default function ChatScreenConversationView({
 	// Pre-compute parallel group edges for non-streaming messages.
 	// This replaces the old index-based lookups inside MessageRenderer,
 	// enabling React.memo to skip re-renders for unchanged messages.
+	// pending 工具不进 Static，避免完成后残留“进行中”
 	const staticMessages = useMemo(
-		() => messages.filter(m => !m.streaming),
+		() => messages.filter(m => !m.streaming && !m.toolPending),
 		[messages],
 	);
 	const {isFirstInGroup, isLastInGroup} = useMemo(
@@ -119,7 +121,8 @@ export default function ChatScreenConversationView({
 				{item => item}
 			</Static>
 
-			<Box paddingX={1} width={terminalWidth}>
+			<Box paddingX={1} width={terminalWidth} flexDirection="column">
+				<PendingToolCalls messages={messages} />
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
 

@@ -110,7 +110,7 @@ export async function executeBatchOperation<
 	const failureCount = results.filter(r => !r.success).length;
 
 	// Build detailed message with all file diffs
-	let detailedMessage = `📊 Batch Edit Summary: ${successCount} succeeded, ${failureCount} failed\n\n`;
+	let detailedMessage = `Batch Edit Summary: ${successCount} succeeded, ${failureCount} failed\n\n`;
 
 	results.forEach((result, index) => {
 		const num = index + 1;
@@ -118,7 +118,7 @@ export async function executeBatchOperation<
 
 		if (result.success) {
 			detailedMessage += `${separator}\n`;
-			detailedMessage += `✅ File ${num}/${results.length}: ${result.path}\n`;
+			detailedMessage += `✓ File ${num}/${results.length}: ${result.path}\n`;
 			detailedMessage += `${separator}\n\n`;
 
 			// Add individual file full result (including oldContent and newContent for diff)
@@ -132,7 +132,7 @@ export async function executeBatchOperation<
 						l.trim().startsWith('Matched:') ||
 						l.trim().startsWith('Replaced:') ||
 						l.trim().startsWith('Result:') ||
-						l.trim().startsWith('📍'),
+						l.trim().startsWith('Context:'),
 				);
 				if (metadataLines.length > 0) {
 					metadataLines.forEach((line: string) => {
@@ -146,7 +146,7 @@ export async function executeBatchOperation<
 			// Don't format as text here, let the UI handle it with DiffViewer
 			if (fileResult.oldContent && fileResult.newContent) {
 				// Just add a placeholder message, actual diff will be rendered by UI
-				detailedMessage += `📊 Changes (lines ${
+				detailedMessage += `Changes (lines ${
 					fileResult.contextStartLine ?? '?'
 				}-${fileResult.contextEndLine ?? '?'})\n\n`;
 			}
@@ -188,7 +188,7 @@ export async function executeBatchOperation<
 				}
 
 				if (warnings.length > 0) {
-					detailedMessage += `⚠️  Structure Warnings:\n`;
+					detailedMessage += `∆ Structure Warnings:\n`;
 					warnings.forEach((w: string) => {
 						detailedMessage += `   • ${w}\n`;
 					});
@@ -206,9 +206,9 @@ export async function executeBatchOperation<
 				).length;
 
 				if (errorCount > 0 || warningCount > 0) {
-					detailedMessage += `🔧 Diagnostics: ${errorCount} error(s), ${warningCount} warning(s)\n`;
+					detailedMessage += `Diagnostics: ${errorCount} error(s), ${warningCount} warning(s)\n`;
 					fileResult.diagnostics.slice(0, 3).forEach((d: any) => {
-						const icon = d.severity === 'error' ? '❌' : '⚠️';
+						const icon = d.severity === 'error' ? '✗' : '∆';
 						detailedMessage += `   ${icon} Line ${d.line}: ${d.message}\n`;
 					});
 					if (fileResult.diagnostics.length > 3) {
@@ -221,7 +221,7 @@ export async function executeBatchOperation<
 			}
 		} else {
 			detailedMessage += `${separator}\n`;
-			detailedMessage += `❌ File ${num}/${results.length}: ${result.path}\n`;
+			detailedMessage += `✗ File ${num}/${results.length}: ${result.path}\n`;
 			detailedMessage += `${separator}\n`;
 			detailedMessage += `Error: ${result.error}\n\n`;
 		}

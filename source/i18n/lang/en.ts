@@ -836,7 +836,15 @@ export const en: TranslationKeys = {
 		moreHidden: '{count} more hidden',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
-		interactionHint: 'Tab: Autocomplete • Enter: Execute',
+		interactionHint: 'Tab: Autocomplete • ←/→: Category • Enter: Execute',
+		categories: {
+			all: 'All',
+			frequent: 'Frequent',
+			settings: 'Settings',
+			advanced: 'Advanced',
+			fun: 'Fun',
+			custom: 'Custom',
+		},
 		commands: {
 			help: 'Show keyboard shortcuts and help information',
 			clear: 'Clear chat context and conversation history',
@@ -859,6 +867,10 @@ export const en: TranslationKeys = {
 			roleSubagent:
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
+			context:
+				'Break down context: system / ROLE / AGENTS / hooks / tools / messages',
+			agentsInject:
+				'Toggle AGENTS.md inject into model-bound messages. Usage: /agents-inject [on|off|status]',
 			export: 'Export chat conversation to text file with save dialog',
 			config:
 				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
@@ -951,6 +963,19 @@ export const en: TranslationKeys = {
 				disabled: 'Simple mode: Disabled',
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
+			},
+			agentsInject: {
+				enabled:
+					'AGENTS inject: ON — project AGENTS.md will prepend to model-bound messages (saved to .snow/settings.json)',
+				disabled:
+					'AGENTS inject: OFF — no automatic AGENTS.md prepend (saved to .snow/settings.json)',
+				statusEnabled: 'AGENTS inject: ON',
+				statusDisabled: 'AGENTS inject: OFF',
+				sourceProject: 'source: project settings',
+				sourceGlobal: 'source: global settings',
+				sourceDefault: 'source: default (opt-in)',
+				invalid:
+					'Invalid args. Usage: /agents-inject [on|off|status]',
 			},
 			// Tool display mode command messages
 			toolDisplay: {
@@ -2199,6 +2224,32 @@ export const en: TranslationKeys = {
 		emptyHint: 'No files to rollback',
 		noFilesConfirm: 'No file changes detected. Confirm rollback?',
 		noFilesConfirmHint: 'Enter confirm · ESC cancel',
+	},
+	contextPanel: {
+		title: 'Context Breakdown',
+		subtitle: 'system · ROLE · AGENTS · hooks · tools · messages',
+		loading: 'Loading context breakdown…',
+		error: 'Failed: {error}',
+		hint: 'Already expanded for viewing · ↑↓ select · Enter expand · A/C all · ESC close',
+		apiLast: 'Last API prompt',
+		displayOnly: 'in sys',
+		truncated: '[trunc]',
+		dropped: '[dropped]',
+		moreAbove: 'more above',
+		moreBelow: 'more below',
+		estimate: 'estimate',
+		precise: 'precise',
+		colBucket: 'Bucket',
+		colTokens: 'Tokens',
+		colShare: 'Share',
+		buckets: {
+			system: 'System prompt',
+			role: 'ROLE.md',
+			agents: 'AGENTS.md inject',
+			hooks: 'Hooks context',
+			tools: 'Tool definitions',
+			messages: 'Conversation',
+		},
 	},
 	usagePanel: {
 		title: 'Token Usage Statistics',

@@ -9,6 +9,10 @@ import {
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
 import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
+import {
+	formatDurationMs,
+	MIN_TOOL_DURATION_DISPLAY_MS,
+} from '../../../utils/core/textUtils.js';
 
 /**
  * Build UI messages for tool execution results.
@@ -17,8 +21,10 @@ export function buildToolResultMessages(
 	toolResults: ToolResult[],
 	receivedToolCalls: ToolCall[],
 	parallelGroupId: string | undefined,
+	toolStartTimes?: Map<string, number>,
 ): Message[] {
 	const resultMessages: Message[] = [];
+	const completedAt = Date.now();
 
 	for (const result of toolResults) {
 		const toolCall = receivedToolCalls.find(
@@ -28,6 +34,19 @@ export function buildToolResultMessages(
 
 		const isError = result.content.startsWith('Error:');
 		const statusKey = isError ? 'error' : 'success';
+
+		const startedAt = toolStartTimes?.get(toolCall.id);
+		const durationMs =
+			typeof startedAt === 'number' ? completedAt - startedAt : undefined;
+		const durationLabel =
+			typeof durationMs === 'number' &&
+			durationMs >= MIN_TOOL_DURATION_DISPLAY_MS
+				? formatDurationMs(durationMs)
+				: '';
+		const titleBase = formatToolTitleLine(toolCall.function.name, statusKey);
+		const titleContent = durationLabel
+			? `${titleBase} (${durationLabel})`
+			: titleBase;
 
 		// Sub-agent tools
 		if (toolCall.function.name.startsWith('subagent-')) {
@@ -43,11 +62,13 @@ export function buildToolResultMessages(
 
 			resultMessages.push({
 				role: 'assistant',
-				content: formatToolTitleLine(toolCall.function.name, statusKey),
+				content: titleContent,
 				streaming: false,
 				messageStatus: isError ? 'error' : 'success',
+				toolCallId: result.tool_call_id,
 				toolResult: !isError ? result.content : undefined,
 				subAgentUsage: usage,
+				...(typeof durationMs === 'number' ? {toolDurationMs: durationMs} : {}),
 			});
 			continue;
 		}
@@ -62,15 +83,17 @@ export function buildToolResultMessages(
 
 		resultMessages.push({
 			role: 'assistant',
-			content: formatToolTitleLine(toolCall.function.name, statusKey),
+			content: titleContent,
 			streaming: false,
 			messageStatus: isError ? 'error' : 'success',
+			toolCallId: result.tool_call_id,
 			toolCall: editDiffData
 				? {name: toolCall.function.name, arguments: editDiffData}
 				: undefined,
 			toolDisplay: isNonTimeConsuming ? toolDisplay : undefined,
 			toolResult: !isError ? result.content : undefined,
 			parallelGroup: parallelGroupId,
+			...(typeof durationMs === 'number' ? {toolDurationMs: durationMs} : {}),
 		});
 	}
 

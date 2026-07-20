@@ -1,56 +1,87 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
 import type {Message} from './MessageList.js';
 import Spinner from 'ink-spinner';
+import {
+	formatDurationMs,
+	formatElapsedTime,
+	MIN_TOOL_DURATION_DISPLAY_MS,
+} from '../../../utils/core/textUtils.js';
 
 interface Props {
 	messages: Message[];
 }
 
 /**
- * 显示正在执行的工具调用(只显示耗时工具)
- * 这些消息有 toolPending: true 标记
+ * 动态渲染正在执行的两步工具（toolPending: true）。
+ * 从 Static 中排除后，在此展示实时运行时间，避免完成后残留 pending。
  */
 export default function PendingToolCalls({messages}: Props) {
-	// 筛选出正在执行的工具调用消息
 	const pendingTools = messages.filter(
-		msg => msg.role === 'assistant' && msg.toolPending === true,
+		msg =>
+			(msg.role === 'assistant' || msg.role === 'subagent') &&
+			msg.toolPending === true,
 	);
+
+	const [now, setNow] = useState(() => Date.now());
+
+	useEffect(() => {
+		if (pendingTools.length === 0) {
+			return;
+		}
+		const timer = setInterval(() => {
+			setNow(Date.now());
+		}, 1000);
+		return () => clearInterval(timer);
+	}, [pendingTools.length]);
 
 	if (pendingTools.length === 0) {
 		return null;
 	}
 
 	return (
-		<Box
-			flexDirection="column"
-			borderStyle="round"
-			borderColor="cyan"
-			paddingX={1}
-		>
-			<Text color="cyan" bold>
-				<Spinner type="dots" /> Executing Tools ({pendingTools.length})
-			</Text>
-			{pendingTools.map((tool, index) => (
-				<Box key={index} marginLeft={1} marginY={0}>
-					<Text color="yellow" bold>
-						{index + 1}.
-					</Text>
-					<Box marginLeft={1}>
-						<Text color="gray">{tool.content}</Text>
+		<Box flexDirection="column">
+			{pendingTools.map((tool, index) => {
+				const startedAt =
+					typeof tool.toolStartedAt === 'number'
+						? tool.toolStartedAt
+						: undefined;
+				const elapsedMs =
+					startedAt !== undefined ? Math.max(0, now - startedAt) : 0;
+				const elapsedSeconds = Math.floor(elapsedMs / 1000);
+				const showElapsed =
+					startedAt !== undefined && elapsedMs >= MIN_TOOL_DURATION_DISPLAY_MS;
+				const elapsedLabel = showElapsed
+					? formatElapsedTime(Math.max(elapsedSeconds, 1)) ||
+					  formatDurationMs(elapsedMs)
+					: '';
+				const tokens =
+					typeof tool.toolProgressTokens === 'number' &&
+					tool.toolProgressTokens > 0
+						? tool.toolProgressTokens
+						: undefined;
+				const progressParts = [
+					elapsedLabel || undefined,
+					tokens !== undefined ? `${tokens} tokens` : undefined,
+				].filter(Boolean);
+				const progressLabel =
+					progressParts.length > 0 ? progressParts.join(' · ') : '';
+
+				return (
+					<Box key={tool.toolCallId || `pending-tool-${index}`}>
+						<Text color="yellow">
+							<Spinner type="dots" />{' '}
+						</Text>
+						<Text color="yellow">{tool.content || 'Running tool'}</Text>
+						{progressLabel ? (
+							<Text color="cyan" dimColor>
+								{' '}
+								({progressLabel})
+							</Text>
+						) : null}
 					</Box>
-					{/* 显示工具参数 - 完整显示所有参数 */}
-					{tool.toolDisplay && tool.toolDisplay.args.length > 0 && (
-						<Box flexDirection="column" marginLeft={2}>
-							{tool.toolDisplay.args.map((arg, argIndex) => (
-								<Text key={argIndex} color="gray" dimColor>
-									{arg.key}: {arg.value}
-								</Text>
-							))}
-						</Box>
-					)}
-				</Box>
-			))}
+				);
+			})}
 		</Box>
 	);
 }

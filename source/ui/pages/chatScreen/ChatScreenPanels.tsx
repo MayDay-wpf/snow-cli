@@ -120,6 +120,7 @@ export default function ChatScreenPanels({
 				showGoalSessionPanel={panelState.showGoalSessionPanel}
 				showMcpPanel={panelState.showMcpPanel}
 				showUsagePanel={panelState.showUsagePanel}
+				showContextPanel={panelState.showContextPanel}
 				showHelpPanel={panelState.showHelpPanel}
 				showCustomCommandConfig={panelState.showCustomCommandConfig}
 				showSkillsCreation={panelState.showSkillsCreation}

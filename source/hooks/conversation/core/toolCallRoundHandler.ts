@@ -24,6 +24,7 @@ import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -165,6 +166,29 @@ export async function handleToolCallRound(ctx: {
 		}: ${summarizeToolCalls(approvedTools)}`,
 	});
 
+	// 刷新已批准工具的 pending 开始时间，用于完成态耗时展示
+	const approvedIds = new Set(approvedTools.map(t => t.id));
+	const executionStartedAt = Date.now();
+	setMessages(prev =>
+		prev.map(m =>
+			m.toolPending && m.toolCallId && approvedIds.has(m.toolCallId)
+				? {
+						...m,
+						toolStartedAt: executionStartedAt,
+						...(m.toolCall?.name === 'websearch-fetch'
+							? {
+									toolStage: 'fetching',
+									content: `${formatToolTitleLine(
+										'websearch-fetch',
+										'pending',
+									)} · fetching…`,
+							  }
+							: {}),
+				  }
+				: m,
+		),
+	);
+
 	if (controller.signal.aborted) {
 		for (const toolCall of approvedTools) {
 			const abortedResult = {
@@ -189,10 +213,42 @@ export async function handleToolCallRound(ctx: {
 		streamingEnabled,
 	);
 
+	// Throttled pending-tool UI updates for AI-summarizing tools
+	let lastPendingTokenUiUpdate = 0;
+	const onToolTokenUpdate = (tokenCount: number) => {
+		setStreamTokenCount(tokenCount);
+		const now = Date.now();
+		if (now - lastPendingTokenUiUpdate < 200) {
+			return;
+		}
+		lastPendingTokenUiUpdate = now;
+		setMessages(prev =>
+			prev.map(m => {
+				if (!m.toolPending || !m.toolCallId || !approvedIds.has(m.toolCallId)) {
+					return m;
+				}
+				const name = m.toolCall?.name;
+				if (name !== 'websearch-fetch' && name !== 'terminal-execute') {
+					return m;
+				}
+				const baseTitle = formatToolTitleLine(name, 'pending');
+				return {
+					...m,
+					toolProgressTokens: tokenCount,
+					toolStage: name === 'websearch-fetch' ? 'summarizing' : m.toolStage,
+					content:
+						name === 'websearch-fetch'
+							? `${baseTitle} · summarizing…`
+							: m.content,
+				};
+			}),
+		);
+	};
+
 	const rawToolResults = await executeToolCalls(
 		approvedTools,
 		controller.signal,
-		setStreamTokenCount,
+		onToolTokenUpdate,
 		async subAgentMessage => {
 			setMessages(prev => subAgentHandler.handleMessage(prev, subAgentMessage));
 		},
@@ -371,24 +427,61 @@ export async function handleToolCallRound(ctx: {
 		}
 	}
 
-	setMessages(prev =>
-		prev.filter(
-			message =>
-				message.role !== 'subagent' ||
-				message.toolCall !== undefined ||
-				message.toolResult !== undefined ||
-				message.subAgentInternal === true,
-		),
-	);
+	// 合并：清理本轮 pending、过滤临时 subagent 展示，并一次性追加结果
+	// 避免多次 setMessages 竞态导致 pending 残留在 Static 中
+	setMessages(prev => {
+		const startTimes = new Map<string, number>();
+		for (const m of prev) {
+			if (
+				m.toolPending &&
+				m.toolCallId &&
+				typeof m.toolStartedAt === 'number'
+			) {
+				startTimes.set(m.toolCallId, m.toolStartedAt);
+			}
+		}
+		// fallback：没有 toolStartedAt 的工具用 executionStartedAt
+		for (const tc of receivedToolCalls) {
+			if (!startTimes.has(tc.id)) {
+				startTimes.set(tc.id, executionStartedAt);
+			}
+		}
 
-	const resultMessages = buildToolResultMessages(
-		toolResults,
-		receivedToolCalls,
-		parallelGroupId,
-	);
-	if (resultMessages.length > 0) {
-		setMessages(prev => [...prev, ...resultMessages]);
-	}
+		const resultMessages = buildToolResultMessages(
+			toolResults,
+			receivedToolCalls,
+			parallelGroupId,
+			startTimes,
+		);
+
+		const completedIds = new Set(toolResults.map(r => r.tool_call_id));
+		const roundIds = new Set(receivedToolCalls.map(t => t.id));
+
+		const cleaned = prev.filter(message => {
+			// 移除本轮已完成/相关的 pending 工具消息
+			if (
+				message.toolPending &&
+				message.toolCallId &&
+				(completedIds.has(message.toolCallId) ||
+					roundIds.has(message.toolCallId))
+			) {
+				return false;
+			}
+			// 保留原有 subagent 临时消息过滤逻辑
+			if (message.role === 'subagent') {
+				return (
+					message.toolCall !== undefined ||
+					message.toolResult !== undefined ||
+					message.subAgentInternal === true
+				);
+			}
+			return true;
+		});
+
+		return resultMessages.length > 0
+			? [...cleaned, ...resultMessages]
+			: cleaned;
+	});
 
 	try {
 		const {runningSubAgentTracker} = await import(

@@ -119,6 +119,7 @@ async function runConversationWithTools(
 	await appendUserMessageAndSyncContext({
 		conversationMessages,
 		userContent,
+		hookApiOnlyContext: options.hookApiOnlyContext,
 		editorContext,
 		imageContents,
 		saveMessage,

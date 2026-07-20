@@ -35,4 +35,13 @@ export interface WebPageContent {
 		  >;
 	textLength: number;
 	contentPreview: string;
+	/** How the returned content was produced (optional for backward compatibility). */
+	summaryStatus?:
+		| 'summarized'
+		| 'fallback_timeout'
+		| 'fallback_error'
+		| 'raw'
+		| 'unavailable';
+	/** Content serialization format. Fetch pages use lightweight markdown-ish text. */
+	contentFormat?: 'text' | 'markdown';
 }

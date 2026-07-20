@@ -75,6 +75,10 @@ import {
 	setTelemetryEnabled,
 	getTelemetryConfig,
 } from '../config/projectSettings.js';
+import {
+	getContextInjectEnabled,
+	setContextInjectEnabled,
+} from '../config/contextInjectSettings.js';
 import {tpsTracker} from '../../hooks/conversation/core/tpsTracker.js';
 import {
 	getActiveProfileName,
@@ -734,6 +738,15 @@ function handleBooleanSetting(
 			meta.id,
 			{enabled: current},
 			`${label}: ${current ? 'on' : 'off'}`,
+			meta.risk,
+		);
+	}
+	// Skip no-op toggles so side effects (e.g. plan gate reset) only run on real changes.
+	if (parsed.value === current) {
+		return okResult(
+			meta.id,
+			{enabled: current, previous: current, unchanged: true},
+			`${label}: already ${current ? 'on' : 'off'}`,
 			meta.risk,
 		);
 	}
@@ -1990,6 +2003,14 @@ export async function executeSessionCommandHandler(
 					configEvents.emitConfigChange({type: 'simpleMode', value});
 				},
 			);
+		case 'agents-inject':
+			return handleBooleanSetting(
+				meta,
+				normalizedArgs,
+				getContextInjectEnabled,
+				value => setContextInjectEnabled(value, 'project'),
+				'AGENTS inject',
+			);
 		case 'tool-display':
 			return handleToolDisplay(meta, normalizedArgs);
 		case 'think-display':
@@ -2028,6 +2049,13 @@ export async function executeSessionCommandHandler(
 				'Plan',
 				value => {
 					configEvents.emitConfigChange({type: 'planMode', value});
+					try {
+						const {onPlanModeChange} = require('./planModeGate.js');
+						const {sessionManager} = require('../session/sessionManager.js');
+						onPlanModeChange(value, sessionManager.getCurrentSession()?.id);
+					} catch {
+						// ignore
+					}
 				},
 			);
 		case 'tool-search':

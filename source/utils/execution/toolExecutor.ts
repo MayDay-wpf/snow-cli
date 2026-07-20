@@ -15,6 +15,8 @@ import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmatio
 import type {ImageContent} from '../../api/types.js';
 import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
+import {getPlanMode} from '../config/projectSettings.js';
+import {evaluatePlanGate, maybeApprovePlanFromAskUser} from './planModeGate.js';
 
 //安全解析JSON，处理可能被拼接的多个JSON对象
 function safeParseToolArguments(argsString: string): Record<string, any> {
@@ -312,6 +314,27 @@ export async function executeToolCall(
 				console.warn('Failed to execute beforeToolCall hook:', error);
 			}
 
+			// Plan Mode hard gate: block mutating tools until explicit approval.
+			// Runs after beforeToolCall so hooks can still observe attempts, but
+			// before team/subagent/MCP side effects. YOLO cannot bypass this.
+			const planModeEnabled = getPlanMode();
+			const gateDecision = evaluatePlanGate({
+				planMode: planModeEnabled,
+				sessionId,
+				toolName: toolCall.function.name,
+				args,
+				cwd: workingDirectory || process.cwd(),
+			});
+			if (!gateDecision.allow) {
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: gateDecision.message || 'Error: Plan Mode gate blocked tool',
+					messageStatus: 'error' as const,
+				};
+				return result;
+			}
+
 			// If the tool is askuser-ask_question, check whether the
 			// beforeToolCall hook has already provided an answer on stdout.
 			// When a hook returns a selection result, we skip the interactive
@@ -327,6 +350,17 @@ export async function executeToolCall(
 						hookAnswer.selected,
 						hookAnswer.customInput,
 					);
+
+					maybeApprovePlanFromAskUser({
+						planMode: planModeEnabled,
+						sessionId,
+						question:
+							typeof args['question'] === 'string'
+								? args['question']
+								: undefined,
+						selected: hookAnswer.selected,
+						customInput: hookAnswer.customInput,
+					});
 
 					result = {
 						tool_call_id: toolCall.id,
@@ -621,6 +655,27 @@ export async function executeToolCall(
 						response.selected,
 						response.customInput,
 					);
+
+					// Plan Mode: capture explicit approval from interactive askuser.
+					try {
+						const parsedArgs = safeParseToolArguments(
+							toolCall.function.arguments,
+						);
+						maybeApprovePlanFromAskUser({
+							planMode: getPlanMode(),
+							sessionId,
+							question:
+								typeof parsedArgs['question'] === 'string'
+									? parsedArgs['question']
+									: typeof error.question === 'string'
+									? error.question
+									: undefined,
+							selected: response.selected,
+							customInput: response.customInput,
+						});
+					} catch {
+						// ignore approval parse failures
+					}
 
 					result = {
 						tool_call_id: toolCall.id,

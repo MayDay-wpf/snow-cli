@@ -7,6 +7,7 @@ import {
 } from '../config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../ui/diffPreview.js';
 import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
+import {resolvePersistedUserContent} from '../../prompt/contextInject/stripPersistedAgents.js';
 
 /**
  * 从后续的 tool result 消息中提取 editDiffData。
@@ -77,6 +78,29 @@ function findToolNameForToolCall(
 	if (!msg || !msg.tool_calls) return undefined;
 	const tc = msg.tool_calls.find(t => t.id === toolCallId);
 	return tc?.function.name;
+}
+
+/**
+ * Whether a tool_call already has a matching tool result after the assistant message.
+ * Used so resume does not rebuild live "pending" rows for completed tools.
+ */
+function hasMatchingToolResult(
+	sessionMessages: ChatMessage[],
+	startIndex: number,
+	toolCallId: string,
+): boolean {
+	for (let j = startIndex + 1; j < sessionMessages.length; j++) {
+		const nextMsg = sessionMessages[j];
+		if (!nextMsg) break;
+		if (nextMsg.role === 'tool' && nextMsg.tool_call_id === toolCallId) {
+			return true;
+		}
+		// Stop at the next top-level assistant turn
+		if (nextMsg.role === 'assistant' && !nextMsg.subAgentInternal) {
+			break;
+		}
+	}
+	return false;
 }
 
 /**
@@ -479,9 +503,17 @@ export function convertSessionMessagesToUI(
 					toolArgs = {};
 				}
 
-				// Only add "in progress" message for tools that need two-step display
+				// Only rebuild a pending row for two-step tools that never finished.
+				// Completed tools already have a tool result message; live UI removes
+				// the pending row after success, so resume must not recreate it as
+				// toolPending (PendingToolCalls would treat history as still running).
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
-				if (needTwoSteps) {
+				const toolCompleted = hasMatchingToolResult(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
+				if (needTwoSteps && !toolCompleted) {
 					// When resuming a session, the file on disk has already been
 					// edited, so enrichPendingEditArgs (which reads the current
 					// file) cannot compute a correct diff. Instead, prefer the
@@ -496,8 +528,8 @@ export function convertSessionMessagesToUI(
 					const enrichedArgs = savedDiffData
 						? {...toolArgs, ...savedDiffData}
 						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
-					// Rebuild the historical pending step with the current marker config;
-					// the following persisted tool result restores success or error.
+					// Incomplete historical tool: show as pending in Static, not as a
+					// live spinner row (toolPending is reserved for active execution).
 					uiMessages.push({
 						role: 'assistant',
 						content: formatToolTitleLine(toolCall.function.name, 'pending'),
@@ -508,7 +540,7 @@ export function convertSessionMessagesToUI(
 						},
 						toolDisplay,
 						toolCallId: toolCall.id,
-						toolPending: true,
+						toolPending: false,
 						messageStatus: 'pending',
 					});
 				}
@@ -738,9 +770,12 @@ export function convertSessionMessagesToUI(
 
 		// Handle regular user and assistant messages
 		if (msg.role === 'user' || msg.role === 'assistant') {
+			// Prefer originalContent, then strip legacy AGENTS inject from content.
+			const displayContent =
+				msg.role === 'user' ? resolvePersistedUserContent(msg) : msg.content;
 			uiMessages.push({
 				role: msg.role,
-				content: msg.content,
+				content: displayContent,
 				streaming: false,
 				images: msg.images,
 				thinking: extractThinkingFromMessage(msg),

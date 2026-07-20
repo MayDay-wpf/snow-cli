@@ -169,23 +169,28 @@ test.serial(
 		sessionManager.setPendingAdditionalContext('SESSION_CONTEXT');
 
 		const pending = sessionManager.consumePendingAdditionalContext();
+
 		const output = applyOnUserMessageHookResult(
 			'original',
 			{action: 'replace', replacedContent: 'rewritten'},
 			pending.context,
 		);
 
-		t.is(output, 'rewritten');
+		t.is(output.content, 'rewritten');
+		t.true(output.isReplace);
+		t.is(output.apiOnlyContext, undefined);
 		t.is(sessionManager.peekPendingAdditionalContext(), undefined);
 	},
 );
 
-test('continue result merges pending and message hook contexts', t => {
+test('continue result keeps content clean and returns api-only contexts', t => {
 	const output = applyOnUserMessageHookResult(
 		'original',
 		{action: 'continue', additionalContext: 'MESSAGE_CONTEXT'},
 		'SESSION_CONTEXT',
 	);
 
-	t.is(output, 'SESSION_CONTEXT\n\nMESSAGE_CONTEXT\n\noriginal');
+	t.is(output.content, 'original');
+	t.false(output.isReplace);
+	t.is(output.apiOnlyContext, 'SESSION_CONTEXT\n\nMESSAGE_CONTEXT');
 });

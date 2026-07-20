@@ -22,7 +22,7 @@ export function appendDiagnosticsSummary(
 		maxDetails = 5,
 		moreSuffix = 'more issue(s)',
 		includeTip = false,
-		tipText = '⚡ TIP: Review the errors above and make another edit to fix them',
+		tipText = 'TIP: Review the errors above and make another edit to fix them',
 	} = options;
 
 	const errorCount = diagnostics.filter(d => d.severity === 'error').length;
@@ -32,20 +32,24 @@ export function appendDiagnosticsSummary(
 		return baseMessage;
 	}
 
-	let message = `${baseMessage}\n\n⚠️  ${headerLabel}: ${errorCount} error(s), ${warningCount} warning(s)`;
+	let message = `${baseMessage}\n\n∆ ${headerLabel}: ${errorCount} error(s), ${warningCount} warning(s)`;
 	const formattedDiagnostics = diagnostics
 		.filter(d => d.severity === 'error' || d.severity === 'warning')
 		.slice(0, maxDetails)
 		.map(d => {
-			const icon = d.severity === 'error' ? '❌' : '⚠️';
+			const icon = d.severity === 'error' ? '✗' : '∆';
 			const location = `${filePath}:${d.line}:${d.character}`;
-			return `   ${icon} [${d.source || 'unknown'}] ${location}\n      ${d.message}`;
+			return `   ${icon} [${d.source || 'unknown'}] ${location}\n      ${
+				d.message
+			}`;
 		})
 		.join('\n\n');
 
-	message += `\n\n📋 ${detailsLabel}:\n${formattedDiagnostics}`;
+	message += `\n\n${detailsLabel}:\n${formattedDiagnostics}`;
 	if (errorCount + warningCount > maxDetails) {
-		message += `\n   ... and ${errorCount + warningCount - maxDetails} ${moreSuffix}`;
+		message += `\n   ... and ${
+			errorCount + warningCount - maxDetails
+		} ${moreSuffix}`;
 	}
 	if (includeTip) {
 		message += `\n\n   ${tipText}`;
@@ -91,12 +95,16 @@ function getStructureWarnings(structureAnalysis: StructureAnalysis): string[] {
 	if (structureAnalysis.htmlTags && !structureAnalysis.htmlTags.balanced) {
 		if (structureAnalysis.htmlTags.unclosedTags.length > 0) {
 			warnings.push(
-				`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(', ')}`,
+				`Unclosed HTML tags: ${structureAnalysis.htmlTags.unclosedTags.join(
+					', ',
+				)}`,
 			);
 		}
 		if (structureAnalysis.htmlTags.unopenedTags.length > 0) {
 			warnings.push(
-				`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(', ')}`,
+				`Unopened closing tags: ${structureAnalysis.htmlTags.unopenedTags.join(
+					', ',
+				)}`,
 			);
 		}
 	}
@@ -115,16 +123,16 @@ function getStructureWarnings(structureAnalysis: StructureAnalysis): string[] {
 export function appendStructureWarnings(
 	baseMessage: string,
 	structureAnalysis: StructureAnalysis,
-	tipText: string = '💡 TIP: These warnings help identify potential issues.',
+	tipText: string = 'TIP: These warnings help identify potential issues.',
 ): string {
 	const warnings = getStructureWarnings(structureAnalysis);
 	if (warnings.length === 0) {
 		return baseMessage;
 	}
 
-	let message = `${baseMessage}\n\n🔍 Structure Analysis:\n`;
+	let message = `${baseMessage}\n\nStructure Analysis:\n`;
 	warnings.forEach(warning => {
-		message += `   ⚠️  ${warning}\n`;
+		message += `   ∆ ${warning}\n`;
 	});
 	message += `\n   ${tipText}`;
 	return message;
