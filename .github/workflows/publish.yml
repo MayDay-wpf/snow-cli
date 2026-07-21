@@ -104,7 +104,19 @@ jobs:
 
             ### What's New
 
-            - Emergency fix for destructive update, configuration file hot reload disabled
+            #### Features
+            - Agent Team Mode: orchestrate multiple agents with independent Git worktrees for parallel, conflict-free collaborative development
+            - Hooks session context injection (#194): inject additionalContext into onSessionStart/onUserMessage, project-level `.snow/agents` markdown agents, new beforeSubAgentStart hook
+            - Session identity management: inject SNOW_SESSION_ID / TRELLIS_CONTEXT_ID / SNOW_CWD / SNOW_PLATFORM env vars for Trellis multi-session isolation
+            - Session management: enhanced session identity and context handling, initial user prompt support
+
+            #### Fixes
+            - Fix silent failures of summaryAgent / compactAgent / visionAgent / codebaseReviewAgent / bashOutputSummaryAgent / unifiedHooksExecutor on OpenAI-compatible endpoints (LM Studio, Ollama, vLLM) caused by wrong StreamChunk format reading
+            - Simplify i18n user message sample translations and improve theme colors
+
+            #### Docs
+            - Add relay station recommendations to README
+            - Update Bloome links for consistency
 
             ### Installation
             ```bash
