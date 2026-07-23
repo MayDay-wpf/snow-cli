@@ -57,6 +57,148 @@ type EditToolContext = {
 	validatePath: (fullPath: string) => Promise<void>;
 };
 
+/**
+ * Sliding-window fuzzy matcher with variable window size for large code blocks.
+ * When the search block is large (>= 10 lines), the window is allowed to
+ * expand/contract by a few lines to better align with the actual code block
+ * boundaries, preventing duplicate boundary lines after replacement.
+ */
+async function fuzzyMatchSlidingWindow(
+	contentLines: string[],
+	searchLines: string[],
+	normalizedSearchForSimilarity: string,
+	searchRaw: string,
+	threshold: number,
+	maxMatches: number,
+	usePreFilter: boolean,
+	preFilterThreshold: number,
+	searchFirstLine: string,
+): Promise<Array<{startLine: number; endLine: number; similarity: number}>> {
+	const result: Array<{
+		startLine: number;
+		endLine: number;
+		similarity: number;
+	}> = [];
+	const windowDelta =
+		searchLines.length >= 10
+			? Math.min(15, Math.max(3, Math.floor(searchLines.length / 5)))
+			: 0;
+
+	for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+		if (i > 0 && i % 100 === 0) {
+			await new Promise<void>(resolve => setImmediate(resolve));
+		}
+
+		if (usePreFilter) {
+			const firstLineSimilarity = calculateSimilarity(
+				searchFirstLine,
+				normalizeWhitespace(contentLines[i] || ''),
+				preFilterThreshold,
+			);
+			if (firstLineSimilarity < preFilterThreshold) {
+				continue;
+			}
+		}
+
+		const candidateLines = contentLines.slice(i, i + searchLines.length);
+		const candidateContent = candidateLines.join('\n');
+		const exactSimilarity =
+			candidateContent === searchRaw
+				? 1
+				: await calculateNormalizedSimilarityAsync(
+						normalizedSearchForSimilarity,
+						normalizeWhitespace(candidateContent),
+						threshold,
+				  );
+
+		// High-confidence match: accept immediately without trying other sizes
+		if (exactSimilarity >= 0.9) {
+			result.push({
+				startLine: i + 1,
+				endLine: i + searchLines.length,
+				similarity: exactSimilarity,
+			});
+			if (exactSimilarity >= 0.95 || result.length >= maxMatches) {
+				break;
+			}
+			continue;
+		}
+
+		// Variable window for large blocks: try nearby window sizes for better
+		// boundary alignment
+		if (windowDelta > 0) {
+			let bestSimilarity = exactSimilarity;
+			let bestEndLine = i + searchLines.length;
+
+			for (let delta = 1; delta <= windowDelta; delta++) {
+				// Smaller window
+				const smallerLen = searchLines.length - delta;
+				if (smallerLen > 0 && i + smallerLen <= contentLines.length) {
+					const smallerCandidate = contentLines
+						.slice(i, i + smallerLen)
+						.join('\n');
+					const smallerSim =
+						smallerCandidate === searchRaw
+							? 1
+							: await calculateNormalizedSimilarityAsync(
+									normalizedSearchForSimilarity,
+									normalizeWhitespace(smallerCandidate),
+									threshold,
+							  );
+					if (smallerSim > bestSimilarity) {
+						bestSimilarity = smallerSim;
+						bestEndLine = i + smallerLen;
+					}
+				}
+
+				// Larger window
+				const largerLen = searchLines.length + delta;
+				if (i + largerLen <= contentLines.length) {
+					const largerCandidate = contentLines
+						.slice(i, i + largerLen)
+						.join('\n');
+					const largerSim =
+						largerCandidate === searchRaw
+							? 1
+							: await calculateNormalizedSimilarityAsync(
+									normalizedSearchForSimilarity,
+									normalizeWhitespace(largerCandidate),
+									threshold,
+							  );
+					if (largerSim > bestSimilarity) {
+						bestSimilarity = largerSim;
+						bestEndLine = i + largerLen;
+					}
+				}
+
+				if (bestSimilarity >= 0.95) break;
+			}
+
+			if (bestSimilarity >= threshold) {
+				result.push({
+					startLine: i + 1,
+					endLine: bestEndLine,
+					similarity: bestSimilarity,
+				});
+				if (bestSimilarity >= 0.95 || result.length >= maxMatches) {
+					break;
+				}
+			}
+		} else if (exactSimilarity >= threshold) {
+			result.push({
+				startLine: i + 1,
+				endLine: i + searchLines.length,
+				similarity: exactSimilarity,
+			});
+			if (exactSimilarity >= 0.95 || result.length >= maxMatches) {
+				break;
+			}
+		}
+	}
+
+	return result;
+}
+
 export async function executeEditBySearchSingle(
 	ctx: EditToolContext,
 	filePath: string,
@@ -121,45 +263,18 @@ export async function executeEditBySearchSingle(
 		} else {
 			const normalizedSearchForSimilarity =
 				normalizeWhitespace(normalizedSearch);
-			for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-				// Keep the UI responsive even when every candidate is rejected by the pre-filter.
-				if (i > 0 && i % 100 === 0) {
-					await new Promise<void>(resolve => setImmediate(resolve));
-				}
-
-				if (usePreFilter) {
-					const firstLineSimilarity = calculateSimilarity(
-						searchFirstLine,
-						normalizeWhitespace(contentLines[i] || ''),
-						preFilterThreshold,
-					);
-					if (firstLineSimilarity < preFilterThreshold) {
-						continue;
-					}
-				}
-
-				const candidateLines = contentLines.slice(i, i + searchLines.length);
-				const candidateContent = candidateLines.join('\n');
-				const similarity =
-					candidateContent === normalizedSearch
-						? 1
-						: await calculateNormalizedSimilarityAsync(
-								normalizedSearchForSimilarity,
-								normalizeWhitespace(candidateContent),
-								threshold,
-						  );
-
-				if (similarity >= threshold) {
-					matches.push({
-						startLine: i + 1,
-						endLine: i + searchLines.length,
-						similarity,
-					});
-					if (similarity >= 0.95 || matches.length >= maxMatches) {
-						break;
-					}
-				}
-			}
+			const fallbackMatches = await fuzzyMatchSlidingWindow(
+				contentLines,
+				searchLines,
+				normalizedSearchForSimilarity,
+				normalizedSearch,
+				threshold,
+				maxMatches,
+				usePreFilter,
+				preFilterThreshold,
+				searchFirstLine,
+			);
+			matches.push(...fallbackMatches);
 		}
 
 		matches.sort((a, b) => b.similarity - a.similarity);
@@ -186,31 +301,20 @@ export async function executeEditBySearchSingle(
 					const normalizedCorrectedSearch = normalizeWhitespace(
 						unescapeFix.correctedString,
 					);
-					for (
-						let i = 0;
-						i <= contentLines.length - correctedSearchLines.length;
-						i++
-					) {
-						if (i > 0 && i % 100 === 0) {
-							await new Promise<void>(resolve => setImmediate(resolve));
-						}
-						const candidateLines = contentLines.slice(
-							i,
-							i + correctedSearchLines.length,
-						);
-						const similarity = await calculateNormalizedSimilarityAsync(
-							normalizedCorrectedSearch,
-							normalizeWhitespace(candidateLines.join('\n')),
-							threshold,
-						);
-						if (similarity >= threshold) {
-							matches.push({
-								startLine: i + 1,
-								endLine: i + correctedSearchLines.length,
-								similarity,
-							});
-						}
-					}
+					const correctedFirstLine =
+						correctedSearchLines[0]?.replace(/\s+/g, ' ').trim() || '';
+					const correctedMatches = await fuzzyMatchSlidingWindow(
+						contentLines,
+						correctedSearchLines,
+						normalizedCorrectedSearch,
+						unescapeFix.correctedString,
+						threshold,
+						maxMatches,
+						correctedSearchLines.length >= 5,
+						preFilterThreshold,
+						correctedFirstLine,
+					);
+					matches.push(...correctedMatches);
 				}
 				matches.sort((a, b) => b.similarity - a.similarity);
 				if (matches.length > 0) {
