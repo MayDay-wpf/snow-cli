@@ -453,6 +453,41 @@ export class TodoService {
 		return null;
 	}
 
+	/**
+	 * 将 todoId 参数规范化为 string[]。
+	 * 某些 AI 模型会将数组参数序列化为 JSON 字符串（如 '["id1","id2"]'），
+	 * 这里做防御性解析，确保无论传入 string、string[] 还是 JSON 字符串都能正确处理。
+	 */
+	private normalizeTodoId(value: unknown): string[] | null {
+		if (value === undefined || value === null) {
+			return null;
+		}
+
+		if (Array.isArray(value)) {
+			return value.filter((item): item is string => typeof item === 'string');
+		}
+
+		if (typeof value === 'string') {
+			const trimmed = value.trim();
+			if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+				try {
+					const parsed = JSON.parse(trimmed);
+					if (
+						Array.isArray(parsed) &&
+						parsed.every(item => typeof item === 'string')
+					) {
+						return parsed;
+					}
+				} catch {
+					// JSON 解析失败，当作单个 ID 处理
+				}
+			}
+			return [trimmed];
+		}
+
+		return null;
+	}
+
 	private buildIncompletePhaseMessage(
 		phase: TodoPhase,
 		incompleteTodos: TodoItem[],
@@ -591,7 +626,6 @@ export class TodoService {
 				}
 
 				case 'update_item': {
-					const todoId = args['todoId'] as string | string[] | undefined;
 					const status = args['status'] as
 						| 'pending'
 						| 'inProgress'
@@ -599,7 +633,8 @@ export class TodoService {
 						| undefined;
 					const content = args['content'];
 
-					if (todoId === undefined || todoId === null) {
+					const ids = this.normalizeTodoId(args['todoId']);
+					if (!ids || ids.length === 0) {
 						return this.createErrorResult(
 							'Error: action=update_item requires "todoId"',
 						);
@@ -614,7 +649,6 @@ export class TodoService {
 						);
 					}
 
-					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const idSet = new Set(ids);
 					const updatedAt = new Date().toISOString();
 					let anyFound = false;
@@ -724,14 +758,13 @@ export class TodoService {
 				}
 
 				case 'delete_item': {
-					const todoId = args['todoId'] as string | string[] | undefined;
-					if (todoId === undefined || todoId === null) {
+					const ids = this.normalizeTodoId(args['todoId']);
+					if (!ids || ids.length === 0) {
 						return this.createErrorResult(
 							'Error: action=delete_item requires "todoId"',
 						);
 					}
 
-					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const idSet = new Set(ids);
 					todoList.todos = todoList.todos.filter(
 						todo => !idSet.has(todo.id) && !idSet.has(todo.parentId ?? ''),
@@ -1091,13 +1124,13 @@ EXAMPLES:
 				}
 
 				case 'update': {
-					const {todoId, status, content} = args as {
-						todoId: string | string[];
+					const {status, content} = args as {
 						status?: 'pending' | 'inProgress' | 'completed';
 						content?: string;
 					};
 
-					if (todoId === undefined || todoId === null) {
+					const ids = this.normalizeTodoId(args['todoId']);
+					if (!ids || ids.length === 0) {
 						return {
 							content: [
 								{
@@ -1115,7 +1148,6 @@ EXAMPLES:
 						updates.content = content;
 					}
 
-					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const result = await this.updateTodoItems(sessionId, ids, updates);
 					return {
 						content: [
@@ -1196,11 +1228,8 @@ EXAMPLES:
 				}
 
 				case 'delete': {
-					const {todoId} = args as {
-						todoId?: string | string[];
-					};
-
-					if (todoId === undefined || todoId === null) {
+					const ids = this.normalizeTodoId(args['todoId']);
+					if (!ids || ids.length === 0) {
 						return {
 							content: [
 								{
@@ -1212,7 +1241,6 @@ EXAMPLES:
 						};
 					}
 
-					const ids = Array.isArray(todoId) ? todoId : [todoId];
 					const result = await this.deleteTodoItems(sessionId, ids);
 					return {
 						content: [

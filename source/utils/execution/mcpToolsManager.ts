@@ -1169,6 +1169,7 @@ export async function executeMCPTool(
 			'paths',
 			'items',
 			'options',
+			'todoId',
 		];
 
 		for (const [key, value] of Object.entries(args)) {
