@@ -1023,7 +1023,7 @@ export const mcpTools = [
 											"Whether to create parent directories if they don't exist",
 									},
 								},
-								required: ['path', 'content'],
+								required: ['path', 'content','overwrite'],
 							},
 							description: 'Array of file configs for batch creation',
 						},
