@@ -445,6 +445,7 @@ export default function ChatScreen({
 		onResetTerminalTitle: resetTerminalTitleSummary,
 		handleInterrupt,
 		cutInterruptRef,
+		pauseGate: streamingState.pauseGate,
 	});
 
 	useEffect(() => {
@@ -744,6 +745,7 @@ export default function ChatScreen({
 						bashMode.state.isExecuting ||
 						isCompressing
 					}
+					isPaused={streamingState.isPaused}
 					chatHistory={messages}
 					yoloMode={yoloMode}
 					setYoloMode={setYoloMode}

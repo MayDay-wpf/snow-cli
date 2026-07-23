@@ -87,6 +87,7 @@ type LoadingIndicatorProps = {
 	isSaving: boolean;
 	isCompressing: boolean;
 	isAutoCompressing?: boolean;
+	isPaused?: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
 	hasBlockingOverlay: boolean;
@@ -122,6 +123,7 @@ export default function LoadingIndicator({
 	isSaving,
 	isCompressing,
 	isAutoCompressing = false,
+	isPaused = false,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
 	hasBlockingOverlay,
@@ -168,7 +170,8 @@ export default function LoadingIndicator({
 	const isStreamingStarted = isStreaming && !wasStreamingRef.current;
 	wasStreamingRef.current = isStreaming;
 
-	const shouldIgnoreStreamDelay = isCompressing || isAutoCompressing;
+	const shouldIgnoreStreamDelay =
+		isCompressing || isAutoCompressing || isPaused;
 
 	if (
 		!isStreaming ||
@@ -431,6 +434,11 @@ export default function LoadingIndicator({
 							</Text>
 						)}
 						{renderLoadingTip()}
+						{isPaused && (
+							<Text color={theme.colors.warning} dimColor>
+								└─ {t.chatScreen.statusPaused}
+							</Text>
+						)}
 					</>
 				) : (
 					<Text color={theme.colors.menuSecondary} dimColor>

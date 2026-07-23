@@ -126,10 +126,7 @@ jobs:
             ### What's New
 
             #### Features
-            - Agent Team Mode: orchestrate multiple agents with independent Git worktrees for parallel, conflict-free collaborative development
-            - Hooks session context injection (#194): inject additionalContext into onSessionStart/onUserMessage, project-level `.snow/agents` markdown agents, new beforeSubAgentStart hook
-            - Session identity management: inject SNOW_SESSION_ID / TRELLIS_CONTEXT_ID / SNOW_CWD / SNOW_PLATFORM env vars for Trellis multi-session isolation
-            - Session management: enhanced session identity and context handling, initial user prompt support
+            - AI Loop pause/continue: pause the AI loop mid-processing with `/pause` and resume with `/continue`; timer and stream-delay indicators freeze during pause, ESC still interrupts
 
             #### Fixes
             - Fix silent failures of summaryAgent / compactAgent / visionAgent / codebaseReviewAgent / bashOutputSummaryAgent / unifiedHooksExecutor on OpenAI-compatible endpoints (LM Studio, Ollama, vLLM) caused by wrong StreamChunk format reading

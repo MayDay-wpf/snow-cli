@@ -921,6 +921,8 @@ export const en: TranslationKeys = {
 			speedometer:
 				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
+			pause: 'Pause the AI loop at the next round',
+			continue: 'Resume the AI loop after /pause',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -1179,6 +1181,11 @@ export const en: TranslationKeys = {
 			// Cut (interrupt) command messages
 			cut: {
 				usage: 'Usage: /cut <message>',
+			},
+			// Pause/Continue command messages
+			pause: {
+				paused: 'AI loop paused. Use /continue to resume or ESC to interrupt.',
+				resumed: 'AI loop resumed.',
 			},
 			// BTW command messages
 			btw: {
@@ -1614,6 +1621,7 @@ export const en: TranslationKeys = {
 		statusConnectionFailed:
 			'Connection Failed (this will not affect any usage) - Make sure Snow CLI plugin is installed and active in your IDE',
 		statusStopping: 'Stopping...',
+		statusPaused: 'Paused - use /continue to resume or ESC to interrupt',
 		inputCopySuccess: 'Input content copied to clipboard',
 		inputCopyFailedPrefix: 'Failed to copy input content',
 		// Profile switch

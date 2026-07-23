@@ -866,6 +866,8 @@ export const zh: TranslationKeys = {
 			speedometer:
 				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
 			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
+			pause: '在下一轮暂停 AI Loop',
+			continue: '在 /pause 后继续 AI Loop',
 			quit: '退出应用程序',
 		},
 		copyLastFeedback: {
@@ -1108,6 +1110,11 @@ export const zh: TranslationKeys = {
 			// Cut (打断) 命令消息
 			cut: {
 				usage: '用法: /cut <消息>',
+			},
+			// Pause/Continue (暂停/继续) 命令消息
+			pause: {
+				paused: 'AI Loop 已暂停。使用 /continue 继续，或按 ESC 中断。',
+				resumed: 'AI Loop 已继续。',
 			},
 			// BTW 命令消息
 			btw: {
@@ -1524,6 +1531,7 @@ export const zh: TranslationKeys = {
 		statusConnectionFailed:
 			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		statusStopping: '停止中...',
+		statusPaused: '已暂停 - 使用 /continue 继续或按 ESC 中断',
 		inputCopySuccess: '已复制输入框内容到剪贴板',
 		inputCopyFailedPrefix: '复制输入框内容失败',
 		// Profile switch

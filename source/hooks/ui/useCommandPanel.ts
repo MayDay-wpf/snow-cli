@@ -166,7 +166,11 @@ export function getCommandArgsHint(commandName: string): string {
 	return customCmd?.argsHint ?? '';
 }
 
-export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
+export function useCommandPanel(
+	buffer: TextBuffer,
+	isProcessing = false,
+	isPaused = false,
+) {
 	const {t} = useI18n();
 
 	const subAgents = useSyncExternalStore(
@@ -490,6 +494,19 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					t.commandPanel.commands.cut || 'Interrupt AI and send a message',
 				allowDuringProcessing: true,
 			},
+			{
+				name: 'pause',
+				description:
+					t.commandPanel.commands.pause ||
+					'Pause the AI loop at the next round',
+				allowDuringProcessing: true,
+			},
+			{
+				name: 'continue',
+				description:
+					t.commandPanel.commands.continue || 'Resume the AI loop after /pause',
+				allowDuringProcessing: true,
+			},
 		],
 		[t],
 	);
@@ -555,10 +572,16 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			? allCommands.filter(
 					command =>
 						command.type === 'prompt' &&
-						!(command.mainFlowOnly && hasRunningAgentsOrTeam),
+						!(command.mainFlowOnly && hasRunningAgentsOrTeam) &&
+						// Hide 'pause' when already paused; hide 'continue' when not paused
+						!(command.name === 'pause' && isPaused) &&
+						!(command.name === 'continue' && !isPaused),
 			  )
 			: trigger.isAtStart
-			? allCommands
+			? allCommands.filter(
+					// /pause and /continue only make sense during AI processing
+					command => command.name !== 'pause' && command.name !== 'continue',
+			  )
 			: allCommands.filter(isInlineCommand);
 
 		// Filter and sort commands by priority and usage frequency
@@ -618,6 +641,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		buffer,
 		getAllCommands,
 		isProcessing,
+		isPaused,
 		hasRunningAgentsOrTeam,
 		usageLoaded,
 	]);

@@ -204,6 +204,7 @@ type Props = {
 	placeholder?: string;
 	disabled?: boolean;
 	isProcessing?: boolean; // Prevent command panel from showing during AI response/tool execution
+	isPaused?: boolean; // AI loop is paused, show /continue instead of /pause
 	chatHistory?: Array<{
 		role: string;
 		content: string;
@@ -276,6 +277,7 @@ export default function ChatInput({
 	placeholder = 'Type your message...',
 	disabled = false,
 	isProcessing = false,
+	isPaused = false,
 	chatHistory = [],
 	onHistorySelect,
 	yoloMode = false,
@@ -354,7 +356,7 @@ export default function ChatInput({
 		getFilteredCommands,
 		updateCommandPanelState,
 		getAllCommands,
-	} = useCommandPanel(buffer, isProcessing);
+	} = useCommandPanel(buffer, isProcessing, isPaused);
 
 	// Command args picker state
 	const [showArgsPicker, setShowArgsPicker] = React.useState(false);
