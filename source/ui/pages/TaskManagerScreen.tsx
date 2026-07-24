@@ -7,6 +7,7 @@ import {
 	taskManager,
 	type TaskListItem,
 	type Task,
+	type TaskScope,
 } from '../../utils/task/taskManager.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
@@ -20,6 +21,7 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 	const {t} = useI18n();
 	useTerminalTitle(`Snow CLI - ${t.taskManager.title}`);
 	const [tasks, setTasks] = useState<TaskListItem[]>([]);
+	const [taskScope, setTaskScope] = useState<TaskScope>('current');
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const [markedTasks, setMarkedTasks] = useState<Set<string>>(new Set());
@@ -39,7 +41,7 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 	const loadTasks = useCallback(async () => {
 		setIsLoading(true);
 		try {
-			const taskList = await taskManager.listTasks();
+			const taskList = await taskManager.listTasks(taskScope);
 			setTasks(taskList);
 		} catch (error) {
 			console.error('Failed to load tasks:', error);
@@ -47,7 +49,7 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 		} finally {
 			setIsLoading(false);
 		}
-	}, []);
+	}, [taskScope]);
 
 	useEffect(() => {
 		void loadTasks();
@@ -196,6 +198,14 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 			return;
 		}
 
+		if ((input === 'g' || input === 'G') && !key.ctrl && viewMode === 'list') {
+			setTaskScope(scope => (scope === 'current' ? 'all' : 'current'));
+			setSelectedIndex(0);
+			setScrollOffset(0);
+			setMarkedTasks(new Set());
+			return;
+		}
+
 		if (key.upArrow) {
 			setSelectedIndex(prev => {
 				const newIndex = Math.max(0, prev - 1);
@@ -289,7 +299,7 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 			const selectedTask = tasks[selectedIndex];
 			if (selectedTask) {
 				void (async () => {
-					const fullTask = await taskManager.loadTask(selectedTask.id);
+					const fullTask = await taskManager.loadTask(selectedTask);
 					if (fullTask) {
 						setDetailTask(fullTask);
 						setViewMode('detail');
@@ -572,6 +582,12 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 					<Text color={theme.colors.menuSecondary as any} dimColor>
 						{t.taskManager.navigationHint}
 					</Text>
+					<Text color={theme.colors.menuSecondary as any} dimColor>
+						{taskScope === 'current'
+							? t.taskManager.scopeCurrent
+							: t.taskManager.scopeAll}{' '}
+						• {t.taskManager.scopeHint}
+					</Text>
 				</Box>
 				{hasPrevious && (
 					<Text color={theme.colors.menuSecondary as any} dimColor>
@@ -614,6 +630,15 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 							<Text color={theme.colors.menuSecondary as any} dimColor>
 								{' '}
 								• {timeStr}
+								{taskScope === 'all' && (
+									<>
+										{' '}
+										•{' '}
+										{task.isLegacy
+											? t.taskManager.legacyProject
+											: task.projectPath || task.projectId}
+									</>
+								)}
 							</Text>
 						</Text>
 					);

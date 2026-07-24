@@ -1857,7 +1857,11 @@ export const zhTW: TranslationKeys = {
 		messagesCount: '{count} 則訊息',
 		markedCount: '{count} 個已標記',
 		navigationHint:
-			'↑↓ 導航 • 空格 標記 • D 刪除 • R 重新整理 • Enter 檢視 • ESC 關閉',
+			'↑↓ 導航 • 空格 標記 • D 刪除 • R 重新整理 • G 範圍 • Enter 檢視 • ESC 關閉',
+		scopeCurrent: '目前專案',
+		scopeAll: '全部專案',
+		scopeHint: 'G 切換範圍',
+		legacyProject: '舊版任務',
 		moreAbove: '↑ 上方還有 {count} 個',
 		moreBelow: '↓ 下方還有 {count} 個',
 		deleteConfirm: '再次按 D 確認刪除任務',

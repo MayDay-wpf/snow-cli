@@ -1694,6 +1694,10 @@ export type TranslationKeys = {
 		messagesCount: string;
 		markedCount: string;
 		navigationHint: string;
+		scopeCurrent: string;
+		scopeAll: string;
+		scopeHint: string;
+		legacyProject: string;
 		moreAbove: string;
 		moreBelow: string;
 		deleteConfirm: string;

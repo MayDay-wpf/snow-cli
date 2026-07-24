@@ -5,17 +5,20 @@ import {homedir} from 'os';
 import {notifyTaskFinished} from '../platform/notification.js';
 import {taskManager} from './taskManager.js';
 
-const TASK_LOG_DIR = join(homedir(), '.snow', 'task-logs');
+function getTaskLogDir(): string {
+	return join(homedir(), '.snow', 'task-logs', taskManager.getProjectId());
+}
 
 function ensureLogDir() {
-	if (!existsSync(TASK_LOG_DIR)) {
-		mkdirSync(TASK_LOG_DIR, {recursive: true});
+	const taskLogDir = getTaskLogDir();
+	if (!existsSync(taskLogDir)) {
+		mkdirSync(taskLogDir, {recursive: true});
 	}
 }
 
 function getLogPath(taskId: string): string {
 	ensureLogDir();
-	return join(TASK_LOG_DIR, `${taskId}.log`);
+	return join(getTaskLogDir(), `${taskId}.log`);
 }
 
 function writeLog(taskId: string, message: string) {
@@ -77,6 +80,8 @@ export async function executeTaskInBackground(
 				...process.env,
 				SNOW_TASK_MODE: 'true',
 				SNOW_TASK_ID: taskId,
+				SNOW_TASK_PROJECT_ID: taskManager.getProjectId(),
+				SNOW_TASK_PROJECT_PATH: taskManager.getProjectPath(),
 			},
 		},
 	);
@@ -108,11 +113,7 @@ export async function executeTaskInBackground(
 	// Save the PID to the task for process management
 	if (child.pid) {
 		try {
-			const task = await taskManager.loadTask(taskId);
-			if (task) {
-				task.pid = child.pid;
-				await taskManager.saveTask(task);
-			}
+			await taskManager.setTaskPid(taskId, child.pid);
 		} catch (error) {
 			writeLog(taskId, `Failed to save PID: ${error}`);
 		}
@@ -278,24 +279,10 @@ export async function executeTask(
 							await new Promise(resolve => setTimeout(resolve, 500));
 
 							// Verify the paused status was saved correctly
-							let verifyTask = await taskManager.loadTask(taskId);
+							const verifyTask = await taskManager.loadTask(taskId);
 							if (verifyTask && verifyTask.status !== 'paused') {
 								log('Paused status was overwritten, forcing re-save...');
-								verifyTask.status = 'paused';
-								if (!verifyTask.pausedInfo) {
-									verifyTask.pausedInfo = {
-										reason: 'sensitive_command',
-										sensitiveCommand: {
-											command,
-											description: checkResult.matchedCommand?.description,
-											toolCallId: toolCall.id,
-											toolName: toolCall.function.name,
-											args,
-										},
-										pausedAt: Date.now(),
-									};
-								}
-								await taskManager.saveTask(verifyTask);
+								await taskManager.ensureTaskPaused(taskId);
 								log('Paused status re-saved successfully');
 							}
 
@@ -319,12 +306,9 @@ export async function executeTask(
 
 								if (currentTask.status === 'running') {
 									const rejectionReason =
-										currentTask.pausedInfo?.sensitiveCommand?.rejectionReason;
+										await taskManager.consumeRejectionReason(taskId);
 									if (rejectionReason) {
 										log(`User rejected with reason: ${rejectionReason}`);
-										delete currentTask.pausedInfo;
-										await taskManager.saveTask(currentTask);
-
 										return {
 											type: 'reject_with_reply',
 											reason: rejectionReason,
@@ -379,13 +363,8 @@ export async function executeTask(
 		await new Promise(resolve => setTimeout(resolve, 500));
 
 		log('Updating task status to completed...');
-		await taskManager.updateTaskStatus(taskId, 'completed');
-
-		// Clear PID since task is completed
-		const completedTask = await taskManager.loadTask(taskId);
+		const completedTask = await taskManager.finalizeTask(taskId, 'completed');
 		if (completedTask) {
-			delete completedTask.pid;
-			await taskManager.saveTask(completedTask);
 			notifyTaskFinished({
 				taskTitle: completedTask.title,
 				status: 'completed',
@@ -403,13 +382,12 @@ export async function executeTask(
 		const stack = error instanceof Error ? error.stack : '';
 		log(`Task execution failed: ${errorMessage}`);
 		log(`Stack trace: ${stack}`);
-		await taskManager.updateTaskStatus(taskId, 'failed', errorMessage);
-
-		// Clear PID since task is failed
-		const failedTask = await taskManager.loadTask(taskId);
+		const failedTask = await taskManager.finalizeTask(
+			taskId,
+			'failed',
+			errorMessage,
+		);
 		if (failedTask) {
-			delete failedTask.pid;
-			await taskManager.saveTask(failedTask);
 			notifyTaskFinished({
 				taskTitle: failedTask.title,
 				status: 'failed',

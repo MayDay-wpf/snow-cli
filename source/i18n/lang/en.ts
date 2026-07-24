@@ -1403,10 +1403,8 @@ export const en: TranslationKeys = {
 		tool: 'Tool display:',
 		think: 'Think display:',
 		subagent: 'Sub-agent display:',
-		toolInfo:
-			'Enter to cycle full → compact → hidden (same as /display tool)',
-		thinkInfo:
-			'Enter to cycle compact → full (same as /display think)',
+		toolInfo: 'Enter to cycle full → compact → hidden (same as /display tool)',
+		thinkInfo: 'Enter to cycle compact → full (same as /display think)',
 		subagentInfo:
 			'Enter to cycle slots → multi → compact → hidden (same as /display subagent)',
 		close: '← Close',
@@ -1959,7 +1957,11 @@ export const en: TranslationKeys = {
 		messagesCount: '{count} msgs',
 		markedCount: '{count} marked',
 		navigationHint:
-			'↑↓ navigate • Space mark • D delete • R refresh • Enter view • ESC close',
+			'↑↓ navigate • Space mark • D delete • R refresh • G scope • Enter view • ESC close',
+		scopeCurrent: 'Current project',
+		scopeAll: 'All projects',
+		scopeHint: 'G switch scope',
+		legacyProject: 'Legacy task',
 		moreAbove: '↑ {count} more above',
 		moreBelow: '↓ {count} more below',
 		deleteConfirm: 'Press D again to delete task',

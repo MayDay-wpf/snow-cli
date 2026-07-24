@@ -1861,7 +1861,11 @@ export const zh: TranslationKeys = {
 		messagesCount: '{count} 条消息',
 		markedCount: '{count} 个已标记',
 		navigationHint:
-			'↑↓ 导航 • 空格 标记 • D 删除 • R 刷新 • Enter 查看 • ESC 关闭',
+			'↑↓ 导航 • 空格 标记 • D 删除 • R 刷新 • G 范围 • Enter 查看 • ESC 关闭',
+		scopeCurrent: '当前项目',
+		scopeAll: '全部项目',
+		scopeHint: 'G 切换范围',
+		legacyProject: '旧版任务',
 		moreAbove: '↑ 上方还有 {count} 个',
 		moreBelow: '↓ 下方还有 {count} 个',
 		deleteConfirm: '再次按 D 确认删除任务',
