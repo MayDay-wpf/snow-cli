@@ -1,7 +1,10 @@
 import anyTest, {type TestFn} from 'ava';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
+	buildScopeWarningMessage,
 	classifyPlanGateDecision,
 	collectFilesystemPaths,
 	evaluatePlanGate,
@@ -10,14 +13,45 @@ import {
 	isPlanApprovalAnswer,
 	isPlanDirPath,
 	isTrellisTasksDirPath,
+	isWithinPlanScope,
 	maybeApprovePlanFromAskUser,
 	onPlanModeChange,
 	resetAllPlanGates,
 	resetPlanGate,
 	setPlanApproved,
+	setPlanScope,
+	validatePlanBeforeApproval,
 } from '../utils/execution/planModeGate.js';
 
 const test = anyTest as unknown as TestFn;
+
+const VALID_PLAN = `---
+status: draft
+current_phase: 0
+created: '2026-07-25T00:00:00.000Z'
+session: s-approve
+---
+# Demo
+
+### Phase 1: Only phase
+- **Files**: src/exists.ts
+- **Steps**:
+  - [ ] do the thing
+- **Done when**: build passes
+`;
+
+async function makePlanDir(content = VALID_PLAN): Promise<string> {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-gate-test-'));
+	await fs.mkdir(path.join(dir, '.snow', 'plan'), {recursive: true});
+	await fs.mkdir(path.join(dir, 'src'), {recursive: true});
+	await fs.writeFile(path.join(dir, 'src', 'exists.ts'), 'x', 'utf8');
+	await fs.writeFile(
+		path.join(dir, '.snow', 'plan', 'demo.md'),
+		content,
+		'utf8',
+	);
+	return dir;
+}
 
 test.beforeEach(() => {
 	resetAllPlanGates();
@@ -268,25 +302,122 @@ test('isPlanApprovalAnswer matches explicit approvals', t => {
 	);
 });
 
-test('maybeApprovePlanFromAskUser sets and resets approval', t => {
+test('maybeApprovePlanFromAskUser approves valid plan and persists frontmatter', async t => {
 	const sessionId = 's-approve';
+	const cwd = await makePlanDir();
 	t.false(getPlanApproved(sessionId));
 
-	maybeApprovePlanFromAskUser({
+	const result = await maybeApprovePlanFromAskUser({
 		planMode: true,
 		sessionId,
+		cwd,
 		question: 'Plan ready. Proceed?',
 		selected: 'Yes - Execute the entire plan',
 	});
+	t.true(result.approved);
 	t.true(getPlanApproved(sessionId));
 
-	maybeApprovePlanFromAskUser({
+	const raw = await fs.readFile(
+		path.join(cwd, '.snow', 'plan', 'demo.md'),
+		'utf8',
+	);
+	t.true(raw.includes('status: executing'));
+	t.true(raw.includes('current_phase: 1'));
+
+	const reset = await maybeApprovePlanFromAskUser({
 		planMode: true,
 		sessionId,
+		cwd,
 		question: 'Plan ready. Proceed?',
 		selected: 'Modify the plan',
 	});
+	t.false(reset.approved);
 	t.false(getPlanApproved(sessionId));
+});
+
+test('maybeApprovePlanFromAskUser rejects approval without a plan file', async t => {
+	const sessionId = 's-noplan';
+	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-gate-empty-'));
+	const result = await maybeApprovePlanFromAskUser({
+		planMode: true,
+		sessionId,
+		cwd,
+		question: 'Plan ready. Proceed?',
+		selected: 'Yes - Execute the entire plan',
+	});
+	t.false(result.approved);
+	t.truthy(result.error?.includes('no plan file'));
+	t.false(getPlanApproved(sessionId));
+});
+
+test('validatePlanBeforeApproval rejects structurally invalid plans', async t => {
+	const cwd = await makePlanDir(
+		VALID_PLAN.replace(
+			/- \*\*Steps\*\*:[\s\S]*?- \*\*Done when\*\*/,
+			'- **Done when**',
+		),
+	);
+	const result = await validatePlanBeforeApproval(cwd, 's-approve');
+	t.false(result.ok);
+	if (!result.ok) {
+		t.true(result.message.includes('Steps'));
+	}
+});
+
+test('validatePlanBeforeApproval rejects plans referencing missing files', async t => {
+	const cwd = await makePlanDir(
+		VALID_PLAN.replace('src/exists.ts', 'src/ghost.ts'),
+	);
+	const result = await validatePlanBeforeApproval(cwd, 's-approve');
+	t.false(result.ok);
+	if (!result.ok) {
+		t.true(result.message.includes('ghost.ts'));
+	}
+});
+
+test('plan scope: soft warning outside scope, always allow plan dir', async t => {
+	const sessionId = 's-scope';
+	const cwd = await makePlanDir();
+	setPlanApproved(sessionId, true);
+	setPlanScope(sessionId, {
+		planPath: path.join(cwd, '.snow', 'plan', 'demo.md'),
+		files: ['src/exists.ts'],
+		cwd,
+	});
+
+	t.true(isWithinPlanScope('src/exists.ts', cwd, sessionId));
+	t.true(isWithinPlanScope(path.join(cwd, 'SRC', 'exists.ts'), cwd, sessionId));
+	t.false(isWithinPlanScope('src/other.ts', cwd, sessionId));
+	t.true(isWithinPlanScope('.snow/plan/demo.md', cwd, sessionId));
+
+	const inScope = evaluatePlanGate({
+		planMode: true,
+		sessionId,
+		toolName: 'filesystem-edit',
+		args: {filePath: 'src/exists.ts'},
+		cwd,
+	});
+	t.true(inScope.allow);
+	t.falsy(inScope.warning);
+
+	const outScope = evaluatePlanGate({
+		planMode: true,
+		sessionId,
+		toolName: 'filesystem-edit',
+		args: {filePath: 'src/other.ts'},
+		cwd,
+	});
+	t.true(outScope.allow);
+	t.truthy(outScope.warning?.includes('Plan Scope Warning'));
+
+	// Empty scope → unrestricted
+	resetPlanGate(sessionId);
+	setPlanApproved(sessionId, true);
+	t.true(isWithinPlanScope('src/anything.ts', cwd, sessionId));
+
+	t.true(
+		buildScopeWarningMessage('filesystem-edit', ['x.ts']).includes('amend'),
+	);
 });
 
 test('session isolation and plan mode change reset', t => {
