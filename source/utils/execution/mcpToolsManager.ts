@@ -23,6 +23,7 @@ import {
 	mcpTools as notebookTools,
 	executeNotebookTool,
 } from '../../mcp/notebook.js';
+import {planManageTools, executePlanManageTool} from '../../mcp/planManage.js';
 import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
@@ -146,6 +147,7 @@ export function getRegisteredServicePrefixes(): string[] {
 	const builtInPrefixes = [
 		'todo-',
 		'notebook-',
+		'plan-',
 		'filesystem-',
 		'terminal-',
 		'ace-',
@@ -324,6 +326,17 @@ async function refreshToolsCache(): Promise<void> {
 			inputSchema: t.inputSchema,
 		})),
 		'notebook',
+	);
+
+	// Add built-in Plan management tools (Plan Mode execution tracking)
+	addBuiltInService(
+		'plan',
+		planManageTools.map(t => ({
+			name: t.name,
+			description: t.description || '',
+			inputSchema: t.inputSchema,
+		})),
+		'plan',
 	);
 
 	// Add built-in ACE Code Search tools
@@ -1222,6 +1235,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('notebook-')) {
 			serviceName = 'notebook';
 			actualToolName = toolName.substring('notebook-'.length);
+		} else if (toolName.startsWith('plan-')) {
+			serviceName = 'plan';
+			actualToolName = toolName.substring('plan-'.length);
 		} else if (toolName.startsWith('filesystem-')) {
 			serviceName = 'filesystem';
 			actualToolName = toolName.substring('filesystem-'.length);
@@ -1295,6 +1311,7 @@ export async function executeMCPTool(
 		const builtInServices = [
 			'todo',
 			'notebook',
+			'plan',
 			'filesystem',
 			'terminal',
 			'ace',
@@ -1353,6 +1370,9 @@ export async function executeMCPTool(
 		} else if (serviceName === 'notebook') {
 			// Handle built-in Notebook tools (no connection needed)
 			result = await executeNotebookTool(actualToolName, args);
+		} else if (serviceName === 'plan') {
+			// Handle built-in Plan management tools (Plan Mode execution)
+			result = await executePlanManageTool(actualToolName, args, abortSignal);
 		} else if (serviceName === 'filesystem') {
 			// Handle built-in filesystem tools (no connection needed)
 			const {filesystemService} = await import('../../mcp/filesystem.js');

@@ -50,6 +50,7 @@ export const TOOL_NAME_ICONS: Record<string, string> = {
 	// Tasks / memory
 	'todo-manage': '≣',
 	'notebook-manage': '▧',
+	'plan-manage': '☰',
 
 	// IDE / docs / session
 	'ide-get_diagnostics': '⁇',
