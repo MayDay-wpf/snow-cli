@@ -36,6 +36,7 @@ export interface UnifiedSettings {
 	fileListDisplayMode?: 'list' | 'tree';
 	yoloMode?: boolean;
 	planMode?: boolean;
+	planStrictness?: 'strict' | 'soft' | 'off';
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;

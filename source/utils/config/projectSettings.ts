@@ -12,6 +12,7 @@ export interface ProjectSettings {
 	fileListDisplayMode?: 'list' | 'tree';
 	yoloMode?: boolean;
 	planMode?: boolean;
+	planStrictness?: 'strict' | 'soft' | 'off';
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;
@@ -63,6 +64,7 @@ function loadSettings(): ProjectSettings {
 		fileListDisplayMode: pick('fileListDisplayMode'),
 		yoloMode: pick('yoloMode'),
 		planMode: pick('planMode'),
+		planStrictness: pick('planStrictness'),
 		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		imageCompressEnabled: pick('imageCompressEnabled'),
@@ -147,6 +149,20 @@ export function getPlanMode(): boolean {
 
 export function setPlanMode(enabled: boolean): void {
 	setField('planMode', enabled);
+}
+
+export type PlanStrictness = 'strict' | 'soft' | 'off';
+
+export function getPlanStrictness(): PlanStrictness {
+	const settings = loadSettings();
+	const value = settings.planStrictness;
+	return value === 'strict' || value === 'soft' || value === 'off'
+		? value
+		: 'soft';
+}
+
+export function setPlanStrictness(value: PlanStrictness): void {
+	setField('planStrictness', value);
 }
 
 export function getVulnerabilityHuntingMode(): boolean {

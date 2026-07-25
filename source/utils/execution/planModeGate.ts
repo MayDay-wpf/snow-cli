@@ -9,9 +9,18 @@
  */
 
 import path from 'node:path';
+import {getPlanStrictness} from '../config/projectSettings.js';
+import {
+	findActivePlan,
+	validatePlanDocument,
+	writePlanFrontmatter,
+	type PlanDoc,
+} from './planDocument.js';
 
 type PlanGateState = {
 	planApproved: boolean;
+	allowedWriteFiles: Set<string>;
+	activePlanPath: string | null;
 };
 
 const DEFAULT_SESSION_KEY = 'default';
@@ -28,7 +37,11 @@ function getState(sessionId?: string | null): PlanGateState {
 	const key = resolveSessionKey(sessionId);
 	let state = sessionGateState.get(key);
 	if (!state) {
-		state = {planApproved: false};
+		state = {
+			planApproved: false,
+			allowedWriteFiles: new Set(),
+			activePlanPath: null,
+		};
 		sessionGateState.set(key, state);
 	}
 	return state;
@@ -47,7 +60,11 @@ export function setPlanApproved(
 
 export function resetPlanGate(sessionId?: string | null): void {
 	const key = resolveSessionKey(sessionId);
-	sessionGateState.set(key, {planApproved: false});
+	sessionGateState.set(key, {
+		planApproved: false,
+		allowedWriteFiles: new Set(),
+		activePlanPath: null,
+	});
 }
 
 /** Test helper: wipe all session gate state. */
@@ -64,8 +81,13 @@ export function onPlanModeChange(
 	sessionId?: string | null,
 ): void {
 	// enabled true or false → reset approval for this session
-	void enabled;
 	resetPlanGate(sessionId);
+	if (!enabled) {
+		// Leaving plan mode: archive any completed plans left behind (best-effort)
+		void import('./planArchive.js')
+			.then(m => m.sweepCompletedPlans(process.cwd()))
+			.catch(() => {});
+	}
 }
 
 export function normalizePathForCompare(filePath: string): string {
@@ -124,6 +146,131 @@ export function isAllowedUnapprovedWritePath(
 	return isPlanDirPath(filePath, cwd) || isTrellisTasksDirPath(filePath, cwd);
 }
 
+/**
+ * Register the approved plan's write scope (current phase files) for a session.
+ * Used after approval and when plan-manage advances/amends a phase.
+ */
+export function setPlanScope(
+	sessionId: string | null | undefined,
+	input: {planPath: string; files: string[]; cwd: string},
+): void {
+	const state = getState(sessionId);
+	state.activePlanPath = input.planPath;
+	state.allowedWriteFiles = new Set(
+		input.files
+			.map(f => f.replace(/\s*\(.*\)\s*$/, '').trim())
+			.filter(Boolean)
+			.map(f => normalizePathForCompare(path.resolve(input.cwd, f))),
+	);
+}
+
+/** True when a write target is inside the approved plan's scope. */
+export function isWithinPlanScope(
+	filePath: string,
+	cwd: string,
+	sessionId?: string | null,
+): boolean {
+	if (isPlanDirPath(filePath, cwd) || isTrellisTasksDirPath(filePath, cwd)) {
+		return true;
+	}
+	const state = getState(sessionId);
+	if (state.allowedWriteFiles.size === 0) {
+		// No scope registered (e.g. plan without Files lists): don't restrict.
+		return true;
+	}
+	return state.allowedWriteFiles.has(
+		normalizePathForCompare(path.resolve(cwd, filePath)),
+	);
+}
+
+export function buildScopeWarningMessage(
+	toolName: string,
+	offending: string[],
+): string {
+	return (
+		`[Plan Scope Warning] ${toolName} wrote outside the current phase's file list: ` +
+		`${offending.join(
+			', ',
+		)}. If this change is intentional, call plan-manage ` +
+		`with action "amend" to add these files to the plan first, so the plan stays the source of truth.`
+	);
+}
+
+/** Extract the current-phase write scope (files) from a plan document. */
+export function resolvePlanScopeFiles(plan: PlanDoc): string[] {
+	const phase =
+		plan.phases.find(p => p.index === plan.frontmatter.current_phase) ??
+		plan.phases[0];
+	if (phase && phase.files.length > 0) {
+		return phase.files;
+	}
+	if (plan.affectedFiles.length > 0) {
+		return plan.affectedFiles;
+	}
+	return [...new Set(plan.phases.flatMap(p => p.files))];
+}
+
+/**
+ * Hard validation before plan approval unlocks the gate:
+ * the session must have a plan file with valid structure and real file paths.
+ */
+export async function validatePlanBeforeApproval(
+	cwd: string,
+	sessionId: string | null | undefined,
+): Promise<{ok: true; plan: PlanDoc} | {ok: false; message: string}> {
+	let plan: PlanDoc | null = null;
+	try {
+		plan = await findActivePlan(cwd, sessionId);
+	} catch {
+		plan = null;
+	}
+	if (!plan) {
+		return {
+			ok: false,
+			message:
+				'Plan approval rejected: no plan file found under .snow/plan/. ' +
+				'Create the plan document first (with frontmatter and "### Phase N" sections), then ask for approval again.',
+		};
+	}
+	const issues = validatePlanDocument(plan, cwd);
+	if (issues.length > 0) {
+		return {
+			ok: false,
+			message:
+				`Plan approval rejected (${plan.filePath}): ` +
+				issues.map(i => i.message).join(' ') +
+				' Fix the plan file under .snow/plan/ and ask for approval again.',
+		};
+	}
+	return {ok: true, plan};
+}
+
+/**
+ * Restore in-memory gate state from disk after a session resume:
+ * a plan with status=executing for this session re-approves the gate.
+ */
+export async function restorePlanGateFromDisk(
+	cwd: string,
+	sessionId: string | null | undefined,
+): Promise<void> {
+	if (getPlanApproved(sessionId)) {
+		return;
+	}
+	try {
+		const plan = await findActivePlan(cwd, sessionId);
+		if (plan && plan.frontmatter.status === 'executing') {
+			setPlanApproved(sessionId, true);
+			setPlanScope(sessionId, {
+				planPath: plan.filePath,
+				files: resolvePlanScopeFiles(plan),
+				cwd,
+			});
+		}
+	} catch {
+		// Best-effort restore; gate stays unapproved on failure.
+	}
+}
+
 /** Collect filesystem target paths from tool args (single / batch). */
 export function collectFilesystemPaths(args: any): string[] {
 	if (!args || typeof args !== 'object') {
@@ -163,6 +310,7 @@ const ALWAYS_ALLOW_EXACT = new Set([
 	'ide-get_diagnostics',
 	'todo-manage',
 	'todo-ultra',
+	'plan-manage',
 	'notebook-manage',
 	'skill-execute',
 	'websearch-search',
@@ -339,10 +487,12 @@ export function isPlanApprovalAnswer(input: {
 			opt.includes('execute the entire plan') ||
 			opt.includes('execute entire plan') ||
 			opt.includes('yes - execute') ||
+			opt.includes('continue the plan') ||
 			opt.includes('执行整个计划') ||
 			opt.includes('批准并执行') ||
 			opt.includes('批准计划') ||
-			opt.includes('开始执行')
+			opt.includes('开始执行') ||
+			opt.includes('继续执行')
 		) {
 			return true;
 		}
@@ -404,13 +554,47 @@ export function evaluatePlanGate(input: {
 	toolName: string;
 	args: any;
 	cwd: string;
-}): {allow: boolean; message?: string} {
+}): {allow: boolean; message?: string; warning?: string} {
 	if (!input.planMode) {
 		return {allow: true};
 	}
 
 	if (getPlanApproved(input.sessionId)) {
-		return {allow: true};
+		// Approved: enforce plan scope on filesystem writes per strictness.
+		if (!FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
+			return {allow: true};
+		}
+		let strictness: 'strict' | 'soft' | 'off' = 'soft';
+		try {
+			strictness = getPlanStrictness();
+		} catch {
+			strictness = 'soft';
+		}
+		if (strictness === 'off') {
+			return {allow: true};
+		}
+		const paths = collectFilesystemPaths(input.args);
+		const offending = paths.filter(
+			p => !isWithinPlanScope(p, input.cwd, input.sessionId),
+		);
+		if (offending.length === 0) {
+			return {allow: true};
+		}
+		if (strictness === 'strict') {
+			return {
+				allow: false,
+				message:
+					`Error: Plan Mode strict scope is active. ` +
+					`These paths are outside the current phase's file list: ${offending.join(
+						', ',
+					)}. ` +
+					`Call plan-manage with action "amend" to add them to the plan, then retry.`,
+			};
+		}
+		return {
+			allow: true,
+			warning: buildScopeWarningMessage(input.toolName, offending),
+		};
 	}
 
 	// Always allow the approval tool itself
@@ -436,16 +620,19 @@ export function evaluatePlanGate(input: {
 
 /**
  * After askuser returns, update plan approval state when planMode is on.
+ * Approval only takes effect when the plan document passes hard validation;
+ * on failure the returned error should be surfaced to the model.
  */
-export function maybeApprovePlanFromAskUser(input: {
+export async function maybeApprovePlanFromAskUser(input: {
 	planMode: boolean;
 	sessionId?: string | null;
+	cwd?: string;
 	question?: string;
 	selected: string | string[];
 	customInput?: string;
-}): void {
+}): Promise<{approved: boolean; error?: string}> {
 	if (!input.planMode) {
-		return;
+		return {approved: false};
 	}
 
 	if (
@@ -455,11 +642,40 @@ export function maybeApprovePlanFromAskUser(input: {
 			customInput: input.customInput,
 		})
 	) {
+		const cwd = input.cwd || process.cwd();
+		const validation = await validatePlanBeforeApproval(cwd, input.sessionId);
+		if (!validation.ok) {
+			setPlanApproved(input.sessionId, false);
+			return {approved: false, error: validation.message};
+		}
+
 		setPlanApproved(input.sessionId, true);
-		return;
+		try {
+			await writePlanFrontmatter(validation.plan.filePath, {
+				status: 'executing',
+				current_phase: Math.max(1, validation.plan.frontmatter.current_phase),
+				approved_at: new Date().toISOString(),
+				session: input.sessionId ?? validation.plan.frontmatter.session,
+			});
+		} catch {
+			// Frontmatter persistence is best-effort; approval still holds.
+		}
+		setPlanScope(input.sessionId, {
+			planPath: validation.plan.filePath,
+			files: resolvePlanScopeFiles({
+				...validation.plan,
+				frontmatter: {
+					...validation.plan.frontmatter,
+					current_phase: Math.max(1, validation.plan.frontmatter.current_phase),
+				},
+			}),
+			cwd,
+		});
+		return {approved: true};
 	}
 
 	if (isPlanRejectOrModifyAnswer({selected: input.selected})) {
 		setPlanApproved(input.sessionId, false);
 	}
+	return {approved: false};
 }

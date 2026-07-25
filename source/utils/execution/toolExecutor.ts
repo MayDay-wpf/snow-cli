@@ -360,9 +360,10 @@ export async function executeToolCall(
 						hookAnswer.customInput,
 					);
 
-					maybeApprovePlanFromAskUser({
+					const gateApproval = await maybeApprovePlanFromAskUser({
 						planMode: planModeEnabled,
 						sessionId,
+						cwd: workingDirectory || process.cwd(),
 						question:
 							typeof args['question'] === 'string'
 								? args['question']
@@ -374,11 +375,15 @@ export async function executeToolCall(
 					result = {
 						tool_call_id: toolCall.id,
 						role: 'tool',
-						content: JSON.stringify({
-							answer: answerText,
-							selected: hookAnswer.selected,
-							customInput: hookAnswer.customInput,
-						}),
+						content:
+							JSON.stringify({
+								answer: answerText,
+								selected: hookAnswer.selected,
+								customInput: hookAnswer.customInput,
+							}) +
+							(gateApproval.error
+								? `\n\n[Plan Gate] ${gateApproval.error}`
+								: ''),
 					};
 					return result;
 				}
@@ -601,7 +606,9 @@ export async function executeToolCall(
 				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
-					content: textContent,
+					content: gateDecision.warning
+						? `${textContent}\n\n${gateDecision.warning}`
+						: textContent,
 					images,
 					editDiffData,
 				};
@@ -666,13 +673,15 @@ export async function executeToolCall(
 					);
 
 					// Plan Mode: capture explicit approval from interactive askuser.
+					let gateApprovalError: string | undefined;
 					try {
 						const parsedArgs = safeParseToolArguments(
 							toolCall.function.arguments,
 						);
-						maybeApprovePlanFromAskUser({
+						const gateApproval = await maybeApprovePlanFromAskUser({
 							planMode: getPlanMode(),
 							sessionId,
+							cwd: workingDirectory || process.cwd(),
 							question:
 								typeof parsedArgs['question'] === 'string'
 									? parsedArgs['question']
@@ -682,6 +691,7 @@ export async function executeToolCall(
 							selected: response.selected,
 							customInput: response.customInput,
 						});
+						gateApprovalError = gateApproval.error;
 					} catch {
 						// ignore approval parse failures
 					}
@@ -689,11 +699,13 @@ export async function executeToolCall(
 					result = {
 						tool_call_id: toolCall.id,
 						role: 'tool',
-						content: JSON.stringify({
-							answer: answerText,
-							selected: response.selected,
-							customInput: response.customInput,
-						}),
+						content:
+							JSON.stringify({
+								answer: answerText,
+								selected: response.selected,
+								customInput: response.customInput,
+							}) +
+							(gateApprovalError ? `\n\n[Plan Gate] ${gateApprovalError}` : ''),
 					};
 				} else {
 					// No callback provided, return error
