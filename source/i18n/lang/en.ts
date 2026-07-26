@@ -934,15 +934,15 @@ export const en: TranslationKeys = {
 			deepresearch:
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
-				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+				'Control tool call display: full / compact / hidden. Usage: /tool-display [full|compact|hidden|status]',
 			toolIcons:
 				'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
 			toolNames:
 				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
 			thinkDisplay:
-				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
+				'Control thinking content display: full / compact. Usage: /think-display [full|compact|status]',
 			subAgentDisplay:
-				'Control sub-agent live display. slots=focus overwrite (default) multi=multi-line compact=header-only hidden=legacy cards status=query. Usage: /subagent-display [slots|multi|compact|hidden|status]',
+				'Control sub-agent live display: slots (default) / multi / compact / hidden. Usage: /subagent-display [slots|multi|compact|hidden|status]',
 			display:
 				'Open display settings panel (tool/think/subagent). Usage: /display | status | tool|think|subagent [mode]',
 			speedometer:
@@ -1410,6 +1410,37 @@ export const en: TranslationKeys = {
 		close: '← Close',
 		closeInfo: 'Return to chat',
 		hint: '↑↓ navigate · Enter cycle · Esc close · also: /display tool|think|subagent',
+		modeLabels: {
+			full: 'Full',
+			compact: 'Compact',
+			hidden: 'Hidden',
+			slots: 'Slots',
+			multi: 'Multi',
+		},
+		formatMode: (mode: string) => {
+			const labels: Record<string, string> = {
+				full: 'Full',
+				compact: 'Compact',
+				hidden: 'Hidden',
+				slots: 'Slots',
+				multi: 'Multi',
+			};
+			const label = labels[mode];
+			return label ? `${label} (${mode})` : mode;
+		},
+		statusLine: (tool: string, think: string, subagent: string) => {
+			const labels: Record<string, string> = {
+				full: 'Full',
+				compact: 'Compact',
+				hidden: 'Hidden',
+				slots: 'Slots',
+				multi: 'Multi',
+			};
+			const fmt = (m: string) => labels[m] ?? m;
+			return `tool=${fmt(tool)} · think=${fmt(think)} · subagent=${fmt(
+				subagent,
+			)}`;
+		},
 	},
 	subAgentDepthPanel: {
 		title: 'Sub-Agent Depth',
@@ -2543,12 +2574,39 @@ export const en: TranslationKeys = {
 		title: 'Running Agents',
 		noAgentsRunning: 'No agents or teammates are currently running',
 		keyboardHint: '(Space: toggle · Enter: confirm · Esc: cancel)',
+		keyboardHintDetail:
+			'(Enter/v: detail · 1-9: jump · m: message · Space: multi · Esc: cancel)',
 		selected: 'Selected: {count}',
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
 		subAgentLabel: '[Agent]',
 		teammateLabel: '[Team]',
+		historyLabel: '[History]',
+	},
+	subAgentDetailPanel: {
+		timelineTitle: 'Tool Timeline',
+		inputLabel: 'Message this agent',
+		inputPlaceholder: 'Type a message, Enter to send…',
+		hint: 'Tab switch focus · ↑↓ scroll · Enter send · Esc back',
+		hintRunning:
+			'Tab focus · ↑↓ scroll · Enter send · 1-9 switch · x stop · Esc back',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
+		statusRunning: 'Running',
+		statusWaiting: 'Waiting',
+		statusDone: 'Done',
+		statusError: 'Error',
+		historyReadOnly: 'History view · read only',
+	},
+	subAgentSummaryCard: {
+		statusDone: 'Done',
+		statusError: 'Error',
+		promptLabel: 'prompt',
+		resultLabel: 'result',
+		errorLabel: 'error',
+		toolsCount: '{count} tools',
+		historyHint: '▸ use >> history for full timeline',
 	},
 	sseServer: {
 		started: '✓ SSE Server Started',

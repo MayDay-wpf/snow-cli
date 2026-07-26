@@ -1293,6 +1293,18 @@ export type TranslationKeys = {
 		close: string;
 		closeInfo: string;
 		hint: string;
+		/** Localized labels for display mode enums (full|compact|hidden|slots|multi) */
+		modeLabels: {
+			full: string;
+			compact: string;
+			hidden: string;
+			slots: string;
+			multi: string;
+		};
+		/** Format mode as "完整 (full)" / "Full (full)" */
+		formatMode: (mode: string) => string;
+		/** Top status line: 工具=完整 · 思考=完整 · 子代理=精简 */
+		statusLine: (tool: string, think: string, subagent: string) => string;
 	};
 
 	subAgentDepthPanel: {
@@ -2240,17 +2252,47 @@ export type TranslationKeys = {
 	commandArgsPanel: {
 		navigationHint: string;
 	};
-	// Running Agents Panel
 	runningAgentsPanel: {
 		title: string;
 		noAgentsRunning: string;
 		keyboardHint: string;
+		/** Enter 进入详情 · m 选目标发消息 · Space 多选 · Esc 取消 */
+		keyboardHintDetail?: string;
 		selected: string;
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
 		subAgentLabel: string;
 		teammateLabel: string;
+		/** Completed history row label in >> picker */
+		historyLabel: string;
+	};
+	// Sub-Agent Detail TUI
+	subAgentDetailPanel: {
+		timelineTitle: string;
+		inputLabel: string;
+		inputPlaceholder: string;
+		hint: string;
+		moreAbove: string;
+		moreBelow: string;
+		statusRunning: string;
+		statusWaiting: string;
+		statusDone: string;
+		statusError: string;
+		/** Shown instead of input when viewing a completed history run */
+		historyReadOnly: string;
+		/** Hint when viewing a running agent (includes abort / numeric switch) */
+		hintRunning?: string;
+	};
+	// Main-chat completed sub-agent summary card
+	subAgentSummaryCard: {
+		statusDone: string;
+		statusError: string;
+		promptLabel: string;
+		resultLabel: string;
+		errorLabel: string;
+		toolsCount: string;
+		historyHint: string;
 	};
 	sseServer: {
 		started: string;

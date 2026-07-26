@@ -586,12 +586,13 @@ export const zh: TranslationKeys = {
 			'调整差异高亮显示强度，默认 100%，最低 30%，回车按 10% 循环切换',
 		toolDisplay: '工具显示:',
 		toolDisplayInfo:
-			'工具调用密度 full/compact/hidden（回车循环；等同 /tool-display）',
+			'工具调用密度 完整(full)/精简(compact)/隐藏(hidden)（回车循环；等同 /tool-display）',
 		thinkDisplay: '思考显示:',
-		thinkDisplayInfo: '思考内容 full/compact（回车循环；等同 /think-display）',
+		thinkDisplayInfo:
+			'思考内容 完整(full)/精简(compact)（回车循环；等同 /think-display）',
 		subAgentDisplay: '子代理显示:',
 		subAgentDisplayInfo:
-			'子代理实时面板 slots/multi/compact/hidden（回车循环；等同 /subagent-display）',
+			'子代理实时面板 槽位(slots)/多行(multi)/精简(compact)/隐藏(hidden)（回车循环；等同 /subagent-display）',
 		enabled: '[✓] 已启用',
 		disabled: '[ ] 已禁用',
 		darkTheme: '深色主题',
@@ -878,15 +879,15 @@ export const zh: TranslationKeys = {
 			deepresearch:
 				'执行自主多步联网深度研究，并将带引用的 Markdown 报告保存到 .snow/deepresearch/',
 			toolDisplay:
-				'控制工具调用显示模式。用法: /tool-display [full|compact|hidden|status]',
+				'控制工具调用显示：完整(full)/精简(compact)/隐藏(hidden)。用法: /tool-display [full|compact|hidden|status]',
 			toolIcons:
 				'控制工具类型图标。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
 			toolNames:
 				'自定义工具显示名（官方路径，勿整文件改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
 			thinkDisplay:
-				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
+				'控制思考内容显示：完整(full)/精简(compact)。用法: /think-display [full|compact|status]',
 			subAgentDisplay:
-				'控制子代理实时显示。slots=单行焦点(默认) multi=多行 compact=仅标题 hidden=旧卡片 status=查询。用法: /subagent-display [slots|multi|compact|hidden|status]',
+				'控制子代理实时显示：槽位(slots，默认)/多行(multi)/精简(compact)/隐藏(hidden)。用法: /subagent-display [slots|multi|compact|hidden|status]',
 			display:
 				'打开显示设置面板（工具/思考/子代理）。用法: /display | status | tool|think|subagent [mode]',
 			speedometer:
@@ -937,14 +938,35 @@ export const zh: TranslationKeys = {
 			},
 			// 工具显示模式命令消息
 			toolDisplay: {
-				status: (mode: string) =>
-					`工具显示模式: ${mode}` +
-					(mode === 'full'
-						? '（显示工具名 + 参数 + 结果）'
-						: mode === 'compact'
-						? '（仅显示工具名 + 简要状态）'
-						: '（隐藏所有工具调用，仅显示 AI 回复）'),
-				set: (mode: string) => `工具显示模式已设置为: ${mode}`,
+				status: (mode: string) => {
+					const label =
+						mode === 'full'
+							? '完整'
+							: mode === 'compact'
+							? '精简'
+							: mode === 'hidden'
+							? '隐藏'
+							: mode;
+					return (
+						`工具显示模式: ${label} (${mode})` +
+						(mode === 'full'
+							? '（显示工具名 + 参数 + 结果）'
+							: mode === 'compact'
+							? '（仅显示工具名 + 简要状态）'
+							: '（隐藏所有工具调用，仅显示 AI 回复）')
+					);
+				},
+				set: (mode: string) => {
+					const label =
+						mode === 'full'
+							? '完整'
+							: mode === 'compact'
+							? '精简'
+							: mode === 'hidden'
+							? '隐藏'
+							: mode;
+					return `工具显示模式已设置为: ${label} (${mode})`;
+				},
 				invalid: '无效的模式。用法: /tool-display [full|compact|hidden|status]',
 			},
 			// 工具类型图标 + 状态前缀命令消息
@@ -1003,37 +1025,73 @@ export const zh: TranslationKeys = {
 			},
 			// 思考显示模式命令消息
 			thinkDisplay: {
-				status: (mode: string) =>
-					`思考显示模式: ${mode}` +
-					(mode === 'full'
-						? '（全量思考内容移入静态区）'
-						: '（缩减思考内容后移入静态区）'),
-				set: (mode: string) => `思考显示模式已设置为: ${mode}`,
+				status: (mode: string) => {
+					const label =
+						mode === 'full' ? '完整' : mode === 'compact' ? '精简' : mode;
+					return (
+						`思考显示模式: ${label} (${mode})` +
+						(mode === 'full'
+							? '（全量思考内容移入静态区）'
+							: '（缩减思考内容后移入静态区）')
+					);
+				},
+				set: (mode: string) => {
+					const label =
+						mode === 'full' ? '完整' : mode === 'compact' ? '精简' : mode;
+					return `思考显示模式已设置为: ${label} (${mode})`;
+				},
 				invalid: '无效的模式。用法: /think-display [full|compact|status]',
 			},
 			subAgentDisplay: {
-				status: (mode: string) =>
-					'子代理显示模式: ' +
-					mode +
-					(mode === 'slots'
-						? ' (agent 容器 + 单行焦点覆盖)'
-						: mode === 'multi'
-						? ' (agent 容器 + 多行历史)'
-						: mode === 'compact'
-						? ' (仅 agent 标题行)'
-						: ' (关闭实时面板，回退旧工具卡片)'),
-				set: (mode: string) => '子代理显示模式已设为: ' + mode,
+				status: (mode: string) => {
+					const labels: Record<string, string> = {
+						slots: '槽位',
+						multi: '多行',
+						compact: '精简',
+						hidden: '隐藏',
+					};
+					const label = labels[mode] ?? mode;
+					return (
+						`子代理显示模式: ${label} (${mode})` +
+						(mode === 'slots'
+							? ' (agent 容器 + 单行焦点覆盖)'
+							: mode === 'multi'
+							? ' (agent 容器 + 多行历史)'
+							: mode === 'compact'
+							? ' (仅 agent 标题行)'
+							: ' (关闭实时面板，回退旧工具卡片)')
+					);
+				},
+				set: (mode: string) => {
+					const labels: Record<string, string> = {
+						slots: '槽位',
+						multi: '多行',
+						compact: '精简',
+						hidden: '隐藏',
+					};
+					const label = labels[mode] ?? mode;
+					return `子代理显示模式已设为: ${label} (${mode})`;
+				},
 				invalid:
 					'无效的模式。用法: /subagent-display [slots|multi|compact|hidden|status]',
 			},
 			display: {
-				status: (tool: string, think: string, subagent: string) =>
-					'显示设置: tool=' +
-					tool +
-					' · think=' +
-					think +
-					' · subagent=' +
-					subagent,
+				status: (tool: string, think: string, subagent: string) => {
+					const labels: Record<string, string> = {
+						full: '完整',
+						compact: '精简',
+						hidden: '隐藏',
+						slots: '槽位',
+						multi: '多行',
+					};
+					const fmt = (m: string) => {
+						const label = labels[m];
+						return label ? `${label} (${m})` : m;
+					};
+					return `显示设置: 工具=${fmt(tool)} · 思考=${fmt(
+						think,
+					)} · 子代理=${fmt(subagent)}`;
+				},
 				help:
 					'用法: /display [status]\n' +
 					'      /display tool [full|compact|hidden|status]\n' +
@@ -1327,13 +1385,43 @@ export const zh: TranslationKeys = {
 		tool: '工具显示:',
 		think: '思考显示:',
 		subagent: '子代理显示:',
-		toolInfo: '回车循环 full → compact → hidden（等同 /display tool）',
-		thinkInfo: '回车循环 compact → full（等同 /display think）',
+		toolInfo:
+			'回车循环 完整(full) → 精简(compact) → 隐藏(hidden)（等同 /display tool）',
+		thinkInfo: '回车循环 精简(compact) → 完整(full)（等同 /display think）',
 		subagentInfo:
-			'回车循环 slots → multi → compact → hidden（等同 /display subagent）',
+			'回车循环 槽位(slots) → 多行(multi) → 精简(compact) → 隐藏(hidden)（等同 /display subagent）',
 		close: '← 关闭',
 		closeInfo: '返回聊天',
 		hint: '↑↓ 导航 · Enter 切换 · Esc 关闭 · 也可: /display tool|think|subagent',
+		modeLabels: {
+			full: '完整',
+			compact: '精简',
+			hidden: '隐藏',
+			slots: '槽位',
+			multi: '多行',
+		},
+		formatMode: (mode: string) => {
+			const labels: Record<string, string> = {
+				full: '完整',
+				compact: '精简',
+				hidden: '隐藏',
+				slots: '槽位',
+				multi: '多行',
+			};
+			const label = labels[mode];
+			return label ? `${label} (${mode})` : mode;
+		},
+		statusLine: (tool: string, think: string, subagent: string) => {
+			const labels: Record<string, string> = {
+				full: '完整',
+				compact: '精简',
+				hidden: '隐藏',
+				slots: '槽位',
+				multi: '多行',
+			};
+			const fmt = (m: string) => labels[m] ?? m;
+			return `工具=${fmt(tool)} · 思考=${fmt(think)} · 子代理=${fmt(subagent)}`;
+		},
 	},
 	subAgentDepthPanel: {
 		title: '子代理深度设置',
@@ -2420,12 +2508,39 @@ export const zh: TranslationKeys = {
 		title: '\u8fd0\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '当前没有运行中的代理或队友',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
+		keyboardHintDetail:
+			'(Enter/v: 详情 · 1-9: 跳转 · m: 发消息 · 空格: 多选 · Esc: 取消)',
 		selected: '已选择: {count}',
 		scrollHint: '↑↓ 滚动',
 		moreAbove: '上方还有 {count} 个',
 		moreBelow: '下方还有 {count} 个',
 		subAgentLabel: '[代理]',
 		teammateLabel: '[队友]',
+		historyLabel: '[历史]',
+	},
+	subAgentDetailPanel: {
+		timelineTitle: '工具时间线',
+		inputLabel: '发送消息给该代理',
+		inputPlaceholder: '输入消息，Enter 发送…',
+		hint: 'Tab 切换焦点 · ↑↓ 滚动 · Enter 发送 · Esc 返回',
+		hintRunning:
+			'Tab 焦点 · ↑↓ 滚动 · Enter 发送 · 1-9 切换 · x 停止 · Esc 返回',
+		moreAbove: '上方还有 {count} 条',
+		moreBelow: '下方还有 {count} 条',
+		statusRunning: '运行中',
+		statusWaiting: '等待中',
+		statusDone: '已完成',
+		statusError: '错误',
+		historyReadOnly: '历史回看 · 只读',
+	},
+	subAgentSummaryCard: {
+		statusDone: '已完成',
+		statusError: '错误',
+		promptLabel: '任务',
+		resultLabel: '结果',
+		errorLabel: '错误',
+		toolsCount: '{count} 个工具',
+		historyHint: '▸ 输入 >> 可回看完整时间线',
 	},
 	sseServer: {
 		started: '✓ SSE 服务器已启动',
