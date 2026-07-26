@@ -4,6 +4,7 @@ import {existsSync} from 'fs';
 import {mkdir, rm, readFile, writeFile, readdir} from 'fs/promises';
 import {writeFile as writeJsonFile} from 'fs/promises';
 import type {SkillLocation} from '../commands/skills.js';
+import {getDefaultUserAgent} from '../core/version.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -246,7 +247,7 @@ async function resolveCommitSha(
 	const res = await fetch(url, {
 		headers: {
 			Accept: 'application/vnd.github+json',
-			'User-Agent': 'snow-cli',
+			'User-Agent': getDefaultUserAgent(),
 		},
 		signal: abortSignal,
 	});
@@ -256,7 +257,7 @@ async function resolveCommitSha(
 		const repoRes = await fetch(repoUrl, {
 			headers: {
 				Accept: 'application/vnd.github+json',
-				'User-Agent': 'snow-cli',
+				'User-Agent': getDefaultUserAgent(),
 			},
 			signal: abortSignal,
 		});
@@ -271,7 +272,7 @@ async function resolveCommitSha(
 			{
 				headers: {
 					Accept: 'application/vnd.github+json',
-					'User-Agent': 'snow-cli',
+					'User-Agent': getDefaultUserAgent(),
 				},
 				signal: abortSignal,
 			},
@@ -306,7 +307,7 @@ async function downloadAndExtract(
 	const res = await fetch(downloadUrl, {
 		headers: {
 			Accept: 'application/vnd.github+json',
-			'User-Agent': 'snow-cli',
+			'User-Agent': getDefaultUserAgent(),
 		},
 		signal: abortSignal,
 	});

@@ -9,9 +9,9 @@ import {
 
 const test = anyTest as unknown as TestFn;
 
-test('getDefaultUserAgent uses SNOW-CLI/<version> format', t => {
+test('getDefaultUserAgent uses snow-cli/<version> (cli) format', t => {
 	const version = getPackageVersion();
-	t.is(getDefaultUserAgent(), `SNOW-CLI/${version}`);
+	t.is(getDefaultUserAgent(), `snow-cli/${version} (cli)`);
 });
 
 test('mergeApiRequestHeaders injects default User-Agent when custom headers are empty', t => {
