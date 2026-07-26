@@ -155,6 +155,9 @@ export type TranslationKeys = {
 		disabled: string;
 		toggleHint: string;
 		proxyPort: string;
+		proxyHost: string;
+		hostPlaceholder: string;
+		hostValidationError: string;
 		notSet: string;
 		browserPath: string;
 		autoDetect: string;
