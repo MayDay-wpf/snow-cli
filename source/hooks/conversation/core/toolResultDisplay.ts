@@ -4,10 +4,7 @@ import type {
 	ToolResult,
 } from '../../../utils/execution/toolExecutor.js';
 import {formatToolCallMessage} from '../../../utils/ui/messageFormatter.js';
-import {
-	extractFilesystemEditDiffFromRawResult,
-	isToolNeedTwoStepDisplay,
-} from '../../../utils/config/toolDisplayConfig.js';
+import {extractFilesystemEditDiffFromRawResult} from '../../../utils/config/toolDisplayConfig.js';
 import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 import {
 	formatDurationMs,
@@ -133,10 +130,10 @@ export function buildToolResultMessages(
 		let editDiffData = extractEditDiffData(toolCall, result);
 
 		const toolDisplay = formatToolCallMessage(toolCall);
-		const isNonTimeConsuming = !isToolNeedTwoStepDisplay(
-			toolCall.function.name,
-		);
 
+		// Always keep toolDisplay for compact title summaries (basename / action).
+		// Previously only non-two-step tools carried it; read/plan need path+action
+		// and edit tools still benefit when compact mode hides the full arg tree.
 		resultMessages.push({
 			role: 'assistant',
 			content: titleContent,
@@ -146,8 +143,9 @@ export function buildToolResultMessages(
 			toolCall: editDiffData
 				? {name: toolCall.function.name, arguments: editDiffData}
 				: undefined,
-			toolDisplay: isNonTimeConsuming ? toolDisplay : undefined,
-			toolResult: !isError ? result.content : undefined,
+			toolDisplay,
+			// Keep error text for plan/meta summaries (plain-text tools).
+			toolResult: result.content,
 			parallelGroup: parallelGroupId,
 			...(typeof durationMs === 'number' ? {toolDurationMs: durationMs} : {}),
 			...(typeof groupElapsedMs === 'number'

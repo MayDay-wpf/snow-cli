@@ -6,7 +6,10 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
-import {getToolResultSummary} from '../tools/ToolResultPreview.js';
+import {
+	getToolResultSummary,
+	type ToolResultSummaryContext,
+} from '../../../utils/ui/toolResultSummary.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
@@ -597,17 +600,43 @@ function MessageRendererImpl({
 													<>
 														<Text color={toolStatusColor}>
 															{removeAnsiCodes(titleLine)}
-															{/* compact mode: append brief result summary */}
-															{toolDisplayMode === 'compact' &&
-																message.messageStatus === 'success' &&
+															{/* compact mode: append brief result summary (path/action when known) */}
+															{(toolDisplayMode === 'compact' ||
+																toolDisplayMode === 'full') &&
+																(message.messageStatus === 'success' ||
+																	message.messageStatus === 'error') &&
 																message.toolResult &&
 																(() => {
 																	const toolName = getMessageToolName(
 																		removeAnsiCodes(titleLine),
 																	);
+																	// Only inject compact inline summary for tools
+																	// that benefit from path/action (read/plan/meta).
+																	// full mode still uses ToolResultPreview body;
+																	// keep inline summary for compact always, and
+																	// for full only when no tree body would show
+																	// (plan-manage plain text / quick tools).
+																	if (
+																		toolDisplayMode === 'full' &&
+																		toolName !== 'plan-manage' &&
+																		toolName !== 'filesystem-read'
+																	) {
+																		return null;
+																	}
+																	const summaryContext: ToolResultSummaryContext =
+																		{
+																			displayArgs: message.toolDisplay?.args,
+																			rawArgs:
+																				message.toolCall?.arguments &&
+																				typeof message.toolCall.arguments ===
+																					'object'
+																					? message.toolCall.arguments
+																					: undefined,
+																		};
 																	const summary = getToolResultSummary(
 																		toolName,
 																		message.toolResult,
+																		summaryContext,
 																	);
 																	return summary ? ` — ${summary}` : null;
 																})()}
