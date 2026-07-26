@@ -43,6 +43,7 @@ import {
 	setCurrentLanguage,
 	type Language,
 } from '../config/languageConfig.js';
+import {translations} from '../../i18n/index.js';
 import {getSnowConfig, updateSnowConfig} from '../config/apiConfig.js';
 import {
 	readSettings,
@@ -1164,17 +1165,22 @@ function handleCodebase(
 		meta.risk,
 	);
 }
+function getDisplayCommandOutput() {
+	return translations[getCurrentLanguage()].commandPanel.commandOutput;
+}
+
 function handleToolDisplay(
 	meta: SessionCommandMeta,
 	args?: string,
 ): SessionCommandResult {
 	const token = (args ?? '').trim().toLowerCase();
 	const current = getToolDisplayMode();
+	const messages = getDisplayCommandOutput().toolDisplay;
 	if (!token || token === 'status') {
 		return okResult(
 			meta.id,
 			{mode: current},
-			`Tool display: ${current}`,
+			messages.status(current),
 			meta.risk,
 		);
 	}
@@ -1186,16 +1192,11 @@ function handleToolDisplay(
 		return okResult(
 			meta.id,
 			{mode, previous: current},
-			`Tool display: ${mode}`,
+			messages.set(mode),
 			meta.risk,
 		);
 	}
-	return failResult(
-		meta.id,
-		'INVALID_ARGS',
-		'Usage: tool-display [full|compact|hidden|status]',
-		meta.risk,
-	);
+	return failResult(meta.id, 'INVALID_ARGS', messages.invalid, meta.risk);
 }
 
 function handleSubAgentDisplay(
@@ -1204,11 +1205,12 @@ function handleSubAgentDisplay(
 ): SessionCommandResult {
 	const token = (args ?? '').trim().toLowerCase();
 	const current = getSubAgentDisplayMode();
+	const messages = getDisplayCommandOutput().subAgentDisplay;
 	if (!token || token === 'status') {
 		return okResult(
 			meta.id,
 			{mode: current},
-			'Sub-agent display: ' + current,
+			messages.status(current),
 			meta.risk,
 		);
 	}
@@ -1224,16 +1226,11 @@ function handleSubAgentDisplay(
 		return okResult(
 			meta.id,
 			{mode, previous: current},
-			'Sub-agent display: ' + mode,
+			messages.set(mode),
 			meta.risk,
 		);
 	}
-	return failResult(
-		meta.id,
-		'INVALID_ARGS',
-		'Usage: subagent-display [slots|multi|compact|hidden|status]',
-		meta.risk,
-	);
+	return failResult(meta.id, 'INVALID_ARGS', messages.invalid, meta.risk);
 }
 
 function handleDisplay(
@@ -1241,15 +1238,17 @@ function handleDisplay(
 	args?: string,
 ): SessionCommandResult {
 	const tokens = (args ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+	const messages = getDisplayCommandOutput().display;
 
 	if (tokens.length === 0 || tokens[0] === 'status' || tokens[0] === 'help') {
 		const tool = getToolDisplayMode();
 		const think = getThinkDisplayMode();
 		const subagent = getSubAgentDisplayMode();
+		const status = messages.status(tool, think, subagent);
 		return okResult(
 			meta.id,
 			{tool, think, subagent},
-			'Display: tool=' + tool + ' · think=' + think + ' · subagent=' + subagent,
+			tokens[0] === 'help' ? `${status}\n${messages.help}` : status,
 			meta.risk,
 		);
 	}
@@ -1267,12 +1266,7 @@ function handleDisplay(
 		return handleSubAgentDisplay(meta, modeToken);
 	}
 
-	return failResult(
-		meta.id,
-		'INVALID_ARGS',
-		'Usage: display [status|tool|think|subagent] [mode]',
-		meta.risk,
-	);
+	return failResult(meta.id, 'INVALID_ARGS', messages.invalid, meta.risk);
 }
 
 function handleThinkDisplay(
@@ -1281,11 +1275,12 @@ function handleThinkDisplay(
 ): SessionCommandResult {
 	const token = (args ?? '').trim().toLowerCase();
 	const current = getThinkDisplayMode();
+	const messages = getDisplayCommandOutput().thinkDisplay;
 	if (!token || token === 'status') {
 		return okResult(
 			meta.id,
 			{mode: current},
-			`Think display: ${current}`,
+			messages.status(current),
 			meta.risk,
 		);
 	}
@@ -1297,16 +1292,11 @@ function handleThinkDisplay(
 		return okResult(
 			meta.id,
 			{mode, previous: current},
-			`Think display: ${mode}`,
+			messages.set(mode),
 			meta.risk,
 		);
 	}
-	return failResult(
-		meta.id,
-		'INVALID_ARGS',
-		'Usage: think-display [full|compact|status]',
-		meta.risk,
-	);
+	return failResult(meta.id, 'INVALID_ARGS', messages.invalid, meta.risk);
 }
 
 function handleTelemetry(

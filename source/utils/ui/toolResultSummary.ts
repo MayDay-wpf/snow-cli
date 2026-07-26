@@ -81,9 +81,9 @@ function getContextArgValue(
 			const hit = context.displayArgs.find(a => a.key === key);
 			if (!hit?.value) continue;
 			const value = unwrapDisplayArgValue(hit.value);
-			// Array display: <array with N items> / [a, b]
+			// Array display: <array with N items> / <array with N 项> / [a, b]
 			if (value.startsWith('<array with ')) {
-				const m = value.match(/<array with (\d+) items>/);
+				const m = value.match(/<array with (\d+) (?:items|项)>/);
 				if (m) return `${m[1]} files`;
 			}
 			if (value.startsWith('[') && value.endsWith(']')) {
@@ -242,9 +242,21 @@ export function getToolResultSummary(
 		const data = JSON.parse(result);
 
 		if (toolName.startsWith('subagent-')) {
-			if (!data.result) return null;
-			const lines = data.result.split('\n').filter((l: string) => l.trim());
-			return `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`;
+			// Prefer first non-empty result line for compact inline summaries.
+			if (typeof data.result === 'string' && data.result.trim()) {
+				const first = data.result
+					.split('\n')
+					.map((l: string) => l.trim())
+					.find(Boolean);
+				if (first) {
+					return first.length > 72 ? `${first.slice(0, 72)}…` : first;
+				}
+			}
+			if (typeof data.error === 'string' && data.error.trim()) {
+				const err = data.error.trim();
+				return err.length > 72 ? `${err.slice(0, 72)}…` : err;
+			}
+			return null;
 		}
 
 		if (toolName === 'terminal-execute') {

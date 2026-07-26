@@ -73,12 +73,11 @@ export default function ThemeSettingsScreen({
 	const [simpleMode, setSimpleModeState] = useState<boolean>(() =>
 		getSimpleMode(),
 	);
-	const [toolDisplayMode, setToolDisplayModeState] = useState<ToolDisplayMode>(() =>
-		getToolDisplayMode(),
+	const [toolDisplayMode, setToolDisplayModeState] = useState<ToolDisplayMode>(
+		() => getToolDisplayMode(),
 	);
-	const [thinkDisplayMode, setThinkDisplayModeState] = useState<ThinkDisplayMode>(() =>
-		getThinkDisplayMode(),
-	);
+	const [thinkDisplayMode, setThinkDisplayModeState] =
+		useState<ThinkDisplayMode>(() => getThinkDisplayMode());
 	const [subAgentDisplayMode, setSubAgentDisplayModeState] =
 		useState<SubAgentDisplayMode>(() => getSubAgentDisplayMode());
 	const terminalHeight = stdout?.rows || 24;
@@ -148,17 +147,23 @@ export default function ThemeSettingsScreen({
 				infoText: t.themeSettings.diffOpacityInfo,
 			},
 			{
-				label: `${t.themeSettings.toolDisplay} ${toolDisplayMode}`,
+				label: `${t.themeSettings.toolDisplay} ${t.displayPanel.formatMode(
+					toolDisplayMode,
+				)}`,
 				value: 'tool-display',
 				infoText: t.themeSettings.toolDisplayInfo,
 			},
 			{
-				label: `${t.themeSettings.thinkDisplay} ${thinkDisplayMode}`,
+				label: `${t.themeSettings.thinkDisplay} ${t.displayPanel.formatMode(
+					thinkDisplayMode,
+				)}`,
 				value: 'think-display',
 				infoText: t.themeSettings.thinkDisplayInfo,
 			},
 			{
-				label: `${t.themeSettings.subAgentDisplay} ${subAgentDisplayMode}`,
+				label: `${t.themeSettings.subAgentDisplay} ${t.displayPanel.formatMode(
+					subAgentDisplayMode,
+				)}`,
 				value: 'subagent-display',
 				infoText: t.themeSettings.subAgentDisplayInfo,
 			},

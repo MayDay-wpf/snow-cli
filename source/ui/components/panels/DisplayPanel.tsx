@@ -73,20 +73,22 @@ export default function DisplayPanel({visible, onClose}: Props) {
 		};
 	}, [t]);
 
+	const formatMode = t.displayPanel.formatMode;
+
 	const options = useMemo(
 		() => [
 			{
-				label: `${labels.tool} ${toolMode}`,
+				label: `${labels.tool} ${formatMode(toolMode)}`,
 				value: 'tool',
 				infoText: labels.toolInfo,
 			},
 			{
-				label: `${labels.think} ${thinkMode}`,
+				label: `${labels.think} ${formatMode(thinkMode)}`,
 				value: 'think',
 				infoText: labels.thinkInfo,
 			},
 			{
-				label: `${labels.subagent} ${subAgentMode}`,
+				label: `${labels.subagent} ${formatMode(subAgentMode)}`,
 				value: 'subagent',
 				infoText: labels.subagentInfo,
 			},
@@ -97,7 +99,7 @@ export default function DisplayPanel({visible, onClose}: Props) {
 				infoText: labels.closeInfo,
 			},
 		],
-		[labels, toolMode, thinkMode, subAgentMode],
+		[labels, formatMode, toolMode, thinkMode, subAgentMode],
 	);
 
 	const handleSelect = useCallback(
@@ -154,7 +156,7 @@ export default function DisplayPanel({visible, onClose}: Props) {
 				{labels.title}
 			</Text>
 			<Text color={theme.colors.menuSecondary} dimColor>
-				{`tool=${toolMode} · think=${thinkMode} · subagent=${subAgentMode}`}
+				{t.displayPanel.statusLine(toolMode, thinkMode, subAgentMode)}
 			</Text>
 			<Menu
 				options={options}
