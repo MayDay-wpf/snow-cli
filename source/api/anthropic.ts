@@ -21,7 +21,7 @@ import {logger} from '../utils/core/logger.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
-import {getVersionHeader} from '../utils/core/version.js';
+import {mergeApiRequestHeaders} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
 import {
 	endChatSpan,
@@ -823,14 +823,15 @@ export async function* createStreamingAnthropicCompletion(
 					rawCustomHeaders,
 				);
 
-				// Prepare headers
-				const headers: Record<string, string> = {
-					'Content-Type': 'application/json',
-					'x-api-key': config.apiKey,
-					Authorization: `Bearer ${config.apiKey}`,
-					'x-snow': getVersionHeader(),
-					...customHeaders,
-				};
+				// Prepare headers (default User-Agent when no custom headers)
+				const headers = mergeApiRequestHeaders(
+					{
+						'Content-Type': 'application/json',
+						'x-api-key': config.apiKey,
+						Authorization: `Bearer ${config.apiKey}`,
+					},
+					customHeaders,
+				);
 
 				// Add beta parameter if configured
 				// if (config.anthropicBeta) {

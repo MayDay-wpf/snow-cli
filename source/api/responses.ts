@@ -22,7 +22,7 @@ import type {
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
-import {getVersionHeader} from '../utils/core/version.js';
+import {mergeApiRequestHeaders} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
 import {
 	endChatSpan,
@@ -708,16 +708,17 @@ export async function* createStreamingResponse(
 
 				const fetchOptions = addProxyToFetchOptions(url, {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${config.apiKey}`,
-						'x-snow': getVersionHeader(),
-						...(options.prompt_cache_key && {
-							conversation_id: options.prompt_cache_key,
-							session_id: options.prompt_cache_key,
-						}),
-						...customHeaders,
-					},
+					headers: mergeApiRequestHeaders(
+						{
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${config.apiKey}`,
+							...(options.prompt_cache_key && {
+								conversation_id: options.prompt_cache_key,
+								session_id: options.prompt_cache_key,
+							}),
+						},
+						customHeaders,
+					),
 					body: JSON.stringify(requestPayload),
 					signal: abortSignal,
 				});

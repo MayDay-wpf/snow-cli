@@ -6,6 +6,7 @@ import {
 } from '../utils/config/apiConfig.js';
 import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {mergeApiRequestHeaders} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
 
 export interface Model {
@@ -50,14 +51,13 @@ async function fetchOpenAIModels(
 ): Promise<Model[]> {
 	const url = modelsUrl;
 
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...customHeaders,
-	};
-
-	if (apiKey) {
-		headers['Authorization'] = `Bearer ${apiKey}`;
-	}
+	const headers = mergeApiRequestHeaders(
+		{
+			'Content-Type': 'application/json',
+			...(apiKey ? {Authorization: `Bearer ${apiKey}`} : {}),
+		},
+		customHeaders,
+	);
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
@@ -86,10 +86,10 @@ async function fetchGeminiModels(
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
-		headers: {
+		headers: mergeApiRequestHeaders({
 			'Content-Type': 'application/json',
 			'x-goog-api-key': apiKey,
-		},
+		}),
 	});
 	const response = await fetch(url, fetchOptions);
 
@@ -121,15 +121,18 @@ async function fetchAnthropicModels(
 ): Promise<Model[]> {
 	const url = `${baseUrl}/models`;
 
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...customHeaders,
-	};
-
-	if (apiKey) {
-		headers['x-api-key'] = apiKey;
-		headers['Authorization'] = `Bearer ${apiKey}`;
-	}
+	const headers = mergeApiRequestHeaders(
+		{
+			'Content-Type': 'application/json',
+			...(apiKey
+				? {
+						'x-api-key': apiKey,
+						Authorization: `Bearer ${apiKey}`,
+				  }
+				: {}),
+		},
+		customHeaders,
+	);
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'GET',
