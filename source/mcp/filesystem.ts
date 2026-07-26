@@ -505,6 +505,11 @@ export class FilesystemMCPService {
 	): Promise<FileCreateResult> {
 		// Handle array of files (batch mode)
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			return await executeBatchOperation<
 				FileCreateConfig,
 				{message: string; filePath: string; content: string},
@@ -737,6 +742,11 @@ export class FilesystemMCPService {
 	): Promise<EditBySearchResult> {
 		// Handle array of files
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			return await executeBatchOperation<
 				EditBySearchConfig,
 				EditBySearchSingleResult,
@@ -826,8 +836,13 @@ export class FilesystemMCPService {
 		contextLines: number = 8,
 	): Promise<EditByHashlineResult> {
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			// string[] + shared operations (same batch shape as filesystem-replaceedit)
-			if (filePath.length > 0 && typeof filePath[0] === 'string') {
+			if (typeof filePath[0] === 'string') {
 				if (!operations || operations.length === 0) {
 					throw new Error(
 						'operations array is required when filePath is an array of path strings',
