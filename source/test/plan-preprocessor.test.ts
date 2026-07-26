@@ -8,6 +8,11 @@ import {
 	buildResumePlanNotice,
 } from '../utils/core/planPreprocessor.js';
 import {parsePlanDocument} from '../utils/execution/planDocument.js';
+import {
+	acquirePlanOwnerLock,
+	getPlanOwnerLockPath,
+	PLAN_OWNER_LOCK_SOFT_STALE_MS,
+} from '../utils/execution/planOwnerLock.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -78,16 +83,20 @@ test('buildPlanReminder returns context only for active plans in plan mode', asy
 	t.is(await buildPlanReminder(emptyDir, 'sess-1', true), null);
 });
 
-test('buildResumePlanNotice detects executing plans from other sessions', async t => {
+test('buildResumePlanNotice detects recoverable foreign hard-stale plans', async t => {
 	const dir = await makePlanDir(EXECUTING_PLAN);
+	// No lock → foreign_hard_stale for other-session; Continue without force is OK.
 	const notice = await buildResumePlanNotice(dir, 'other-session');
 	t.truthy(notice?.includes('Unfinished Plan Detected'));
 	t.truthy(notice?.includes('[executing] Demo plan'));
 	t.truthy(notice?.includes('session=sess-1'));
 	t.truthy(notice?.includes('phase=1/2'));
 	t.truthy(notice?.includes(path.join('.snow', 'plan', 'demo.md')));
+	t.truthy(notice?.includes('ownership=foreign_hard_stale'));
 	t.truthy(notice?.includes('plan-manage {action:"adopt"'));
+	t.truthy(notice?.includes('without force'));
 	t.truthy(notice?.includes('Do **not** silently adopt the newest plan'));
+	t.falsy(notice?.includes('Foreign live owner present'));
 
 	const emptyDir = await makePlanDir();
 	t.is(await buildResumePlanNotice(emptyDir, 'x'), null);
@@ -109,6 +118,59 @@ test('buildResumePlanNotice lists multiple unfinished candidates explicitly', as
 	t.truthy(notice?.includes('Found 2 unfinished plan(s)'));
 	t.truthy(notice?.includes('1. [executing]'));
 	t.truthy(notice?.includes('2. [executing]'));
+	t.truthy(notice?.includes('ownership='));
 	t.truthy(notice?.includes('Continue: <absolute-or-relative-plan-path>'));
-	t.truthy(notice?.includes('required when multiple candidates'));
+	t.truthy(notice?.includes('plan_path is required when multiple candidates'));
+});
+
+test('buildResumePlanNotice warns against Continue-stealing foreign_live', async t => {
+	const dir = await makePlanDir(EXECUTING_PLAN);
+	const planPath = path.join(dir, '.snow', 'plan', 'demo.md');
+	const lock = await acquirePlanOwnerLock(dir, {
+		planPath,
+		sessionId: 'sess-1',
+	});
+	t.true(lock.ok);
+
+	const notice = await buildResumePlanNotice(dir, 'other-session');
+	t.truthy(notice);
+	t.truthy(notice?.includes('ownership=foreign_live'));
+	t.truthy(notice?.includes('Foreign live owner present'));
+	t.truthy(notice?.includes('force:true'));
+	t.truthy(notice?.includes('Do **not** Continue / adopt without force'));
+	t.falsy(notice?.includes('without force. That rebinds'));
+
+	await fs.unlink(getPlanOwnerLockPath(dir)).catch(() => {});
+});
+
+test('buildResumePlanNotice requires force for foreign_soft_stale', async t => {
+	const dir = await makePlanDir(EXECUTING_PLAN);
+	const planPath = path.join(dir, '.snow', 'plan', 'demo.md');
+	const acquired = await acquirePlanOwnerLock(dir, {
+		planPath,
+		sessionId: 'sess-1',
+	});
+	t.true(acquired.ok);
+
+	// Age the heartbeat into soft-stale while keeping pid alive (this process).
+	const lockPath = getPlanOwnerLockPath(dir);
+	const raw = JSON.parse(await fs.readFile(lockPath, 'utf8')) as {
+		heartbeatAt: string;
+		acquiredAt: string;
+	};
+	const old = new Date(
+		Date.now() - PLAN_OWNER_LOCK_SOFT_STALE_MS - 60_000,
+	).toISOString();
+	raw.heartbeatAt = old;
+	raw.acquiredAt = old;
+	await fs.writeFile(lockPath, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+
+	const notice = await buildResumePlanNotice(dir, 'other-session');
+	t.truthy(notice);
+	t.truthy(notice?.includes('ownership=foreign_soft_stale'));
+	t.truthy(notice?.includes('Foreign soft-stale owner present'));
+	t.truthy(notice?.includes('never** auto-adopted') || notice?.includes('never auto-adopted') || notice?.includes('Soft-stale is **never**'));
+	t.truthy(notice?.includes('force:true'));
+
+	await fs.unlink(lockPath).catch(() => {});
 });

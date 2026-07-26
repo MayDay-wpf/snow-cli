@@ -23,6 +23,14 @@ export type SubAgentRunRecord = {
 	finalSummary?: string;
 	errorMessage?: string;
 	sessionId?: string;
+	projectId?: string;
+};
+
+export type SubAgentRunSnapshotOptions = {
+	sessionId?: string;
+	projectId?: string;
+	/** When true, return every run regardless of session/project. */
+	all?: boolean;
 };
 
 const MAX_RUNS = 50;
@@ -31,10 +39,59 @@ const PERSIST_DEBOUNCE_MS = 400;
 
 const _runs = new Map<string, SubAgentRunRecord>();
 const _listeners = new Set<() => void>();
+let _allSnapshot: SubAgentRunRecord[] = [];
+/** Default public snapshot: runs for the current session (plus unscoped). */
 let _snapshot: SubAgentRunRecord[] = [];
+let _cachedFilterSessionId: string | undefined;
 let _hydratedSessionId: string | null = null;
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;
 let _dirty = false;
+
+function resolveCurrentSessionScope(): {
+	sessionId?: string;
+	projectId?: string;
+} {
+	const session = sessionManager.getCurrentSession();
+	return {
+		sessionId: session?.id,
+		projectId: session?.projectId ?? sessionManager.getProjectId?.(),
+	};
+}
+
+function matchesRunFilter(
+	run: SubAgentRunRecord,
+	options?: SubAgentRunSnapshotOptions,
+): boolean {
+	if (options?.all) {
+		return true;
+	}
+
+	const current = resolveCurrentSessionScope();
+	const sessionId = options?.sessionId ?? current.sessionId;
+	const projectId = options?.projectId ?? current.projectId;
+
+	if (options?.sessionId !== undefined) {
+		if (run.sessionId && run.sessionId !== options.sessionId) {
+			return false;
+		}
+	} else if (sessionId) {
+		if (run.sessionId && run.sessionId !== sessionId) {
+			return false;
+		}
+	}
+
+	if (options?.projectId !== undefined) {
+		if (run.projectId && run.projectId !== options.projectId) {
+			return false;
+		}
+	} else if (projectId && options?.sessionId === undefined) {
+		if (run.projectId && run.projectId !== projectId) {
+			return false;
+		}
+	}
+
+	return true;
+}
 
 function cloneRun(run: SubAgentRunRecord): SubAgentRunRecord {
 	return {
@@ -44,9 +101,11 @@ function cloneRun(run: SubAgentRunRecord): SubAgentRunRecord {
 }
 
 function rebuildSnapshot(): void {
-	_snapshot = Array.from(_runs.values())
+	_allSnapshot = Array.from(_runs.values())
 		.map(cloneRun)
 		.sort((a, b) => b.startedAt - a.startedAt);
+	_cachedFilterSessionId = resolveCurrentSessionScope().sessionId;
+	_snapshot = _allSnapshot.filter(run => matchesRunFilter(run, undefined));
 }
 
 function notify(): void {
@@ -93,8 +152,20 @@ function persistToCurrentSession(): void {
 	const session = sessionManager.getCurrentSession();
 	if (!session) return;
 
+	// Only persist runs that belong to the current session (or unscoped runs
+	// hydrated for this session) so other sessions are not polluted.
+	const runsForSession = _allSnapshot
+		.filter(run => {
+			if (run.sessionId) {
+				return run.sessionId === session.id;
+			}
+			// Unscoped runs are treated as belonging to the hydrated session.
+			return !_hydratedSessionId || _hydratedSessionId === session.id;
+		})
+		.map(cloneRun);
+
 	(session as {subAgentRuns?: SubAgentRunRecord[]}).subAgentRuns =
-		_snapshot.map(cloneRun);
+		runsForSession;
 	session.updatedAt = Date.now();
 	void sessionManager.saveSession(session).catch(() => {
 		// Persistence is best-effort; in-memory history remains usable.
@@ -108,8 +179,29 @@ export function subscribeSubAgentRuns(listener: () => void): () => void {
 	};
 }
 
-export function getSubAgentRunSnapshot(): SubAgentRunRecord[] {
+export function getSubAgentRunSnapshot(
+	options?: SubAgentRunSnapshotOptions,
+): SubAgentRunRecord[] {
+	if (options?.all) {
+		return _allSnapshot;
+	}
+
+	if (options?.sessionId !== undefined || options?.projectId !== undefined) {
+		return _allSnapshot.filter(run => matchesRunFilter(run, options));
+	}
+
+	const currentSessionId = resolveCurrentSessionScope().sessionId;
+	if (currentSessionId !== _cachedFilterSessionId) {
+		_cachedFilterSessionId = currentSessionId;
+		_snapshot = _allSnapshot.filter(run => matchesRunFilter(run, undefined));
+	}
+
 	return _snapshot;
+}
+
+/** Unfiltered alias for getSubAgentRunSnapshot({all: true}). */
+export function getAllSubAgentRuns(): SubAgentRunRecord[] {
+	return _allSnapshot;
 }
 
 export function getSubAgentRun(
@@ -119,14 +211,22 @@ export function getSubAgentRun(
 	return run ? cloneRun(run) : undefined;
 }
 
-export function getRecentSubAgentRuns(limit = 20): SubAgentRunRecord[] {
-	return _snapshot.slice(0, Math.max(0, limit)).map(cloneRun);
+export function getRecentSubAgentRuns(
+	limit = 20,
+	options?: SubAgentRunSnapshotOptions,
+): SubAgentRunRecord[] {
+	return getSubAgentRunSnapshot(options)
+		.slice(0, Math.max(0, limit))
+		.map(cloneRun);
 }
 
 export function clearSubAgentRuns(): void {
-	if (_runs.size === 0 && _snapshot.length === 0) return;
+	if (_runs.size === 0 && _snapshot.length === 0 && _allSnapshot.length === 0)
+		return;
 	_runs.clear();
+	_allSnapshot = [];
 	_snapshot = [];
+	_cachedFilterSessionId = undefined;
 	_hydratedSessionId = null;
 	_dirty = false;
 	if (_persistTimer) {
@@ -178,6 +278,10 @@ export function hydrateSubAgentRunsFromSession(
 			finalSummary: raw.finalSummary,
 			errorMessage: raw.errorMessage,
 			sessionId: session.id,
+			projectId:
+				raw.projectId ||
+				(session as {projectId?: string}).projectId ||
+				sessionManager.getProjectId?.(),
 		});
 	}
 	for (const run of _runs.values()) {
@@ -206,8 +310,8 @@ export function startSubAgentRun(input: {
 		typeof input.startedAt === 'number'
 			? input.startedAt
 			: input.startedAt instanceof Date
-				? input.startedAt.getTime()
-				: Date.now();
+			? input.startedAt.getTime()
+			: Date.now();
 	const session = sessionManager.getCurrentSession();
 	const existing = _runs.get(input.instanceId);
 	const run: SubAgentRunRecord = {
@@ -221,6 +325,7 @@ export function startSubAgentRun(input: {
 		tokenCount: existing?.tokenCount ?? 0,
 		historyLines: existing?.historyLines ? [...existing.historyLines] : [],
 		sessionId: session?.id,
+		projectId: session?.projectId ?? sessionManager.getProjectId?.(),
 	};
 	run.endedAt = undefined;
 	run.durationMs = undefined;
@@ -247,7 +352,9 @@ export function appendSubAgentRunHistory(
 ): void {
 	const run = _runs.get(instanceId);
 	if (!run) return;
-	const cleaned = stripAnsi(line).replace(/[\r\n]+/g, ' ').trim();
+	const cleaned = stripAnsi(line)
+		.replace(/[\r\n]+/g, ' ')
+		.trim();
 	if (!cleaned) return;
 	const last = run.historyLines[run.historyLines.length - 1];
 	if (last === cleaned) return;

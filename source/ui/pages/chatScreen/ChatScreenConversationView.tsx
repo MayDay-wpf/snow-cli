@@ -132,6 +132,7 @@ export default function ChatScreenConversationView({
 				<SubAgentLiveSlots
 					toolDisplayMode={toolDisplayMode}
 					subAgentDisplayMode={subAgentDisplayMode}
+					terminalWidth={terminalWidth}
 				/>
 				<PendingToolCalls messages={messages} />
 				<PendingMessages pendingMessages={pendingMessages} />

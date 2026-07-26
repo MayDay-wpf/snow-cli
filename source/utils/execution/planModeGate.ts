@@ -2,10 +2,12 @@
  * Plan Mode hard gate (P0 + P0.5)
  *
  * When planMode is on and the current session has not been explicitly approved,
- * block mutating tool side-effects. Planning tools and writes under:
- * - .snow/plan/**
- * - .trellis/tasks/** (Trellis planning artifacts; P0.5 coexistence)
- * remain allowed.
+ * block mutating tool side-effects. While unapproved:
+ * - plan-manage (ALWAYS_ALLOW) is the only supported write path for `.snow/plan/**`
+ * - filesystem-create/edit/replaceedit targeting `.snow/plan/**` are hard-blocked
+ * - filesystem writes under `.trellis/tasks/**` remain allowed (Trellis coexistence)
+ * - reads/search and other always-allow tools remain allowed
+ * After approval, plan/trellis dirs stay in scope via isWithinPlanScope.
  */
 
 import path from 'node:path';
@@ -23,9 +25,14 @@ import {
 import {
 	acquirePlanOwnerLock,
 	formatOwnerLockConflict,
+	readPlanOwnerLock,
 	releasePlanOwnerLock,
 	verifyPlanOwnerLock,
 } from './planOwnerLock.js';
+import {
+	classifyPlanOwnership,
+	type PlanOwnershipClassification,
+} from './planOwnership.js';
 
 type PlanGateState = {
 	planApproved: boolean;
@@ -147,13 +154,15 @@ export function isTrellisTasksDirPath(filePath: string, cwd: string): boolean {
 }
 
 /**
- * Unapproved Plan Mode may write only to planning artifact roots.
+ * Unapproved Plan Mode may use filesystem write tools only under
+ * `.trellis/tasks/**`. Plan docs under `.snow/plan/**` must go through
+ * plan-manage (ALWAYS_ALLOW), not filesystem-create/edit/replaceedit.
  */
 export function isAllowedUnapprovedWritePath(
 	filePath: string,
 	cwd: string,
 ): boolean {
-	return isPlanDirPath(filePath, cwd) || isTrellisTasksDirPath(filePath, cwd);
+	return isTrellisTasksDirPath(filePath, cwd);
 }
 
 /**
@@ -361,7 +370,8 @@ export function buildEmptyFilePathGateMessage(
 		`Cannot verify write target because ${detail}. ` +
 		`Pass a non-empty string filePath (or a non-empty batch array of {path, ...}). ` +
 		`Never pass filePath: [] or "". ` +
-		`While unapproved you may only write under .snow/plan/** or .trellis/tasks/**.`
+		`While unapproved, filesystem write tools may only target .trellis/tasks/**; ` +
+		`use plan-manage (create / write_body / amend) for .snow/plan/**.`
 	);
 }
 
@@ -544,10 +554,26 @@ export function buildPlanGateBlockMessage(toolName: string): string {
 	return (
 		`Error: Plan Mode gate is active (plan not approved yet). ` +
 		`Blocked tool: ${toolName}. ` +
-		`You may only read/search and write files under .snow/plan/** or .trellis/tasks/**. ` +
-		`Create or update the plan, then call askuser-ask_question and get explicit approval ` +
+		`While unapproved you may only read/search, use plan-manage for .snow/plan/**, ` +
+		`and use filesystem write tools only under .trellis/tasks/**. ` +
+		`Create or update the plan via plan-manage, then call askuser-ask_question and get explicit approval ` +
 		`(e.g. "Yes - Execute the entire plan") before modifying code or running commands. ` +
 		`While unapproved, terminal-execute is hard-blocked — do not attempt IDE CLI open or shell commands.`
+	);
+}
+
+/**
+ * Dedicated message when unapproved Plan Mode blocks filesystem writes to
+ * `.snow/plan/**`. plan-manage is the only supported persist path for plans.
+ */
+export function buildPlanFilesystemWriteBlockMessage(toolName: string): string {
+	return (
+		`Error: Plan Mode gate is active (plan not approved yet). ` +
+		`Blocked tool: ${toolName}. ` +
+		`While unapproved, filesystem-create / filesystem-edit / filesystem-replaceedit ` +
+		`cannot write under .snow/plan/**. ` +
+		`Use plan-manage with action create / write_body / amend to persist plan documents. ` +
+		`Do not use filesystem write tools for plan files.`
 	);
 }
 
@@ -609,9 +635,11 @@ export function classifyPlanGateDecision(
 	if (FILESYSTEM_WRITE_TOOLS.has(toolName)) {
 		const paths = collectFilesystemPaths(args);
 		if (paths.length === 0) {
-			// No path → cannot verify allowed planning roots; block.
+			// No path → cannot verify allowed trellis roots; block.
 			return 'block';
 		}
+		// Unapproved: only .trellis/tasks/** for filesystem write tools.
+		// .snow/plan/** must go through plan-manage (ALWAYS_ALLOW).
 		const allAllowed = paths.every(p => isAllowedUnapprovedWritePath(p, cwd));
 		return allAllowed ? 'allow' : 'block';
 	}
@@ -860,6 +888,7 @@ export async function evaluatePlanGate(input: {
 
 	// Filesystem writes with missing/empty paths get an explicit diagnostic
 	// so the model does not only see the generic unapproved-gate message.
+	// Empty-path diagnosis takes priority over plan-fs-write messaging.
 	if (FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
 		const paths = collectFilesystemPaths(input.args);
 		if (paths.length === 0) {
@@ -872,6 +901,21 @@ export async function evaluatePlanGate(input: {
 			return {
 				allow: false,
 				message: buildEmptyFilePathGateMessage(input.toolName, input.args),
+			};
+		}
+
+		// Prefer a dedicated guidance message when the write targets .snow/plan/**
+		// so models are steered to plan-manage instead of freeform FS writes.
+		if (paths.some(p => isPlanDirPath(p, input.cwd))) {
+			recordPlanEvent({
+				event: 'gate_block',
+				sessionId: input.sessionId || undefined,
+				toolName: input.toolName,
+				reason: 'plan-fs-write',
+			});
+			return {
+				allow: false,
+				message: buildPlanFilesystemWriteBlockMessage(input.toolName),
 			};
 		}
 	}
@@ -889,9 +933,95 @@ export async function evaluatePlanGate(input: {
 }
 
 /**
+ * Classify ownership of a plan document against the current session + lock.
+ * Prefer this over raw findForeignExecutingPlans when deciding hard/soft/live.
+ */
+export async function classifyPlanDocOwnership(
+	cwd: string,
+	doc: PlanDoc,
+	sessionId?: string | null,
+): Promise<PlanOwnershipClassification> {
+	const lock = await readPlanOwnerLock(cwd);
+	return classifyPlanOwnership({
+		cwd,
+		sessionId,
+		plan: {
+			filePath: doc.filePath,
+			frontmatter: {
+				status: doc.frontmatter.status,
+				session: doc.frontmatter.session,
+			},
+		},
+		lock,
+	});
+}
+
+/**
+ * Executing plans that block approving a *new* plan for this session.
+ * Only foreign_live / foreign_soft_stale contenders block hard.
+ * foreign_hard_stale / untagged_recoverable / mine_* are recoverable and
+ * surface as soft cleanup hints instead of hard blocks.
+ */
+export async function findBlockingForeignPlans(
+	cwd: string,
+	sessionId?: string | null,
+	exceptPlanPath?: string | null,
+): Promise<{
+	blocking: Array<{doc: PlanDoc; ownership: PlanOwnershipClassification}>;
+	recoverable: Array<{doc: PlanDoc; ownership: PlanOwnershipClassification}>;
+}> {
+	const foreign = await findForeignExecutingPlans(cwd, sessionId);
+	const except = exceptPlanPath ? path.resolve(exceptPlanPath) : null;
+	const blocking: Array<{
+		doc: PlanDoc;
+		ownership: PlanOwnershipClassification;
+	}> = [];
+	const recoverable: Array<{
+		doc: PlanDoc;
+		ownership: PlanOwnershipClassification;
+	}> = [];
+
+	for (const doc of foreign) {
+		if (except && path.resolve(doc.filePath) === except) {
+			continue;
+		}
+		const ownership = await classifyPlanDocOwnership(cwd, doc, sessionId);
+		if (
+			ownership.kind === 'foreign_live' ||
+			ownership.kind === 'foreign_soft_stale'
+		) {
+			blocking.push({doc, ownership});
+		} else if (
+			ownership.kind === 'foreign_hard_stale' ||
+			ownership.kind === 'untagged_recoverable' ||
+			ownership.kind === 'mine_recoverable'
+		) {
+			recoverable.push({doc, ownership});
+		}
+	}
+
+	return {blocking, recoverable};
+}
+
+function formatOwnershipCandidateLine(
+	doc: PlanDoc,
+	ownership: PlanOwnershipClassification,
+): string {
+	return `- ${doc.filePath} (session=${
+		doc.frontmatter.session || 'none'
+	}, ownership=${ownership.kind})`;
+}
+
+/**
  * After askuser returns, update plan approval state when planMode is on.
  * Approval only takes effect when the plan document passes hard validation;
  * on failure the returned error should be surfaced to the model.
+ *
+ * Continue/approve ownership rules (phase 3):
+ * - unique recoverable (mine_recoverable / untagged_recoverable /
+ *   foreign_hard_stale) → Continue must go through plan-manage adopt without force
+ * - foreign_live / foreign_soft_stale → Continue without force is forbidden;
+ *   approving a *new* plan hard-blocks while foreign_live (or soft-stale) exists
  */
 export async function maybeApprovePlanFromAskUser(input: {
 	planMode: boolean;
@@ -924,6 +1054,8 @@ export async function maybeApprovePlanFromAskUser(input: {
 
 		let validation = await validatePlanBeforeApproval(cwd, input.sessionId);
 
+		// Continue path: never silently rebind foreign ownership from askuser.
+		// Always route through plan-manage adopt so force/reason can be enforced.
 		if (!validation.ok && isContinueIntent) {
 			const pathMatch =
 				combined.match(/continue\s*:\s*([^\n|]+)/i) ||
@@ -933,25 +1065,86 @@ export async function maybeApprovePlanFromAskUser(input: {
 				.filter(d => d.frontmatter.status === 'executing')
 				.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-			if (executing.length > 1 || (explicitPath && executing.length > 0)) {
+			const classified = await Promise.all(
+				executing.map(async doc => ({
+					doc,
+					ownership: await classifyPlanDocOwnership(cwd, doc, input.sessionId),
+				})),
+			);
+
+			const resolveTarget = ():
+				| {doc: PlanDoc; ownership: PlanOwnershipClassification}
+				| undefined => {
+				if (explicitPath) {
+					const resolved = path.resolve(cwd, explicitPath);
+					return classified.find(
+						c =>
+							path.resolve(c.doc.filePath) === resolved ||
+							path
+								.normalize(c.doc.filePath)
+								.toLowerCase()
+								.endsWith(path.normalize(explicitPath).toLowerCase()),
+					);
+				}
+				return classified.length === 1 ? classified[0] : undefined;
+			};
+
+			const target = resolveTarget();
+
+			if (classified.length > 1 && !target) {
 				setPlanApproved(input.sessionId, false);
 				return {
 					approved: false,
 					error:
 						`Continue requires explicit plan adoption so ownership can be checked safely. ` +
 						`Call plan-manage {action:"adopt", plan_path:"..."}. Candidates:\n` +
-						executing.map(d => `- ${d.filePath}`).join('\n'),
+						classified
+							.map(c => formatOwnershipCandidateLine(c.doc, c.ownership))
+							.join('\n'),
 				};
 			}
-			if (executing.length === 1) {
+
+			if (target) {
+				setPlanApproved(input.sessionId, false);
+				const {doc, ownership} = target;
+				if (
+					ownership.kind === 'foreign_live' ||
+					ownership.kind === 'foreign_soft_stale'
+				) {
+					return {
+						approved: false,
+						error:
+							`Continue refused: ownership=${ownership.kind} for ${doc.filePath}. ` +
+							`${ownership.summary} ` +
+							`A live/soft-stale foreign owner cannot be taken over by a generic Continue answer. ` +
+							`Call plan-manage {action:"adopt", plan_path:"${doc.filePath}", force:true, reason:"..."} ` +
+							`only if intentional takeover is required.`,
+					};
+				}
+				if (ownership.canAdoptWithoutForce) {
+					return {
+						approved: false,
+						error:
+							`Continue requires plan-manage {action:"adopt", plan_path:"${doc.filePath}"} ` +
+							`(ownership=${ownership.kind}; no force needed). ` +
+							`Generic Continue cannot rebind ownership by itself.`,
+					};
+				}
+				return {
+					approved: false,
+					error:
+						`Continue requires plan-manage {action:"adopt", plan_path:"${doc.filePath}"}. ` +
+						`ownership=${ownership.kind}. ${ownership.summary}`,
+				};
+			}
+
+			if (executing.length === 0) {
 				setPlanApproved(input.sessionId, false);
 				return {
 					approved: false,
 					error:
-						`Continue requires plan-manage {action:"adopt", plan_path:"${
-							executing[0]!.filePath
-						}"}. ` +
-						`A live foreign owner cannot be taken over by a generic Continue answer.`,
+						'Continue refused: no executing plan found to resume. ' +
+						'Create/approve a plan first, or pass an explicit plan path via plan-manage adopt.',
 				};
 			}
 		}
@@ -961,25 +1154,35 @@ export async function maybeApprovePlanFromAskUser(input: {
 			return {approved: false, error: validation.message};
 		}
 
-		// Block second concurrent executing owner unless this is the same plan.
-		const foreign = await findForeignExecutingPlans(cwd, input.sessionId);
-		const approvingPath = path.resolve(validation.plan.filePath);
-		const blockingForeign = foreign.filter(
-			d => path.resolve(d.filePath) !== approvingPath,
+		// Approving a new/session plan: hard-block only live/soft-stale foreign owners.
+		const {blocking, recoverable} = await findBlockingForeignPlans(
+			cwd,
+			input.sessionId,
+			validation.plan.filePath,
 		);
-		if (blockingForeign.length > 0) {
+		if (blocking.length > 0) {
 			setPlanApproved(input.sessionId, false);
+			const hasLive = blocking.some(b => b.ownership.kind === 'foreign_live');
+			const hasSoft = blocking.some(
+				b => b.ownership.kind === 'foreign_soft_stale',
+			);
+			const label = hasLive
+				? 'foreign_live'
+				: hasSoft
+				? 'foreign_soft_stale'
+				: 'foreign';
 			return {
 				approved: false,
 				error:
-					`Cannot approve: another session already has an executing plan:\n` +
-					blockingForeign
-						.map(
-							d =>
-								`- ${d.filePath} (session=${d.frontmatter.session || 'none'})`,
-						)
+					`Cannot approve: another session already has a ${label} executing plan:\n` +
+					blocking
+						.map(b => formatOwnershipCandidateLine(b.doc, b.ownership))
 						.join('\n') +
-					`\nAdopt that plan, finish/abandon it, or force takeover via plan-manage adopt with reason.`,
+					`\nFinish/abandon that plan, or force takeover via plan-manage ` +
+					`{action:"adopt", plan_path:"...", force:true, reason:"..."} first.` +
+					(hasSoft
+						? ' Soft-stale foreign owners still require force+reason (never silent).'
+						: ''),
 			};
 		}
 
@@ -1031,6 +1234,12 @@ export async function maybeApprovePlanFromAskUser(input: {
 			}),
 			cwd,
 		});
+		const cleanupHint =
+			recoverable.length > 0
+				? ` Note: recoverable leftover plans remain (cleanup optional):\n${recoverable
+						.map(r => formatOwnershipCandidateLine(r.doc, r.ownership))
+						.join('\n')}`
+				: '';
 		recordPlanEvent({
 			event: 'approve',
 			sessionId: input.sessionId || undefined,
@@ -1039,6 +1248,8 @@ export async function maybeApprovePlanFromAskUser(input: {
 			phase: Math.max(1, validation.plan.frontmatter.current_phase),
 			reason: 'askuser',
 		});
+		// cleanupHint is not an error; approval still succeeds.
+		void cleanupHint;
 		return {approved: true};
 	}
 

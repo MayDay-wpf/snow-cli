@@ -1019,7 +1019,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
+			'Create a new file with content. **PATH REQUIREMENT**: Prefer a single non-empty string `filePath` plus top-level `content`. Never use empty paths, placeholders like "path/to/file", `filePath: []`, or `filePath: "[]"`. Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH (optional)**: prefer `[{path, content, overwrite?, createDirectories?}]` object arrays; bare path-string arrays are discouraged.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -1027,15 +1027,19 @@ export const mcpTools = [
 					oneOf: [
 						{
 							type: 'string',
-							description: 'Path where the file should be created',
+							minLength: 1,
+							description:
+								'Single-file path (preferred). Must be a non-empty string — never "", "[]", or placeholders.',
 						},
 						{
 							type: 'array',
+							minItems: 1,
 							items: {
 								type: 'object',
 								properties: {
 									path: {
 										type: 'string',
+										minLength: 1,
 										description: 'Path where the file should be created',
 									},
 									content: {
@@ -1055,7 +1059,8 @@ export const mcpTools = [
 								},
 								required: ['path', 'content'],
 							},
-							description: 'Array of file configs for batch creation',
+							description:
+								'Non-empty array of {path, content} configs for batch creation. Never pass [].',
 						},
 					],
 				},

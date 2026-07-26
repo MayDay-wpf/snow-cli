@@ -17,69 +17,17 @@ import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
 import {getPlanMode} from '../config/projectSettings.js';
 import {evaluatePlanGate, maybeApprovePlanFromAskUser} from './planModeGate.js';
+import {
+	parseToolArgumentsDetailed,
+	safeParseToolArguments,
+} from './toolArgsParse.js';
 
-//安全解析JSON，处理可能被拼接的多个JSON对象
-function safeParseToolArguments(argsString: string): Record<string, any> {
-	if (!argsString || argsString.trim() === '') {
-		return {};
-	}
-
-	try {
-		return JSON.parse(argsString);
-	} catch (error) {
-		//尝试只解析第一个完整的JSON对象
-		//这处理了多个工具调用参数被错误拼接的情况
-		const firstBraceIndex = argsString.indexOf('{');
-		if (firstBraceIndex === -1) {
-			return {};
-		}
-
-		let braceCount = 0;
-		let inString = false;
-		let escapeNext = false;
-
-		for (let i = firstBraceIndex; i < argsString.length; i++) {
-			const char = argsString[i];
-
-			if (escapeNext) {
-				escapeNext = false;
-				continue;
-			}
-
-			if (char === '\\') {
-				escapeNext = true;
-				continue;
-			}
-
-			if (char === '"') {
-				inString = !inString;
-				continue;
-			}
-
-			if (!inString) {
-				if (char === '{') {
-					braceCount++;
-				} else if (char === '}') {
-					braceCount--;
-					if (braceCount === 0) {
-						//找到第一个完整的JSON对象
-						const firstJsonObject = argsString.substring(
-							firstBraceIndex,
-							i + 1,
-						);
-						try {
-							return JSON.parse(firstJsonObject);
-						} catch {
-							return {};
-						}
-					}
-				}
-			}
-		}
-
-		return {};
-	}
-}
+// Re-export parse helpers so existing import sites can keep using toolExecutor.
+export {
+	parseToolArgumentsDetailed,
+	safeParseToolArguments,
+	type ToolArgsParseResult,
+} from './toolArgsParse.js';
 
 export interface ToolCall {
 	id: string;
@@ -284,7 +232,22 @@ export async function executeToolCall(
 		}
 
 		try {
-			const args = safeParseToolArguments(toolCall.function.arguments);
+			const parsedArgs = parseToolArgumentsDetailed(
+				toolCall.function.arguments,
+			);
+			if (!parsedArgs.ok) {
+				const preview = parsedArgs.rawPreview
+					? ` Raw preview: ${parsedArgs.rawPreview}`
+					: '';
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: `Error: Tool "${toolCall.function.name}" received invalid tool arguments JSON. ${parsedArgs.error}.${preview}`,
+					messageStatus: 'error',
+				};
+				return result;
+			}
+			const args = parsedArgs.args;
 			recordToolContent(
 				telemetry.span,
 				'tool.input',
@@ -456,6 +419,13 @@ export async function executeToolCall(
 					// Fallback to agentId if lookup fails
 				}
 
+				// Bind session/project scope for multi-session isolation.
+				const {sessionManager} = await import('../session/sessionManager.js');
+				const currentSession = sessionManager.getCurrentSession();
+				const sessionId = currentSession?.id;
+				const projectId =
+					currentSession?.projectId ?? sessionManager.getProjectId?.();
+
 				// Register this sub-agent as running
 				runningSubAgentTracker.register({
 					instanceId: toolCall.id,
@@ -463,6 +433,8 @@ export async function executeToolCall(
 					agentName,
 					prompt: subAgentPrompt,
 					startedAt: new Date(),
+					sessionId,
+					projectId,
 				});
 				// Per-instance abort so Detail TUI can stop this agent without killing the whole turn.
 				const subAgentAbortController =

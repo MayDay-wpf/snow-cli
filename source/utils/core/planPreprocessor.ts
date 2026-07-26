@@ -11,7 +11,12 @@ import {
 	listUnfinishedPlans,
 	type PlanDoc,
 } from '../execution/planDocument.js';
-import {readPlanOwnerLock, isLockStale} from '../execution/planOwnerLock.js';
+import {readPlanOwnerLock} from '../execution/planOwnerLock.js';
+import {
+	classifyPlanOwnership,
+	type PlanOwnershipClassification,
+	type PlanOwnershipKind,
+} from '../execution/planOwnership.js';
 
 export function formatPlanContext(doc: PlanDoc): string {
 	const total = doc.phases.length;
@@ -90,7 +95,30 @@ export async function buildPlanReminder(
 	return null;
 }
 
-function summarizeUnfinished(doc: PlanDoc, index: number): string {
+const RECOVERABLE_KINDS = new Set<PlanOwnershipKind>([
+	'mine_recoverable',
+	'untagged_recoverable',
+	'foreign_hard_stale',
+]);
+
+function formatLockShort(ownership: PlanOwnershipClassification): string {
+	const lock = ownership.lock;
+	if (!lock) {
+		return 'lock=(none)';
+	}
+	const soft = ownership.softStale === true;
+	const hard = ownership.stale === true;
+	const staleLabel = hard ? 'hard' : soft ? 'soft' : 'fresh';
+	return `lock=pid=${lock.pid} alive=${String(
+		ownership.pidAlive,
+	)} ${staleLabel}`;
+}
+
+function summarizeUnfinished(
+	doc: PlanDoc,
+	index: number,
+	ownership: PlanOwnershipClassification,
+): string {
 	const total = doc.phases.length;
 	const current = Math.max(1, doc.frontmatter.current_phase || 1);
 	const title =
@@ -99,9 +127,82 @@ function summarizeUnfinished(doc: PlanDoc, index: number): string {
 		path.basename(doc.filePath);
 	const owner = doc.frontmatter.session || '(none)';
 	return (
-		`${index}. [${doc.frontmatter.status}] ${title} | session=${owner} | ` +
-		`phase=${current}/${total || '?'} | ${doc.filePath}`
+		`${index}. [${doc.frontmatter.status}] ${title} | ownership=${ownership.kind} | ` +
+		`session=${owner} | phase=${current}/${total || '?'} | ` +
+		`${formatLockShort(ownership)} | ${doc.filePath}`
 	);
+}
+
+function buildAdoptGuidance(input: {
+	hasForeignLive: boolean;
+	hasForeignSoft: boolean;
+	hasRecoverable: boolean;
+	multiple: boolean;
+}): string[] {
+	const lines: string[] = [
+		'',
+		'Before starting new work, use `askuser-ask_question` with options like:',
+	];
+
+	if (input.hasRecoverable && !input.hasForeignLive && !input.hasForeignSoft) {
+		lines.push(
+			'- "Continue this plan" / "继续该计划" (when only one unfinished plan)',
+			'- "Continue: <absolute-or-relative-plan-path>" when multiple plans exist',
+		);
+	} else {
+		lines.push(
+			'- Prefer "Start over" / "开始新计划" or wait — do **not** treat Continue as a silent lock steal',
+			'- If the user insists on takeover: "Force continue: <plan-path>" (requires force adopt)',
+		);
+	}
+
+	lines.push(
+		'- "Start over" / "开始新计划" (do NOT adopt; optionally abandon old plans first)',
+		'- "Abandon old" then archive via plan-manage',
+		'',
+	);
+
+	if (input.hasForeignLive) {
+		lines.push(
+			'**Foreign live owner present.** Another session/process holds a live lock. ' +
+				'Do **not** Continue / adopt without force — that would race the live owner. ' +
+				'Ask the user to wait or finish that session. Only if they insist: ' +
+				'`plan-manage {action:"adopt", plan_path:"...", force:true, reason:"..."}`.',
+			'',
+		);
+	}
+
+	if (input.hasForeignSoft) {
+		lines.push(
+			'**Foreign soft-stale owner present.** PID may still be alive but heartbeat is old (possible zombie). ' +
+				'Soft-stale is **never** auto-adopted. Continue without force is forbidden. ' +
+				'If the user confirms takeover: ' +
+				'`plan-manage {action:"adopt", plan_path:"...", force:true, reason:"..."}`.',
+			'',
+		);
+	}
+
+	if (input.hasRecoverable) {
+		const pathHint = input.multiple
+			? 'plan_path is required when multiple candidates exist. '
+			: '';
+		lines.push(
+			'Choosing **Continue** for a recoverable plan should call ' +
+				'`plan-manage {action:"adopt", plan_path:"..."}` without force. ' +
+				pathHint +
+				'That rebinds session id, sets status=executing, restores the plan gate/scope, ' +
+				'and acquires the repo owner lock. Resume from the first unchecked step of the current phase.',
+			'',
+		);
+	}
+
+	lines.push(
+		'Do **not** silently adopt the newest plan without user confirmation.',
+		'plan-manage list labels each plan with ownership=… — use that before adopting.',
+		'',
+	);
+
+	return lines;
 }
 
 /**
@@ -132,42 +233,48 @@ export async function buildResumePlanNotice(
 		}
 
 		const lock = await readPlanOwnerLock(cwd);
-		let lockLine = '';
-		if (lock) {
-			const {stale, pidAlive} = isLockStale(lock);
-			lockLine =
-				`Owner lock: session=${lock.sessionId || '(none)'} pid=${lock.pid} ` +
-				`(alive=${String(pidAlive)}, stale=${String(stale)}) plan=${
-					lock.planPath
-				}`;
-		}
+		const classified = unfinished.map(doc => ({
+			doc,
+			ownership: classifyPlanOwnership({
+				cwd,
+				sessionId,
+				plan: {
+					filePath: doc.filePath,
+					frontmatter: {
+						status: doc.frontmatter.status,
+						session: doc.frontmatter.session,
+					},
+				},
+				lock,
+			}),
+		}));
+
+		const hasForeignLive = classified.some(
+			c => c.ownership.kind === 'foreign_live',
+		);
+		const hasForeignSoft = classified.some(
+			c => c.ownership.kind === 'foreign_soft_stale',
+		);
+		const hasRecoverable = classified.some(c =>
+			RECOVERABLE_KINDS.has(c.ownership.kind),
+		);
 
 		const lines = [
 			'## Unfinished Plan Detected',
 			'',
 			`Found ${unfinished.length} unfinished plan(s) under .snow/plan/.`,
 			'',
-			...unfinished.map((doc, i) => summarizeUnfinished(doc, i + 1)),
+			...classified.map((c, i) =>
+				summarizeUnfinished(c.doc, i + 1, c.ownership),
+			),
+			...buildAdoptGuidance({
+				hasForeignLive,
+				hasForeignSoft,
+				hasRecoverable,
+				multiple: unfinished.length > 1,
+			}),
 		];
-		if (lockLine) {
-			lines.push('', lockLine);
-		}
-		lines.push(
-			'',
-			'Before starting new work, use `askuser-ask_question` with options like:',
-			'- "Continue this plan" / "继续该计划" (when only one unfinished plan)',
-			'- "Continue: <absolute-or-relative-plan-path>" when multiple plans exist',
-			'- "Start over" / "开始新计划" (do NOT adopt; optionally abandon old plans first)',
-			'- "Abandon old" then archive via plan-manage',
-			'',
-			'Choosing **Continue** should call `plan-manage {action:"adopt", plan_path:"..."}` ' +
-				'(required when multiple candidates). That rebinds session id, sets status=executing, ' +
-				'restores the plan gate/scope, and acquires the repo owner lock. ' +
-				'Resume from the first unchecked step of the current phase.',
-			'',
-			'Do **not** silently adopt the newest plan without user confirmation.',
-			'',
-		);
+
 		return lines.join('\n');
 	} catch {
 		return null;

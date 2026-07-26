@@ -100,3 +100,16 @@ test('executeMCPTool filesystem-create keeps non-JSON string filePath as string'
 		{message: /Missing required parameter 'content'|filePath/},
 	);
 });
+
+test('executeMCPTool filesystem-create rejects stringified empty array "[]"', async t => {
+	// Whitelist normalization parses "[]" into [], then empty-array validation must hard-fail.
+	await t.throwsAsync(
+		() =>
+			executeMCPTool('filesystem-create', {
+				filePath: '[]',
+				content: 'hello',
+				overwrite: true,
+			}),
+		{message: /Empty 'filePath' array|Never use filePath/},
+	);
+});

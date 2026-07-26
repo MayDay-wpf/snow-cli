@@ -167,7 +167,38 @@ export function setPlanMode(enabled: boolean): void {
 
 export type PlanStrictness = 'strict' | 'soft' | 'off';
 
+/** Process-local override for tests; does not write settings.json. */
+let planStrictnessOverride: PlanStrictness | null = null;
+
+export function setPlanStrictnessOverride(value: PlanStrictness | null): void {
+	planStrictnessOverride = value;
+}
+
+export function clearPlanStrictnessOverride(): void {
+	planStrictnessOverride = null;
+}
+
+export async function withPlanStrictness<T>(
+	value: PlanStrictness,
+	fn: () => T | Promise<T>,
+): Promise<T> {
+	const previous = planStrictnessOverride;
+	planStrictnessOverride = value;
+	try {
+		return await fn();
+	} finally {
+		planStrictnessOverride = previous;
+	}
+}
+
 export function getPlanStrictness(): PlanStrictness {
+	if (
+		planStrictnessOverride === 'strict' ||
+		planStrictnessOverride === 'soft' ||
+		planStrictnessOverride === 'off'
+	) {
+		return planStrictnessOverride;
+	}
 	const settings = loadSettings();
 	const value = settings.planStrictness;
 	return value === 'strict' || value === 'soft' || value === 'off'

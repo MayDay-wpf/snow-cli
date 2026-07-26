@@ -1,10 +1,18 @@
 /**
- * Headless Plan Mode resume (Phase 4)
+ * Headless Plan Mode resume (Phase 3/4)
  *
  * Headless never uses interactive askuser for plan approval. Opt-in only:
  * resume a preapproved/executing plan from disk (session match or explicit path).
  * If restore/adopt fails, planMode stays off so writes remain unlocked only via YOLO,
  * not via a false plan gate unlock.
+ *
+ * Ownership / isolation rules for --plan-file:
+ * - same session / hard-stale foreign / untagged recoverable → resume allowed
+ *   (acquire without force)
+ * - live foreign / soft-stale foreign → FAIL by default (no silent force adopt)
+ * - Optional takeover: forceTakeover=true + non-empty forceReason may steal a
+ *   live/soft-stale foreign lock (writes a takeover note). Prefer interactive
+ *   plan-manage adopt when possible.
  */
 
 import path from 'node:path';
@@ -14,14 +22,28 @@ import {
 	parsePlanDocument,
 } from './planDocument.js';
 import {
+	classifyPlanDocOwnership,
 	getPlanApproved,
 	restorePlanGateFromDisk,
 	setPlanApproved,
 	setPlanScope,
 	resolvePlanScopeFiles,
 } from './planModeGate.js';
-import {acquirePlanOwnerLock, releasePlanOwnerLock} from './planOwnerLock.js';
+import {
+	acquirePlanOwnerLock,
+	formatOwnerLockConflict,
+	releasePlanOwnerLock,
+	type PlanOwnerLockConflict,
+} from './planOwnerLock.js';
 import {recordPlanEvent} from '../telemetry/otel.js';
+
+function formatHeadlessLockConflict(conflict: PlanOwnerLockConflict): string {
+	try {
+		return formatOwnerLockConflict(conflict);
+	} catch {
+		return `lock session=${conflict.lock.sessionId} pid=${conflict.lock.pid}`;
+	}
+}
 
 export type HeadlessPlanResumeInput = {
 	cwd: string;
@@ -30,6 +52,13 @@ export type HeadlessPlanResumeInput = {
 	planFile?: string | null;
 	/** Opt-in: try restore when --plan / --yolo-p is set without a path */
 	enablePlan?: boolean;
+	/**
+	 * Explicit takeover of a live/soft-stale foreign owner (requires forceReason).
+	 * Default false — headless never silently steals a live lock.
+	 */
+	forceTakeover?: boolean;
+	/** Required when forceTakeover is true; recorded as a takeover note. */
+	forceReason?: string | null;
 };
 
 export type HeadlessPlanResumeResult = {
@@ -61,14 +90,22 @@ export async function tryResumeHeadlessPlan(
 
 	// Explicit plan file: adopt-like rebind without interactive askuser.
 	if (planFile) {
-		const result = await resumeFromPlanFile(cwd, sessionId, planFile);
+		const forceTakeover = input.forceTakeover === true;
+		const forceReason =
+			typeof input.forceReason === 'string' ? input.forceReason.trim() : '';
+		const result = await resumeFromPlanFile(cwd, sessionId, planFile, {
+			forceTakeover,
+			forceReason,
+		});
 		if (result.approved) {
 			recordPlanEvent({
 				event: 'approve',
 				sessionId: sessionId || undefined,
 				planPath: result.planPath,
 				status: 'executing',
-				reason: 'headless-plan-file',
+				reason: forceTakeover
+					? 'headless-plan-file-force-takeover'
+					: 'headless-plan-file',
 			});
 		}
 		return result;
@@ -106,10 +143,15 @@ async function resumeFromPlanFile(
 	cwd: string,
 	sessionId: string | null,
 	planFile: string,
+	options: {forceTakeover: boolean; forceReason: string} = {
+		forceTakeover: false,
+		forceReason: '',
+	},
 ): Promise<HeadlessPlanResumeResult> {
 	const planPath = path.isAbsolute(planFile)
 		? planFile
 		: path.resolve(cwd, planFile);
+	const {forceTakeover, forceReason} = options;
 
 	let doc;
 	try {
@@ -136,32 +178,96 @@ async function resumeFromPlanFile(
 		};
 	}
 
+	// Ownership check BEFORE lock acquire: never silent-force live/soft-stale foreign.
+	const ownership = await classifyPlanDocOwnership(cwd, doc, sessionId);
+	const needsForceTakeover =
+		ownership.kind === 'foreign_live' ||
+		ownership.kind === 'foreign_soft_stale';
+
+	if (needsForceTakeover) {
+		if (!forceTakeover) {
+			return {
+				planMode: false,
+				approved: false,
+				planPath: doc.filePath,
+				message:
+					`Headless plan resume refused: ownership=${ownership.kind}. ` +
+					`${ownership.summary} ` +
+					'Headless will not silently take over a live/soft-stale foreign plan. ' +
+					'Finish or abandon it first, pass forceTakeover+forceReason, ' +
+					'or use interactive plan-manage adopt with force=true reason=... .',
+			};
+		}
+		if (!forceReason) {
+			return {
+				planMode: false,
+				approved: false,
+				planPath: doc.filePath,
+				message:
+					`Headless forceTakeover requires forceReason (ownership=${ownership.kind}). ` +
+					'Soft-stale is never auto-adopted without force+reason.',
+			};
+		}
+	} else if (
+		!ownership.canAdoptWithoutForce &&
+		ownership.kind !== 'mine_active' &&
+		ownership.kind !== 'none'
+	) {
+		return {
+			planMode: false,
+			approved: false,
+			planPath: doc.filePath,
+			message:
+				`Headless plan resume refused: ownership=${ownership.kind}. ` +
+				`${ownership.summary}`,
+		};
+	}
+
 	const boundSession = sessionId || doc.frontmatter.session || '';
 	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
 
+	// force=true only when caller explicitly requested takeover of live/soft foreign.
 	const lockResult = await acquirePlanOwnerLock(cwd, {
 		planPath: doc.filePath,
 		sessionId: boundSession,
+		force: needsForceTakeover && forceTakeover,
 	});
 	if (!lockResult.ok) {
 		return {
 			planMode: false,
 			approved: false,
 			planPath: doc.filePath,
-			message: `Headless plan resume failed: owner lock unavailable for ${doc.filePath}`,
+			message:
+				`Headless plan resume failed: owner lock unavailable for ${doc.filePath}. ` +
+				`${formatHeadlessLockConflict(lockResult.conflict)} ` +
+				'Hard-stale/same-session can resume; live foreign requires forceTakeover+forceReason.',
 		};
 	}
 
 	try {
 		await mutatePlanDocument(
 			doc.filePath,
-			() => ({
-				frontmatter: {
-					session: boundSession,
-					status: 'executing',
-					current_phase: currentPhase,
-				},
-			}),
+			({content}) => {
+				const patch = {
+					frontmatter: {
+						session: boundSession,
+						status: 'executing' as const,
+						current_phase: currentPhase,
+					},
+				};
+				if (!(lockResult.tookOver && forceReason)) {
+					return patch;
+				}
+				const body = content.endsWith('\n') ? content : `${content}\n`;
+				return {
+					...patch,
+					content:
+						body +
+						`\n> Owner takeover: ${forceReason} (${new Date()
+							.toISOString()
+							.slice(0, 10)})\n`,
+				};
+			},
 			getPlanWriteOptions(doc),
 		);
 	} catch (error) {
@@ -187,10 +293,14 @@ async function resumeFromPlanFile(
 		cwd,
 	});
 
+	const takeoverNote =
+		lockResult.tookOver && forceReason
+			? ` (force takeover: ${forceReason})`
+			: '';
 	return {
 		planMode: true,
 		approved: true,
 		planPath: updated.filePath,
-		message: `Headless plan resumed: ${updated.filePath} (phase ${currentPhase})`,
+		message: `Headless plan resumed: ${updated.filePath} (phase ${currentPhase})${takeoverNote}`,
 	};
 }

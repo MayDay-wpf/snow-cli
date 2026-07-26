@@ -5,6 +5,8 @@
  * Snapshot rebuilds immediately; listener notifications are throttled (~200ms).
  */
 
+import {sessionManager} from '../../../utils/session/sessionManager.js';
+
 /** Feature flag: when false, keep legacy toolPending message flooding. */
 export const SUBAGENT_LIVE_SLOTS_ENABLED = true;
 
@@ -50,6 +52,17 @@ export type SubAgentLiveSlot = {
 	otherPendingCount: number;
 	preview?: string;
 	updatedAt: number;
+	/** Session that owns this live slot (for multi-session isolation). */
+	sessionId?: string;
+	/** Project that owns the session (for multi-project isolation). */
+	projectId?: string;
+};
+
+export type SubAgentLiveSnapshotOptions = {
+	sessionId?: string;
+	projectId?: string;
+	/** When true, return every slot regardless of session/project. */
+	all?: boolean;
 };
 
 type LiveSlotInternal = SubAgentLiveSlot & {
@@ -86,8 +99,57 @@ const NOTIFY_THROTTLE_MS = 200;
 
 const _slots = new Map<string, LiveSlotInternal>();
 const _listeners = new Set<() => void>();
+let _allSnapshot: SubAgentLiveSlot[] = [];
+/** Default public snapshot: slots for the current session (plus unscoped). */
 let _snapshot: SubAgentLiveSlot[] = [];
+let _cachedFilterSessionId: string | undefined;
 let _notifyTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resolveCurrentSessionScope(): {
+	sessionId?: string;
+	projectId?: string;
+} {
+	const session = sessionManager.getCurrentSession();
+	return {
+		sessionId: session?.id,
+		projectId: session?.projectId ?? sessionManager.getProjectId?.(),
+	};
+}
+
+function matchesLiveSlotFilter(
+	slot: SubAgentLiveSlot,
+	options?: SubAgentLiveSnapshotOptions,
+): boolean {
+	if (options?.all) {
+		return true;
+	}
+
+	const current = resolveCurrentSessionScope();
+	const sessionId = options?.sessionId ?? current.sessionId;
+	const projectId = options?.projectId ?? current.projectId;
+
+	if (options?.sessionId !== undefined) {
+		if (slot.sessionId && slot.sessionId !== options.sessionId) {
+			return false;
+		}
+	} else if (sessionId) {
+		if (slot.sessionId && slot.sessionId !== sessionId) {
+			return false;
+		}
+	}
+
+	if (options?.projectId !== undefined) {
+		if (slot.projectId && slot.projectId !== options.projectId) {
+			return false;
+		}
+	} else if (projectId && options?.sessionId === undefined) {
+		if (slot.projectId && slot.projectId !== projectId) {
+			return false;
+		}
+	}
+
+	return true;
+}
 
 function toPublicSlot(slot: LiveSlotInternal): SubAgentLiveSlot {
 	return {
@@ -104,6 +166,8 @@ function toPublicSlot(slot: LiveSlotInternal): SubAgentLiveSlot {
 		otherPendingCount: slot.otherPendingCount,
 		preview: slot.preview,
 		updatedAt: slot.updatedAt,
+		sessionId: slot.sessionId,
+		projectId: slot.projectId,
 	};
 }
 
@@ -145,9 +209,20 @@ function ensureSlot(
 		if (agentName && existing.agentName !== agentName) {
 			existing.agentName = agentName;
 		}
+		// Backfill scope if slot was created before session was available.
+		if (!existing.sessionId || !existing.projectId) {
+			const scope = resolveCurrentSessionScope();
+			if (!existing.sessionId && scope.sessionId) {
+				existing.sessionId = scope.sessionId;
+			}
+			if (!existing.projectId && scope.projectId) {
+				existing.projectId = scope.projectId;
+			}
+		}
 		return existing;
 	}
 
+	const scope = resolveCurrentSessionScope();
 	const created: LiveSlotInternal = {
 		agentId,
 		agentName,
@@ -159,6 +234,8 @@ function ensureSlot(
 		historyLines: [],
 		updatedAt: now,
 		pendingTools: new Map(),
+		sessionId: scope.sessionId,
+		projectId: scope.projectId,
 	};
 	_slots.set(agentId, created);
 	return created;
@@ -175,7 +252,11 @@ function notifyListenersNow(): void {
 }
 
 function rebuildSnapshot(): void {
-	_snapshot = Array.from(_slots.values()).map(toPublicSlot);
+	_allSnapshot = Array.from(_slots.values()).map(toPublicSlot);
+	_cachedFilterSessionId = resolveCurrentSessionScope().sessionId;
+	_snapshot = _allSnapshot.filter(slot =>
+		matchesLiveSlotFilter(slot, undefined),
+	);
 	if (!_notifyTimer) {
 		_notifyTimer = setTimeout(() => {
 			_notifyTimer = null;
@@ -196,9 +277,31 @@ export function subscribeSubAgentLive(listener: () => void): () => void {
 		_listeners.delete(listener);
 	};
 }
+export function getSubAgentLiveSnapshot(
+	options?: SubAgentLiveSnapshotOptions,
+): SubAgentLiveSlot[] {
+	if (options?.all) {
+		return _allSnapshot;
+	}
 
-export function getSubAgentLiveSnapshot(): SubAgentLiveSlot[] {
+	if (options?.sessionId !== undefined || options?.projectId !== undefined) {
+		return _allSnapshot.filter(slot => matchesLiveSlotFilter(slot, options));
+	}
+
+	const currentSessionId = resolveCurrentSessionScope().sessionId;
+	if (currentSessionId !== _cachedFilterSessionId) {
+		_cachedFilterSessionId = currentSessionId;
+		_snapshot = _allSnapshot.filter(slot =>
+			matchesLiveSlotFilter(slot, undefined),
+		);
+	}
+
 	return _snapshot;
+}
+
+/** Unfiltered alias for getSubAgentLiveSnapshot({all: true}). */
+export function getAllSubAgentLiveSlots(): SubAgentLiveSlot[] {
+	return _allSnapshot;
 }
 
 export function getSubAgentLiveSlot(
@@ -209,11 +312,40 @@ export function getSubAgentLiveSlot(
 }
 
 export function clearAllSubAgentLiveSlots(): void {
-	if (_slots.size === 0 && _snapshot.length === 0) {
+	if (
+		_slots.size === 0 &&
+		_snapshot.length === 0 &&
+		_allSnapshot.length === 0
+	) {
 		return;
 	}
 	_slots.clear();
+	_allSnapshot = [];
 	_snapshot = [];
+	_cachedFilterSessionId = undefined;
+	if (_notifyTimer) {
+		clearTimeout(_notifyTimer);
+		_notifyTimer = null;
+	}
+	notifyListenersNow();
+}
+
+/**
+ * Drop live slots that do not belong to the given session.
+ * Helper for session-switch cleanup (wired in a later phase).
+ */
+export function clearSubAgentLiveSlotsNotInSession(sessionId: string): void {
+	let removed = false;
+	for (const [agentId, slot] of _slots) {
+		if (slot.sessionId && slot.sessionId !== sessionId) {
+			_slots.delete(agentId);
+			removed = true;
+		}
+	}
+	if (!removed) {
+		return;
+	}
+	rebuildSnapshot();
 	if (_notifyTimer) {
 		clearTimeout(_notifyTimer);
 		_notifyTimer = null;

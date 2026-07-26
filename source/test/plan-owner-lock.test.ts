@@ -3,11 +3,14 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
+	PLAN_OWNER_LOCK_SOFT_STALE_MS,
 	PLAN_OWNER_LOCK_STALE_MS,
 	acquirePlanOwnerLock,
+	getLockLiveness,
 	getPlanOwnerLockPath,
 	isLockStale,
 	readPlanOwnerLock,
+	refreshPlanOwnerHeartbeat,
 	releasePlanOwnerLock,
 	verifyPlanOwnerLock,
 	type PlanOwnerLock,
@@ -142,6 +145,40 @@ test('confirmed-live local owner never expires only because of age', t => {
 	t.deepEqual(isLockStale(live, now), {stale: false, pidAlive: true});
 });
 
+test('soft-stale is live pid with old heartbeat and is not hard-stale', t => {
+	const now = Date.now();
+	const soft = owner({
+		heartbeatAt: new Date(now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1).toISOString(),
+	});
+	t.deepEqual(getLockLiveness(soft, now), {
+		pidAlive: true,
+		hardStale: false,
+		softStale: true,
+	});
+	// isLockStale remains hard-stale only for backward compatibility.
+	t.deepEqual(isLockStale(soft, now), {stale: false, pidAlive: true});
+
+	const fresh = owner({
+		heartbeatAt: new Date(now - 1_000).toISOString(),
+	});
+	t.deepEqual(getLockLiveness(fresh, now), {
+		pidAlive: true,
+		hardStale: false,
+		softStale: false,
+	});
+
+	// Cross-host never soft-stales; only hard rules apply.
+	const remoteSoftAge = owner({
+		hostname: `${os.hostname()}-remote`,
+		heartbeatAt: new Date(now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1).toISOString(),
+	});
+	t.deepEqual(getLockLiveness(remoteSoftAge, now), {
+		pidAlive: 'unknown',
+		hardStale: false,
+		softStale: false,
+	});
+});
+
 test('dead owner is recovered without force', async t => {
 	const {cwd, planPath} = await makeWorkspace();
 	await writeLock(
@@ -161,6 +198,56 @@ test('dead owner is recovered without force', async t => {
 	if (recovered.ok) {
 		t.true(recovered.tookOver);
 		t.is(recovered.previousLock?.sessionId, 'dead-session');
+	}
+});
+
+test('heartbeat refresh updates only same owner and never steals', async t => {
+	const {cwd, planPath} = await makeWorkspace();
+	const acquired = await acquirePlanOwnerLock(cwd, {
+		planPath,
+		sessionId: 'session-a',
+	});
+	t.true(acquired.ok);
+	if (!acquired.ok) {
+		return;
+	}
+
+	const before = acquired.lock.heartbeatAt;
+	await new Promise(resolve => setTimeout(resolve, 5));
+	const refreshed = await refreshPlanOwnerHeartbeat(cwd, {
+		planPath,
+		sessionId: 'session-a',
+	});
+	t.true(refreshed.ok);
+	if (refreshed.ok) {
+		t.is(refreshed.lock.acquiredAt, acquired.lock.acquiredAt);
+		t.true(refreshed.lock.heartbeatAt >= before);
+		t.not(refreshed.lock.heartbeatAt, before);
+	}
+
+	const foreign = await refreshPlanOwnerHeartbeat(cwd, {
+		planPath,
+		sessionId: 'session-b',
+	});
+	t.false(foreign.ok);
+	if (!foreign.ok) {
+		t.is(foreign.reason, 'foreign');
+	}
+	// Foreign refresh must not rewrite the lock owner.
+	const still = await readPlanOwnerLock(cwd);
+	t.is(still?.sessionId, 'session-a');
+	t.is(still?.pid, process.pid);
+});
+
+test('heartbeat refresh reports missing when no lock exists', async t => {
+	const {cwd, planPath} = await makeWorkspace();
+	const missing = await refreshPlanOwnerHeartbeat(cwd, {
+		planPath,
+		sessionId: 'session-a',
+	});
+	t.false(missing.ok);
+	if (!missing.ok) {
+		t.is(missing.reason, 'missing');
 	}
 });
 

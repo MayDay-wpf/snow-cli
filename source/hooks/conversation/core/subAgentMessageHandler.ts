@@ -243,6 +243,9 @@ function formatTokenCount(tokens: number | undefined): string {
 /** Max characters for live slot content preview (single-line). */
 const LIVE_CONTENT_PREVIEW_MAX = 120;
 
+/** Max characters for live tool title/params preview (single-line). */
+const LIVE_TOOL_PARAM_PREVIEW_MAX = 100;
+
 /**
  * Build a short single-line preview for SubAgentLiveSlots writing status.
  * Uses the last non-empty line, collapses whitespace, and truncates aggressively.
@@ -264,6 +267,27 @@ function formatLiveContentPreview(
 	if (!lastLine) return '';
 	if (lastLine.length <= maxChars) return lastLine;
 	return `…${lastLine.slice(-(maxChars - 1))}`;
+}
+
+/**
+ * Collapse multi-line tool params (e.g. terminal-execute commands) into a
+ * single-line live title/paramsPreview fragment. Full args stay elsewhere.
+ */
+function formatLiveToolParamDisplay(
+	raw: string,
+	maxChars: number = LIVE_TOOL_PARAM_PREVIEW_MAX,
+): string {
+	if (!raw) return '';
+	const singleLine = String(raw).replace(/\s+/g, ' ').trim();
+	if (!singleLine) return '';
+	if (singleLine.length <= maxChars) return singleLine;
+	if (maxChars <= 3) return singleLine.slice(0, maxChars);
+	return `${singleLine.slice(0, maxChars - 3)}...`;
+}
+
+/** Join base tool title with already-sanitized param display. */
+function formatLiveToolTitle(baseTitle: string, paramDisplay: string): string {
+	return `${baseTitle}${paramDisplay || ''}`;
 }
 
 function extractRejectionReason(content: string): string | undefined {
@@ -1150,19 +1174,22 @@ export class SubAgentUIHandler {
 
 			let paramDisplay = '';
 			if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
-				paramDisplay = ` "${toolArgs.command}"`;
+				const cmd = formatLiveToolParamDisplay(String(toolArgs.command));
+				paramDisplay = cmd ? ` "${cmd}"` : '';
 			} else if (toolDisplay.args.length > 0) {
-				const params = toolDisplay.args
-					.map((arg: any) => `${arg.key}: ${arg.value}`)
-					.join(', ');
-				paramDisplay = ` (${params})`;
+				const params = formatLiveToolParamDisplay(
+					toolDisplay.args
+						.map((arg: any) => `${arg.key}: ${arg.value}`)
+						.join(', '),
+				);
+				paramDisplay = params ? ` (${params})` : '';
 			}
 
 			const startedAt = Date.now();
-			const title = `${formatToolTitleLine(
-				toolCall.function.name,
-				'pending',
-			)}${paramDisplay}`;
+			const title = formatLiveToolTitle(
+				formatToolTitleLine(toolCall.function.name, 'pending'),
+				paramDisplay,
+			);
 
 			if (useLiveSlots) {
 				this.rememberToolStart(subAgentMessage.agentId, toolCall.id, startedAt);
@@ -1203,12 +1230,14 @@ export class SubAgentUIHandler {
 			if (useLiveSlots) {
 				for (const toolCall of quickTools) {
 					const display = formatToolCallMessage(toolCall);
-					const params = display.args
-						.map((arg: any) => `${arg.key}: ${arg.value}`)
-						.join(', ');
+					const params = formatLiveToolParamDisplay(
+						display.args
+							.map((arg: any) => `${arg.key}: ${arg.value}`)
+							.join(', '),
+					);
 					const paramDisplay = params ? ` (${params})` : '';
 					const startedAt = Date.now();
-					const title = `${display.toolName}${paramDisplay}`;
+					const title = formatLiveToolTitle(display.toolName, paramDisplay);
 					this.rememberToolStart(
 						subAgentMessage.agentId,
 						toolCall.id,

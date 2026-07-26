@@ -1181,10 +1181,20 @@ function assertNonEmptyFilePathParam(
 	}
 
 	if (typeof filePath === 'string') {
-		if (!filePath.trim()) {
+		const trimmed = filePath.trim();
+		if (!trimmed) {
 			throw new Error(
 				`Empty 'filePath' for ${toolName} tool.\n` +
 					`AI Tip: Provide an exact non-empty path string. Never pass "" or whitespace-only paths.`,
+			);
+		}
+		// Models sometimes emit the literal string "[]" instead of a real path.
+		if (trimmed === '[]') {
+			throw new Error(
+				`Empty 'filePath' array for ${toolName} tool.\n` +
+					`Received filePath as the string "[]".\n` +
+					`AI Tip: Pass a non-empty string path, or a non-empty array of file configs. ` +
+					`Never use filePath: [] or filePath: "[]".`,
 			);
 		}
 		return;

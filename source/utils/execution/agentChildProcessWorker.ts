@@ -190,12 +190,21 @@ async function runSubAgentPayload(
 	restoreConversationContext(payload);
 
 	if (payload.instanceId) {
+		const {sessionManager} = await import('../session/sessionManager.js');
+		const currentSession = sessionManager.getCurrentSession();
+		const sessionId =
+			currentSession?.id ?? payload.conversationContext?.sessionId;
+		const projectId =
+			currentSession?.projectId ?? sessionManager.getProjectId?.();
+
 		runningSubAgentTracker.register({
 			instanceId: payload.instanceId,
 			agentId: payload.agentId,
 			agentName: payload.agentId,
 			prompt: payload.prompt,
 			startedAt: new Date(),
+			sessionId,
+			projectId,
 		});
 		try {
 			const {startSubAgentRun} = await import(

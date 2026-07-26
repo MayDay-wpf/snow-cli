@@ -11,8 +11,14 @@ import {getPlanDir} from './planPaths.js';
 
 export const PLAN_OWNER_LOCK_ENABLED = true;
 
-/** Heartbeat older than this is considered stale when pid status is unknown. */
+/** Heartbeat older than this is hard-stale when pid status is unknown. */
 export const PLAN_OWNER_LOCK_STALE_MS = 30 * 60 * 1000;
+
+/**
+ * Heartbeat older than this is soft-stale when the pid is confirmed alive.
+ * Soft-stale never auto-adopts without force.
+ */
+export const PLAN_OWNER_LOCK_SOFT_STALE_MS = 12 * 60 * 1000;
 
 export type PlanOwnerLock = {
 	version: 1;
@@ -22,6 +28,12 @@ export type PlanOwnerLock = {
 	hostname: string;
 	acquiredAt: string;
 	heartbeatAt: string;
+};
+
+export type PlanOwnerLockLiveness = {
+	pidAlive: boolean | 'unknown';
+	hardStale: boolean;
+	softStale: boolean;
 };
 
 export type PlanOwnerLockConflict = {
@@ -57,26 +69,62 @@ export function isPidAlive(pid: number): boolean | 'unknown' {
 	}
 }
 
-export function isLockStale(
+function lockHeartbeatAgeMs(
 	lock: PlanOwnerLock,
 	nowMs: number = Date.now(),
-): {stale: boolean; pidAlive: boolean | 'unknown'} {
+): number {
+	const heartbeat = Date.parse(lock.heartbeatAt || lock.acquiredAt);
+	return Number.isFinite(heartbeat)
+		? nowMs - heartbeat
+		: Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Classify lock liveness for multi-process ownership decisions.
+ * - hardStale: pid dead, or unknown pid with heartbeat older than HARD
+ * - softStale: same-host pid alive but heartbeat older than SOFT
+ * - cross-host (hostname mismatch): pidAlive is unknown; only hard rules apply
+ */
+export function getLockLiveness(
+	lock: PlanOwnerLock,
+	nowMs: number = Date.now(),
+): PlanOwnerLockLiveness {
 	const pidAlive =
 		lock.hostname && lock.hostname !== os.hostname()
 			? 'unknown'
 			: isPidAlive(lock.pid);
+	const age = lockHeartbeatAgeMs(lock, nowMs);
+
 	if (pidAlive === false) {
-		return {stale: true, pidAlive};
+		return {pidAlive, hardStale: true, softStale: false};
 	}
-	const heartbeat = Date.parse(lock.heartbeatAt || lock.acquiredAt);
-	const age = Number.isFinite(heartbeat)
-		? nowMs - heartbeat
-		: Number.POSITIVE_INFINITY;
-	if (pidAlive === 'unknown' && age > PLAN_OWNER_LOCK_STALE_MS) {
-		return {stale: true, pidAlive};
+
+	if (pidAlive === 'unknown') {
+		return {
+			pidAlive,
+			hardStale: age > PLAN_OWNER_LOCK_STALE_MS,
+			softStale: false,
+		};
 	}
-	// A confirmed-live process remains authoritative regardless of lock age.
-	return {stale: false, pidAlive};
+
+	// Confirmed-live same-host process: soft-stale when heartbeat is old.
+	return {
+		pidAlive: true,
+		hardStale: false,
+		softStale: age > PLAN_OWNER_LOCK_SOFT_STALE_MS,
+	};
+}
+
+/**
+ * Backward-compatible stale check.
+ * `stale` is hard-stale only; soft-stale remains non-stale for force-gating.
+ */
+export function isLockStale(
+	lock: PlanOwnerLock,
+	nowMs: number = Date.now(),
+): {stale: boolean; pidAlive: boolean | 'unknown'} {
+	const liveness = getLockLiveness(lock, nowMs);
+	return {stale: liveness.hardStale, pidAlive: liveness.pidAlive};
 }
 
 async function readPlanOwnerLockAtPath(
@@ -393,4 +441,83 @@ export function formatOwnerLockConflict(
 		`plan=${lock.planPath}. ` +
 		`Adopt that plan, wait for it to finish, or force takeover with reason.`
 	);
+}
+
+/**
+ * Refresh heartbeatAt for the same owner only.
+ * Never creates a lock and never takes over a foreign lock.
+ */
+export async function refreshPlanOwnerHeartbeat(
+	cwd: string,
+	input: {planPath: string; sessionId: string; pid?: number},
+): Promise<
+	{ok: true; lock: PlanOwnerLock} | {ok: false; reason: 'missing' | 'foreign'}
+> {
+	const expected = {
+		planPath: path.resolve(input.planPath),
+		sessionId: input.sessionId || '',
+		pid: input.pid ?? process.pid,
+		hostname: os.hostname(),
+	};
+
+	if (!PLAN_OWNER_LOCK_ENABLED) {
+		const now = new Date().toISOString();
+		return {
+			ok: true,
+			lock: {
+				version: 1,
+				...expected,
+				acquiredAt: now,
+				heartbeatAt: now,
+			},
+		};
+	}
+
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const existing = await readPlanOwnerLock(cwd);
+		if (!existing) {
+			return {ok: false, reason: 'missing'};
+		}
+		if (!sameOwner(existing, expected)) {
+			return {ok: false, reason: 'foreign'};
+		}
+
+		const now = new Date().toISOString();
+		const lock: PlanOwnerLock = {
+			...existing,
+			heartbeatAt: now,
+		};
+
+		const lockPath = getPlanOwnerLockPath(cwd);
+		const movedPath = movedLockPath(lockPath, 'heartbeat');
+		try {
+			await fs.rename(lockPath, movedPath);
+		} catch (error: any) {
+			if (error?.code === 'ENOENT') {
+				continue;
+			}
+			throw error;
+		}
+
+		const moved = await readPlanOwnerLockAtPath(movedPath);
+		if (!moved || !sameLock(moved, existing)) {
+			await restoreMovedLock(lockPath, movedPath);
+			continue;
+		}
+
+		if (await createLockFile(cwd, lock)) {
+			await fs.unlink(movedPath).catch(() => {});
+			return {ok: true, lock};
+		}
+		await restoreMovedLock(lockPath, movedPath);
+	}
+
+	const existing = await readPlanOwnerLock(cwd);
+	if (!existing) {
+		return {ok: false, reason: 'missing'};
+	}
+	if (!sameOwner(existing, expected)) {
+		return {ok: false, reason: 'foreign'};
+	}
+	return {ok: false, reason: 'foreign'};
 }

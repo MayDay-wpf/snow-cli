@@ -5,6 +5,8 @@
  * and a per-instance message queue for injecting user messages into running sub-agents.
  */
 
+import {sessionManager} from '../session/sessionManager.js';
+
 export interface InterAgentMessage {
 	/** Instance ID of the sender sub-agent */
 	fromInstanceId: string;
@@ -29,7 +31,18 @@ export interface RunningSubAgent {
 	prompt: string;
 	/** When this sub-agent started */
 	startedAt: Date;
+	/** Session that spawned this sub-agent (for multi-session isolation) */
+	sessionId?: string;
+	/** Project that owns the session (for multi-project isolation) */
+	projectId?: string;
 }
+
+export type RunningSubAgentQueryOptions = {
+	sessionId?: string;
+	projectId?: string;
+	/** When true, return every running agent regardless of session/project. */
+	all?: boolean;
+};
 
 /**
  * Result from a sub-agent that was spawned by another sub-agent.
@@ -66,11 +79,14 @@ class RunningSubAgentTracker {
 	private agents: Map<string, RunningSubAgent> = new Map();
 	private listeners: Set<Listener> = new Set();
 	/**
-	 * Cached snapshot array for useSyncExternalStore compatibility.
+	 * Cached snapshots for useSyncExternalStore compatibility.
 	 * useSyncExternalStore requires getSnapshot to return the same reference
-	 * if the data hasn't changed, so we cache it and only rebuild on mutation.
+	 * if the data hasn't changed, so we cache them and only rebuild on mutation.
 	 */
+	private cachedAllSnapshot: RunningSubAgent[] = [];
+	/** Default public snapshot: agents for the current session (plus unscoped). */
 	private cachedSnapshot: RunningSubAgent[] = [];
+	private cachedFilterSessionId: string | undefined;
 
 	/**
 	 * Per-instance message queue.
@@ -169,16 +185,44 @@ class RunningSubAgentTracker {
 	}
 
 	/**
-	 * Get all currently running sub-agents (returns cached snapshot).
-	 * Safe for useSyncExternalStore - returns the same reference
-	 * until the data changes.
+	 * Get currently running sub-agents.
+	 * Default (no options / not all): current session only (plus unscoped agents).
+	 * Pass {all: true} or use getAllRunningAgents() for the unfiltered list.
+	 * Safe for useSyncExternalStore when called with default options - returns the
+	 * same reference until agents mutate (or the current session id changes).
 	 */
-	getRunningAgents(): RunningSubAgent[] {
+	getRunningAgents(options?: RunningSubAgentQueryOptions): RunningSubAgent[] {
+		if (options?.all) {
+			return this.cachedAllSnapshot;
+		}
+
+		if (options?.sessionId !== undefined || options?.projectId !== undefined) {
+			return this.cachedAllSnapshot.filter(agent =>
+				matchesRunningAgentFilter(agent, options),
+			);
+		}
+
+		// Refresh default filtered cache if the active session changed.
+		const currentSessionId = sessionManager.getCurrentSession()?.id;
+		if (currentSessionId !== this.cachedFilterSessionId) {
+			this.cachedFilterSessionId = currentSessionId;
+			this.cachedSnapshot = this.cachedAllSnapshot.filter(agent =>
+				matchesRunningAgentFilter(agent, undefined),
+			);
+		}
+
 		return this.cachedSnapshot;
 	}
 
 	/**
-	 * Get count of currently running sub-agents
+	 * Unfiltered alias for getRunningAgents({all: true}).
+	 */
+	getAllRunningAgents(): RunningSubAgent[] {
+		return this.cachedAllSnapshot;
+	}
+
+	/**
+	 * Get count of currently running sub-agents (all sessions).
 	 */
 	getCount(): number {
 		return this.agents.size;
@@ -497,7 +541,11 @@ class RunningSubAgentTracker {
 	}
 
 	private rebuildSnapshot(): void {
-		this.cachedSnapshot = Array.from(this.agents.values());
+		this.cachedAllSnapshot = Array.from(this.agents.values());
+		this.cachedFilterSessionId = sessionManager.getCurrentSession()?.id;
+		this.cachedSnapshot = this.cachedAllSnapshot.filter(agent =>
+			matchesRunningAgentFilter(agent, undefined),
+		);
 	}
 
 	private notifyListeners(): void {
@@ -509,6 +557,48 @@ class RunningSubAgentTracker {
 			}
 		}
 	}
+}
+
+function matchesRunningAgentFilter(
+	agent: RunningSubAgent,
+	options?: RunningSubAgentQueryOptions,
+): boolean {
+	if (options?.all) {
+		return true;
+	}
+
+	const sessionId =
+		options?.sessionId ?? sessionManager.getCurrentSession()?.id;
+	const projectId =
+		options?.projectId ??
+		sessionManager.getCurrentSession()?.projectId ??
+		sessionManager.getProjectId?.();
+
+	// Explicit filters take precedence when provided.
+	if (options?.sessionId !== undefined) {
+		// Unscoped agents (legacy / tests) are included for the active query.
+		if (agent.sessionId && agent.sessionId !== options.sessionId) {
+			return false;
+		}
+	} else if (sessionId) {
+		if (agent.sessionId && agent.sessionId !== sessionId) {
+			return false;
+		}
+	}
+
+	if (options?.projectId !== undefined) {
+		if (agent.projectId && agent.projectId !== options.projectId) {
+			return false;
+		}
+	} else if (projectId && options?.sessionId === undefined) {
+		// Only apply default project filter when no explicit session filter was given.
+		// Default path already scopes by current session; keep unscoped agents.
+		if (agent.projectId && agent.projectId !== projectId) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 export const runningSubAgentTracker = new RunningSubAgentTracker();

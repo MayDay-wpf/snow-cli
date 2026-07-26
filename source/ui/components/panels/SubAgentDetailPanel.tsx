@@ -31,10 +31,28 @@ interface Props {
 	timelineOffset: number;
 	maxHeight?: number;
 	sendFeedback?: string | null;
+	/** Terminal columns; used to size the panel and clamp timeline lines. */
+	terminalWidth?: number;
 }
 
 function stripAnsi(text: string): string {
 	return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+/** Collapse ANSI + newlines into a single trimmed line for TUI rendering. */
+function toSingleLine(text: string): string {
+	return stripAnsi(String(text ?? ''))
+		.replace(/[\r\n]+/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/** Clamp a single-line string to maxCols characters, appending `...` when needed. */
+function clampLine(text: string, maxCols: number): string {
+	if (maxCols <= 0) return '';
+	if (text.length <= maxCols) return text;
+	if (maxCols <= 3) return text.slice(0, maxCols);
+	return `${text.slice(0, maxCols - 3)}...`;
 }
 
 function formatTokens(count: number): string {
@@ -133,18 +151,12 @@ function statusColorFor(
 function buildTimelineLines(
 	slot: SubAgentLiveSlot | undefined,
 	agent: PickerAgent,
+	maxLineCols: number,
 ): string[] {
 	const lines: string[] = [];
-	const prompt = agent.prompt
-		? stripAnsi(
-				agent.prompt
-					.replace(/[\r\n]+/g, ' ')
-					.replace(/\s+/g, ' ')
-					.trim(),
-		  )
-		: '';
+	const prompt = agent.prompt ? toSingleLine(agent.prompt) : '';
 	if (prompt) {
-		lines.push(`prompt · ${prompt}`);
+		lines.push(clampLine(`prompt · ${prompt}`, maxLineCols));
 	}
 
 	// Prefer live timeline; fall back to durable history lines for completed runs.
@@ -153,31 +165,35 @@ function buildTimelineLines(
 			? slot.historyLines
 			: agent.historyLines || [];
 	for (const line of history) {
-		const cleaned = stripAnsi(line).trim();
-		if (cleaned) lines.push(cleaned);
+		const cleaned = toSingleLine(line);
+		if (cleaned) lines.push(clampLine(cleaned, maxLineCols));
 	}
 
 	if (slot?.focus?.title) {
-		const focusTitle = stripAnsi(slot.focus.title).trim();
+		const focusTitle = toSingleLine(slot.focus.title);
 		const last = lines[lines.length - 1];
-		if (focusTitle && focusTitle !== last) {
-			lines.push(focusTitle);
+		const clamped = clampLine(focusTitle, maxLineCols);
+		if (clamped && clamped !== last) {
+			lines.push(clamped);
 		}
 	} else if (slot?.status === 'writing' && slot.preview) {
-		const preview = stripAnsi(slot.preview).trim();
+		const preview = toSingleLine(slot.preview);
 		const last = lines[lines.length - 1];
-		if (preview && preview !== last) {
-			lines.push(preview);
+		const clamped = clampLine(preview, maxLineCols);
+		if (clamped && clamped !== last) {
+			lines.push(clamped);
 		}
 	}
 
 	if (slot && slot.otherPendingCount > 0) {
-		lines.push(`+${slot.otherPendingCount} more pending tools`);
+		lines.push(
+			clampLine(`+${slot.otherPendingCount} more pending tools`, maxLineCols),
+		);
 	}
 
-	const summary = agent.finalSummary?.trim();
+	const summary = toSingleLine(agent.finalSummary || '');
 	if (summary) {
-		const summaryLine = `result · ${stripAnsi(summary)}`;
+		const summaryLine = clampLine(`result · ${summary}`, maxLineCols);
 		const last = lines[lines.length - 1];
 		if (summaryLine !== last) {
 			lines.push(summaryLine);
@@ -200,6 +216,7 @@ const SubAgentDetailPanel = memo(
 		timelineOffset,
 		maxHeight = 12,
 		sendFeedback,
+		terminalWidth = 80,
 	}: Props) => {
 		const {theme} = useTheme();
 		const {t} = useI18n();
@@ -226,6 +243,11 @@ const SubAgentDetailPanel = memo(
 		if (!visible || !agent) {
 			return null;
 		}
+
+		// Parent ChatInput already has paddingX; keep a modest min width.
+		const panelWidth = Math.max(40, (terminalWidth ?? 80) - 2);
+		// Reserve ~6 cols for `  └─ ` / `  │  ` tree prefixes inside padding.
+		const maxLineCols = Math.max(24, panelWidth - 8);
 
 		const isHistory = !!agent.isHistory;
 		const isTeammate = agent.sourceType === 'teammate';
@@ -255,8 +277,12 @@ const SubAgentDetailPanel = memo(
 			tokenCount > 0 ? `${formatTokens(tokenCount)} tokens` : undefined;
 		const headerMeta = [elapsed, label, tokenText].filter(Boolean).join(' · ');
 		const shortId = agent.instanceId.slice(-6);
+		const headerName = clampLine(toSingleLine(agent.agentName), maxLineCols);
+		const headerMetaText = headerMeta
+			? clampLine(toSingleLine(headerMeta), Math.max(12, maxLineCols - 4))
+			: '';
 
-		const timeline = buildTimelineLines(slot, agent);
+		const timeline = buildTimelineLines(slot, agent, maxLineCols);
 		const visibleCount = Math.max(4, maxHeight);
 		const maxOffset = Math.max(0, timeline.length - visibleCount);
 		const offset = Math.min(Math.max(0, timelineOffset), maxOffset);
@@ -266,6 +292,11 @@ const SubAgentDetailPanel = memo(
 
 		const inputFocused = focus === 'input';
 		const timelineFocused = focus === 'timeline';
+		// Reserve `> ` prefix + optional cursor block for input display.
+		const inputDisplay = clampLine(
+			toSingleLine(inputValue),
+			Math.max(12, maxLineCols - 4),
+		);
 
 		return (
 			<Box
@@ -274,16 +305,17 @@ const SubAgentDetailPanel = memo(
 				borderColor={theme.colors.menuInfo}
 				paddingX={1}
 				marginTop={1}
+				width={panelWidth}
 			>
 				{/* Header */}
 				<Box>
-					<Text color={theme.colors.menuSelected} bold>
+					<Text color={theme.colors.menuSelected} bold wrap="truncate">
 						{'◈ '}
-						{agent.agentName}
+						{headerName}
 					</Text>
-					{headerMeta ? (
-						<Text color={color} dimColor>
-							{'  '}({headerMeta})
+					{headerMetaText ? (
+						<Text color={color} dimColor wrap="truncate">
+							{'  '}({headerMetaText})
 						</Text>
 					) : null}
 				</Box>
@@ -291,17 +323,18 @@ const SubAgentDetailPanel = memo(
 					<Text
 						color={isTeammate ? theme.colors.warning : theme.colors.cyan}
 						dimColor
+						wrap="truncate"
 					>
 						{typeLabel}
 					</Text>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 						{' · #'}
 						{agent.agentId}
 						{' · '}
 						{shortId}
 					</Text>
 					{slot?.ctxUsage ? (
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 							{' · ctx '}
 							{Math.round(slot.ctxUsage.percentage)}%
 						</Text>
@@ -317,12 +350,13 @@ const SubAgentDetailPanel = memo(
 								: theme.colors.menuSecondary
 						}
 						bold={timelineFocused}
+						wrap="truncate"
 					>
 						{timelineFocused ? '❯ ' : '  '}
 						{t.subAgentDetailPanel.timelineTitle}
 					</Text>
 					{moreAbove > 0 ? (
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 							{'  ↑ '}
 							{t.subAgentDetailPanel.moreAbove.replace(
 								'{count}',
@@ -335,16 +369,20 @@ const SubAgentDetailPanel = memo(
 						const prefix = isLast ? '└─ ' : '│  ';
 						return (
 							<Box key={`${offset + idx}-${line.slice(0, 24)}`}>
-								<Text color={theme.colors.menuSecondary} dimColor>
+								<Text
+									color={theme.colors.menuSecondary}
+									dimColor
+									wrap="truncate"
+								>
 									{'  '}
 									{prefix}
-									{line.length > 96 ? `${line.slice(0, 93)}...` : line}
+									{line}
 								</Text>
 							</Box>
 						);
 					})}
 					{moreBelow > 0 ? (
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 							{'  ↓ '}
 							{t.subAgentDetailPanel.moreBelow.replace(
 								'{count}',
@@ -364,14 +402,15 @@ const SubAgentDetailPanel = memo(
 									: theme.colors.menuSecondary
 							}
 							bold={inputFocused}
+							wrap="truncate"
 						>
 							{inputFocused ? '❯ ' : '  '}
 							{t.subAgentDetailPanel.inputLabel}
 						</Text>
 						<Box marginLeft={2}>
-							<Text color={theme.colors.menuInfo}>
+							<Text color={theme.colors.menuInfo} wrap="truncate">
 								{'> '}
-								{inputValue || (
+								{inputDisplay || (
 									<Text color={theme.colors.menuSecondary} dimColor>
 										{t.subAgentDetailPanel.inputPlaceholder}
 									</Text>
@@ -383,15 +422,15 @@ const SubAgentDetailPanel = memo(
 						</Box>
 						{sendFeedback ? (
 							<Box marginLeft={2}>
-								<Text color={theme.colors.success} dimColor>
-									{sendFeedback}
+								<Text color={theme.colors.success} dimColor wrap="truncate">
+									{clampLine(toSingleLine(sendFeedback), maxLineCols)}
 								</Text>
 							</Box>
 						) : null}
 					</Box>
 				) : (
 					<Box marginTop={1}>
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 							{t.subAgentDetailPanel.historyReadOnly ||
 								'History view · read only'}
 						</Text>
@@ -400,7 +439,7 @@ const SubAgentDetailPanel = memo(
 
 				{/* Hints */}
 				<Box marginTop={1}>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 						{!isHistory && t.subAgentDetailPanel.hintRunning
 							? t.subAgentDetailPanel.hintRunning
 							: t.subAgentDetailPanel.hint}

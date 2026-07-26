@@ -1,4 +1,11 @@
-import React, {useEffect, useRef, useMemo, lazy, Suspense} from 'react';
+import React, {
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useMemo,
+	lazy,
+	Suspense,
+} from 'react';
 import {Box, Text, useCursor} from 'ink';
 import {Viewport} from '../../../utils/ui/textBuffer.js';
 
@@ -822,6 +829,14 @@ export default function ChatInput({
 		return () => clearTimeout(timer);
 	}, [showFilePicker, forceUpdate]);
 
+	// Same artifact prevention when the sub-agent detail panel mounts/unmounts
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			forceUpdate();
+		}, 10);
+		return () => clearTimeout(timer);
+	}, [showSubAgentDetail, forceUpdate]);
+
 	// Handle terminal width changes with debounce (like gemini-cli)
 	useEffect(() => {
 		// Skip on initial mount
@@ -897,10 +912,61 @@ export default function ChatInput({
 
 	// Real terminal cursor via useCursor hook
 	const {setCursorPosition, cursorRef} = useCursor();
+	const lastCursorOffsetRef = useRef<{x: number; y: number} | null | undefined>(
+		undefined,
+	);
 
 	// Render content with cursor (treat all text including placeholders as plain text)
 	const INPUT_MAX_LINES = 6;
 	const EXPANDED_MAX_LINES = 12;
+
+	// Sync terminal cursor AFTER render. Calling setCursorPosition during render
+	// triggers React's "Cannot update a component while rendering a different
+	// component" warning when ChatScreen re-renders frequently (e.g. sub-agent
+	// parallel tool updates). No deps: re-read buffer on every render so cursor
+	// moves that only force-render (same text) still update the real cursor.
+	useLayoutEffect(() => {
+		let next: {x: number; y: number} | undefined;
+		if (!hasFocus) {
+			next = undefined;
+		} else if (buffer.text.length === 0) {
+			next = {x: 0, y: 0};
+		} else {
+			const visualLines = buffer.viewportVisualLines;
+			const [cursorRow, cursorCol] = buffer.visualCursor;
+			const maxLines = buffer.isExpandedView
+				? EXPANDED_MAX_LINES
+				: INPUT_MAX_LINES;
+
+			let startLine = 0;
+			if (visualLines.length > maxLines) {
+				const halfWindow = Math.floor(maxLines / 2);
+				startLine = Math.max(0, cursorRow - halfWindow);
+				startLine = Math.min(startLine, visualLines.length - maxLines);
+			}
+
+			const hasScrollUp = startLine > 0;
+			const cursorYInContent = cursorRow - startLine + (hasScrollUp ? 1 : 0);
+			next = {x: cursorCol, y: cursorYInContent};
+		}
+
+		const previous = lastCursorOffsetRef.current;
+		// Skip unchanged offsets after first apply; still run on first mount
+		// (previous === undefined) so focus/cursor registration is established.
+		if (
+			previous !== undefined &&
+			((previous == null && next == null) ||
+				(previous != null &&
+					next != null &&
+					previous.x === next.x &&
+					previous.y === next.y))
+		) {
+			return;
+		}
+
+		lastCursorOffsetRef.current = next ?? null;
+		setCursorPosition(next);
+	});
 
 	// 当输入为单行的 `/cmd` 或 `/cmd ` 形式时，计算参数提示；否则为空字符串
 	const commandArgsHint = useMemo(() => {
@@ -952,7 +1018,7 @@ export default function ChatInput({
 		if (buffer.text.length > 0) {
 			// Use visual lines for proper wrapping and multi-line support
 			const visualLines = buffer.viewportVisualLines;
-			const [cursorRow, cursorCol] = buffer.visualCursor;
+			const [cursorRow] = buffer.visualCursor;
 
 			let startLine = 0;
 			let endLine = visualLines.length;
@@ -966,15 +1032,6 @@ export default function ChatInput({
 				startLine = Math.max(0, cursorRow - halfWindow);
 				startLine = Math.min(startLine, visualLines.length - maxLines);
 				endLine = startLine + maxLines;
-			}
-
-			// Set real terminal cursor position
-			const hasScrollUp = startLine > 0;
-			const cursorYInContent = cursorRow - startLine + (hasScrollUp ? 1 : 0);
-			if (hasFocus) {
-				setCursorPosition({x: cursorCol, y: cursorYInContent});
-			} else {
-				setCursorPosition(undefined);
 			}
 
 			const renderedLines: React.ReactNode[] = [];
@@ -1144,20 +1201,14 @@ export default function ChatInput({
 			}
 
 			return <Box flexDirection="column">{renderedLines}</Box>;
-		} else {
-			// Empty input: cursor at start
-			if (hasFocus) {
-				setCursorPosition({x: 0, y: 0});
-			} else {
-				setCursorPosition(undefined);
-			}
-
-			return (
-				<Text color={theme.colors.menuSecondary} dimColor>
-					{disabled ? t.chatScreen.waitingForResponse : placeholder}
-				</Text>
-			);
 		}
+
+		// Empty input: terminal cursor is synced in useLayoutEffect.
+		return (
+			<Text color={theme.colors.menuSecondary} dimColor>
+				{disabled ? t.chatScreen.waitingForResponse : placeholder}
+			</Text>
+		);
 	};
 
 	return (
@@ -1363,6 +1414,7 @@ export default function ChatInput({
 								timelineOffset={detailTimelineOffset}
 								maxHeight={8}
 								sendFeedback={detailSendFeedback}
+								terminalWidth={inputTerminalWidth}
 							/>
 						</Suspense>
 					</Box>

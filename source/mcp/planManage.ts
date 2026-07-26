@@ -23,8 +23,14 @@ import {
 import {
 	acquirePlanOwnerLock,
 	formatOwnerLockConflict,
+	readPlanOwnerLock,
+	refreshPlanOwnerHeartbeat,
 	releasePlanOwnerLock,
 } from '../utils/execution/planOwnerLock.js';
+import {
+	classifyPlanOwnership,
+	type PlanOwnershipClassification,
+} from '../utils/execution/planOwnership.js';
 import {
 	setPlanScope,
 	resolvePlanScopeFiles,
@@ -79,9 +85,9 @@ export const planManageTools: Tool[] = [
 
 - create: Create a new draft plan under .snow/plan/YYYY-MM-DD/. Required "title". Optional "slug", "complexity" (simple|medium|complex), "context", "session", structured "phases" [{title, files?, steps?, doneWhen?}], "analysis", "risks", "rollback". Prefer this over filesystem-create for plan docs.
 - write_body: Replace the plan body of the active draft/approved plan (or plan_path). Pass "body_markdown" and/or structured "phases" (+ optional title/context/analysis/risks/rollback). Does NOT change status/session/current_phase. Use this instead of filesystem-create/edit for plan content.
-- get: Summarize the active plan for this session (path, status, phase, step progress, next step, files).
-- status: Compact progress line for the active plan.
-- list: List all active plans (all sessions) under .snow/plan date dirs + legacy top-level.
+- get: Summarize the active plan for this session (path, status, phase, step progress, next step, files). Optional "plan_path" for another plan; foreign_live/foreign_soft_stale returns a read-only ownership summary (not mutable).
+- status: Compact progress line for the active plan (same plan_path rules as get).
+- list: List all active plans (all sessions) under .snow/plan date dirs + legacy top-level, with ownership=… and lock liveness per plan.
 - check_step: Mark a step done. Required "step_index" (1-based). Optional "phase_index" (defaults current).
 - uncheck_step: Unmark a step. Required "step_index". Optional "phase_index".
 - complete_phase: Run acceptance for the current phase; advance current_phase. All steps must be checked first.
@@ -214,7 +220,7 @@ The plan file is the source of truth — keep it in sync with reality via these 
 				plan_path: {
 					type: 'string',
 					description:
-						'For action=adopt/write_body: optional absolute/relative plan path.',
+						'For action=adopt/write_body/get/status: optional absolute/relative plan path.',
 				},
 				force: {
 					type: 'boolean',
@@ -233,6 +239,141 @@ function textResult(text: string, isError = false): CallToolResult {
 
 function getSessionId(): string | null {
 	return sessionManager.getCurrentSession()?.id ?? null;
+}
+
+function formatLockSnippet(ownership: PlanOwnershipClassification): string {
+	const lock = ownership.lock;
+	if (!lock) {
+		return 'lock=(none)';
+	}
+	const soft = ownership.softStale === true;
+	const hard = ownership.stale === true;
+	const staleLabel = hard ? 'hard' : soft ? 'soft' : 'fresh';
+	return `lock=pid=${lock.pid} alive=${String(
+		ownership.pidAlive,
+	)} ${staleLabel}`;
+}
+
+function formatOwnershipListLine(
+	doc: PlanDoc,
+	ownership: PlanOwnershipClassification,
+): string {
+	const title =
+		doc.frontmatter.title || doc.title || path.basename(doc.filePath);
+	return (
+		`- [${doc.frontmatter.status}] ${title} | ownership=${ownership.kind} | ` +
+		`session=${doc.frontmatter.session || '(none)'} | phase=${
+			doc.frontmatter.current_phase
+		} | path=${doc.filePath} | ${formatLockSnippet(ownership)}`
+	);
+}
+
+function formatReadOnlyOwnershipSummary(
+	doc: PlanDoc,
+	ownership: PlanOwnershipClassification,
+): string {
+	const title =
+		doc.frontmatter.title || doc.title || path.basename(doc.filePath);
+	return [
+		`Plan: ${title}`,
+		`Path: ${doc.filePath}`,
+		`Status: ${doc.frontmatter.status}`,
+		`Session: ${doc.frontmatter.session || '(none)'}`,
+		`Phase: ${doc.frontmatter.current_phase}`,
+		`Ownership: ${ownership.kind}`,
+		`Can mutate: false (read-only summary)`,
+		`Lock: ${formatLockSnippet(ownership)}`,
+		ownership.summary,
+		'Foreign live/soft-stale plans cannot be mutated from this session. Use adopt with force=true reason=... only if takeover is intentional.',
+	].join('\n');
+}
+
+function mutationDeniedMessage(
+	ownership: PlanOwnershipClassification,
+	action: string,
+): string {
+	if (
+		ownership.kind === 'foreign_live' ||
+		ownership.kind === 'foreign_soft_stale'
+	) {
+		return (
+			`Error: cannot ${action} — ownership=${ownership.kind}. ` +
+			`${ownership.summary} Mutations are rejected. If takeover is intentional, adopt with force=true reason=... first.`
+		);
+	}
+	if (
+		ownership.kind === 'mine_recoverable' ||
+		ownership.kind === 'untagged_recoverable' ||
+		ownership.kind === 'foreign_hard_stale'
+	) {
+		return (
+			`Error: cannot ${action} — ownership=${ownership.kind}. ` +
+			`${ownership.summary} Call plan-manage {action:"adopt"} first (no force needed for recoverable).`
+		);
+	}
+	return (
+		`Error: cannot ${action} — ownership=${ownership.kind}. ` +
+		`${ownership.summary}`
+	);
+}
+
+async function classifyDocOwnership(
+	cwd: string,
+	doc: PlanDoc,
+	sessionId: string | null,
+): Promise<PlanOwnershipClassification> {
+	const lock = await readPlanOwnerLock(cwd);
+	return classifyPlanOwnership({
+		cwd,
+		sessionId,
+		plan: {
+			filePath: doc.filePath,
+			frontmatter: {
+				status: doc.frontmatter.status,
+				session: doc.frontmatter.session,
+			},
+		},
+		lock,
+	});
+}
+
+async function touchPlanOwnerHeartbeat(
+	cwd: string,
+	doc: PlanDoc,
+): Promise<void> {
+	try {
+		await refreshPlanOwnerHeartbeat(cwd, {
+			planPath: doc.filePath,
+			sessionId: getSessionId() || '',
+		});
+	} catch {
+		// Best-effort heartbeat; never fail the mutation.
+	}
+}
+
+async function resolvePlanPathArg(
+	cwd: string,
+	args: any,
+): Promise<{doc: PlanDoc} | {error: CallToolResult} | null> {
+	if (typeof args?.plan_path !== 'string' || !args.plan_path.trim()) {
+		return null;
+	}
+	const planPath = path.isAbsolute(args.plan_path)
+		? args.plan_path
+		: path.resolve(cwd, args.plan_path);
+	try {
+		const doc = await parsePlanDocument(planPath);
+		return {doc};
+	} catch (error) {
+		return {
+			error: textResult(
+				`Error: cannot parse plan at ${planPath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+				true,
+			),
+		};
+	}
 }
 
 function currentPhaseOf(doc: PlanDoc): PlanPhase | undefined {
@@ -296,7 +437,7 @@ export {runAcceptance} from '../utils/execution/planAcceptance.js';
 
 async function requireActivePlan(
 	cwd: string,
-	options: {mutation?: boolean} = {},
+	options: {mutation?: boolean; action?: string} = {},
 ): Promise<{doc: PlanDoc} | {error: CallToolResult}> {
 	const sessionId = getSessionId();
 	const doc = await findActivePlan(cwd, sessionId);
@@ -308,16 +449,34 @@ async function requireActivePlan(
 			),
 		};
 	}
-	if (options.mutation && doc.frontmatter.status === 'executing') {
-		const owner = await acquirePlanOwnerLock(cwd, {
-			planPath: doc.filePath,
-			sessionId: sessionId || '',
-		});
-		if (!owner.ok) {
-			resetPlanGate(sessionId);
+	if (options.mutation) {
+		const ownership = await classifyDocOwnership(cwd, doc, sessionId);
+		// Active ownership contention: reject foreign live/soft; recoverable needs adopt.
+		if (
+			ownership.kind === 'foreign_live' ||
+			ownership.kind === 'foreign_soft_stale' ||
+			ownership.kind === 'mine_recoverable' ||
+			ownership.kind === 'untagged_recoverable' ||
+			ownership.kind === 'foreign_hard_stale'
+		) {
 			return {
-				error: textResult(formatOwnerLockConflict(owner.conflict), true),
+				error: textResult(
+					mutationDeniedMessage(ownership, options.action || 'mutate'),
+					true,
+				),
 			};
+		}
+		if (doc.frontmatter.status === 'executing') {
+			const owner = await acquirePlanOwnerLock(cwd, {
+				planPath: doc.filePath,
+				sessionId: sessionId || '',
+			});
+			if (!owner.ok) {
+				resetPlanGate(sessionId);
+				return {
+					error: textResult(formatOwnerLockConflict(owner.conflict), true),
+				};
+			}
 		}
 	}
 	return {doc};
@@ -709,25 +868,72 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 		return textResult('Error: force adopt/takeover requires "reason".', true);
 	}
 
+	// Ownership gate: without force, only canAdoptWithoutForce kinds are allowed.
+	// Soft-stale / live foreign always require force+reason (never silent).
+	const ownership = await classifyDocOwnership(cwd, doc, sessionId);
+	if (!force) {
+		if (
+			ownership.kind === 'foreign_live' ||
+			ownership.kind === 'foreign_soft_stale'
+		) {
+			return textResult(
+				`Error: cannot adopt without force — ownership=${ownership.kind}. ` +
+					`${ownership.summary} ` +
+					`Pass force=true and reason to takeover, or finish/abandon the foreign plan first.`,
+				true,
+			);
+		}
+		if (!ownership.canAdoptWithoutForce && ownership.kind !== 'mine_active') {
+			// mine_active is already ours (re-adopt to refresh lock/gate is fine via lock acquire).
+			// none / other non-recoverable kinds still need an explicit path.
+			if (ownership.kind !== 'none') {
+				return textResult(
+					`Error: cannot adopt without force — ownership=${ownership.kind}. ` +
+						`${ownership.summary} ` +
+						`If takeover is intentional, pass force=true reason=...`,
+					true,
+				);
+			}
+		}
+	}
+
 	const foreign = await findForeignExecutingPlans(cwd, sessionId);
 	const targetPath = path.resolve(doc.filePath);
 	const otherForeign = foreign.filter(
 		d => path.resolve(d.filePath) !== targetPath,
 	);
 	if (otherForeign.length > 0 && !force) {
-		return textResult(
-			`Error: another executing plan exists. Pass force=true and reason to takeover, or finish/abandon:\n` +
-				otherForeign
-					.map(
-						d => `- ${d.filePath} (session=${d.frontmatter.session || 'none'})`,
-					)
-					.join('\n'),
-			true,
+		// Soften: only hard-block when another plan is live/soft-stale.
+		const otherClassified = await Promise.all(
+			otherForeign.map(async d => ({
+				doc: d,
+				ownership: await classifyDocOwnership(cwd, d, sessionId),
+			})),
 		);
+		const blockingOthers = otherClassified.filter(
+			c =>
+				c.ownership.kind === 'foreign_live' ||
+				c.ownership.kind === 'foreign_soft_stale',
+		);
+		if (blockingOthers.length > 0) {
+			return textResult(
+				`Error: another live/soft-stale executing plan exists. Pass force=true and reason to takeover, or finish/abandon:\n` +
+					blockingOthers
+						.map(
+							c =>
+								`- ${c.doc.filePath} (session=${
+									c.doc.frontmatter.session || 'none'
+								}, ownership=${c.ownership.kind})`,
+						)
+						.join('\n'),
+				true,
+			);
+		}
 	}
 
 	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
 	const boundSession = sessionId ?? '';
+	// force is only honored after ownership gate above; hard-stale recovers without force.
 	const lockResult = await acquirePlanOwnerLock(cwd, {
 		planPath: doc.filePath,
 		sessionId: boundSession,
@@ -1111,15 +1317,24 @@ export async function executePlanManageTool(
 			if (docs.length === 0) {
 				return textResult('No active plans under .snow/plan/.');
 			}
-			const lines = docs
-				.sort((a, b) => b.mtimeMs - a.mtimeMs)
-				.map(d => {
-					const title =
-						d.frontmatter.title || d.title || path.basename(d.filePath);
-					return `- [${d.frontmatter.status}] ${title} | session=${
-						d.frontmatter.session || '(none)'
-					} | phase=${d.frontmatter.current_phase} | ${d.filePath}`;
+			const sessionId = getSessionId();
+			const lock = await readPlanOwnerLock(cwd);
+			const sorted = docs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+			const lines = sorted.map(d => {
+				const ownership = classifyPlanOwnership({
+					cwd,
+					sessionId,
+					plan: {
+						filePath: d.filePath,
+						frontmatter: {
+							status: d.frontmatter.status,
+							session: d.frontmatter.session,
+						},
+					},
+					lock,
 				});
+				return formatOwnershipListLine(d, ownership);
+			});
 			return textResult(`Active plans (${docs.length}):\n${lines.join('\n')}`);
 		}
 
@@ -1139,33 +1354,68 @@ export async function executePlanManageTool(
 			return await handleArchiveBatch(cwd, args);
 		}
 
+		if (action === 'get' || action === 'status') {
+			const viaPath = await resolvePlanPathArg(cwd, args);
+			if (viaPath && 'error' in viaPath) {
+				return viaPath.error;
+			}
+			let doc: PlanDoc | null = viaPath?.doc ?? null;
+			if (!doc) {
+				const found = await requireActivePlan(cwd, {mutation: false});
+				if ('error' in found) {
+					return found.error;
+				}
+				doc = found.doc;
+			}
+			const ownership = await classifyDocOwnership(cwd, doc, getSessionId());
+			// Foreign live/soft via plan_path: only read-only ownership summary.
+			if (
+				viaPath &&
+				(ownership.kind === 'foreign_live' ||
+					ownership.kind === 'foreign_soft_stale')
+			) {
+				return textResult(formatReadOnlyOwnershipSummary(doc, ownership));
+			}
+			return textResult(
+				action === 'get' ? summarizePlan(doc) : statusLine(doc),
+			);
+		}
+
 		const found = await requireActivePlan(cwd, {
-			mutation: !['get', 'status'].includes(action),
+			mutation: true,
+			action,
 		});
 		if ('error' in found) {
 			return found.error;
 		}
 
+		let result: CallToolResult;
 		switch (action) {
-			case 'get':
-				return textResult(summarizePlan(found.doc));
-			case 'status':
-				return textResult(statusLine(found.doc));
 			case 'check_step':
-				return await handleCheckStep(found.doc, args, true);
+				result = await handleCheckStep(found.doc, args, true);
+				break;
 			case 'uncheck_step':
-				return await handleCheckStep(found.doc, args, false);
+				result = await handleCheckStep(found.doc, args, false);
+				break;
 			case 'complete_phase':
-				return await handleCompletePhase(found.doc, cwd, abortSignal);
+				result = await handleCompletePhase(found.doc, cwd, abortSignal);
+				break;
 			case 'amend':
-				return await handleAmend(found.doc, cwd, args);
+				result = await handleAmend(found.doc, cwd, args);
+				break;
 			case 'complete':
-				return await handleComplete(found.doc, cwd, abortSignal);
+				result = await handleComplete(found.doc, cwd, abortSignal);
+				break;
 			case 'abandon':
-				return await handleAbandon(found.doc, cwd, args);
+				result = await handleAbandon(found.doc, cwd, args);
+				break;
 			default:
 				return textResult(`Unknown plan action: ${action}`, true);
 		}
+		if (!result.isError) {
+			await touchPlanOwnerHeartbeat(cwd, found.doc);
+		}
+		return result;
 	} catch (error) {
 		return textResult(
 			`Error executing plan-manage: ${

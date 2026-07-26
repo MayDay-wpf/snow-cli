@@ -661,6 +661,52 @@ test('content sets writing status with truncated single-line preview', t => {
 	);
 });
 
+test('terminal-execute multiline command is single-line truncated in live title', t => {
+	const {handler} = makeHandler();
+	const agentId = 'inst-term-multiline-title';
+	const multilineCommand = [
+		'node -e "',
+		"const fs = require('fs');",
+		"const path = require('path');",
+		"console.log(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));",
+		"for (let i = 0; i < 20; i++) { console.log('line-' + i); }",
+		'"',
+	].join('\n');
+
+	handler.handleMessage(
+		[],
+		asSubAgentMsg({
+			agentId,
+			message: {
+				type: 'tool_calls',
+				tool_calls: [
+					toolCall('tc-term-ml', 'terminal-execute', {
+						command: multilineCommand,
+					}),
+				],
+			},
+		}),
+	);
+
+	const slot = getSubAgentLiveSlot(agentId);
+	t.truthy(slot);
+	t.is(slot!.focus?.toolCallId, 'tc-term-ml');
+
+	const title = slot!.focus?.title || '';
+	const historyText = (slot!.historyLines || []).join('\n');
+	const combined = `${title}\n${historyText}`;
+
+	t.false(title.includes('\n'));
+	t.false((slot!.focus?.paramsPreview || '').includes('\n'));
+	t.true(title.length < multilineCommand.length);
+	t.true(
+		/terminal-execute|terminal/i.test(combined),
+		'live title/history should still identify the tool',
+	);
+	// Full script body must not leak into live UI strings.
+	t.false(combined.includes('for (let i = 0; i < 20; i++)'));
+});
+
 test('streamingEnabled=false still sets writing status without content preview', t => {
 	const {handler} = makeHandler(false);
 	handler.handleMessage(

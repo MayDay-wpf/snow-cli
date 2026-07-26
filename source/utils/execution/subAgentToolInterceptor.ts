@@ -356,12 +356,19 @@ export async function interceptSpawnSubAgent(
 
 				ctx.spawnedChildInstanceIds.add(spawnInstanceId);
 
+				const currentSession = sessionManager.getCurrentSession();
+				const sessionId = currentSession?.id;
+				const projectId =
+					currentSession?.projectId ?? sessionManager.getProjectId?.();
+
 				runningSubAgentTracker.register({
 					instanceId: spawnInstanceId,
 					agentId: spawnAgentId,
 					agentName: spawnAgentName,
 					prompt: spawnPrompt,
 					startedAt: new Date(),
+					sessionId,
+					projectId,
 				});
 				const spawnAbortController =
 					runningSubAgentTracker.createAbortController(

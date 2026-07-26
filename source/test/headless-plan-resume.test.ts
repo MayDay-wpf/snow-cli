@@ -119,7 +119,7 @@ test('plan-file refuses draft status', async t => {
 	t.truthy(result.message?.includes('status=draft'));
 });
 
-test('plan-file fails when owner lock held by another session', async t => {
+test('plan-file fails when owner lock held by another session (foreign_live)', async t => {
 	const content = VALID_PLAN.replace('status: draft', 'status: executing');
 	const {cwd, planPath} = await makePlanDir(content);
 	await acquirePlanOwnerLock(cwd, {
@@ -134,7 +134,8 @@ test('plan-file fails when owner lock held by another session', async t => {
 	});
 	t.false(result.planMode);
 	t.false(result.approved);
-	t.truthy(result.message?.toLowerCase().includes('lock'));
+	t.truthy(result.message?.includes('foreign_live'));
+	t.truthy(result.message?.toLowerCase().includes('force'));
 
 	// cleanup lock file if present
 	try {
@@ -142,4 +143,72 @@ test('plan-file fails when owner lock held by another session', async t => {
 	} catch {
 		// ignore
 	}
+});
+
+test('plan-file forceTakeover steals live foreign with reason', async t => {
+	const content = VALID_PLAN.replace('status: draft', 'status: executing');
+	const {cwd, planPath} = await makePlanDir(content);
+	await acquirePlanOwnerLock(cwd, {
+		planPath,
+		sessionId: 'foreign',
+	});
+
+	const denied = await tryResumeHeadlessPlan({
+		cwd,
+		sessionId: 's-new',
+		planFile: planPath,
+		forceTakeover: true,
+		// missing reason → still fail
+	});
+	t.false(denied.approved);
+	t.truthy(denied.message?.includes('forceReason'));
+
+	const result = await tryResumeHeadlessPlan({
+		cwd,
+		sessionId: 's-new',
+		planFile: planPath,
+		forceTakeover: true,
+		forceReason: 'operator confirmed headless takeover',
+	});
+	t.true(result.planMode);
+	t.true(result.approved);
+	t.true(getPlanApproved('s-new'));
+	t.is((await readPlanOwnerLock(cwd))?.sessionId, 's-new');
+	t.truthy(result.message?.includes('force takeover'));
+
+	const updated = await fs.readFile(planPath, 'utf8');
+	t.true(
+		updated.includes('Owner takeover: operator confirmed headless takeover'),
+	);
+});
+
+test('plan-file resumes hard-stale foreign plan without force', async t => {
+	const content = VALID_PLAN.replace(
+		'session: s-headless',
+		'session: foreign-dead',
+	).replace('status: draft', 'status: executing');
+	const {cwd, planPath} = await makePlanDir(content);
+	// No live lock → foreign_hard_stale; headless may resume without force.
+	const result = await tryResumeHeadlessPlan({
+		cwd,
+		sessionId: 's-new',
+		planFile: planPath,
+	});
+	t.true(result.planMode);
+	t.true(result.approved);
+	t.true(getPlanApproved('s-new'));
+	t.is((await readPlanOwnerLock(cwd))?.sessionId, 's-new');
+});
+
+test('enablePlan restores mine session without rebinding foreign', async t => {
+	const content = VALID_PLAN.replace('status: draft', 'status: executing');
+	const {cwd} = await makePlanDir(content);
+	const result = await tryResumeHeadlessPlan({
+		cwd,
+		sessionId: 's-headless',
+		enablePlan: true,
+	});
+	t.true(result.planMode);
+	t.true(result.approved);
+	t.true(getPlanApproved('s-headless'));
 });
