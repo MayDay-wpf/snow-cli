@@ -5,25 +5,30 @@
  * in-terminal before choosing "Yes - Execute the entire plan".
  */
 
-import React, {useEffect, useState} from 'react';
-import {Box, Text} from 'ink';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {Box, Text, useInput} from 'ink';
+import wrapAnsi from 'wrap-ansi';
+import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {useTerminalMouseWheel} from '../../../hooks/ui/useTerminalMouseWheel.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {
 	findActivePlan,
 	type PlanDoc,
 } from '../../../utils/execution/planDocument.js';
 import {
+	computePlanPreviewScrollWindow,
+	computePlanPreviewVisibleRows,
 	formatPlanApprovalPreview,
 	isPlanApprovalQuestion,
 } from '../../../utils/ui/planApprovalPreview.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 
-type Props = {
-	enabled: boolean;
+type Properties = Readonly<{
+	isEnabled: boolean;
 	question?: string;
 	workingDirectory: string;
 	terminalWidth?: number;
-};
+}>;
 
 type LoadState =
 	| {status: 'idle'}
@@ -32,16 +37,24 @@ type LoadState =
 	| {status: 'empty'}
 	| {status: 'error'; message: string};
 
+type PreviewVisualLine = {
+	text: string;
+	sourceIndex: number;
+	sourceText: string;
+};
+
 export default function PlanApprovalPreview({
-	enabled,
+	isEnabled,
 	question,
 	workingDirectory,
-}: Props) {
+	terminalWidth,
+}: Properties) {
 	const {theme} = useTheme();
+	const {columns: terminalColumns, rows: terminalRows} = useTerminalSize();
 	const [state, setState] = useState<LoadState>({status: 'idle'});
+	const [scrollOffset, setScrollOffset] = useState(0);
 
-	const shouldShow =
-		enabled && isPlanApprovalQuestion(question);
+	const shouldShow = isEnabled && isPlanApprovalQuestion(question);
 
 	useEffect(() => {
 		if (!shouldShow) {
@@ -50,27 +63,32 @@ export default function PlanApprovalPreview({
 		}
 
 		let cancelled = false;
+		setScrollOffset(0);
 		setState({status: 'loading'});
 
 		(async () => {
 			try {
 				const sessionId = sessionManager.getCurrentSession()?.id ?? null;
-				const doc = await findActivePlan(workingDirectory, sessionId);
+				const planDocument = await findActivePlan(workingDirectory, sessionId);
 				if (cancelled) {
 					return;
 				}
 
-				if (!doc) {
+				if (!planDocument) {
 					setState({status: 'empty'});
 					return;
 				}
 
 				setState({
 					status: 'ready',
-					doc,
-					text: formatPlanApprovalPreview(doc),
+					doc: planDocument,
+					text: formatPlanApprovalPreview(planDocument, {
+						maxStepsPerPhase: Number.MAX_SAFE_INTEGER,
+						maxFilesPerPhase: Number.MAX_SAFE_INTEGER,
+						maxPhases: Number.MAX_SAFE_INTEGER,
+					}),
 				});
-			} catch (error: any) {
+			} catch (error: unknown) {
 				if (cancelled) {
 					return;
 				}
@@ -78,7 +96,7 @@ export default function PlanApprovalPreview({
 				setState({
 					status: 'error',
 					message:
-						error?.message && typeof error.message === 'string'
+						error instanceof Error
 							? error.message
 							: 'Failed to load plan document',
 				});
@@ -89,6 +107,89 @@ export default function PlanApprovalPreview({
 			cancelled = true;
 		};
 	}, [shouldShow, workingDirectory, question]);
+
+	const contentWidth = Math.max(20, (terminalWidth ?? terminalColumns) - 6);
+	const readyText = state.status === 'ready' ? state.text : '';
+	const visualLines = useMemo<PreviewVisualLine[]>(() => {
+		if (!readyText) {
+			return [];
+		}
+
+		return readyText.split('\n').flatMap((sourceText, sourceIndex) =>
+			wrapAnsi(sourceText || ' ', contentWidth, {
+				hard: true,
+				trim: false,
+				wordWrap: false,
+			})
+				.split('\n')
+				.map(text => ({text: text || ' ', sourceIndex, sourceText})),
+		);
+	}, [readyText, contentWidth]);
+	const visibleRows = computePlanPreviewVisibleRows(terminalRows);
+	const scrollWindow = computePlanPreviewScrollWindow(
+		visualLines.length,
+		scrollOffset,
+		visibleRows,
+	);
+	const visibleLines = visualLines.slice(
+		scrollWindow.visibleStart,
+		scrollWindow.visibleEnd,
+	);
+	const scrollInputActive =
+		shouldShow && state.status === 'ready' && scrollWindow.canScroll;
+
+	useEffect(() => {
+		if (scrollOffset !== scrollWindow.clampedOffset) {
+			setScrollOffset(scrollWindow.clampedOffset);
+		}
+	}, [scrollOffset, scrollWindow.clampedOffset]);
+
+	const applyScrollDelta = useCallback(
+		(delta: number) => {
+			if (delta === 0) {
+				return;
+			}
+
+			setScrollOffset(
+				previous =>
+					computePlanPreviewScrollWindow(
+						visualLines.length,
+						previous + delta,
+						visibleRows,
+					).clampedOffset,
+			);
+		},
+		[visualLines.length, visibleRows],
+	);
+
+	useInput(
+		(input, key) => {
+			let delta = 0;
+			if (key.pageUp) {
+				delta = -visibleRows;
+			} else if (key.pageDown) {
+				delta = visibleRows;
+			} else if (input === '[') {
+				delta = -1;
+			} else if (input === ']') {
+				delta = 1;
+			}
+
+			applyScrollDelta(delta);
+		},
+		{isActive: scrollInputActive},
+	);
+
+	// Best-effort physical mouse wheel (SGR/X10). Terminals without mouse
+	// reporting simply never fire; keyboard scroll remains the reliable path.
+	useTerminalMouseWheel({
+		isActive: scrollInputActive,
+		onWheel: event => {
+			applyScrollDelta(
+				event.direction === 'up' ? -event.deltaLines : event.deltaLines,
+			);
+		},
+	});
 
 	if (!shouldShow || state.status === 'idle') {
 		return null;
@@ -146,7 +247,35 @@ export default function PlanApprovalPreview({
 		);
 	}
 
-	const lines = state.text.split('\n');
+	const renderVisualLine = (line: PreviewVisualLine, index: number) => {
+		const isHeader = line.sourceIndex === 0;
+		const isSection = line.sourceText.startsWith('### ');
+		const isMeta =
+			line.sourceText.startsWith('Title:') ||
+			line.sourceText.startsWith('Status:') ||
+			line.sourceText.startsWith('Path:') ||
+			line.sourceText.startsWith('Affected:');
+
+		return (
+			<Text
+				key={`${scrollWindow.visibleStart + index}-${line.sourceIndex}`}
+				bold={isHeader || isSection}
+				color={
+					isHeader || isSection
+						? theme.colors.menuInfo
+						: isMeta
+						? theme.colors.menuSecondary
+						: undefined
+				}
+				dimColor={
+					!isHeader && !isSection && !isMeta && line.sourceText.startsWith('  ')
+				}
+				wrap="truncate"
+			>
+				{line.text}
+			</Text>
+		);
+	};
 
 	return (
 		<Box
@@ -157,34 +286,36 @@ export default function PlanApprovalPreview({
 			borderColor={theme.colors.menuInfo}
 			paddingX={1}
 		>
-			{lines.map((line, index) => {
-				const isHeader = index === 0;
-				const isSection = line.startsWith('### ');
-				const isMeta =
-					line.startsWith('Title:') ||
-					line.startsWith('Status:') ||
-					line.startsWith('Path:') ||
-					line.startsWith('Affected:');
-
-				return (
-					<Text
-						key={index}
-						bold={isHeader || isSection}
-						color={
-							isHeader || isSection
-								? theme.colors.menuInfo
-								: isMeta
-									? theme.colors.menuSecondary
-									: undefined
-						}
-						dimColor={!isHeader && !isSection && !isMeta && line.startsWith('  ')}
-					>
-						{line || ' '}
+			{scrollWindow.canScroll ? (
+				<Box flexDirection="column" height={visibleRows + 2}>
+					<Text dimColor color={theme.colors.menuSecondary}>
+						{scrollWindow.hiddenAbove > 0
+							? `↑ ${scrollWindow.hiddenAbove} more above`
+							: ' '}
 					</Text>
-				);
-			})}
+					<Box flexDirection="column" height={visibleRows} overflow="hidden">
+						{visibleLines.map((line, index) => renderVisualLine(line, index))}
+					</Box>
+					<Text dimColor color={theme.colors.menuSecondary}>
+						{scrollWindow.hiddenBelow > 0
+							? `↓ ${scrollWindow.hiddenBelow} more below`
+							: ' '}
+					</Text>
+				</Box>
+			) : (
+				<Box flexDirection="column">
+					{visibleLines.map((line, index) => renderVisualLine(line, index))}
+				</Box>
+			)}
+			{scrollWindow.canScroll && (
+				<Text dimColor color={theme.colors.menuSecondary}>
+					PgUp/PgDn/[ ]/wheel scroll plan · ↑↓ select options · (
+					{scrollWindow.visibleStart + 1}-{scrollWindow.visibleEnd}/
+					{visualLines.length})
+				</Text>
+			)}
 			<Box marginTop={1}>
-				<Text dimColor>
+				<Text dimColor wrap="truncate">
 					Review above, then choose an option below. Full file:{' '}
 					{state.doc.filePath}
 				</Text>

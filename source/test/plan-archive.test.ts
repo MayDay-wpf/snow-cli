@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
 	archivePlan,
 	sweepCompletedPlans,
+	sweepPlans,
 } from '../utils/execution/planArchive.js';
 import {parsePlanDocument} from '../utils/execution/planDocument.js';
 
@@ -119,4 +120,123 @@ test('sweepCompletedPlans archives completed plans inside date dirs', async t =>
 
 	await t.throwsAsync(() => fs.access(donePath));
 	await fs.access(runningPath);
+});
+
+test('sweepPlans archives draft+completed and protects executing by default', async t => {
+	const dir = await makePlanDir();
+	const draftPath = await writePlan(dir, 'draft.md', 'draft');
+	const donePath = await writePlan(dir, 'done.md', 'completed');
+	const runningPath = await writePlan(dir, 'running.md', 'executing');
+	const result = await sweepPlans(dir, {
+		statuses: ['draft', 'completed', 'executing'],
+		sessionId: 'sess-1',
+		reason: 'cleanup',
+	});
+
+	t.is(result.archived.length, 2);
+	t.true(result.archived.some(item => item.source === draftPath));
+	t.true(result.archived.some(item => item.source === donePath));
+	t.true(result.skipped.some(item => item.source === runningPath));
+	await fs.access(runningPath);
+});
+
+test('sweepPlans dry_run does not move files', async t => {
+	const dir = await makePlanDir();
+	const draftPath = await writePlan(dir, 'draft.md', 'draft');
+	const result = await sweepPlans(dir, {
+		statuses: ['draft'],
+		dryRun: true,
+		sessionId: 'sess-1',
+	});
+	t.is(result.archived.length, 1);
+	t.is(result.archived[0]!.target, '(dry-run)');
+	await fs.access(draftPath);
+});
+
+test('sweepPlans planPaths whitelist filters sources', async t => {
+	const dir = await makePlanDir();
+	const keep = await writePlan(dir, 'keep.md', 'draft');
+	const drop = await writePlan(dir, 'drop.md', 'draft');
+	const result = await sweepPlans(dir, {
+		statuses: ['draft'],
+		planPaths: [drop],
+		sessionId: 'sess-1',
+		reason: 'whitelist',
+	});
+	t.is(result.archived.length, 1);
+	t.is(result.archived[0]!.source, drop);
+	await fs.access(keep);
+	await t.throwsAsync(() => fs.access(drop));
+});
+
+test('sweepPlans defaults to current session and excludes legacy plans', async t => {
+	const dir = await makePlanDir();
+	const mine = await writePlan(dir, 'mine.md', 'draft');
+	const foreign = await writePlan(dir, 'foreign.md', 'draft');
+	const legacy = await writePlan(dir, 'legacy.md', 'draft');
+	await fs.writeFile(
+		foreign,
+		(
+			await fs.readFile(foreign, 'utf8')
+		).replace('session: sess-1', 'session: sess-2'),
+		'utf8',
+	);
+	await fs.writeFile(
+		legacy,
+		(
+			await fs.readFile(legacy, 'utf8')
+		).replace('session: sess-1', "session: ''"),
+		'utf8',
+	);
+
+	const result = await sweepPlans(dir, {
+		statuses: ['draft'],
+		sessionId: 'sess-1',
+		reason: 'session cleanup',
+	});
+	t.deepEqual(
+		result.archived.map(item => item.source),
+		[mine],
+	);
+	await fs.access(foreign);
+	await fs.access(legacy);
+});
+
+test('sweepPlans abandoned notes stamp updated_at and survive archive CAS', async t => {
+	const dir = await makePlanDir();
+	const draftPath = await writePlan(dir, 'draft.md', 'draft');
+	const result = await sweepPlans(dir, {
+		statuses: ['draft'],
+		sessionId: 'sess-1',
+		reason: 'note-cas-check',
+	});
+	t.is(result.archived.length, 1);
+	t.is(result.errors.length, 0);
+	const archived = await parsePlanDocument(result.archived[0]!.target);
+	t.true(archived.raw.includes('> Batch archived: note-cas-check'));
+	t.truthy(archived.frontmatter.updated_at);
+	await t.throwsAsync(() => fs.access(draftPath));
+});
+
+test('sweepPlans scope=all archives across sessions', async t => {
+	const dir = await makePlanDir();
+	const mine = await writePlan(dir, 'mine.md', 'draft');
+	const foreign = await writePlan(dir, 'foreign.md', 'draft');
+	await fs.writeFile(
+		foreign,
+		(
+			await fs.readFile(foreign, 'utf8')
+		).replace('session: sess-1', 'session: sess-2'),
+		'utf8',
+	);
+
+	const result = await sweepPlans(dir, {
+		statuses: ['draft'],
+		scope: 'all',
+		reason: 'global cleanup',
+	});
+	t.deepEqual(
+		result.archived.map(item => item.source).sort(),
+		[mine, foreign].sort(),
+	);
 });

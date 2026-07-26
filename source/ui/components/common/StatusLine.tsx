@@ -381,7 +381,9 @@ export default function StatusLine({
 		[contextUsage],
 	);
 	const [privacyRevision, setPrivacyRevision] = React.useState(0);
-	const [planProgressLabel, setPlanProgressLabel] = React.useState<string | null>(null);
+	const [planProgressLabel, setPlanProgressLabel] = React.useState<
+		string | null
+	>(null);
 
 	// Poll active plan progress while plan mode is on (StatusLine chrome).
 	React.useEffect(() => {
@@ -694,7 +696,7 @@ export default function StatusLine({
 
 		if (planMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modePlan)) {
 			statusItems.push({
-				text: planProgressLabel || '⚐ Plan',
+				text: planProgressLabel || t.chatScreen.planBadge,
 				color: '#60A5FA',
 			});
 		}

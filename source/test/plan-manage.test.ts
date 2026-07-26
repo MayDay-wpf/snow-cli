@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {executePlanManageTool} from '../mcp/planManage.js';
 import {parsePlanDocument} from '../utils/execution/planDocument.js';
+import {sessionManager, type Session} from '../utils/session/sessionManager.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -35,9 +36,23 @@ async function makePlanDir(): Promise<{dir: string; planPath: string}> {
 function resultText(result: any): string {
 	return result?.content?.[0]?.text ?? '';
 }
-
 function run(dir: string, args: any) {
 	return executePlanManageTool('manage', args, undefined, dir);
+}
+
+function setTestSession(id: string): void {
+	const now = Date.now();
+	sessionManager.setCurrentSession({
+		id,
+		title: 'test',
+		summary: '',
+		createdAt: now,
+		updatedAt: now,
+		messages: [],
+		messageCount: 0,
+		projectId: 'test',
+		projectPath: process.cwd(),
+	} as Session);
 }
 
 test('rejects unknown actions and missing plan', async t => {
@@ -200,3 +215,109 @@ test.serial(
 		t.true(getPlanApproved(null));
 	},
 );
+
+test.serial('archive_batch dry_run and default protects executing', async t => {
+	const {dir, planPath} = await makePlanDir();
+	const draftPath = path.join(dir, '.snow', 'plan', 'old-draft.md');
+	await fs.writeFile(
+		draftPath,
+		`---
+status: draft
+current_phase: 0
+created: '2026-07-25T00:00:00.000Z'
+session: ''
+---
+# Old Draft
+
+### Phase 1: X
+- **Steps**:
+  - [x] done
+- **Done when**: ok
+`,
+		'utf8',
+	);
+
+	const dry = await run(dir, {
+		action: 'archive_batch',
+		statuses: ['draft', 'executing'],
+		dry_run: true,
+	});
+	t.falsy(dry.isError);
+	const dryText = resultText(dry);
+	t.true(dryText.includes('dry-run'));
+	t.true(dryText.includes('old-draft.md'));
+	// executing demo.md should be skipped/protected in dry-run listing only if not matched;
+	// with statuses including executing but include_executing false, executing is protected.
+	await fs.access(planPath);
+	await fs.access(draftPath);
+
+	const real = await run(dir, {
+		action: 'archive_batch',
+		statuses: ['draft'],
+		reason: 'unit-test cleanup',
+	});
+	t.falsy(real.isError);
+	t.true(resultText(real).includes('archived'));
+	await t.throwsAsync(() => fs.access(draftPath));
+	// executing plan remains
+	await fs.access(planPath);
+});
+
+test.serial('archive_batch include_executing requires reason', async t => {
+	const {dir} = await makePlanDir();
+	const missing = await run(dir, {
+		action: 'archive_batch',
+		include_executing: true,
+		statuses: ['executing'],
+	});
+	t.true(missing.isError === true);
+	t.true(resultText(missing).includes('requires "reason"'));
+});
+
+test.serial(
+	'archive_batch defaults to current session and scope=all requires reason',
+	async t => {
+		const {dir} = await makePlanDir();
+		setTestSession('sess-current');
+		const planDir = path.join(dir, '.snow', 'plan');
+		const mine = path.join(planDir, 'mine.md');
+		const foreign = path.join(planDir, 'foreign.md');
+		await fs.writeFile(
+			mine,
+			PLAN.replace("session: ''", 'session: sess-current').replace(
+				'status: executing',
+				'status: draft',
+			),
+			'utf8',
+		);
+		await fs.writeFile(
+			foreign,
+			PLAN.replace("session: ''", 'session: sess-foreign').replace(
+				'status: executing',
+				'status: draft',
+			),
+			'utf8',
+		);
+
+		const scoped = await run(dir, {
+			action: 'archive_batch',
+			statuses: ['draft'],
+			reason: 'current session cleanup',
+		});
+		t.falsy(scoped.isError);
+		await t.throwsAsync(() => fs.access(mine));
+		await fs.access(foreign);
+
+		const missingReason = await run(dir, {
+			action: 'archive_batch',
+			statuses: ['draft'],
+			scope: 'all',
+		});
+		t.true(missingReason.isError === true);
+		t.true(resultText(missingReason).includes('scope="all"'));
+	},
+);
+
+test.serial.afterEach.always(() => {
+	sessionManager.clearCurrentSession();
+});

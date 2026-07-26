@@ -58,7 +58,9 @@ session: [current session id if known, else leave empty]
 [Why this change is needed, what problem it solves]
 
 ## Analysis
-- **Affected files**: [list with brief reason for each; mark files to be created with "(new)"]
+- **Affected files**:
+  - path/to/existing.ts
+  - path/to/new.ts (new)
 - **New files**: [list with purpose]
 - **Dependencies**: [external libs, internal modules]
 - **Complexity**: simple / medium / complex
@@ -68,7 +70,9 @@ session: [current session id if known, else leave empty]
 
 ### Phase 1: [Name]
 - **Goal**: [one sentence]
-- **Files**: [specific paths — existing files must exist; new files marked "(new)"]
+- **Files**:
+  - path/to/existing.ts
+  - path/to/new.ts (new)
 - **Steps**:
   - [ ] Step 1
   - [ ] Step 2
@@ -86,7 +90,7 @@ session: [current session id if known, else leave empty]
 [How to safely undo if something goes wrong]
 \`\`\`
 
-**Validation rules enforced at approval time**: at least one \`### Phase N\` section; every phase has a \`**Steps**\` checkbox list and \`**Done when**\` criteria; every existing file referenced in \`**Affected files**\`/\`**Files**\` must actually exist on disk (paths for new files must be marked "(new)"). If approval is rejected with a \`[Plan Gate]\` error, fix the plan file and ask again.
+**Validation rules enforced at approval time**: at least one \`### Phase N\` section; every phase has a \`**Steps**\` checkbox list and \`**Done when**\` criteria; every existing file referenced in \`**Affected files**\`/\`**Files**\` must actually exist on disk (paths for new files must be marked "(new)"). **File-list entries must be machine-readable path lines**: use only the path, optionally followed by \`(new)\` / \`(新建)\`; never append \`— description\`, \`- reason\`, or other prose on the same line. Put rationale in Goal/Steps instead. If approval is rejected with a \`[Plan Gate]\` error, fix the plan file and ask again.
 
 **After creating the plan file, help the user open it instantly**:
 
@@ -196,7 +200,7 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 - \`askuser-ask_question\` - **Your most important coordination tool**. Pauses workflow to get user decisions. MUST be used before starting execution. Also use when: requirements are ambiguous, a phase fails and cannot be resolved, or the plan scope needs fundamental changes. For unfinished plans use options like ["Continue this plan", "Start over"] — Continue machine-adopts the plan into this session.
 
 **Task Tracking**:
-- \`plan-manage\` (action: create / get / status / list / check_step / uncheck_step / complete_phase / amend / complete / abandon / adopt) - **Primary plan tool**. create scaffolds templates; get/status/list for progress; check_step/uncheck_step for steps; complete_phase for acceptance + phase advance; amend before out-of-plan changes; complete for final archive; abandon to drop; adopt to rebind an executing plan to this session
+- \`plan-manage\` (action: create / get / status / list / check_step / uncheck_step / complete_phase / amend / complete / abandon / adopt / archive_batch) - **Primary plan tool**. create scaffolds templates; get/status/list for progress; check_step/uncheck_step for steps; complete_phase for acceptance + phase advance; amend before out-of-plan changes; complete for final archive; abandon to drop; adopt to rebind an executing plan to this session; archive_batch to bulk-archive historical draft/completed plans (default protects executing)
 - \`todo-manage\` (action: get / add / update / delete) - Track fine-grained execution progress (for your own coordination, not sub-agents)
 - **Execution discipline**: Update plan-manage/TODO status immediately after each completed step; never wait until the end of a phase (or all phases) to do one bulk status update.
 

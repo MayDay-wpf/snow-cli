@@ -327,7 +327,7 @@ export async function executeToolCall(
 			// Runs after beforeToolCall so hooks can still observe attempts, but
 			// before team/subagent/MCP side effects. YOLO cannot bypass this.
 			const planModeEnabled = getPlanMode();
-			const gateDecision = evaluatePlanGate({
+			const gateDecision = await evaluatePlanGate({
 				planMode: planModeEnabled,
 				sessionId,
 				toolName: toolCall.function.name,

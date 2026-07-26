@@ -6,7 +6,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
 	findActivePlan,
+	findForeignExecutingPlans,
 	findSessionPlanFiles,
+	getPlanWriteOptions,
+	listUnfinishedPlans,
+	mutatePlanDocument,
+	parsePhasesFromMarkdown,
 	parsePlanDocument,
 	setStepChecked,
 	writePlanFrontmatter,
@@ -15,12 +20,22 @@ import {
 	type PlanPhase,
 } from '../utils/execution/planDocument.js';
 import {
+	acquirePlanOwnerLock,
+	formatOwnerLockConflict,
+	releasePlanOwnerLock,
+} from '../utils/execution/planOwnerLock.js';
+import {
 	setPlanScope,
 	resolvePlanScopeFiles,
 	setPlanApproved,
 	resetPlanGate,
 } from '../utils/execution/planModeGate.js';
-import {archivePlan} from '../utils/execution/planArchive.js';
+import {
+	archivePlan,
+	sweepPlans,
+	type SweepPlansOptions,
+} from '../utils/execution/planArchive.js';
+import type {PlanStatus} from '../utils/execution/planDocument.js';
 import {runAcceptance} from '../utils/execution/planAcceptance.js';
 import {
 	buildPlanMarkdown,
@@ -42,6 +57,7 @@ const PLAN_ACTIONS = [
 	'abandon',
 	'adopt',
 	'create',
+	'archive_batch',
 ] as const;
 
 type PlanAction = (typeof PLAN_ACTIONS)[number];
@@ -65,7 +81,7 @@ export const planManageTools: Tool[] = [
 - amend: Update the plan when scope changes. Optional "phase_index", "add_files", "add_steps", required "reason".
 - complete: Final acceptance after ALL phases; archives the plan to .snow/plan/archive/YYYY-MM-DD/.
 - abandon: Abandon active plan. Required "reason". Sets status abandoned, clears gate, archives.
-- adopt: Rebind an executing plan to this session and restore the gate. Optional "plan_path"; else latest executing plan any session.
+- adopt: Rebind an executing plan to this session and restore the gate. Optional "plan_path"; required when multiple plans exist. Live takeover requires "force":true plus "reason".
 
 The plan file is the source of truth — keep it in sync with reality via these actions.`,
 		inputSchema: {
@@ -100,7 +116,35 @@ The plan file is the source of truth — keep it in sync with reality via these 
 				reason: {
 					type: 'string',
 					description:
-						'For action=amend/abandon: why the plan changed or was abandoned.',
+						'For action=amend/abandon/archive_batch: why the plan changed or was abandoned.',
+				},
+				scope: {
+					type: 'string',
+					enum: ['session', 'all'],
+					description:
+						'For action=archive_batch: current session only (default) or all sessions. scope=all requires reason.',
+				},
+				statuses: {
+					type: 'array',
+					items: {type: 'string'},
+					description:
+						'For action=archive_batch: status filter (draft/approved/executing/completed/abandoned). Default: draft,completed,abandoned.',
+				},
+				include_executing: {
+					type: 'boolean',
+					description:
+						'For action=archive_batch: allow archiving executing plans (requires reason). Default false.',
+				},
+				dry_run: {
+					type: 'boolean',
+					description:
+						'For action=archive_batch: list matches without moving files. Default false.',
+				},
+				plan_paths: {
+					type: 'array',
+					items: {type: 'string'},
+					description:
+						'For action=archive_batch: optional whitelist of plan file paths.',
 				},
 				title: {
 					type: 'string',
@@ -128,6 +172,11 @@ The plan file is the source of truth — keep it in sync with reality via these 
 					type: 'string',
 					description:
 						'For action=adopt: optional absolute/relative plan path.',
+				},
+				force: {
+					type: 'boolean',
+					description:
+						'For action=adopt: explicitly take over a live foreign owner (requires reason).',
 				},
 			},
 			required: ['action'],
@@ -204,8 +253,10 @@ export {runAcceptance} from '../utils/execution/planAcceptance.js';
 
 async function requireActivePlan(
 	cwd: string,
+	options: {mutation?: boolean} = {},
 ): Promise<{doc: PlanDoc} | {error: CallToolResult}> {
-	const doc = await findActivePlan(cwd, getSessionId());
+	const sessionId = getSessionId();
+	const doc = await findActivePlan(cwd, sessionId);
 	if (!doc) {
 		return {
 			error: textResult(
@@ -213,6 +264,18 @@ async function requireActivePlan(
 				true,
 			),
 		};
+	}
+	if (options.mutation && doc.frontmatter.status === 'executing') {
+		const owner = await acquirePlanOwnerLock(cwd, {
+			planPath: doc.filePath,
+			sessionId: sessionId || '',
+		});
+		if (!owner.ok) {
+			resetPlanGate(sessionId);
+			return {
+				error: textResult(formatOwnerLockConflict(owner.conflict), true),
+			};
+		}
 	}
 	return {doc};
 }
@@ -241,7 +304,13 @@ async function handleCheckStep(
 			true,
 		);
 	}
-	await setStepChecked(doc.filePath, phase.index, stepIndex, checked);
+	await setStepChecked(
+		doc.filePath,
+		phase.index,
+		stepIndex,
+		checked,
+		getPlanWriteOptions(doc),
+	);
 	const updated = await parsePlanDocument(doc.filePath);
 	const updatedPhase = updated.phases.find(p => p.index === phase.index)!;
 	const remaining = updatedPhase.steps.filter(s => !s.checked);
@@ -304,7 +373,11 @@ async function handleCompletePhase(
 	}
 
 	const nextIndex = phase.index + 1;
-	await writePlanFrontmatter(doc.filePath, {current_phase: nextIndex});
+	await writePlanFrontmatter(
+		doc.filePath,
+		{current_phase: nextIndex},
+		getPlanWriteOptions(doc),
+	);
 
 	const updated = await parsePlanDocument(doc.filePath);
 	setPlanScope(getSessionId(), {
@@ -352,34 +425,34 @@ async function handleAmend(
 	}
 
 	// Insert after the last existing entry of each section (line-anchored).
-	const matter = (await import('gray-matter')).default;
-	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^\uFEFF/, '');
-	const parsed = matter(raw);
-	const lines = parsed.content.split(/\r?\n/);
+	await mutatePlanDocument(
+		doc.filePath,
+		({content, eol}) => {
+			const lines = content.split(/\r?\n/);
+			const freshPhase = parsePhasesFromMarkdown(content).phases.find(
+				p => p.index === phaseIndex,
+			);
 
-	// Re-parse for stable line anchors
-	const freshDoc = await parsePlanDocument(doc.filePath);
-	const freshPhase = freshDoc.phases.find(p => p.index === phaseIndex)!;
-
-	if (addSteps.length > 0) {
-		const lastStep = freshPhase.steps[freshPhase.steps.length - 1];
-		const insertAt = lastStep
-			? lastStep.line + 1
-			: findSectionAnchor(lines, phaseIndex, 'Steps');
-		lines.splice(insertAt, 0, ...addSteps.map(s => `  - [ ] ${s}`));
-	}
-	if (addFiles.length > 0) {
-		// Recompute anchors after possible steps insertion by matching Files section
-		const filesAnchor = findSectionAnchor(lines, phaseIndex, 'Files');
-		lines.splice(filesAnchor, 0, ...addFiles.map(f => `  - ${f}`));
-	}
-	lines.push(
-		'',
-		`> Amended: ${reason} (${new Date().toISOString().slice(0, 10)})`,
+			if (addSteps.length > 0) {
+				const lastStep = freshPhase?.steps[freshPhase.steps.length - 1];
+				const insertAt = lastStep
+					? lastStep.line + 1
+					: findSectionAnchor(lines, phaseIndex, 'Steps');
+				lines.splice(insertAt, 0, ...addSteps.map(s => `  - [ ] ${s}`));
+			}
+			if (addFiles.length > 0) {
+				// Recompute anchors after possible steps insertion by matching Files section
+				const filesAnchor = findSectionAnchor(lines, phaseIndex, 'Files');
+				lines.splice(filesAnchor, 0, ...addFiles.map(f => `  - ${f}`));
+			}
+			lines.push(
+				'',
+				`> Amended: ${reason} (${new Date().toISOString().slice(0, 10)})`,
+			);
+			return {content: lines.join(eol)};
+		},
+		getPlanWriteOptions(doc),
 	);
-
-	const output = matter.stringify(lines.join(doc.eol), parsed.data);
-	await fs.writeFile(doc.filePath, output, 'utf8');
 
 	const updated = await parsePlanDocument(doc.filePath);
 	setPlanScope(getSessionId(), {
@@ -458,11 +531,24 @@ async function handleComplete(
 		);
 	}
 
-	await writePlanFrontmatter(doc.filePath, {status: 'completed'});
+	await writePlanFrontmatter(
+		doc.filePath,
+		{status: 'completed'},
+		getPlanWriteOptions(doc),
+	);
 	const completedDoc = await parsePlanDocument(doc.filePath);
 	const archivedTo = await archivePlan(completedDoc, cwd);
+	const sessionId = getSessionId();
+	const released = await releasePlanOwnerLock(cwd, {
+		planPath: doc.filePath,
+		sessionId: sessionId || '',
+	});
+	resetPlanGate(sessionId);
 	return textResult(
-		`Plan completed (${acceptance.output}) and archived to ${archivedTo}.`,
+		`Plan completed (${acceptance.output}) and archived to ${archivedTo}.` +
+			(released
+				? ''
+				: ' Owner lock changed before release; the current lock was preserved.'),
 	);
 }
 
@@ -476,31 +562,42 @@ async function handleAbandon(
 		return textResult('Error: action=abandon requires "reason".', true);
 	}
 
-	const matter = (await import('gray-matter')).default;
-	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^\uFEFF/, '');
-	const parsed = matter(raw);
-	const body = parsed.content.endsWith('\n')
-		? parsed.content
-		: parsed.content + '\n';
-	const nextBody =
-		body +
-		`\n> Abandoned: ${reason} (${new Date().toISOString().slice(0, 10)})\n`;
-	await fs.writeFile(
+	await mutatePlanDocument(
 		doc.filePath,
-		matter.stringify(nextBody, parsed.data),
-		'utf8',
+		({content}) => {
+			const body = content.endsWith('\n') ? content : `${content}\n`;
+			return {
+				content:
+					body +
+					`\n> Abandoned: ${reason} (${new Date()
+						.toISOString()
+						.slice(0, 10)})\n`,
+				frontmatter: {status: 'abandoned'},
+			};
+		},
+		getPlanWriteOptions(doc),
 	);
-
-	await writePlanFrontmatter(doc.filePath, {status: 'abandoned'});
-	resetPlanGate(getSessionId());
 	const abandonedDoc = await parsePlanDocument(doc.filePath);
 	const archivedTo = await archivePlan(abandonedDoc, cwd, 'abandoned');
-	return textResult(`Plan abandoned and archived to ${archivedTo}.`);
+	const sessionId = getSessionId();
+	const released = await releasePlanOwnerLock(cwd, {
+		planPath: doc.filePath,
+		sessionId: sessionId || '',
+	});
+	resetPlanGate(sessionId);
+	return textResult(
+		`Plan abandoned and archived to ${archivedTo}.` +
+			(released
+				? ''
+				: ' Owner lock changed before release; the current lock was preserved.'),
+	);
 }
 
 async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 	const sessionId = getSessionId();
 	let doc: PlanDoc | null = null;
+	const force = args?.force === true;
+	const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
 
 	if (typeof args?.plan_path === 'string' && args.plan_path.trim()) {
 		const planPath = path.isAbsolute(args.plan_path)
@@ -517,11 +614,20 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 			);
 		}
 	} else {
-		const docs = await findSessionPlanFiles(cwd, null);
-		doc =
-			docs
-				.filter(d => d.frontmatter.status === 'executing')
-				.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
+		const unfinished = await listUnfinishedPlans(cwd, {
+			includeDraftsWithProgress: false,
+		});
+		const executing = unfinished.filter(
+			d => d.frontmatter.status === 'executing',
+		);
+		if (executing.length > 1) {
+			return textResult(
+				`Error: multiple executing plans found — pass plan_path explicitly.\n` +
+					executing.map(d => `- ${d.filePath}`).join('\n'),
+				true,
+			);
+		}
+		doc = executing[0] ?? null;
 	}
 
 	if (!doc) {
@@ -530,15 +636,83 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 			true,
 		);
 	}
+	if (!['draft', 'approved', 'executing'].includes(doc.frontmatter.status)) {
+		return textResult(
+			`Error: plan ${doc.filePath} has status=${doc.frontmatter.status} and cannot be adopted.`,
+			true,
+		);
+	}
+	if (force && !reason) {
+		return textResult('Error: force adopt/takeover requires "reason".', true);
+	}
+
+	const foreign = await findForeignExecutingPlans(cwd, sessionId);
+	const targetPath = path.resolve(doc.filePath);
+	const otherForeign = foreign.filter(
+		d => path.resolve(d.filePath) !== targetPath,
+	);
+	if (otherForeign.length > 0 && !force) {
+		return textResult(
+			`Error: another executing plan exists. Pass force=true and reason to takeover, or finish/abandon:\n` +
+				otherForeign
+					.map(
+						d => `- ${d.filePath} (session=${d.frontmatter.session || 'none'})`,
+					)
+					.join('\n'),
+			true,
+		);
+	}
 
 	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
-	// Always rebind to the current session id (empty string when no session manager entry).
 	const boundSession = sessionId ?? '';
-	await writePlanFrontmatter(doc.filePath, {
-		session: boundSession,
-		status: 'executing',
-		current_phase: currentPhase,
+	const lockResult = await acquirePlanOwnerLock(cwd, {
+		planPath: doc.filePath,
+		sessionId: boundSession,
+		force,
 	});
+	if (!lockResult.ok) {
+		return textResult(formatOwnerLockConflict(lockResult.conflict), true);
+	}
+
+	try {
+		await mutatePlanDocument(
+			doc.filePath,
+			({content}) => {
+				const patch = {
+					frontmatter: {
+						session: boundSession,
+						status: 'executing' as const,
+						current_phase: currentPhase,
+					},
+				};
+				if (!(lockResult.tookOver && reason)) {
+					return patch;
+				}
+				const body = content.endsWith('\n') ? content : `${content}\n`;
+				return {
+					...patch,
+					content:
+						body +
+						`\n> Owner takeover: ${reason} (${new Date()
+							.toISOString()
+							.slice(0, 10)})\n`,
+				};
+			},
+			getPlanWriteOptions(doc),
+		);
+	} catch (error) {
+		await releasePlanOwnerLock(cwd, {
+			planPath: doc.filePath,
+			sessionId: boundSession,
+		});
+		return textResult(
+			`Error: adopted owner lock but failed to rebind plan: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+			true,
+		);
+	}
+
 	const updated = await parsePlanDocument(doc.filePath);
 	setPlanApproved(sessionId, true);
 	setPlanScope(sessionId, {
@@ -546,13 +720,15 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 		files: resolvePlanScopeFiles(updated),
 		cwd,
 	});
+	const takeoverNote = lockResult.tookOver
+		? ` tookOver=true reason=${reason}`
+		: '';
 	return textResult(
 		`Adopted plan ${updated.filePath} into session ${
 			boundSession || '(default)'
-		}; status=executing phase=${currentPhase}; gate approved.`,
+		}; status=executing phase=${currentPhase}; gate approved; owner lock acquired.${takeoverNote}`,
 	);
 }
-
 async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 	const title = typeof args?.title === 'string' ? args.title.trim() : '';
 	if (!title) {
@@ -612,6 +788,84 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 	);
 }
 
+async function handleArchiveBatch(
+	cwd: string,
+	args: any,
+): Promise<CallToolResult> {
+	const includeExecuting = Boolean(args?.include_executing);
+	const dryRun = Boolean(args?.dry_run);
+	const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
+	const scope = args?.scope === 'all' ? 'all' : 'session';
+
+	if (scope === 'all' && !reason) {
+		return textResult(
+			'Error: archive_batch with scope="all" requires "reason".',
+			true,
+		);
+	}
+	if (includeExecuting && !reason) {
+		return textResult(
+			'Error: archive_batch with include_executing=true requires "reason".',
+			true,
+		);
+	}
+
+	const statusesRaw = Array.isArray(args?.statuses)
+		? (args.statuses as unknown[]).filter(
+				(s): s is string => typeof s === 'string' && s.trim().length > 0,
+		  )
+		: undefined;
+	const statuses = statusesRaw as PlanStatus[] | undefined;
+
+	const planPaths = Array.isArray(args?.plan_paths)
+		? (args.plan_paths as unknown[]).filter(
+				(p): p is string => typeof p === 'string' && p.trim().length > 0,
+		  )
+		: undefined;
+
+	const options: SweepPlansOptions = {
+		statuses,
+		includeExecuting,
+		dryRun,
+		planPaths,
+		scope,
+		sessionId: getSessionId(),
+		reason: reason || undefined,
+	};
+
+	const result = await sweepPlans(cwd, options);
+	const archivedLines = result.archived.map(
+		item =>
+			`- [${item.status}→${item.finalStatus}] ${item.source} -> ${item.target}`,
+	);
+	const skippedLines = result.skipped.map(
+		item => `- skip ${item.source}: ${item.reason}`,
+	);
+	const errorLines = result.errors.map(
+		item => `- error ${item.source}: ${item.error}`,
+	);
+
+	const header = result.dryRun
+		? `archive_batch dry-run: ${result.archived.length} match(es)`
+		: `archive_batch: archived ${result.archived.length}, skipped ${result.skipped.length}, errors ${result.errors.length}`;
+
+	const body = [
+		header,
+		archivedLines.length > 0
+			? `Matched:\n${archivedLines.join('\n')}`
+			: 'Matched: (none)',
+		skippedLines.length > 0 ? `Skipped:\n${skippedLines.join('\n')}` : '',
+		errorLines.length > 0 ? `Errors:\n${errorLines.join('\n')}` : '',
+	]
+		.filter(Boolean)
+		.join('\n\n');
+
+	return textResult(
+		body,
+		result.errors.length > 0 && result.archived.length === 0,
+	);
+}
+
 export async function executePlanManageTool(
 	toolName: string,
 	args: any,
@@ -656,7 +910,13 @@ export async function executePlanManageTool(
 			return await handleAdopt(cwd, args);
 		}
 
-		const found = await requireActivePlan(cwd);
+		if (action === 'archive_batch') {
+			return await handleArchiveBatch(cwd, args);
+		}
+
+		const found = await requireActivePlan(cwd, {
+			mutation: !['get', 'status'].includes(action),
+		});
 		if ('error' in found) {
 			return found.error;
 		}

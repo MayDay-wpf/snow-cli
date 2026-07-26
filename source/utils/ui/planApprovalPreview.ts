@@ -18,6 +18,78 @@ export type PlanApprovalPreviewOptions = {
 	maxPhases?: number;
 };
 
+/** Options for adaptive plan-preview viewport height. */
+export type PlanPreviewVisibleRowsOptions = {
+	/** Rows reserved for AskUserQuestion + chrome (default 18). */
+	reservedRows?: number;
+	/** Minimum content rows (default 8). */
+	minRows?: number;
+	/** Maximum content rows (default 16). */
+	maxRows?: number;
+};
+
+export type PlanPreviewScrollWindow = {
+	clampedOffset: number;
+	visibleStart: number;
+	visibleEnd: number;
+	hiddenAbove: number;
+	hiddenBelow: number;
+	canScroll: boolean;
+	visibleRows: number;
+};
+
+/**
+ * Compute how many plan-preview content rows fit in the terminal.
+ * Leaves room for AskUserQuestion + chrome so options stay visible.
+ */
+export function computePlanPreviewVisibleRows(
+	terminalRows: number,
+	options: PlanPreviewVisibleRowsOptions = {},
+): number {
+	const reservedRows = options.reservedRows ?? 18;
+	const minRows = options.minRows ?? 8;
+	const maxRows = options.maxRows ?? 16;
+	const safeTerminalRows =
+		Number.isFinite(terminalRows) && terminalRows > 0
+			? Math.floor(terminalRows)
+			: minRows + reservedRows;
+	const available = Math.max(minRows, safeTerminalRows - reservedRows);
+	return Math.max(minRows, Math.min(maxRows, available));
+}
+
+/**
+ * Clamp scroll offset and derive the visible window for plan preview lines.
+ */
+export function computePlanPreviewScrollWindow(
+	totalLines: number,
+	offset: number,
+	visibleRows: number,
+): PlanPreviewScrollWindow {
+	const safeTotal =
+		Number.isFinite(totalLines) && totalLines > 0 ? Math.floor(totalLines) : 0;
+	const safeVisible =
+		Number.isFinite(visibleRows) && visibleRows > 0
+			? Math.floor(visibleRows)
+			: 1;
+	const maxOffset = Math.max(0, safeTotal - safeVisible);
+	const rawOffset = Number.isFinite(offset) ? Math.floor(offset) : 0;
+	const clampedOffset = Math.max(0, Math.min(maxOffset, rawOffset));
+	const visibleStart = clampedOffset;
+	const visibleEnd = Math.min(safeTotal, clampedOffset + safeVisible);
+	const hiddenAbove = clampedOffset;
+	const hiddenBelow = Math.max(0, safeTotal - visibleEnd);
+
+	return {
+		clampedOffset,
+		visibleStart,
+		visibleEnd,
+		hiddenAbove,
+		hiddenBelow,
+		canScroll: safeTotal > safeVisible,
+		visibleRows: safeVisible,
+	};
+}
+
 function basenameOfPath(filePath: string): string {
 	const normalized = filePath.replace(/\\/g, '/');
 	const parts = normalized.split('/').filter(Boolean);
@@ -34,9 +106,7 @@ function formatFileList(files: string[], maxFiles: number): string {
 		return basenameOfPath(cleaned);
 	});
 	const extra = files.length - shown.length;
-	return extra > 0
-		? `${shown.join(', ')} · +${extra} more`
-		: shown.join(', ');
+	return extra > 0 ? `${shown.join(', ')} · +${extra} more` : shown.join(', ');
 }
 
 function formatPhase(
@@ -151,7 +221,10 @@ export function formatPlanApprovalPreview(
 
 	const hiddenPhases = phaseCount - phases.length;
 	if (hiddenPhases > 0) {
-		lines.push('', `… +${hiddenPhases} more phases (open the plan file for full detail)`);
+		lines.push(
+			'',
+			`… +${hiddenPhases} more phases (open the plan file for full detail)`,
+		);
 	}
 
 	return lines.join('\n');

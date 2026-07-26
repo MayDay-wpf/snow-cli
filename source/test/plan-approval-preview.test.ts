@@ -1,5 +1,7 @@
 import anyTest, {type TestFn} from 'ava';
 import {
+	computePlanPreviewScrollWindow,
+	computePlanPreviewVisibleRows,
 	formatPlanApprovalPreview,
 	isPlanApprovalQuestion,
 } from '../utils/ui/planApprovalPreview.js';
@@ -98,8 +100,54 @@ test('formatPlanApprovalPreview truncates long step lists', t => {
 	t.false(text.includes('[ ] Step 4'));
 	t.true(text.includes('+9 more steps'));
 });
-
 test('formatPlanApprovalPreview handles empty phases', t => {
 	const text = formatPlanApprovalPreview(makeDoc({phases: []}));
 	t.true(text.includes('No ### Phase N sections'));
+});
+
+test('computePlanPreviewVisibleRows clamps by terminal size', t => {
+	t.is(computePlanPreviewVisibleRows(40), 16);
+	t.is(computePlanPreviewVisibleRows(30), 12);
+	t.is(computePlanPreviewVisibleRows(20), 8);
+	t.is(computePlanPreviewVisibleRows(5), 8);
+	t.is(
+		computePlanPreviewVisibleRows(50, {
+			minRows: 4,
+			maxRows: 10,
+			reservedRows: 10,
+		}),
+		10,
+	);
+	t.is(computePlanPreviewVisibleRows(Number.NaN), 8);
+});
+
+test('computePlanPreviewScrollWindow short content does not scroll', t => {
+	const window = computePlanPreviewScrollWindow(5, 0, 10);
+	t.false(window.canScroll);
+	t.is(window.clampedOffset, 0);
+	t.is(window.visibleStart, 0);
+	t.is(window.visibleEnd, 5);
+	t.is(window.hiddenAbove, 0);
+	t.is(window.hiddenBelow, 0);
+});
+
+test('computePlanPreviewScrollWindow clamps long content and offset', t => {
+	const window = computePlanPreviewScrollWindow(30, 100, 10);
+	t.true(window.canScroll);
+	t.is(window.clampedOffset, 20);
+	t.is(window.visibleStart, 20);
+	t.is(window.visibleEnd, 30);
+	t.is(window.hiddenAbove, 20);
+	t.is(window.hiddenBelow, 0);
+
+	const mid = computePlanPreviewScrollWindow(30, 5, 10);
+	t.is(mid.clampedOffset, 5);
+	t.is(mid.visibleEnd, 15);
+	t.is(mid.hiddenAbove, 5);
+	t.is(mid.hiddenBelow, 15);
+
+	const resized = computePlanPreviewScrollWindow(12, 8, 16);
+	t.false(resized.canScroll);
+	t.is(resized.clampedOffset, 0);
+	t.is(resized.visibleEnd, 12);
 });

@@ -80,10 +80,33 @@ test('buildResumePlanNotice detects executing plans from other sessions', async 
 	const dir = await makePlanDir(EXECUTING_PLAN);
 	const notice = await buildResumePlanNotice(dir, 'other-session');
 	t.truthy(notice?.includes('Unfinished Plan Detected'));
-	t.truthy(notice?.includes('Phase 1/2'));
-	t.truthy(notice?.includes('Continue this plan'));
-	t.truthy(notice?.includes('machine-adopts') || notice?.includes('adopt'));
+	t.truthy(notice?.includes('[executing] Demo plan'));
+	t.truthy(notice?.includes('session=sess-1'));
+	t.truthy(notice?.includes('phase=1/2'));
+	t.truthy(notice?.includes(path.join('.snow', 'plan', 'demo.md')));
+	t.truthy(notice?.includes('plan-manage {action:"adopt"'));
+	t.truthy(notice?.includes('Do **not** silently adopt the newest plan'));
 
 	const emptyDir = await makePlanDir();
 	t.is(await buildResumePlanNotice(emptyDir, 'x'), null);
+});
+
+test('buildResumePlanNotice lists multiple unfinished candidates explicitly', async t => {
+	const dir = await makePlanDir(EXECUTING_PLAN);
+	const secondPath = path.join(dir, '.snow', 'plan', 'second.md');
+	await fs.writeFile(
+		secondPath,
+		EXECUTING_PLAN.replace('session: sess-1', 'session: sess-2').replace(
+			'# Demo plan',
+			'# Second plan',
+		),
+		'utf8',
+	);
+
+	const notice = await buildResumePlanNotice(dir, 'new-session');
+	t.truthy(notice?.includes('Found 2 unfinished plan(s)'));
+	t.truthy(notice?.includes('1. [executing]'));
+	t.truthy(notice?.includes('2. [executing]'));
+	t.truthy(notice?.includes('Continue: <absolute-or-relative-plan-path>'));
+	t.truthy(notice?.includes('required when multiple candidates'));
 });

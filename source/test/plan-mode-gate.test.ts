@@ -18,10 +18,16 @@ import {
 	onPlanModeChange,
 	resetAllPlanGates,
 	resetPlanGate,
+	restorePlanGateFromDisk,
 	setPlanApproved,
 	setPlanScope,
 	validatePlanBeforeApproval,
 } from '../utils/execution/planModeGate.js';
+import {
+	acquirePlanOwnerLock,
+	getPlanOwnerLockPath,
+	readPlanOwnerLock,
+} from '../utils/execution/planOwnerLock.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -174,23 +180,25 @@ test('classify blocks business writes, terminal, general agent', t => {
 	t.is(classifyPlanGateDecision('team-create_task', {}, cwd), 'block');
 });
 
-test('evaluatePlanGate respects planMode and approval state', t => {
+test('evaluatePlanGate respects planMode and approval state', async t => {
 	const cwd = process.cwd();
 	const sessionId = 's1';
 
 	// planMode off → always allow
 	t.true(
-		evaluatePlanGate({
-			planMode: false,
-			sessionId,
-			toolName: 'terminal-execute',
-			args: {command: 'ls'},
-			cwd,
-		}).allow,
+		(
+			await evaluatePlanGate({
+				planMode: false,
+				sessionId,
+				toolName: 'terminal-execute',
+				args: {command: 'ls'},
+				cwd,
+			})
+		).allow,
 	);
 
 	// planMode on, unapproved → block terminal
-	const blocked = evaluatePlanGate({
+	const blocked = await evaluatePlanGate({
 		planMode: true,
 		sessionId,
 		toolName: 'terminal-execute',
@@ -203,51 +211,59 @@ test('evaluatePlanGate respects planMode and approval state', t => {
 
 	// plan writes allowed while unapproved
 	t.true(
-		evaluatePlanGate({
-			planMode: true,
-			sessionId,
-			toolName: 'filesystem-create',
-			args: {filePath: '.snow/plan/demo.md', content: '#x'},
-			cwd,
-		}).allow,
+		(
+			await evaluatePlanGate({
+				planMode: true,
+				sessionId,
+				toolName: 'filesystem-create',
+				args: {filePath: '.snow/plan/demo.md', content: '#x'},
+				cwd,
+			})
+		).allow,
 	);
 
 	// trellis task writes allowed while unapproved (P0.5)
 	t.true(
-		evaluatePlanGate({
-			planMode: true,
-			sessionId,
-			toolName: 'filesystem-edit',
-			args: {filePath: '.trellis/tasks/demo/prd.md', content: '#prd'},
-			cwd,
-		}).allow,
+		(
+			await evaluatePlanGate({
+				planMode: true,
+				sessionId,
+				toolName: 'filesystem-edit',
+				args: {filePath: '.trellis/tasks/demo/prd.md', content: '#prd'},
+				cwd,
+			})
+		).allow,
 	);
 
 	// mixed batch with business path still blocked
 	t.false(
-		evaluatePlanGate({
-			planMode: true,
-			sessionId,
-			toolName: 'filesystem-create',
-			args: {
-				filePath: [
-					{path: '.trellis/tasks/demo/a.md', content: 'a'},
-					{path: 'src/a.ts', content: 'b'},
-				],
-			},
-			cwd,
-		}).allow,
+		(
+			await evaluatePlanGate({
+				planMode: true,
+				sessionId,
+				toolName: 'filesystem-create',
+				args: {
+					filePath: [
+						{path: '.trellis/tasks/demo/a.md', content: 'a'},
+						{path: 'src/a.ts', content: 'b'},
+					],
+				},
+				cwd,
+			})
+		).allow,
 	);
 
 	setPlanApproved(sessionId, true);
 	t.true(
-		evaluatePlanGate({
-			planMode: true,
-			sessionId,
-			toolName: 'terminal-execute',
-			args: {command: 'ls'},
-			cwd,
-		}).allow,
+		(
+			await evaluatePlanGate({
+				planMode: true,
+				sessionId,
+				toolName: 'terminal-execute',
+				args: {command: 'ls'},
+				cwd,
+			})
+		).allow,
 	);
 });
 
@@ -404,20 +420,24 @@ test('validatePlanBeforeApproval rejects plans referencing missing files', async
 
 test('plan scope: soft warning outside scope, always allow plan dir', async t => {
 	const sessionId = 's-scope';
-	const cwd = await makePlanDir();
-	setPlanApproved(sessionId, true);
-	setPlanScope(sessionId, {
-		planPath: path.join(cwd, '.snow', 'plan', 'demo.md'),
-		files: ['src/exists.ts'],
+	const cwd = await makePlanDir(
+		VALID_PLAN.replace('session: s-approve', `session: ${sessionId}`),
+	);
+	const approved = await maybeApprovePlanFromAskUser({
+		planMode: true,
+		sessionId,
 		cwd,
+		question: 'Plan ready. Proceed?',
+		selected: 'Yes - Execute the entire plan',
 	});
+	t.true(approved.approved);
 
 	t.true(isWithinPlanScope('src/exists.ts', cwd, sessionId));
 	t.true(isWithinPlanScope(path.join(cwd, 'SRC', 'exists.ts'), cwd, sessionId));
 	t.false(isWithinPlanScope('src/other.ts', cwd, sessionId));
 	t.true(isWithinPlanScope('.snow/plan/demo.md', cwd, sessionId));
 
-	const inScope = evaluatePlanGate({
+	const inScope = await evaluatePlanGate({
 		planMode: true,
 		sessionId,
 		toolName: 'filesystem-edit',
@@ -427,7 +447,7 @@ test('plan scope: soft warning outside scope, always allow plan dir', async t =>
 	t.true(inScope.allow);
 	t.falsy(inScope.warning);
 
-	const outScope = evaluatePlanGate({
+	const outScope = await evaluatePlanGate({
 		planMode: true,
 		sessionId,
 		toolName: 'filesystem-edit',
@@ -463,4 +483,89 @@ test('session isolation and plan mode change reset', t => {
 	setPlanApproved('b', true);
 	onPlanModeChange(true, 'b');
 	t.false(getPlanApproved('b'));
+});
+
+test('approval rejects a second plan while a foreign plan is executing', async t => {
+	const cwd = await makePlanDir();
+	const foreignPath = path.join(cwd, '.snow', 'plan', 'foreign.md');
+	await fs.writeFile(
+		foreignPath,
+		VALID_PLAN.replace(
+			'session: s-approve',
+			'session: foreign-session',
+		).replace('status: draft', 'status: executing'),
+		'utf8',
+	);
+	const result = await maybeApprovePlanFromAskUser({
+		planMode: true,
+		sessionId: 's-approve',
+		cwd,
+		question: 'Plan ready. Proceed?',
+		selected: 'Yes - Execute the entire plan',
+	});
+	t.false(result.approved);
+	t.true(
+		result.error?.includes('another session already has an executing plan'),
+	);
+	t.false(getPlanApproved('s-approve'));
+});
+
+test('continue requires explicit adopt instead of taking a foreign owner', async t => {
+	const content = VALID_PLAN.replace(
+		'session: s-approve',
+		'session: foreign-session',
+	).replace('status: draft', 'status: executing');
+	const cwd = await makePlanDir(content);
+	const result = await maybeApprovePlanFromAskUser({
+		planMode: true,
+		sessionId: 'new-session',
+		cwd,
+		question: 'Resume unfinished plan?',
+		selected: 'Continue this plan',
+	});
+	t.false(result.approved);
+	t.true(result.error?.includes('plan-manage'));
+	t.true(result.error?.includes('cannot be taken over by a generic Continue'));
+});
+
+test('restore gate requires matching session and owner lock', async t => {
+	const content = VALID_PLAN.replace('status: draft', 'status: executing');
+	const cwd = await makePlanDir(content);
+	const planPath = path.join(cwd, '.snow', 'plan', 'demo.md');
+
+	await restorePlanGateFromDisk(cwd, 'foreign-session');
+	t.false(getPlanApproved('foreign-session'));
+	t.is(await readPlanOwnerLock(cwd), null);
+
+	await restorePlanGateFromDisk(cwd, 's-approve');
+	t.true(getPlanApproved('s-approve'));
+	t.is((await readPlanOwnerLock(cwd))?.sessionId, 's-approve');
+	await fs.unlink(getPlanOwnerLockPath(cwd));
+	resetPlanGate('s-approve');
+
+	await acquirePlanOwnerLock(cwd, {
+		planPath,
+		sessionId: 'foreign-session',
+	});
+	await restorePlanGateFromDisk(cwd, 's-approve');
+	t.false(getPlanApproved('s-approve'));
+});
+
+test('approved gate resets after owner lock changes', async t => {
+	const cwd = await makePlanDir();
+	const planPath = path.join(cwd, '.snow', 'plan', 'demo.md');
+	setPlanApproved('session-a', true);
+	setPlanScope('session-a', {planPath, files: ['src/exists.ts'], cwd});
+	await acquirePlanOwnerLock(cwd, {planPath, sessionId: 'foreign-session'});
+
+	const result = await evaluatePlanGate({
+		planMode: true,
+		sessionId: 'session-a',
+		toolName: 'terminal-execute',
+		args: {command: 'echo ok'},
+		cwd,
+	});
+	t.false(result.allow);
+	t.true(result.message?.includes('Plan owner changed'));
+	t.false(getPlanApproved('session-a'));
 });

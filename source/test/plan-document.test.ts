@@ -11,6 +11,10 @@ import {
 	validatePlanDocument,
 	findSessionPlanFiles,
 	findActivePlan,
+	getPlanWriteOptions,
+	PlanWriteConflictError,
+	listUnfinishedPlans,
+	findForeignExecutingPlans,
 } from '../utils/execution/planDocument.js';
 import {
 	dateFolderName,
@@ -146,6 +150,29 @@ test('parsePhasesFromMarkdown supports Chinese section labels and uppercase X', 
 	t.deepEqual(phases[0]!.doneWhen, ['构建通过']);
 });
 
+test('parsePhasesFromMarkdown normalizes file paths with descriptions', t => {
+	const {phases} = parsePhasesFromMarkdown(
+		[
+			'### Phase 1: Parser',
+			'- **Files**:',
+			'  - `src/a.ts` — existing file reason',
+			'  - src/b.ts - another reason',
+			'  - `src/new.ts` (new) — create it',
+			'  - src/new-zh.ts (新建) - create it',
+			'- **Steps**:',
+			'  - [ ] update parser',
+			'- **Done when**: tests pass',
+		].join('\n'),
+	);
+
+	t.deepEqual(phases[0]!.files, [
+		'src/a.ts',
+		'src/b.ts',
+		'src/new.ts (new)',
+		'src/new-zh.ts (新建)',
+	]);
+});
+
 test('validatePlanDocument reports all issue codes', async t => {
 	const dir = await makeTmpDir();
 	const noPhases = await parsePlanDocument(
@@ -183,6 +210,21 @@ test('validatePlanDocument accepts existing files and (new) markers', async t =>
 	await fs.writeFile(path.join(dir, 'src', 'a.ts'), 'x', 'utf8');
 	const doc = await parsePlanDocument(await writeSamplePlan(dir));
 	t.deepEqual(validatePlanDocument(doc, dir), []);
+});
+
+test('validatePlanDocument tolerates legacy path descriptions', async t => {
+	const directory = await makeTmpDir();
+	await fs.mkdir(path.join(directory, 'src'), {recursive: true});
+	await fs.writeFile(path.join(directory, 'src', 'a.ts'), 'x', 'utf8');
+	const document = await parsePlanDocument(await writeSamplePlan(directory));
+
+	// Simulate a previously parsed/cached plan whose file entries were not cleaned.
+	document.affectedFiles = [
+		'`src/a.ts` — existing file reason',
+		'`src/new.ts` (new) — create it',
+	];
+
+	t.deepEqual(validatePlanDocument(document, directory), []);
 });
 
 test('validatePlanDocument requires Risks or Rollback for complex plans', async t => {
@@ -356,6 +398,70 @@ test('findSessionPlanFiles discovers plans in date subdirs and ignores archive',
 		forSess1.some(d =>
 			d.filePath.includes(path.join('2026-07-20', 'day-one.md')),
 		),
+	);
+});
+
+test('writePlanFrontmatter rejects stale updated_at and mtime revisions', async t => {
+	const dir = await makeTmpDir();
+	const filePath = await writeSamplePlan(dir);
+	const doc = await parsePlanDocument(filePath);
+
+	await writePlanFrontmatter(filePath, {status: 'approved'});
+
+	const err = await t.throwsAsync(
+		() =>
+			writePlanFrontmatter(
+				filePath,
+				{status: 'executing'},
+				getPlanWriteOptions(doc),
+			),
+		{instanceOf: PlanWriteConflictError},
+	);
+	t.true(String(err?.message).includes('updated_at mismatch'));
+
+	const fresh = await parsePlanDocument(filePath);
+	await setStepChecked(filePath, 1, 2, true);
+	const conflictErr = await t.throwsAsync(
+		() => setStepChecked(filePath, 1, 1, true, getPlanWriteOptions(fresh)),
+		{instanceOf: PlanWriteConflictError},
+	);
+	const msg = String(conflictErr?.message);
+	t.true(msg.includes('updated_at mismatch') || msg.includes('mtime mismatch'));
+});
+
+test('listUnfinishedPlans and findForeignExecutingPlans cover multi-plan resume', async t => {
+	const dir = await makeTmpDir();
+	await writeSamplePlan(dir, 'exec-a.md');
+	await writeSamplePlan(
+		dir,
+		'exec-b.md',
+		SAMPLE_PLAN.replace('session: sess-1', 'session: sess-2'),
+	);
+	await writeSamplePlan(
+		dir,
+		'draft-progress.md',
+		SAMPLE_PLAN.replace('status: executing', 'status: draft'),
+	);
+	await writeSamplePlan(
+		dir,
+		'draft-empty.md',
+		SAMPLE_PLAN.replace('status: executing', 'status: draft').replace(
+			'- [x] create middleware',
+			'- [ ] create middleware',
+		),
+	);
+
+	const unfinished = await listUnfinishedPlans(dir);
+	t.deepEqual(
+		unfinished.map(d => path.basename(d.filePath)).sort(),
+		['draft-progress.md', 'exec-a.md', 'exec-b.md'].sort(),
+	);
+	t.is(unfinished[0]!.frontmatter.status, 'executing');
+
+	const foreign = await findForeignExecutingPlans(dir, 'sess-1');
+	t.deepEqual(
+		foreign.map(d => path.basename(d.filePath)),
+		['exec-b.md'],
 	);
 });
 

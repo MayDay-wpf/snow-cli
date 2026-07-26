@@ -252,7 +252,7 @@ export default function ChatScreenConversationView({
 				<>
 					{/* Plan Mode: show the plan document above the approval prompt. */}
 					<PlanApprovalPreview
-						enabled={Boolean(planMode)}
+						isEnabled={Boolean(planMode)}
 						question={pendingUserQuestion.question}
 						workingDirectory={workingDirectory}
 						terminalWidth={terminalWidth}

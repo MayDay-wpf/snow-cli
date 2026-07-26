@@ -136,8 +136,50 @@ function sectionKey(label: string): PhaseSection {
 	return null;
 }
 
+const createMarkerPattern = /\((new|新建|create[ds]?)\)/i;
+
+/**
+ * Normalize a plan file-list item into a path candidate.
+ * Tolerates surrounding/inline backticks, em/en-dash descriptions, and
+ * "path - reason" suffixes. Preserves create markers like "(new)".
+ */
 function cleanListPath(text: string): string {
-	return text.trim().replace(/^`|`$/g, '').trim();
+	let s = text.trim();
+	if (!s) {
+		return '';
+	}
+
+	// Prefer first fenced path: `path/to/file` (optionally followed by notes)
+	const fenced = /`([^`]+)`/.exec(s);
+	if (fenced) {
+		const pathPart = fenced[1]!.trim();
+		const after = s.slice((fenced.index ?? 0) + fenced[0].length);
+		const marker = createMarkerPattern.exec(after);
+		return marker ? `${pathPart} ${marker[0]}` : pathPart;
+	}
+
+	// Unfenced: extract create marker first so description stripping won't drop it
+	let marker = '';
+	const markerMatch = createMarkerPattern.exec(s);
+	if (markerMatch) {
+		marker = markerMatch[0];
+		s =
+			s.slice(0, markerMatch.index).trimEnd() +
+			s.slice(markerMatch.index + markerMatch[0].length);
+		s = s.trim();
+	}
+
+	// Strip trailing prose after em/en dash or " - "
+	s = s.replace(/\s*[—–]\s*.*$/u, '').trim();
+	s = s.replace(/\s+-\s+.*$/u, '').trim();
+
+	// Drop leftover trailing parenthetical notes (create markers already extracted)
+	s = s.replace(/\s*\([^)]*\)\s*$/u, '').trim();
+
+	// Final surrounding backticks
+	s = s.replaceAll(/^`+|`+$/g, '').trim();
+
+	return marker ? `${s} ${marker}` : s;
 }
 
 export function parsePhasesFromMarkdown(content: string): {
@@ -289,21 +331,94 @@ export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
 	};
 }
 
-export async function writePlanFrontmatter(
+export type WritePlanFrontmatterOptions = {
+	/** When set, reject the write if the parsed revision no longer matches. */
+	expectedUpdatedAt?: string;
+	expectedMtimeMs?: number;
+};
+
+export class PlanWriteConflictError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'PlanWriteConflictError';
+	}
+}
+
+export function getPlanWriteOptions(doc: PlanDoc): WritePlanFrontmatterOptions {
+	return {
+		expectedUpdatedAt: doc.frontmatter.updated_at || '',
+		expectedMtimeMs: doc.mtimeMs,
+	};
+}
+
+function assertPlanRevision(
+	absPath: string,
+	current: PlanFrontmatter,
+	mtimeMs: number,
+	options?: WritePlanFrontmatterOptions,
+): void {
+	if (
+		options?.expectedUpdatedAt !== undefined &&
+		(current.updated_at || '') !== options.expectedUpdatedAt
+	) {
+		throw new PlanWriteConflictError(
+			`Plan file changed on disk (updated_at mismatch) at ${absPath}. Reload the plan and retry.`,
+		);
+	}
+	if (
+		options?.expectedMtimeMs !== undefined &&
+		mtimeMs !== options.expectedMtimeMs
+	) {
+		throw new PlanWriteConflictError(
+			`Plan file changed on disk (mtime mismatch) at ${absPath}. Reload the plan and retry.`,
+		);
+	}
+}
+
+/**
+ * Apply one synchronous body/frontmatter transformation to the revision that
+ * was checked on disk. Every mutation stamps updated_at so later writes can
+ * detect both frontmatter and checklist/body changes.
+ */
+export async function mutatePlanDocument(
 	filePath: string,
-	patch: Partial<PlanFrontmatter>,
+	mutate: (input: {
+		content: string;
+		frontmatter: PlanFrontmatter;
+		eol: '\n' | '\r\n';
+	}) => {content?: string; frontmatter?: Partial<PlanFrontmatter>} | undefined,
+	options?: WritePlanFrontmatterOptions,
 ): Promise<void> {
 	const absPath = path.resolve(filePath);
-	const raw = (await fs.readFile(absPath, 'utf8')).replace(/^\uFEFF/, '');
+	const [rawBuffer, stat] = await Promise.all([
+		fs.readFile(absPath, 'utf8'),
+		fs.stat(absPath),
+	]);
+	const raw = rawBuffer.replace(/^\uFEFF/, '');
 	const parsed = matter(raw);
-	const merged = {...normalizeFrontmatter(parsed.data), ...patch};
+	const current = normalizeFrontmatter(parsed.data);
+	assertPlanRevision(absPath, current, stat.mtimeMs, options);
+
+	const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
+	const change =
+		mutate({content: parsed.content, frontmatter: current, eol}) ?? {};
+	const merged = {...current, ...(change.frontmatter ?? {})};
 	const now = new Date().toISOString();
 	if (!merged.created) {
 		merged.created = now;
 	}
 	merged.updated_at = now;
-	const output = matter.stringify(parsed.content, merged);
+
+	const output = matter.stringify(change.content ?? parsed.content, merged);
 	await fs.writeFile(absPath, output, 'utf8');
+}
+
+export async function writePlanFrontmatter(
+	filePath: string,
+	patch: Partial<PlanFrontmatter>,
+	options?: WritePlanFrontmatterOptions,
+): Promise<void> {
+	await mutatePlanDocument(filePath, () => ({frontmatter: patch}), options);
 }
 
 export async function setStepChecked(
@@ -311,42 +426,40 @@ export async function setStepChecked(
 	phaseIndex: number,
 	stepIndex: number,
 	checked: boolean,
+	options?: WritePlanFrontmatterOptions,
 ): Promise<void> {
-	const doc = await parsePlanDocument(filePath);
-	const phase = doc.phases.find(p => p.index === phaseIndex);
-	if (!phase) {
-		throw new Error(`Phase ${phaseIndex} not found in ${filePath}`);
-	}
-	const step = phase.steps[stepIndex - 1];
-	if (!step) {
-		throw new Error(
-			`Step ${stepIndex} not found in phase ${phaseIndex} (has ${phase.steps.length} steps)`,
-		);
-	}
+	await mutatePlanDocument(
+		filePath,
+		({content, eol}) => {
+			const parsedPlan = parsePhasesFromMarkdown(content);
+			const phase = parsedPlan.phases.find(p => p.index === phaseIndex);
+			if (!phase) {
+				throw new Error(`Phase ${phaseIndex} not found in ${filePath}`);
+			}
+			const step = phase.steps[stepIndex - 1];
+			if (!step) {
+				throw new Error(
+					`Step ${stepIndex} not found in phase ${phaseIndex} (has ${phase.steps.length} steps)`,
+				);
+			}
 
-	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^﻿/, '');
-	const parsed = matter(raw);
-	const lines = parsed.content.split(/\r?\n/);
-	const target = lines[step.line];
-	if (target === undefined) {
-		throw new Error(`Step line ${step.line} out of range in ${filePath}`);
-	}
-	const mark = checked ? 'x' : ' ';
-	const replaced = target.replace(/-\s*\[( |x|X)\]/, `- [${mark}]`);
-	const finalLine =
-		replaced === target && !CHECKBOX_RE.test(target)
-			? // Tolerant step (plain list item): convert to checkbox
-			  target.replace(/^(\s*)-\s+/, `$1- [${mark}] `)
-			: replaced;
-	lines[step.line] = finalLine;
-	const output = matter.stringify(
-		lines.join(doc.eol),
-		normalizeFrontmatter(parsed.data),
+			const lines = content.split(/\r?\n/);
+			const target = lines[step.line];
+			if (target === undefined) {
+				throw new Error(`Step line ${step.line} out of range in ${filePath}`);
+			}
+			const mark = checked ? 'x' : ' ';
+			const replaced = target.replace(/-\s*\[( |x|X)\]/, `- [${mark}]`);
+			const finalLine =
+				replaced === target && !CHECKBOX_RE.test(target)
+					? target.replace(/^(\s*)-\s+/, `$1- [${mark}] `)
+					: replaced;
+			lines[step.line] = finalLine;
+			return {content: lines.join(eol)};
+		},
+		options,
 	);
-	await fs.writeFile(doc.filePath, output, 'utf8');
 }
-
-const NEW_FILE_MARKER_RE = /\((new|新建|create[ds]?)\)/i;
 
 export function validatePlanDocument(
 	doc: PlanDoc,
@@ -383,13 +496,17 @@ export function validatePlanDocument(
 			? doc.affectedFiles
 			: [...new Set(doc.phases.flatMap(p => p.files))];
 	for (const file of candidates) {
-		if (NEW_FILE_MARKER_RE.test(file)) {
+		// Defense-in-depth: re-clean in case older plans stored dirty list items
+		const normalized = cleanListPath(file);
+		if (createMarkerPattern.test(normalized)) {
 			continue;
 		}
-		const cleaned = file.replace(/\s*\(.*\)\s*$/, '').trim();
+
+		const cleaned = normalized.replace(/\s*\(.*\)\s*$/, '').trim();
 		if (!cleaned || /[*?]/.test(cleaned)) {
 			continue;
 		}
+
 		if (!existsSync(path.resolve(cwd, cleaned))) {
 			issues.push({
 				code: 'missing_file',
@@ -472,4 +589,63 @@ export async function findActivePlan(
 				STATUS_PRIORITY[b.frontmatter.status] || b.mtimeMs - a.mtimeMs,
 	);
 	return active[0]!;
+}
+
+export type ListUnfinishedPlansOptions = {
+	/** When set, plans owned by other sessions are still returned (for resume UI). */
+	sessionId?: string | null;
+	/** Include draft/approved plans that already have checked steps. Default true. */
+	includeDraftsWithProgress?: boolean;
+};
+
+/**
+ * Unfinished plans for resume UX: all executing plans, plus optional
+ * draft/approved plans that already have progress.
+ * Sorted: executing first, then mtime desc.
+ */
+export async function listUnfinishedPlans(
+	cwd: string,
+	options: ListUnfinishedPlansOptions = {},
+): Promise<PlanDoc[]> {
+	const includeDrafts = options.includeDraftsWithProgress !== false;
+	const all = await findSessionPlanFiles(cwd, null);
+	const matched = all.filter(doc => {
+		const status = doc.frontmatter.status;
+		if (status === 'executing') {
+			return true;
+		}
+		if (!includeDrafts) {
+			return false;
+		}
+		if (status !== 'draft' && status !== 'approved') {
+			return false;
+		}
+		const checked = doc.phases.some(p => p.steps.some(s => s.checked));
+		return checked;
+	});
+	matched.sort(
+		(a, b) =>
+			STATUS_PRIORITY[a.frontmatter.status] -
+				STATUS_PRIORITY[b.frontmatter.status] || b.mtimeMs - a.mtimeMs,
+	);
+	return matched;
+}
+
+/** Executing plans not owned by the given session (or any session when null). */
+export async function findForeignExecutingPlans(
+	cwd: string,
+	sessionId: string | null | undefined,
+): Promise<PlanDoc[]> {
+	const all = await findSessionPlanFiles(cwd, null);
+	return all
+		.filter(d => d.frontmatter.status === 'executing')
+		.filter(d => {
+			if (!sessionId) {
+				return true;
+			}
+			const owner = d.frontmatter.session || '';
+			// Untagged executing counts as foreign when we have a concrete session.
+			return owner !== sessionId;
+		})
+		.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }

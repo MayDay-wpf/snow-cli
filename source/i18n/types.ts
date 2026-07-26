@@ -1673,6 +1673,20 @@ export type TranslationKeys = {
 		expandedViewHint: string;
 		yoloModeActive: string;
 		planModeActive: string;
+		/** Compact StatusLine badge, e.g. "⚐ Plan" / "⚐ 计划" */
+		planBadge: string;
+		planStatusDraft: string;
+		planStatusApproved: string;
+		planStatusExecuting: string;
+		planStatusCompleted: string;
+		planStatusArchived: string;
+		planStatusAbandoned: string;
+		/** Template with {count}, e.g. "{count} phase(s)" / "{count} 个阶段" */
+		planPhaseCount: string;
+		/** Detail helper: "phase {current}/{total}" */
+		planPhaseProgress: string;
+		/** Detail helper prefix for next step: "next" */
+		planNextStep: string;
 		vulnerabilityHuntingModeActive: string;
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;

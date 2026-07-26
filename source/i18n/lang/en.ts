@@ -1931,6 +1931,16 @@ export const en: TranslationKeys = {
 			'⧴ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
 			'⚐ Plan mode active - Specialized planning and coordination agent',
+		planBadge: '⚐ Plan',
+		planStatusDraft: 'Draft',
+		planStatusApproved: 'Approved',
+		planStatusExecuting: 'Executing',
+		planStatusCompleted: 'Completed',
+		planStatusArchived: 'Archived',
+		planStatusAbandoned: 'Abandoned',
+		planPhaseCount: '{count} phase(s)',
+		planPhaseProgress: 'phase {current}/{total}',
+		planNextStep: 'next',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',

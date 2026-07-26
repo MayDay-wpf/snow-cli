@@ -12,11 +12,19 @@ import path from 'node:path';
 import {getPlanStrictness} from '../config/projectSettings.js';
 import {
 	findActivePlan,
+	findForeignExecutingPlans,
 	findSessionPlanFiles,
+	getPlanWriteOptions,
 	validatePlanDocument,
 	writePlanFrontmatter,
 	type PlanDoc,
 } from './planDocument.js';
+import {
+	acquirePlanOwnerLock,
+	formatOwnerLockConflict,
+	releasePlanOwnerLock,
+	verifyPlanOwnerLock,
+} from './planOwnerLock.js';
 
 type PlanGateState = {
 	planApproved: boolean;
@@ -259,14 +267,26 @@ export async function restorePlanGateFromDisk(
 	}
 	try {
 		const plan = await findActivePlan(cwd, sessionId);
-		if (plan && plan.frontmatter.status === 'executing') {
-			setPlanApproved(sessionId, true);
-			setPlanScope(sessionId, {
-				planPath: plan.filePath,
-				files: resolvePlanScopeFiles(plan),
-				cwd,
-			});
+		if (
+			!plan ||
+			plan.frontmatter.status !== 'executing' ||
+			plan.frontmatter.session !== (sessionId || '')
+		) {
+			return;
 		}
+		const lockResult = await acquirePlanOwnerLock(cwd, {
+			planPath: plan.filePath,
+			sessionId: sessionId || '',
+		});
+		if (!lockResult.ok) {
+			return;
+		}
+		setPlanApproved(sessionId, true);
+		setPlanScope(sessionId, {
+			planPath: plan.filePath,
+			files: resolvePlanScopeFiles(plan),
+			cwd,
+		});
 	} catch {
 		// Best-effort restore; gate stays unapproved on failure.
 	}
@@ -554,18 +574,29 @@ export function isPlanRejectOrModifyAnswer(input: {
 	);
 }
 
-export function evaluatePlanGate(input: {
+export async function evaluatePlanGate(input: {
 	planMode: boolean;
 	sessionId?: string | null;
 	toolName: string;
 	args: any;
 	cwd: string;
-}): {allow: boolean; message?: string; warning?: string} {
+}): Promise<{allow: boolean; message?: string; warning?: string}> {
 	if (!input.planMode) {
 		return {allow: true};
 	}
 
 	if (getPlanApproved(input.sessionId)) {
+		const state = getState(input.sessionId);
+		if (state.activePlanPath) {
+			const owner = await verifyPlanOwnerLock(input.cwd, {
+				planPath: state.activePlanPath,
+				sessionId: input.sessionId || '',
+			});
+			if (!owner.ok) {
+				resetPlanGate(input.sessionId);
+				return {allow: false, message: `Error: ${owner.message}`};
+			}
+		}
 		// Approved: enforce plan scope on filesystem writes per strictness.
 		if (!FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
 			return {allow: true};
@@ -649,25 +680,46 @@ export async function maybeApprovePlanFromAskUser(input: {
 		})
 	) {
 		const cwd = input.cwd || process.cwd();
+		const selectedText = Array.isArray(input.selected)
+			? input.selected.join(' ')
+			: String(input.selected || '');
+		const customText = String(input.customInput || '');
+		const combined = `${input.question || ''} ${selectedText} ${customText}`;
+		const isContinueIntent =
+			/continue|resume|继续|接着|adopt/i.test(combined) ||
+			/continue\s*:/i.test(combined);
+
 		let validation = await validatePlanBeforeApproval(cwd, input.sessionId);
 
-		// CONTINUE unfinished plan from another session: adopt then re-validate.
-		if (!validation.ok) {
-			try {
-				const orphan =
-					(await findSessionPlanFiles(cwd, null))
-						.filter(d => d.frontmatter.status === 'executing')
-						.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
-				if (orphan) {
-					await writePlanFrontmatter(orphan.filePath, {
-						session: input.sessionId ?? orphan.frontmatter.session,
-						status: 'executing',
-						current_phase: Math.max(1, orphan.frontmatter.current_phase),
-					});
-					validation = await validatePlanBeforeApproval(cwd, input.sessionId);
-				}
-			} catch {
-				// Best-effort adopt; fall through to original rejection.
+		if (!validation.ok && isContinueIntent) {
+			const pathMatch =
+				combined.match(/continue\s*:\s*([^\n|]+)/i) ||
+				combined.match(/(?:\.snow[\\/]plan[\\/][^\s|]+)/i);
+			const explicitPath = pathMatch?.[1]?.trim() || pathMatch?.[0]?.trim();
+			const executing = (await findSessionPlanFiles(cwd, null))
+				.filter(d => d.frontmatter.status === 'executing')
+				.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+			if (executing.length > 1 || (explicitPath && executing.length > 0)) {
+				setPlanApproved(input.sessionId, false);
+				return {
+					approved: false,
+					error:
+						`Continue requires explicit plan adoption so ownership can be checked safely. ` +
+						`Call plan-manage {action:"adopt", plan_path:"..."}. Candidates:\n` +
+						executing.map(d => `- ${d.filePath}`).join('\n'),
+				};
+			}
+			if (executing.length === 1) {
+				setPlanApproved(input.sessionId, false);
+				return {
+					approved: false,
+					error:
+						`Continue requires plan-manage {action:"adopt", plan_path:"${
+							executing[0]!.filePath
+						}"}. ` +
+						`A live foreign owner cannot be taken over by a generic Continue answer.`,
+				};
 			}
 		}
 
@@ -676,17 +728,65 @@ export async function maybeApprovePlanFromAskUser(input: {
 			return {approved: false, error: validation.message};
 		}
 
-		setPlanApproved(input.sessionId, true);
-		try {
-			await writePlanFrontmatter(validation.plan.filePath, {
-				status: 'executing',
-				current_phase: Math.max(1, validation.plan.frontmatter.current_phase),
-				approved_at: new Date().toISOString(),
-				session: input.sessionId ?? validation.plan.frontmatter.session,
-			});
-		} catch {
-			// Frontmatter persistence is best-effort; approval still holds.
+		// Block second concurrent executing owner unless this is the same plan.
+		const foreign = await findForeignExecutingPlans(cwd, input.sessionId);
+		const approvingPath = path.resolve(validation.plan.filePath);
+		const blockingForeign = foreign.filter(
+			d => path.resolve(d.filePath) !== approvingPath,
+		);
+		if (blockingForeign.length > 0) {
+			setPlanApproved(input.sessionId, false);
+			return {
+				approved: false,
+				error:
+					`Cannot approve: another session already has an executing plan:\n` +
+					blockingForeign
+						.map(
+							d =>
+								`- ${d.filePath} (session=${d.frontmatter.session || 'none'})`,
+						)
+						.join('\n') +
+					`\nAdopt that plan, finish/abandon it, or force takeover via plan-manage adopt with reason.`,
+			};
 		}
+
+		const lockResult = await acquirePlanOwnerLock(cwd, {
+			planPath: validation.plan.filePath,
+			sessionId: input.sessionId || '',
+		});
+		if (!lockResult.ok) {
+			setPlanApproved(input.sessionId, false);
+			return {
+				approved: false,
+				error: formatOwnerLockConflict(lockResult.conflict),
+			};
+		}
+
+		try {
+			await writePlanFrontmatter(
+				validation.plan.filePath,
+				{
+					status: 'executing',
+					current_phase: Math.max(1, validation.plan.frontmatter.current_phase),
+					approved_at: new Date().toISOString(),
+					session: input.sessionId ?? validation.plan.frontmatter.session,
+				},
+				getPlanWriteOptions(validation.plan),
+			);
+		} catch (error) {
+			await releasePlanOwnerLock(cwd, {
+				planPath: validation.plan.filePath,
+				sessionId: input.sessionId || '',
+			});
+			setPlanApproved(input.sessionId, false);
+			return {
+				approved: false,
+				error: `Plan approval persistence failed: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			};
+		}
+		setPlanApproved(input.sessionId, true);
 		setPlanScope(input.sessionId, {
 			planPath: validation.plan.filePath,
 			files: resolvePlanScopeFiles({

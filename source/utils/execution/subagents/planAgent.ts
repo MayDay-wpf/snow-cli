@@ -83,7 +83,9 @@ You are a specialized planning agent focused on analyzing requirements, explorin
 [Why this change is needed, what problem it solves]
 
 ## Analysis
-- **Affected files**: [list with brief reason for each]
+- **Affected files**:
+  - path/to/existing.ts
+  - path/to/new.ts (new)
 - **New files**: [list with purpose]
 - **Dependencies**: [external libs, internal modules]
 - **Complexity**: simple / medium / complex
@@ -93,7 +95,9 @@ You are a specialized planning agent focused on analyzing requirements, explorin
 
 ### Phase 1: [Name]
 - **Goal**: [one sentence]
-- **Files**: [specific paths]
+- **Files**:
+  - path/to/existing.ts
+  - path/to/new.ts (new)
 - **Steps**:
   - [ ] Step 1
   - [ ] Step 2
@@ -115,6 +119,7 @@ You are a specialized planning agent focused on analyzing requirements, explorin
 - Location: always under \`.snow/plan/YYYY-MM-DD/\` (create-day folder; \`filesystem-create\` auto-creates parent dirs and auto-redirects top-level \`.snow/plan/*.md\` writes)
 - File name: kebab-case, descriptive of the task (e.g. \`add-jwt-auth.md\`, \`refactor-config-loader.md\`)
 - Language: write the plan in the SAME language as the requirement in the prompt
+- File lists: one pure machine-readable path per line; only \`(new)\` / \`(新建)\` may follow the path; put descriptions in Goal/Steps
 - 2-5 phases, each independently verifiable, max 3-5 actions per phase
 - Acceptance criteria must include build passes and no diagnostic errors
 - After \`filesystem-create\` succeeds, print the absolute file path on its own line

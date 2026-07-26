@@ -5,11 +5,13 @@
  * across turns instead of drifting once the plan file scrolls out of context.
  */
 
+import path from 'node:path';
 import {
 	findActivePlan,
-	findSessionPlanFiles,
+	listUnfinishedPlans,
 	type PlanDoc,
 } from '../execution/planDocument.js';
+import {readPlanOwnerLock, isLockStale} from '../execution/planOwnerLock.js';
 
 export function formatPlanContext(doc: PlanDoc): string {
 	const total = doc.phases.length;
@@ -21,6 +23,7 @@ export function formatPlanContext(doc: PlanDoc): string {
 		'',
 		`Plan file: ${doc.filePath}`,
 		`Status: ${doc.frontmatter.status}`,
+		`Session: ${doc.frontmatter.session || '(none)'}`,
 	];
 
 	if (phase) {
@@ -80,39 +83,83 @@ export async function buildPlanReminder(
 	return null;
 }
 
+function summarizeUnfinished(doc: PlanDoc, index: number): string {
+	const total = doc.phases.length;
+	const current = Math.max(1, doc.frontmatter.current_phase || 1);
+	const title =
+		doc.frontmatter.title?.trim() ||
+		doc.title?.trim() ||
+		path.basename(doc.filePath);
+	const owner = doc.frontmatter.session || '(none)';
+	return (
+		`${index}. [${doc.frontmatter.status}] ${title} | session=${owner} | ` +
+		`phase=${current}/${total || '?'} | ${doc.filePath}`
+	);
+}
+
 /**
- * When no plan is active for this session but an executing plan exists on
- * disk (any session), prompt the model to ask the user about resuming it.
+ * When this session has no active plan but unfinished plans exist on disk
+ * (any session), prompt the model to ask the user about resuming.
  */
 export async function buildResumePlanNotice(
 	cwd: string,
 	sessionId: string | null | undefined,
 ): Promise<string | null> {
-	// Scans plans from ALL sessions; sessionId reserved for future filtering.
-	void sessionId;
 	try {
-		const docs = await findSessionPlanFiles(cwd, null);
-		const executing = docs
-			.filter(d => d.frontmatter.status === 'executing')
-			.sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
-		if (!executing) {
+		// If this session already owns an executing/approved plan, no resume banner.
+		const mine = await findActivePlan(cwd, sessionId);
+		if (
+			mine &&
+			(mine.frontmatter.status === 'executing' ||
+				mine.frontmatter.status === 'approved')
+		) {
 			return null;
 		}
-		const total = executing.phases.length;
-		const current = Math.max(1, executing.frontmatter.current_phase);
-		return [
+
+		const unfinished = await listUnfinishedPlans(cwd, {
+			sessionId,
+			includeDraftsWithProgress: true,
+		});
+		if (unfinished.length === 0) {
+			return null;
+		}
+
+		const lock = await readPlanOwnerLock(cwd);
+		let lockLine = '';
+		if (lock) {
+			const {stale, pidAlive} = isLockStale(lock);
+			lockLine =
+				`Owner lock: session=${lock.sessionId || '(none)'} pid=${lock.pid} ` +
+				`(alive=${String(pidAlive)}, stale=${String(stale)}) plan=${lock.planPath}`;
+		}
+
+		const lines = [
 			'## Unfinished Plan Detected',
 			'',
-			`An in-progress plan exists: ${executing.filePath} (Phase ${current}/${total}).`,
+			`Found ${unfinished.length} unfinished plan(s) under .snow/plan/.`,
 			'',
-			'Before starting new work, use `askuser-ask_question` with options ' +
-				'["Continue this plan", "Start over"] (or 继续该计划 / 开始新计划). ' +
-				'Choosing **Continue this plan** machine-adopts the unfinished plan into this session ' +
-				'(rebinds session id, status=executing, restores the plan gate and scope). ' +
-				'You may also call `plan-manage {action:"adopt"}` explicitly. ' +
+			...unfinished.map((doc, i) => summarizeUnfinished(doc, i + 1)),
+		];
+		if (lockLine) {
+			lines.push('', lockLine);
+		}
+		lines.push(
+			'',
+			'Before starting new work, use `askuser-ask_question` with options like:',
+			'- "Continue this plan" / "继续该计划" (when only one unfinished plan)',
+			'- "Continue: <absolute-or-relative-plan-path>" when multiple plans exist',
+			'- "Start over" / "开始新计划" (do NOT adopt; optionally abandon old plans first)',
+			'- "Abandon old" then archive via plan-manage',
+			'',
+			'Choosing **Continue** should call `plan-manage {action:"adopt", plan_path:"..."}` ' +
+				'(required when multiple candidates). That rebinds session id, sets status=executing, ' +
+				'restores the plan gate/scope, and acquires the repo owner lock. ' +
 				'Resume from the first unchecked step of the current phase.',
 			'',
-		].join('\n');
+			'Do **not** silently adopt the newest plan without user confirmation.',
+			'',
+		);
+		return lines.join('\n');
 	} catch {
 		return null;
 	}
