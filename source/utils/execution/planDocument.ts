@@ -9,6 +9,13 @@ import fs from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
+import {
+	getCachedPlanDoc,
+	invalidateActivePlanPathsCacheForPlanPath,
+	invalidatePlanCache,
+	setCachedPlanDoc,
+} from './planCache.js';
+import {planEvents} from './planEvents.js';
 import {listActivePlanMarkdownPaths} from './planPaths.js';
 
 export type PlanStatus =
@@ -303,11 +310,16 @@ export function parsePhasesFromMarkdown(content: string): {
 
 export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
 	const absPath = path.resolve(filePath);
+	const cached = await getCachedPlanDoc(absPath);
+	if (cached) {
+		return cached;
+	}
+
 	const [rawBuffer, stat] = await Promise.all([
 		fs.readFile(absPath, 'utf8'),
 		fs.stat(absPath),
 	]);
-	const raw = rawBuffer.replace(/^﻿/, '');
+	const raw = rawBuffer.replace(/^\uFEFF/, '');
 	const parsed = matter(raw);
 	const legacy = !parsed.data || Object.keys(parsed.data).length === 0;
 	const frontmatter = normalizeFrontmatter(parsed.data);
@@ -318,7 +330,7 @@ export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
 	const {title, affectedFiles, phases} = parsePhasesFromMarkdown(
 		parsed.content,
 	);
-	return {
+	const doc: PlanDoc = {
 		filePath: absPath,
 		frontmatter,
 		title,
@@ -329,6 +341,8 @@ export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
 		eol,
 		mtimeMs: stat.mtimeMs,
 	};
+	setCachedPlanDoc(doc, stat.size);
+	return doc;
 }
 
 export type WritePlanFrontmatterOptions = {
@@ -411,6 +425,9 @@ export async function mutatePlanDocument(
 
 	const output = matter.stringify(change.content ?? parsed.content, merged);
 	await fs.writeFile(absPath, output, 'utf8');
+	invalidatePlanCache(absPath);
+	invalidateActivePlanPathsCacheForPlanPath(absPath);
+	planEvents.emitPlanEvent({type: 'plan-changed', planPath: absPath});
 }
 
 export async function writePlanFrontmatter(

@@ -20,6 +20,17 @@ test('runAcceptance skips build when no package.json and no commands', async t =
 	t.true(result.output.includes('diagnostics: skipped'));
 });
 
+test('runAcceptance soft-skips non-Node markers with commands hint', async t => {
+	const dir = await makeDir();
+	await fs.writeFile(path.join(dir, 'Cargo.toml'), '[package]\n');
+	const result = await runAcceptance(dir, undefined, {
+		runDiagnostics: false,
+	});
+	t.true(result.ok);
+	t.true(result.output.includes('Cargo.toml present'));
+	t.true(result.output.includes('planAcceptance.commands'));
+});
+
 test('runAcceptance can disable build entirely', async t => {
 	const dir = await makeDir();
 	const result = await runAcceptance(dir, undefined, {
@@ -42,4 +53,14 @@ test('runAcceptance runs configured commands and reports result', async t => {
 	if (result.ok) {
 		t.true(result.output.includes('build: passed'));
 	}
+});
+
+test('runAcceptance uses fallbackCommands when no build script', async t => {
+	const dir = await makeDir();
+	const result = await runAcceptance(dir, undefined, {
+		runDiagnostics: false,
+		fallbackCommands: ['node -e "process.exit(0)"'],
+	});
+	t.true(result.ok);
+	t.true(result.output.includes('build: passed'));
 });

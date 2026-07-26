@@ -7,9 +7,12 @@ import {
 	buildScopeWarningMessage,
 	classifyPlanGateDecision,
 	collectFilesystemPaths,
+	describeEmptyFilesystemPaths,
 	evaluatePlanGate,
+	extractShellWritePaths,
 	getPlanApproved,
 	isAllowedUnapprovedWritePath,
+	isLikelyPureBuildOrTestCommand,
 	isPlanApprovalAnswer,
 	isPlanDirPath,
 	isTrellisTasksDirPath,
@@ -28,6 +31,10 @@ import {
 	getPlanOwnerLockPath,
 	readPlanOwnerLock,
 } from '../utils/execution/planOwnerLock.js';
+import {
+	getPlanStrictness,
+	setPlanStrictness,
+} from '../utils/config/projectSettings.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -109,6 +116,61 @@ test('collectFilesystemPaths supports string and batch forms', t => {
 		}),
 		['p1.md', 'p2.md'],
 	);
+	t.deepEqual(collectFilesystemPaths({filePath: []}), []);
+	t.deepEqual(collectFilesystemPaths({filePath: '   '}), []);
+	t.deepEqual(collectFilesystemPaths({}), []);
+});
+
+test('describeEmptyFilesystemPaths reports missing/empty array explicitly', t => {
+	t.is(describeEmptyFilesystemPaths({}), 'filePath is missing');
+	t.is(
+		describeEmptyFilesystemPaths({filePath: []}),
+		'filePath is empty array []',
+	);
+	t.is(
+		describeEmptyFilesystemPaths({filePath: '  '}),
+		'filePath is empty string',
+	);
+});
+
+test('unapproved empty filePath gets explicit gate diagnostic', async t => {
+	const cwd = process.cwd();
+	const sessionId = 's-empty-path';
+	const blocked = await evaluatePlanGate({
+		planMode: true,
+		sessionId,
+		toolName: 'filesystem-create',
+		args: {filePath: [], content: 'x'},
+		cwd,
+	});
+	t.false(blocked.allow);
+	t.truthy(blocked.message?.includes('filePath is empty array []'));
+	t.truthy(blocked.message?.includes('Never pass filePath: []'));
+
+	const missing = await evaluatePlanGate({
+		planMode: true,
+		sessionId,
+		toolName: 'filesystem-create',
+		args: {content: 'x'},
+		cwd,
+	});
+	t.false(missing.allow);
+	t.truthy(missing.message?.includes('filePath is missing'));
+});
+
+test('extractShellWritePaths finds redirects and write commands', t => {
+	t.true(
+		extractShellWritePaths('echo hi > src/out.txt').includes('src/out.txt'),
+	);
+	t.true(extractShellWritePaths('rm src/a.ts').includes('src/a.ts'));
+	t.true(
+		extractShellWritePaths('cp src/a.ts src/b.ts').some(p =>
+			p.includes('src/b.ts'),
+		),
+	);
+	t.deepEqual(extractShellWritePaths('npm run build'), []);
+	t.true(isLikelyPureBuildOrTestCommand('npm run build'));
+	t.true(isLikelyPureBuildOrTestCommand('npx ava source/test/x.test.ts'));
 });
 
 test('classify allows planning tools and plan writes', t => {
@@ -568,4 +630,88 @@ test('approved gate resets after owner lock changes', async t => {
 	t.false(result.allow);
 	t.true(result.message?.includes('Plan owner changed'));
 	t.false(getPlanApproved('session-a'));
+});
+
+test('strict terminal write outside scope is blocked; build command allowed', async t => {
+	const sessionId = 's-shell-scope';
+	const previous = getPlanStrictness();
+	setPlanStrictness('strict');
+	try {
+		const cwd = await makePlanDir(
+			VALID_PLAN.replace('session: s-approve', `session: ${sessionId}`),
+		);
+		const approved = await maybeApprovePlanFromAskUser({
+			planMode: true,
+			sessionId,
+			cwd,
+			question: 'Plan ready. Proceed?',
+			selected: 'Yes - Execute the entire plan',
+		});
+		t.true(approved.approved);
+
+		const blocked = await evaluatePlanGate({
+			planMode: true,
+			sessionId,
+			toolName: 'terminal-execute',
+			args: {command: 'echo leak > src/other.ts'},
+			cwd,
+		});
+		t.false(blocked.allow);
+		t.truthy(blocked.message?.includes('strict scope'));
+		t.truthy(blocked.message?.includes('src/other.ts'));
+
+		const allowedBuild = await evaluatePlanGate({
+			planMode: true,
+			sessionId,
+			toolName: 'terminal-execute',
+			args: {command: 'npm run build'},
+			cwd,
+		});
+		t.true(allowedBuild.allow);
+		t.falsy(allowedBuild.warning);
+
+		const allowedInScope = await evaluatePlanGate({
+			planMode: true,
+			sessionId,
+			toolName: 'terminal-execute',
+			args: {command: 'echo ok > src/exists.ts'},
+			cwd,
+		});
+		t.true(allowedInScope.allow);
+		t.falsy(allowedInScope.warning);
+	} finally {
+		setPlanStrictness(previous);
+	}
+});
+
+test('soft terminal write outside scope warns but allows', async t => {
+	const sessionId = 's-shell-soft';
+	const previous = getPlanStrictness();
+	setPlanStrictness('soft');
+	try {
+		const cwd = await makePlanDir(
+			VALID_PLAN.replace('session: s-approve', `session: ${sessionId}`),
+		);
+		const approved = await maybeApprovePlanFromAskUser({
+			planMode: true,
+			sessionId,
+			cwd,
+			question: 'Plan ready. Proceed?',
+			selected: 'Yes - Execute the entire plan',
+		});
+		t.true(approved.approved);
+
+		const warned = await evaluatePlanGate({
+			planMode: true,
+			sessionId,
+			toolName: 'terminal-execute',
+			args: {command: 'rm src/other.ts'},
+			cwd,
+		});
+		t.true(warned.allow);
+		t.truthy(warned.warning?.includes('Plan Scope Warning'));
+		t.truthy(warned.warning?.includes('src/other.ts'));
+	} finally {
+		setPlanStrictness(previous);
+	}
 });

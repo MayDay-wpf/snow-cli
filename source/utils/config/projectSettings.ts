@@ -5,10 +5,16 @@ import {
 	type UnifiedSettings,
 } from './unifiedSettings.js';
 
+export type PlanAcceptancePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+
 export interface PlanAcceptanceSettings {
 	commands?: string[];
 	runBuild?: boolean;
 	runDiagnostics?: boolean;
+	/** Preferred package manager when no lockfile is present. */
+	preferPackageManager?: PlanAcceptancePackageManager;
+	/** Fallback commands when no build script / explicit commands are set. */
+	fallbackCommands?: string[];
 }
 
 export interface ProjectSettings {
@@ -172,12 +178,39 @@ export function setPlanStrictness(value: PlanStrictness): void {
 	setField('planStrictness', value);
 }
 
+const PLAN_ACCEPTANCE_PACKAGE_MANAGERS: PlanAcceptancePackageManager[] = [
+	'npm',
+	'pnpm',
+	'yarn',
+	'bun',
+];
+
+function normalizePreferPackageManager(
+	value: unknown,
+): PlanAcceptancePackageManager | undefined {
+	if (
+		typeof value === 'string' &&
+		(PLAN_ACCEPTANCE_PACKAGE_MANAGERS as string[]).includes(value)
+	) {
+		return value as PlanAcceptancePackageManager;
+	}
+	return undefined;
+}
+
 export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
 	const settings = loadSettings();
 	const value = settings.planAcceptance;
 	if (!value || typeof value !== 'object') {
 		return {runBuild: true, runDiagnostics: true};
 	}
+	const preferPackageManager = normalizePreferPackageManager(
+		value.preferPackageManager,
+	);
+	const fallbackCommands = Array.isArray(value.fallbackCommands)
+		? value.fallbackCommands.filter(
+				(c): c is string => typeof c === 'string' && c.trim().length > 0,
+		  )
+		: undefined;
 	return {
 		commands: Array.isArray(value.commands)
 			? value.commands.filter(
@@ -186,6 +219,11 @@ export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
 			: undefined,
 		runBuild: value.runBuild !== false,
 		runDiagnostics: value.runDiagnostics !== false,
+		preferPackageManager,
+		fallbackCommands:
+			fallbackCommands && fallbackCommands.length > 0
+				? fallbackCommands
+				: undefined,
 	};
 }
 

@@ -41,6 +41,8 @@ export interface UnifiedSettings {
 		commands?: string[];
 		runBuild?: boolean;
 		runDiagnostics?: boolean;
+		preferPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+		fallbackCommands?: string[];
 	};
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;

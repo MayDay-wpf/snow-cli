@@ -28,6 +28,13 @@ export function formatPlanContext(doc: PlanDoc): string {
 
 	if (phase) {
 		lines.push(`Phase ${phase.index}/${total}: ${phase.title}`, '');
+		if (phase.files.length > 0) {
+			lines.push('**Files** (current phase write allowlist):');
+			for (const file of phase.files) {
+				lines.push(`- ${file}`);
+			}
+			lines.push('');
+		}
 		if (phase.steps.length > 0) {
 			lines.push('**Steps**:');
 			for (const step of phase.steps) {
@@ -130,7 +137,9 @@ export async function buildResumePlanNotice(
 			const {stale, pidAlive} = isLockStale(lock);
 			lockLine =
 				`Owner lock: session=${lock.sessionId || '(none)'} pid=${lock.pid} ` +
-				`(alive=${String(pidAlive)}, stale=${String(stale)}) plan=${lock.planPath}`;
+				`(alive=${String(pidAlive)}, stale=${String(stale)}) plan=${
+					lock.planPath
+				}`;
 		}
 
 		const lines = [

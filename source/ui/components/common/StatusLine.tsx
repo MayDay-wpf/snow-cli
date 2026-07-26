@@ -13,6 +13,7 @@ import {
 } from '../../../utils/config/configManager.js';
 import {readSettings} from '../../../utils/config/unifiedSettings.js';
 import {configEvents} from '../../../utils/config/configEvents.js';
+import {planEvents} from '../../../utils/execution/planEvents.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
 import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
 import {
@@ -385,7 +386,8 @@ export default function StatusLine({
 		string | null
 	>(null);
 
-	// Poll active plan progress while plan mode is on (StatusLine chrome).
+	// Refresh active plan progress while plan mode is on (StatusLine chrome).
+	// Prefer planEvents for immediate updates; keep a slow interval as fallback.
 	React.useEffect(() => {
 		if (!planMode) {
 			setPlanProgressLabel(null);
@@ -403,12 +405,17 @@ export default function StatusLine({
 			}
 		};
 		void refresh();
+		const handlePlanEvent = () => {
+			void refresh();
+		};
+		planEvents.onPlanEvent(handlePlanEvent);
 		const id = setInterval(() => {
 			void refresh();
-		}, 3000);
+		}, 15000);
 		return () => {
 			cancelled = true;
 			clearInterval(id);
+			planEvents.removePlanEventListener(handlePlanEvent);
 		};
 	}, [planMode]);
 	React.useEffect(() => {

@@ -5,6 +5,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
+	invalidateActivePlanPathsCache,
+	invalidatePlanCache,
+} from './planCache.js';
+import {planEvents} from './planEvents.js';
+import {
 	getPlanWriteOptions,
 	mutatePlanDocument,
 	parsePlanDocument,
@@ -60,6 +65,18 @@ export async function archivePlan(
 	}
 
 	await moveFile(doc.filePath, target);
+
+	const sourcePath = path.resolve(doc.filePath);
+	const targetPath = path.resolve(target);
+	invalidatePlanCache(sourcePath);
+	invalidatePlanCache(targetPath);
+	invalidateActivePlanPathsCache(cwd);
+	planEvents.emitPlanEvent({
+		type: 'plan-archived',
+		planPath: targetPath,
+		reason: finalStatus,
+	});
+
 	return target;
 }
 

@@ -53,6 +53,8 @@ test('formatPlanContext renders phase progress and instructions', async t => {
 	const text = formatPlanContext(doc);
 	t.true(text.includes('## Active Plan'));
 	t.true(text.includes('Phase 1/2: First'));
+	t.true(text.includes('**Files** (current phase write allowlist)'));
+	t.true(text.includes('- src/a.ts'));
 	t.true(text.includes('[x] done step'));
 	t.true(text.includes('[ ] pending step'));
 	t.true(text.includes('**Next step**: pending step'));

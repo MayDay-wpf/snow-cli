@@ -1108,7 +1108,66 @@ export function endToolSpan(
 	toolDuration.record(Date.now() - startTime, attributes);
 	context.with(trace.setSpan(context.active(), span), () => span.end());
 }
-
 export function isTelemetryActive(): boolean {
 	return telemetryStarted || getEffectiveTelemetryConfig().enabled === true;
+}
+
+export type TelemetryPlanEvent =
+	| 'approve'
+	| 'complete_phase'
+	| 'complete'
+	| 'abandon'
+	| 'gate_block'
+	| 'scope_warning'
+	| 'resume';
+
+export type TelemetryPlanAttributes = {
+	event: TelemetryPlanEvent;
+	sessionId?: string;
+	planPath?: string;
+	status?: string;
+	phase?: number;
+	strictness?: string;
+	toolName?: string;
+	reason?: string;
+};
+
+/**
+ * Best-effort plan lifecycle telemetry. No-ops when telemetry is disabled.
+ */
+export function recordPlanEvent(attributes: TelemetryPlanAttributes): void {
+	try {
+		if (!initializeTelemetry(attributes.sessionId)) {
+			return;
+		}
+
+		const spanAttributes: Attributes = {
+			'snow.mode.plan': true,
+			'snow.plan.event': attributes.event,
+			...(attributes.sessionId
+				? {'snow.session.id': attributes.sessionId}
+				: {}),
+			...(attributes.planPath ? {'snow.plan.path': attributes.planPath} : {}),
+			...(attributes.status ? {'snow.plan.status': attributes.status} : {}),
+			...(attributes.phase !== undefined
+				? {'snow.plan.phase': attributes.phase}
+				: {}),
+			...(attributes.strictness
+				? {'snow.plan.strictness': attributes.strictness}
+				: {}),
+			...(attributes.toolName ? {'snow.tool.name': attributes.toolName} : {}),
+			...(attributes.reason ? {'snow.plan.reason': attributes.reason} : {}),
+		};
+
+		const tracer = trace.getTracer(TRACER_NAME);
+		const span = tracer.startSpan(`snow.plan.${attributes.event}`, {
+			kind: SpanKind.INTERNAL,
+			attributes: spanAttributes,
+		});
+		span.addEvent(`snow.plan.${attributes.event}`, spanAttributes);
+		span.setStatus({code: SpanStatusCode.OK});
+		span.end();
+	} catch {
+		// Telemetry must never break plan execution.
+	}
 }

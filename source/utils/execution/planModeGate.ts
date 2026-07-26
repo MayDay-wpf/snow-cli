@@ -10,6 +10,7 @@
 
 import path from 'node:path';
 import {getPlanStrictness} from '../config/projectSettings.js';
+import {recordPlanEvent} from '../telemetry/otel.js';
 import {
 	findActivePlan,
 	findForeignExecutingPlans,
@@ -323,6 +324,182 @@ export function collectFilesystemPaths(args: any): string[] {
 	return [];
 }
 
+/**
+ * Describe why filesystem write args produced no usable paths.
+ * Used for plan-gate diagnostics when the model sends missing/empty filePath.
+ */
+export function describeEmptyFilesystemPaths(args: any): string {
+	if (!args || typeof args !== 'object') {
+		return 'tool args missing or not an object';
+	}
+
+	const filePath = args.filePath ?? args.path;
+	if (filePath === undefined || filePath === null) {
+		return 'filePath is missing';
+	}
+	if (typeof filePath === 'string') {
+		return filePath.trim()
+			? 'filePath present but not collectable'
+			: 'filePath is empty string';
+	}
+	if (Array.isArray(filePath)) {
+		return filePath.length === 0
+			? 'filePath is empty array []'
+			: 'filePath array has no usable path entries';
+	}
+	return `filePath has unsupported type (${typeof filePath})`;
+}
+
+export function buildEmptyFilePathGateMessage(
+	toolName: string,
+	args: any,
+): string {
+	const detail = describeEmptyFilesystemPaths(args);
+	return (
+		`Error: Plan Mode gate is active (plan not approved yet). ` +
+		`Blocked tool: ${toolName}. ` +
+		`Cannot verify write target because ${detail}. ` +
+		`Pass a non-empty string filePath (or a non-empty batch array of {path, ...}). ` +
+		`Never pass filePath: [] or "". ` +
+		`While unapproved you may only write under .snow/plan/** or .trellis/tasks/**.`
+	);
+}
+
+/**
+ * Conservative shell write-target extraction for post-approval scope checks.
+ * Returns [] when no clear write path is found (caller should allow).
+ */
+export function extractShellWritePaths(command: unknown): string[] {
+	if (typeof command !== 'string' || !command.trim()) {
+		return [];
+	}
+
+	const cmd = command.trim();
+	// Pure build/test/read-ish commands with no clear write target → no paths.
+	if (
+		isLikelyPureBuildOrTestCommand(cmd) &&
+		!hasExplicitShellWriteSignal(cmd)
+	) {
+		return [];
+	}
+
+	const paths = new Set<string>();
+
+	// Redirects: > file, >> file, 2> file, 1>>file (not comparison operators alone).
+	const redirectRe =
+		/(?:^|[\s;|&])(?:\d*)>{1,2}\s*(?:&?\d+)?\s*(['"]?)([^'"|&;>\n\r]+)\1/g;
+	let match: RegExpExecArray | null;
+	while ((match = redirectRe.exec(cmd)) !== null) {
+		const candidate = (match[2] || '').trim();
+		if (candidate && !/^&\d+$/.test(candidate)) {
+			paths.add(stripShellPathNoise(candidate));
+		}
+	}
+
+	// Destructive / write-ish commands with path args.
+	const writeCommandPatterns: Array<{re: RegExp; pathGroup: number}> = [
+		// rm / del / Remove-Item
+		{
+			re: /(?:^|[\s;|&])(?:rm|del|erase|Remove-Item|ri)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
+			pathGroup: 2,
+		},
+		// mv / move / Move-Item
+		{
+			re: /(?:^|[\s;|&])(?:mv|move|Move-Item|mi)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
+			pathGroup: 4, // destination
+		},
+		// cp / copy / Copy-Item
+		{
+			re: /(?:^|[\s;|&])(?:cp|copy|Copy-Item|cpi)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
+			pathGroup: 4, // destination
+		},
+		// sed -i file
+		{
+			re: /(?:^|[\s;|&])sed\b(?:\s+-[A-Za-z0-9]+)*\s+-i(?:\s*[^\s]+)?\s+(?:'[^']*'|"[^"]*"|[^\s]+)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			pathGroup: 2,
+		},
+		// Set-Content / Out-File / Add-Content path
+		{
+			re: /(?:^|[\s;|&])(?:Set-Content|Out-File|Add-Content|sc|ac)\b(?:\s+-[A-Za-z]+\s+[^\s]+)*\s+(?:-Path\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
+			pathGroup: 2,
+		},
+		// New-Item -ItemType File -Path / -Name writing
+		{
+			re: /(?:^|[\s;|&])New-Item\b(?:(?!\|).)*?(?:-Path|-Name)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			pathGroup: 2,
+		},
+		// tee file
+		{
+			re: /(?:^|[\s;|&])tee\b(?:\s+-[A-Za-z]\w*)*\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			pathGroup: 2,
+		},
+	];
+
+	for (const {re, pathGroup} of writeCommandPatterns) {
+		re.lastIndex = 0;
+		while ((match = re.exec(cmd)) !== null) {
+			const candidate = (match[pathGroup] || '').trim();
+			if (candidate) {
+				// Some patterns capture multi-arg tails; take first token if needed.
+				const first = candidate.split(/\s+/)[0] || candidate;
+				if (looksLikePathToken(first)) {
+					paths.add(stripShellPathNoise(first));
+				}
+			}
+		}
+	}
+
+	return [...paths].filter(Boolean);
+}
+
+function stripShellPathNoise(value: string): string {
+	return value.replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+function looksLikePathToken(value: string): boolean {
+	if (!value || value.startsWith('-')) {
+		return false;
+	}
+	// Avoid treating pure flags / numbers / pure shell tokens as paths.
+	if (/^(&?\d+|true|false|null)$/i.test(value)) {
+		return false;
+	}
+	return true;
+}
+
+function hasExplicitShellWriteSignal(command: string): boolean {
+	return (
+		/(?:^|[\s;|&])(?:\d*)>{1,2}\s*\S+/.test(command) ||
+		/\b(?:rm|del|erase|mv|move|cp|copy|tee|sed)\b/i.test(command) ||
+		/\b(?:Remove-Item|Move-Item|Copy-Item|Set-Content|Out-File|Add-Content|New-Item)\b/i.test(
+			command,
+		)
+	);
+}
+
+/**
+ * Whitelist common pure build/test/read commands so they are not blocked when
+ * no write path can be extracted.
+ */
+export function isLikelyPureBuildOrTestCommand(command: string): boolean {
+	const cmd = command.trim();
+	if (!cmd) {
+		return false;
+	}
+	// Reject early if explicit write signals dominate (redirects etc. checked by caller).
+	const purePatterns = [
+		/^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:build|test|lint|typecheck|check|ci|compile|tsc|ava|jest|vitest|mocha)\b/i,
+		/^(?:npx|pnpm\s+dlx|yarn\s+dlx)\s+(?:tsc|ava|jest|vitest|mocha|eslint|prettier)\b/i,
+		/^(?:node|tsx|ts-node)\s+[^\n|>]+/i,
+		/^(?:dotnet|go|cargo|make|cmake|gradle|mvn)\s+(?:build|test|check|run|compile)\b/i,
+		/^(?:python|python3|py)\s+-m\s+(?:pytest|unittest)\b/i,
+		/^(?:pytest|unittest)\b/i,
+		/^(?:git)\s+(?:status|diff|log|show|branch|rev-parse)\b/i,
+		/^(?:ls|dir|cat|type|Get-Content|Get-ChildItem|echo|Write-Output|pwd|cd)\b/i,
+	];
+	return purePatterns.some(re => re.test(cmd));
+}
+
 const ALWAYS_ALLOW_EXACT = new Set([
 	'askuser-ask_question',
 	'filesystem-read',
@@ -369,7 +546,8 @@ export function buildPlanGateBlockMessage(toolName: string): string {
 		`Blocked tool: ${toolName}. ` +
 		`You may only read/search and write files under .snow/plan/** or .trellis/tasks/**. ` +
 		`Create or update the plan, then call askuser-ask_question and get explicit approval ` +
-		`(e.g. "Yes - Execute the entire plan") before modifying code or running commands.`
+		`(e.g. "Yes - Execute the entire plan") before modifying code or running commands. ` +
+		`While unapproved, terminal-execute is hard-blocked — do not attempt IDE CLI open or shell commands.`
 	);
 }
 
@@ -597,10 +775,8 @@ export async function evaluatePlanGate(input: {
 				return {allow: false, message: `Error: ${owner.message}`};
 			}
 		}
-		// Approved: enforce plan scope on filesystem writes per strictness.
-		if (!FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
-			return {allow: true};
-		}
+
+		// Approved: enforce plan scope on filesystem writes and obvious shell writes.
 		let strictness: 'strict' | 'soft' | 'off' = 'soft';
 		try {
 			strictness = getPlanStrictness();
@@ -610,7 +786,27 @@ export async function evaluatePlanGate(input: {
 		if (strictness === 'off') {
 			return {allow: true};
 		}
-		const paths = collectFilesystemPaths(input.args);
+
+		let paths: string[] = [];
+		if (FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
+			paths = collectFilesystemPaths(input.args);
+		} else if (isTerminalLikeTool(input.toolName)) {
+			// Conservative: only check when we can extract clear write targets.
+			// Pure build/test commands with no extracted paths are allowed.
+			const command =
+				typeof input.args?.command === 'string'
+					? input.args.command
+					: typeof input.args?.cmd === 'string'
+					? input.args.cmd
+					: '';
+			paths = extractShellWritePaths(command);
+			if (paths.length === 0) {
+				return {allow: true};
+			}
+		} else {
+			return {allow: true};
+		}
+
 		const offending = paths.filter(
 			p => !isWithinPlanScope(p, input.cwd, input.sessionId),
 		);
@@ -618,6 +814,13 @@ export async function evaluatePlanGate(input: {
 			return {allow: true};
 		}
 		if (strictness === 'strict') {
+			recordPlanEvent({
+				event: 'gate_block',
+				sessionId: input.sessionId || undefined,
+				toolName: input.toolName,
+				strictness,
+				reason: 'strict-scope',
+			});
 			return {
 				allow: false,
 				message:
@@ -628,6 +831,12 @@ export async function evaluatePlanGate(input: {
 					`Call plan-manage with action "amend" to add them to the plan, then retry.`,
 			};
 		}
+		recordPlanEvent({
+			event: 'scope_warning',
+			sessionId: input.sessionId || undefined,
+			toolName: input.toolName,
+			strictness,
+		});
 		return {
 			allow: true,
 			warning: buildScopeWarningMessage(input.toolName, offending),
@@ -649,6 +858,30 @@ export async function evaluatePlanGate(input: {
 		return {allow: true};
 	}
 
+	// Filesystem writes with missing/empty paths get an explicit diagnostic
+	// so the model does not only see the generic unapproved-gate message.
+	if (FILESYSTEM_WRITE_TOOLS.has(input.toolName)) {
+		const paths = collectFilesystemPaths(input.args);
+		if (paths.length === 0) {
+			recordPlanEvent({
+				event: 'gate_block',
+				sessionId: input.sessionId || undefined,
+				toolName: input.toolName,
+				reason: 'empty-filepath',
+			});
+			return {
+				allow: false,
+				message: buildEmptyFilePathGateMessage(input.toolName, input.args),
+			};
+		}
+	}
+
+	recordPlanEvent({
+		event: 'gate_block',
+		sessionId: input.sessionId || undefined,
+		toolName: input.toolName,
+		reason: 'unapproved',
+	});
 	return {
 		allow: false,
 		message: buildPlanGateBlockMessage(input.toolName),
@@ -797,6 +1030,14 @@ export async function maybeApprovePlanFromAskUser(input: {
 				},
 			}),
 			cwd,
+		});
+		recordPlanEvent({
+			event: 'approve',
+			sessionId: input.sessionId || undefined,
+			planPath: validation.plan.filePath,
+			status: 'executing',
+			phase: Math.max(1, validation.plan.frontmatter.current_phase),
+			reason: 'askuser',
 		});
 		return {approved: true};
 	}

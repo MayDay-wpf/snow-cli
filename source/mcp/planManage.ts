@@ -14,6 +14,7 @@ import {
 	parsePhasesFromMarkdown,
 	parsePlanDocument,
 	setStepChecked,
+	validatePlanDocument,
 	writePlanFrontmatter,
 	type PlanComplexity,
 	type PlanDoc,
@@ -38,12 +39,16 @@ import {
 import type {PlanStatus} from '../utils/execution/planDocument.js';
 import {runAcceptance} from '../utils/execution/planAcceptance.js';
 import {
+	buildPlanBodyMarkdown,
 	buildPlanMarkdown,
+	parsePlanPhasesArg,
 	slugifyPlanTitle,
+	stripPlanFrontmatter,
 } from '../utils/execution/planTemplate.js';
 import {getPlanDateDir} from '../utils/execution/planPaths.js';
 import {getPlanAcceptanceSettings} from '../utils/config/projectSettings.js';
 import {sessionManager} from '../utils/session/sessionManager.js';
+import {recordPlanEvent} from '../utils/telemetry/otel.js';
 
 const PLAN_ACTIONS = [
 	'check_step',
@@ -57,6 +62,7 @@ const PLAN_ACTIONS = [
 	'abandon',
 	'adopt',
 	'create',
+	'write_body',
 	'archive_batch',
 ] as const;
 
@@ -71,7 +77,8 @@ export const planManageTools: Tool[] = [
 		name: 'plan-manage',
 		description: `Manage plans under .snow/plan/ during Plan Mode (active plans may live in date subdirs YYYY-MM-DD/). Required field "action":
 
-- create: Create a new draft plan from a template. Required "title". Optional "slug", "complexity" (simple|medium|complex), "context", "session".
+- create: Create a new draft plan under .snow/plan/YYYY-MM-DD/. Required "title". Optional "slug", "complexity" (simple|medium|complex), "context", "session", structured "phases" [{title, files?, steps?, doneWhen?}], "analysis", "risks", "rollback". Prefer this over filesystem-create for plan docs.
+- write_body: Replace the plan body of the active draft/approved plan (or plan_path). Pass "body_markdown" and/or structured "phases" (+ optional title/context/analysis/risks/rollback). Does NOT change status/session/current_phase. Use this instead of filesystem-create/edit for plan content.
 - get: Summarize the active plan for this session (path, status, phase, step progress, next step, files).
 - status: Compact progress line for the active plan.
 - list: List all active plans (all sessions) under .snow/plan date dirs + legacy top-level.
@@ -161,17 +168,53 @@ The plan file is the source of truth — keep it in sync with reality via these 
 				},
 				context: {
 					type: 'string',
-					description: 'For action=create: optional context body text.',
+					description:
+						'For action=create/write_body: optional context body text.',
 				},
 				session: {
 					type: 'string',
 					description:
 						'For action=create: optional session id (defaults to current).',
 				},
+				phases: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							title: {type: 'string'},
+							files: {type: 'array', items: {type: 'string'}},
+							steps: {type: 'array', items: {type: 'string'}},
+							doneWhen: {type: 'string'},
+						},
+						required: ['title'],
+					},
+					description:
+						'For action=create/write_body: structured phases [{title, files?, steps?, doneWhen?}]. Prefer this over freeform filesystem writes.',
+				},
+				analysis: {
+					type: 'string',
+					description:
+						'For action=create/write_body: optional Analysis section markdown body.',
+				},
+				risks: {
+					type: 'string',
+					description:
+						'For action=create/write_body: optional Risks & Mitigations body.',
+				},
+				rollback: {
+					type: 'string',
+					description:
+						'For action=create/write_body: optional Rollback Strategy body.',
+				},
+				body_markdown: {
+					type: 'string',
+					description:
+						'For action=write_body: full plan body markdown (with or without frontmatter). Frontmatter status/session/current_phase are ignored and preserved from disk.',
+				},
 				plan_path: {
 					type: 'string',
 					description:
-						'For action=adopt: optional absolute/relative plan path.',
+						'For action=adopt/write_body: optional absolute/relative plan path.',
 				},
 				force: {
 					type: 'boolean',
@@ -386,6 +429,13 @@ async function handleCompletePhase(
 		cwd,
 	});
 	const next = updated.phases.find(p => p.index === nextIndex);
+	recordPlanEvent({
+		event: 'complete_phase',
+		sessionId: getSessionId() || undefined,
+		planPath: updated.filePath,
+		status: updated.frontmatter.status,
+		phase: nextIndex,
+	});
 	return textResult(
 		`Phase ${phase.index} accepted (${
 			acceptance.output
@@ -544,6 +594,12 @@ async function handleComplete(
 		sessionId: sessionId || '',
 	});
 	resetPlanGate(sessionId);
+	recordPlanEvent({
+		event: 'complete',
+		sessionId: sessionId || undefined,
+		planPath: doc.filePath,
+		status: 'completed',
+	});
 	return textResult(
 		`Plan completed (${acceptance.output}) and archived to ${archivedTo}.` +
 			(released
@@ -585,6 +641,13 @@ async function handleAbandon(
 		sessionId: sessionId || '',
 	});
 	resetPlanGate(sessionId);
+	recordPlanEvent({
+		event: 'abandon',
+		sessionId: sessionId || undefined,
+		planPath: doc.filePath,
+		status: 'abandoned',
+		reason,
+	});
 	return textResult(
 		`Plan abandoned and archived to ${archivedTo}.` +
 			(released
@@ -765,11 +828,21 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		}
 	}
 
+	const phases = parsePlanPhasesArg(args?.phases);
+	const analysis =
+		typeof args?.analysis === 'string' ? args.analysis : undefined;
+	const risks = typeof args?.risks === 'string' ? args.risks : undefined;
+	const rollback =
+		typeof args?.rollback === 'string' ? args.rollback : undefined;
 	const content = buildPlanMarkdown({
 		title,
 		session,
 		complexity,
 		context,
+		...(phases.length > 0 ? {phases} : {}),
+		analysis,
+		risks,
+		rollback,
 	});
 	await fs.writeFile(filePath, content, 'utf8');
 
@@ -785,6 +858,154 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		`Created draft plan at ${filePath} (complexity=${complexity}).\n` +
 			`Review the plan below (and/or open the file), then ask for approval via askuser-ask_question.\n\n` +
 			`${previewLines}${content.split(/\r?\n/).length > 40 ? '\n…' : ''}`,
+	);
+}
+
+async function handleWriteBody(
+	cwd: string,
+	args: any,
+): Promise<CallToolResult> {
+	const bodyMarkdown =
+		typeof args?.body_markdown === 'string' ? args.body_markdown : '';
+	const phases = parsePlanPhasesArg(args?.phases);
+	const hasStructured =
+		phases.length > 0 ||
+		typeof args?.context === 'string' ||
+		typeof args?.analysis === 'string' ||
+		typeof args?.risks === 'string' ||
+		typeof args?.rollback === 'string';
+
+	if (!bodyMarkdown.trim() && !hasStructured) {
+		return textResult(
+			'Error: action=write_body requires "body_markdown" and/or structured "phases" (optional context/analysis/risks/rollback).',
+			true,
+		);
+	}
+
+	let doc: PlanDoc | null = null;
+	if (typeof args?.plan_path === 'string' && args.plan_path.trim()) {
+		const planPath = path.isAbsolute(args.plan_path)
+			? args.plan_path
+			: path.resolve(cwd, args.plan_path);
+		try {
+			doc = await parsePlanDocument(planPath);
+		} catch (error) {
+			return textResult(
+				`Error: cannot parse plan at ${planPath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+				true,
+			);
+		}
+	} else {
+		const found = await requireActivePlan(cwd, {mutation: true});
+		if ('error' in found) {
+			return found.error;
+		}
+		doc = found.doc;
+	}
+
+	if (!doc) {
+		return textResult('Error: no plan found for write_body.', true);
+	}
+
+	const status = doc.frontmatter.status;
+	if (!['draft', 'approved'].includes(status)) {
+		return textResult(
+			`Error: write_body only allowed for draft/approved plans (got status=${status}). For executing plans use amend/check_step instead.`,
+			true,
+		);
+	}
+
+	const title =
+		(typeof args?.title === 'string' && args.title.trim()) ||
+		doc.frontmatter.title ||
+		doc.title ||
+		'Untitled plan';
+	const complexityRaw =
+		typeof args?.complexity === 'string'
+			? args.complexity
+			: doc.frontmatter.complexity || 'simple';
+	const complexity: PlanComplexity =
+		complexityRaw === 'medium' || complexityRaw === 'complex'
+			? complexityRaw
+			: 'simple';
+
+	let nextContent: string;
+	if (bodyMarkdown.trim()) {
+		nextContent = stripPlanFrontmatter(bodyMarkdown);
+		if (!nextContent.trim()) {
+			return textResult(
+				'Error: body_markdown is empty after stripping frontmatter.',
+				true,
+			);
+		}
+	} else {
+		nextContent = buildPlanBodyMarkdown({
+			title,
+			complexity,
+			context: typeof args?.context === 'string' ? args.context : undefined,
+			...(phases.length > 0 ? {phases} : {}),
+			analysis: typeof args?.analysis === 'string' ? args.analysis : undefined,
+			risks: typeof args?.risks === 'string' ? args.risks : undefined,
+			rollback: typeof args?.rollback === 'string' ? args.rollback : undefined,
+		});
+	}
+
+	// Preserve status machine fields; only allow safe frontmatter updates.
+	const frontmatterPatch: {
+		title?: string;
+		complexity?: PlanComplexity;
+	} = {};
+	if (typeof args?.title === 'string' && args.title.trim()) {
+		frontmatterPatch.title = args.title.trim();
+	}
+	if (
+		typeof args?.complexity === 'string' &&
+		(args.complexity === 'simple' ||
+			args.complexity === 'medium' ||
+			args.complexity === 'complex')
+	) {
+		frontmatterPatch.complexity = args.complexity;
+	}
+
+	await mutatePlanDocument(
+		doc.filePath,
+		() => ({
+			content: nextContent.endsWith('\n') ? nextContent : `${nextContent}\n`,
+			...(Object.keys(frontmatterPatch).length > 0
+				? {frontmatter: frontmatterPatch}
+				: {}),
+		}),
+		getPlanWriteOptions(doc),
+	);
+
+	const updated = await parsePlanDocument(doc.filePath);
+	if (updated.frontmatter.status !== status) {
+		// Defense-in-depth: never allow write_body to change lifecycle status.
+		await writePlanFrontmatter(
+			updated.filePath,
+			{status},
+			getPlanWriteOptions(updated),
+		);
+	}
+
+	const finalDoc = await parsePlanDocument(doc.filePath);
+	const issues = validatePlanDocument(finalDoc, cwd);
+	const preview = finalDoc.raw.split(/\r?\n/).slice(0, 30).join('\n');
+	const issueText =
+		issues.length > 0
+			? `\nValidation warnings (fix before approval):\n${issues
+					.map(i => `- [${i.code}] ${i.message}`)
+					.join('\n')}`
+			: '\nValidation: ok (ready for askuser approval when complete).';
+
+	return textResult(
+		`Wrote plan body at ${finalDoc.filePath} (status=${
+			finalDoc.frontmatter.status
+		} preserved).${issueText}\n\n${preview}${
+			finalDoc.raw.split(/\r?\n/).length > 30 ? '\n…' : ''
+		}`,
 	);
 }
 
@@ -904,6 +1125,10 @@ export async function executePlanManageTool(
 
 		if (action === 'create') {
 			return await handleCreate(cwd, args);
+		}
+
+		if (action === 'write_body') {
+			return await handleWriteBody(cwd, args);
 		}
 
 		if (action === 'adopt') {

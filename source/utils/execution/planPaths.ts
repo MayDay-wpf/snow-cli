@@ -14,6 +14,14 @@
 import fs from 'node:fs/promises';
 import type {Dirent} from 'node:fs';
 import path from 'node:path';
+import {
+	getCachedActivePlanPaths,
+	invalidateActivePlanPathsCache,
+	setCachedActivePlanPaths,
+} from './planCache.js';
+
+/** Re-export so callers can drop the short-lived active path list. */
+export {invalidateActivePlanPathsCache};
 
 const DATE_FOLDER_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,15 +50,32 @@ export function getPlanDateDir(cwd: string, date: Date = new Date()): string {
  * - `.snow/plan/YYYY-MM-DD/*.md`
  * Skips `archive/` (case-insensitive) and non-date directories.
  */
+async function readPlanDirMtimeMs(planDir: string): Promise<number> {
+	try {
+		const stat = await fs.stat(planDir);
+		return stat.mtimeMs;
+	} catch {
+		return -1;
+	}
+}
+
 export async function listActivePlanMarkdownPaths(
 	cwd: string,
 ): Promise<string[]> {
 	const planDir = getPlanDir(cwd);
+	const planDirMtimeMs = await readPlanDirMtimeMs(planDir);
+	const cached = getCachedActivePlanPaths(cwd);
+	if (cached && cached.planDirMtimeMs === planDirMtimeMs) {
+		return [...cached.paths];
+	}
+
 	let entries: Dirent[];
 	try {
 		entries = await fs.readdir(planDir, {withFileTypes: true});
 	} catch {
-		return [];
+		const empty: string[] = [];
+		setCachedActivePlanPaths(cwd, empty, 2000, -1);
+		return empty;
 	}
 
 	const results: string[] = [];
@@ -79,6 +104,7 @@ export async function listActivePlanMarkdownPaths(
 		}
 	}
 
+	setCachedActivePlanPaths(cwd, results, 2000, planDirMtimeMs);
 	return results;
 }
 

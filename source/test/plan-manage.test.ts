@@ -165,6 +165,119 @@ test('create writes plan under date dir', async t => {
 	t.true(doc.phases.length >= 1);
 });
 
+test('create with phases produces files/steps and validates clean', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plancreate-ph-'));
+	// Existing file so missing_file does not fire for it.
+	const existingRel = path.join('src', 'existing.ts');
+	await fs.mkdir(path.join(dir, 'src'), {recursive: true});
+	await fs.writeFile(path.join(dir, existingRel), 'export {};\n', 'utf8');
+
+	const created = await run(dir, {
+		action: 'create',
+		title: 'Phased Feature',
+		complexity: 'medium',
+		context: 'structured phases test',
+		phases: [
+			{
+				title: 'Implement',
+				files: [existingRel, 'src/brand-new.ts (new)'],
+				steps: ['touch existing', 'add brand-new'],
+				doneWhen: 'build passes; diagnostics clean',
+			},
+		],
+		analysis: 'Affects auth path only.',
+	});
+	t.falsy(created.isError);
+	const text = resultText(created);
+	const match = text.match(/Created draft plan at (.+?) \(complexity=/);
+	t.truthy(match);
+	const planPath = match![1]!.trim();
+	const doc = await parsePlanDocument(planPath);
+	t.is(doc.frontmatter.status, 'draft');
+	t.true(doc.phases.length >= 1);
+	t.true(doc.phases[0]!.files.some(f => f.includes('existing.ts')));
+	t.true(doc.phases[0]!.files.some(f => f.includes('brand-new.ts')));
+	t.true(doc.phases[0]!.steps.some(s => s.text === 'touch existing'));
+	t.true(doc.raw.includes('Affects auth path only.'));
+
+	const {validatePlanDocument} = await import(
+		'../utils/execution/planDocument.js'
+	);
+	const issues = validatePlanDocument(doc, dir);
+	t.deepEqual(
+		issues.filter(i => i.code === 'missing_file'),
+		[],
+	);
+	t.true(issues.every(i => i.code !== 'phase_no_steps'));
+});
+
+test('write_body preserves draft status', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-writebody-'));
+	const created = await run(dir, {
+		action: 'create',
+		title: 'Draft Body',
+		complexity: 'simple',
+	});
+	const match = resultText(created).match(
+		/Created draft plan at (.+?) \(complexity=/,
+	);
+	t.truthy(match);
+	const planPath = match![1]!.trim();
+
+	const written = await run(dir, {
+		action: 'write_body',
+		plan_path: planPath,
+		phases: [
+			{
+				title: 'Rewrite',
+				files: ['src/new-only.ts (new)'],
+				steps: ['rewrite body'],
+				doneWhen: 'ok',
+			},
+		],
+		context: 'updated context',
+	});
+	t.falsy(written.isError);
+	t.true(resultText(written).includes('status=draft preserved'));
+
+	const doc = await parsePlanDocument(planPath);
+	t.is(doc.frontmatter.status, 'draft');
+	t.true(doc.raw.includes('updated context'));
+	t.true(doc.phases[0]!.steps.some(s => s.text === 'rewrite body'));
+});
+
+test('write_body rejects executing status', async t => {
+	const {dir, planPath} = await makePlanDir();
+	const result = await run(dir, {
+		action: 'write_body',
+		plan_path: planPath,
+		body_markdown: '# Nope\n\n## Context\n\nx\n',
+	});
+	t.true(result.isError === true);
+	t.true(resultText(result).includes('only allowed for draft/approved'));
+});
+
+test('write_body requires body_markdown or phases', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-writebody-req-'));
+	const created = await run(dir, {
+		action: 'create',
+		title: 'Needs Body',
+		complexity: 'simple',
+	});
+	const match = resultText(created).match(
+		/Created draft plan at (.+?) \(complexity=/,
+	);
+	t.truthy(match);
+	const planPath = match![1]!.trim();
+
+	const missing = await run(dir, {
+		action: 'write_body',
+		plan_path: planPath,
+	});
+	t.true(missing.isError === true);
+	t.true(resultText(missing).includes('requires "body_markdown"'));
+});
+
 test.serial('abandon archives plan with abandoned status', async t => {
 	const {dir, planPath} = await makePlanDir();
 	const missing = await run(dir, {action: 'abandon'});
