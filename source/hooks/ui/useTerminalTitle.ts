@@ -1,4 +1,4 @@
-import {useEffect} from 'react';
+import {useEffect, useRef} from 'react';
 import {useStdout} from 'ink';
 import {
 	cleanTerminalTitle,
@@ -6,60 +6,71 @@ import {
 } from '../../utils/ui/terminalTitle.js';
 
 /**
- * 设置终端窗口/标签标题，组件卸载时自动清空。
+ * Set terminal window/tab title. Clears only when the consuming screen unmounts.
  *
- * 跨平台兼容策略：
- * 1. process.title：Windows 控制台直接生效，类 Unix 上仅修改进程名
- * 2. OSC 转义序列 ESC]0;<title>BEL：所有支持 ANSI 的现代终端
- *    （macOS Terminal/iTerm2、Windows Terminal、Linux 终端、mintty 等）
+ * Cross-platform strategy (see setTerminalTitle):
+ * 1. process.title — Windows console title
+ * 2. OSC ESC]0;<title>BEL — modern terminals
  *
- * 注意：
- * - 非 TTY 环境（管道、重定向、CI 日志）会跳过，避免污染输出
- * - 退出页面会写入空标题，多数终端会回退到默认值（如 cwd 或 shell 名）
- * - tmux/screen 用户需启用 set-titles on 才能透传到外层终端
+ * CRITICAL: cleanup must NOT run on every title change. Action Required blinks
+ * update the title every ~500ms; the old implementation restored process.title
+ * and wrote an empty OSC on each cleanup, which made Windows Terminal flash
+ * the whole pane (title clear → set → clear → set).
  *
- * @param title 要显示的标题；传入空字符串会清空标题
- * @example
- * ```tsx
- * function MyScreen() {
- *   useTerminalTitle('Snow CLI - 设置');
- *   return <Box>...</Box>;
- * }
- * ```
+ * @param title Title to show; empty string clears on write
  */
 export function useTerminalTitle(title: string): void {
 	const {stdout} = useStdout();
+	const originalProcessTitleRef = useRef<string | undefined>(undefined);
+	const capturedOriginalRef = useRef(false);
+	const lastAppliedTitleRef = useRef<string | null>(null);
 
+	// Apply title when it changes. No per-update cleanup.
 	useEffect(() => {
-		if (!stdout?.isTTY) return;
-
-		const safeTitle = cleanTerminalTitle(title);
-
-		// 保存原 process.title 以便卸载时恢复
-		let previousProcessTitle: string | undefined;
-		try {
-			previousProcessTitle = process.title;
-		} catch {
-			// 某些受限环境读取 process.title 可能抛错，忽略即可
+		if (!stdout?.isTTY) {
+			return;
 		}
 
-		// 1. process.title + 2. OSC 序列：所有支持 ANSI 的终端
+		if (!capturedOriginalRef.current) {
+			try {
+				originalProcessTitleRef.current = process.title;
+			} catch {
+				// Restricted environments may throw on process.title read.
+			}
+			capturedOriginalRef.current = true;
+		}
+
+		const safeTitle = cleanTerminalTitle(title);
+		if (lastAppliedTitleRef.current === safeTitle) {
+			return;
+		}
+		lastAppliedTitleRef.current = safeTitle;
 		setTerminalTitle(safeTitle, stdout);
+	}, [stdout, title]);
+
+	// Unmount-only: restore previous process title and clear OSC once.
+	useEffect(() => {
+		if (!stdout?.isTTY) {
+			return;
+		}
 
 		return () => {
-			if (!stdout?.isTTY) return;
-			if (previousProcessTitle !== undefined) {
+			if (!stdout?.isTTY) {
+				return;
+			}
+
+			const previous = originalProcessTitleRef.current;
+			if (previous !== undefined) {
 				try {
-					process.title = previousProcessTitle;
+					process.title = previous;
 				} catch {
-					// 同上，忽略恢复失败
+					// Ignore restore failures.
 				}
 			}
-			try {
-				stdout.write('\x1b]0;\x07');
-			} catch {
-				// 卸载阶段 stdout 可能已关闭，忽略
-			}
+
+			// Force clear even if dedupe cache matches empty string from a prior clear.
+			setTerminalTitle('', stdout, {force: true});
+			lastAppliedTitleRef.current = null;
 		};
-	}, [stdout, title]);
+	}, [stdout]);
 }
