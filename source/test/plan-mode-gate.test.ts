@@ -251,10 +251,37 @@ test('evaluatePlanGate respects planMode and approval state', t => {
 	);
 });
 
+test('isPlanApprovalAnswer matches CONTINUE resume phrases', t => {
+	t.true(
+		isPlanApprovalAnswer({
+			question: 'Resume unfinished plan?',
+			selected: 'Continue this plan',
+		}),
+	);
+	t.true(
+		isPlanApprovalAnswer({
+			question: '继续未完成计划？',
+			selected: '继续该计划',
+		}),
+	);
+	t.true(
+		isPlanApprovalAnswer({
+			question: 'Plan resume',
+			selected: 'resume plan',
+		}),
+	);
+	t.true(
+		isPlanApprovalAnswer({
+			question: '继续？',
+			selected: '继续此计划',
+		}),
+	);
+});
+
 test('isPlanApprovalAnswer matches explicit approvals', t => {
 	t.true(
 		isPlanApprovalAnswer({
-			question: 'Implementation plan ready. Proceed?',
+			question: 'Proceed with the plan?',
 			selected: 'Yes - Execute the entire plan',
 		}),
 	);

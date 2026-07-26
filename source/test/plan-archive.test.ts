@@ -30,8 +30,17 @@ async function makePlanDir(): Promise<string> {
 	return dir;
 }
 
-async function writePlan(dir: string, name: string, status: string) {
-	const filePath = path.join(dir, '.snow', 'plan', name);
+async function writePlan(
+	dir: string,
+	name: string,
+	status: string,
+	subdir?: string,
+) {
+	const planDir = subdir
+		? path.join(dir, '.snow', 'plan', subdir)
+		: path.join(dir, '.snow', 'plan');
+	await fs.mkdir(planDir, {recursive: true});
+	const filePath = path.join(planDir, name);
 	await fs.writeFile(filePath, PLAN(status), 'utf8');
 	return filePath;
 }
@@ -48,6 +57,15 @@ test('archivePlan moves file to dated folder and marks archived', async t => {
 	await t.throwsAsync(() => fs.access(filePath));
 	const archived = await parsePlanDocument(target);
 	t.is(archived.frontmatter.status, 'archived');
+});
+
+test('archivePlan can mark abandoned final status', async t => {
+	const dir = await makePlanDir();
+	const filePath = await writePlan(dir, 'drop.md', 'executing');
+	const doc = await parsePlanDocument(filePath);
+	const target = await archivePlan(doc, dir, 'abandoned');
+	const archived = await parsePlanDocument(target);
+	t.is(archived.frontmatter.status, 'abandoned');
 });
 
 test('archivePlan avoids name collisions with -N suffix', async t => {
@@ -82,4 +100,23 @@ test('sweepCompletedPlans archives only completed plans', async t => {
 	t.false(remaining.includes('done.md'));
 
 	t.deepEqual(await sweepCompletedPlans(path.join(dir, 'nope')), []);
+});
+
+test('sweepCompletedPlans archives completed plans inside date dirs', async t => {
+	const dir = await makePlanDir();
+	const donePath = await writePlan(dir, 'done.md', 'completed', '2026-07-20');
+	const runningPath = await writePlan(
+		dir,
+		'running.md',
+		'executing',
+		'2026-07-20',
+	);
+
+	const archived = await sweepCompletedPlans(dir);
+	t.is(archived.length, 1);
+	t.true(archived[0]!.includes(path.join('archive')));
+	t.true(path.basename(archived[0]!).startsWith('done'));
+
+	await t.throwsAsync(() => fs.access(donePath));
+	await fs.access(runningPath);
 });

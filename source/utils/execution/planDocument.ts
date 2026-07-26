@@ -9,13 +9,17 @@ import fs from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
+import {listActivePlanMarkdownPaths} from './planPaths.js';
 
 export type PlanStatus =
 	| 'draft'
 	| 'approved'
 	| 'executing'
 	| 'completed'
-	| 'archived';
+	| 'archived'
+	| 'abandoned';
+
+export type PlanComplexity = 'simple' | 'medium' | 'complex';
 
 export interface PlanFrontmatter {
 	status: PlanStatus;
@@ -24,6 +28,9 @@ export interface PlanFrontmatter {
 	created: string;
 	session: string;
 	approved_at?: string;
+	title?: string;
+	complexity?: PlanComplexity;
+	updated_at?: string;
 }
 
 export interface PlanStep {
@@ -55,7 +62,12 @@ export interface PlanDoc {
 }
 
 export interface PlanValidationIssue {
-	code: 'no_phases' | 'phase_no_steps' | 'phase_no_done_when' | 'missing_file';
+	code:
+		| 'no_phases'
+		| 'phase_no_steps'
+		| 'phase_no_done_when'
+		| 'missing_file'
+		| 'complex_missing_sections';
 	message: string;
 }
 
@@ -65,7 +77,10 @@ const PLAN_STATUSES: PlanStatus[] = [
 	'executing',
 	'completed',
 	'archived',
+	'abandoned',
 ];
+
+const PLAN_COMPLEXITIES: PlanComplexity[] = ['simple', 'medium', 'complex'];
 
 export function normalizeFrontmatter(data: any): PlanFrontmatter {
 	const source = data && typeof data === 'object' ? data : {};
@@ -88,6 +103,18 @@ export function normalizeFrontmatter(data: any): PlanFrontmatter {
 	};
 	if (typeof source.approved_at === 'string' && source.approved_at.trim()) {
 		frontmatter.approved_at = source.approved_at;
+	}
+	if (typeof source.title === 'string' && source.title.trim()) {
+		frontmatter.title = source.title.trim();
+	}
+	if (
+		typeof source.complexity === 'string' &&
+		PLAN_COMPLEXITIES.includes(source.complexity as PlanComplexity)
+	) {
+		frontmatter.complexity = source.complexity as PlanComplexity;
+	}
+	if (typeof source.updated_at === 'string' && source.updated_at.trim()) {
+		frontmatter.updated_at = source.updated_at;
 	}
 	return frontmatter;
 }
@@ -267,9 +294,14 @@ export async function writePlanFrontmatter(
 	patch: Partial<PlanFrontmatter>,
 ): Promise<void> {
 	const absPath = path.resolve(filePath);
-	const raw = (await fs.readFile(absPath, 'utf8')).replace(/^﻿/, '');
+	const raw = (await fs.readFile(absPath, 'utf8')).replace(/^\uFEFF/, '');
 	const parsed = matter(raw);
 	const merged = {...normalizeFrontmatter(parsed.data), ...patch};
+	const now = new Date().toISOString();
+	if (!merged.created) {
+		merged.created = now;
+	}
+	merged.updated_at = now;
 	const output = matter.stringify(parsed.content, merged);
 	await fs.writeFile(absPath, output, 'utf8');
 }
@@ -366,32 +398,32 @@ export function validatePlanDocument(
 		}
 	}
 
+	if (doc.frontmatter.complexity === 'complex') {
+		const body = doc.raw || '';
+		if (!/Risks/i.test(body) && !/Rollback/i.test(body)) {
+			issues.push({
+				code: 'complex_missing_sections',
+				message:
+					'Complex plans must include a Risks and/or Rollback section (e.g. "## Risks & Mitigations" or "## Rollback Strategy").',
+			});
+		}
+	}
+
 	return issues;
 }
 
-export function getPlanDir(cwd: string): string {
-	return path.resolve(cwd, '.snow', 'plan');
-}
+export {getPlanDir} from './planPaths.js';
 
 export async function findSessionPlanFiles(
 	cwd: string,
 	sessionId: string | null | undefined,
 ): Promise<PlanDoc[]> {
-	const planDir = getPlanDir(cwd);
-	let entries: string[];
-	try {
-		entries = await fs.readdir(planDir);
-	} catch {
-		return [];
-	}
+	const planPaths = await listActivePlanMarkdownPaths(cwd);
 
 	const docs: PlanDoc[] = [];
-	for (const entry of entries) {
-		if (!entry.toLowerCase().endsWith('.md')) {
-			continue;
-		}
+	for (const planPath of planPaths) {
 		try {
-			docs.push(await parsePlanDocument(path.join(planDir, entry)));
+			docs.push(await parsePlanDocument(planPath));
 		} catch {
 			// Unreadable/malformed file: skip
 		}
@@ -420,6 +452,7 @@ const STATUS_PRIORITY: Record<PlanStatus, number> = {
 	draft: 2,
 	completed: 3,
 	archived: 4,
+	abandoned: 5,
 };
 
 export async function findActivePlan(

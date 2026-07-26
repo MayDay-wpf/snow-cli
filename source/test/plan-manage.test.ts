@@ -94,3 +94,109 @@ test('amend appends files and steps and records reason', async t => {
 	t.true(doc.phases[0]!.steps.some(s => s.text === 'extra step'));
 	t.true(doc.raw.includes('> Amended: scope grew'));
 });
+
+test('get and status summarize active plan', async t => {
+	const {dir} = await makePlanDir();
+	const get = await run(dir, {action: 'get'});
+	t.falsy(get.isError);
+	t.true(resultText(get).includes('Status: executing'));
+	t.true(resultText(get).includes('Next step:'));
+
+	const status = await run(dir, {action: 'status'});
+	t.falsy(status.isError);
+	t.true(resultText(status).includes('status=executing'));
+});
+
+test('list returns active plans without requiring session match', async t => {
+	const {dir} = await makePlanDir();
+	const list = await run(dir, {action: 'list'});
+	t.falsy(list.isError);
+	t.true(resultText(list).includes('Active plans'));
+	t.true(resultText(list).includes('demo.md'));
+});
+
+test('uncheck_step clears a checked step', async t => {
+	const {dir, planPath} = await makePlanDir();
+	await run(dir, {action: 'check_step', step_index: 1});
+	let doc = await parsePlanDocument(planPath);
+	t.true(doc.phases[0]!.steps[0]!.checked);
+
+	const unchecked = await run(dir, {action: 'uncheck_step', step_index: 1});
+	t.falsy(unchecked.isError);
+	doc = await parsePlanDocument(planPath);
+	t.false(doc.phases[0]!.steps[0]!.checked);
+});
+
+test('create writes plan under date dir', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plancreate-'));
+	const created = await run(dir, {
+		action: 'create',
+		title: 'Add Feature X',
+		complexity: 'simple',
+		context: 'why we need it',
+	});
+	t.falsy(created.isError);
+	const text = resultText(created);
+	t.true(text.includes('Created draft plan'));
+	t.true(text.includes(path.join('.snow', 'plan')));
+	t.true(text.includes('add-feature-x.md'));
+
+	const match = text.match(/Created draft plan at (.+?) \(complexity=/);
+	t.truthy(match);
+	const planPath = match![1]!.trim();
+	const doc = await parsePlanDocument(planPath);
+	t.is(doc.frontmatter.status, 'draft');
+	t.is(doc.frontmatter.complexity, 'simple');
+	t.true(doc.phases.length >= 1);
+});
+
+test.serial('abandon archives plan with abandoned status', async t => {
+	const {dir, planPath} = await makePlanDir();
+	const missing = await run(dir, {action: 'abandon'});
+	t.true(missing.isError === true);
+
+	const ok = await run(dir, {action: 'abandon', reason: 'no longer needed'});
+	t.falsy(ok.isError);
+	t.true(resultText(ok).includes('abandoned'));
+	await t.throwsAsync(() => fs.access(planPath));
+
+	const archivedPath = resultText(ok)
+		.match(/archived to (.+?)\.?$/)?.[1]
+		?.trim()
+		.replace(/\.$/, '');
+	t.truthy(archivedPath);
+	const archived = await parsePlanDocument(archivedPath!);
+	t.is(archived.frontmatter.status, 'abandoned');
+	t.true(archived.raw.includes('> Abandoned: no longer needed'));
+});
+
+test.serial(
+	'adopt rebinds executing plan session and approves gate',
+	async t => {
+		const {dir, planPath} = await makePlanDir();
+		// Tag plan to another session
+		const content = await fs.readFile(planPath, 'utf8');
+		await fs.writeFile(
+			planPath,
+			content.replace("session: ''", 'session: other-session'),
+			'utf8',
+		);
+
+		const {getPlanApproved, resetAllPlanGates} = await import(
+			'../utils/execution/planModeGate.js'
+		);
+		resetAllPlanGates();
+		// No live session in unit tests → gate key resolves to 'default' via null.
+		t.false(getPlanApproved(null));
+
+		const ok = await run(dir, {action: 'adopt', plan_path: planPath});
+		t.falsy(ok.isError);
+		t.true(resultText(ok).includes('Adopted plan'));
+
+		const doc = await parsePlanDocument(planPath);
+		t.is(doc.frontmatter.status, 'executing');
+		// Rebinds away from other-session (empty when sessionManager has no current session).
+		t.not(doc.frontmatter.session, 'other-session');
+		t.true(getPlanApproved(null));
+	},
+);

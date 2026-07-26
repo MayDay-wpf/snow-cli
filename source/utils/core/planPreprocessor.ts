@@ -105,9 +105,12 @@ export async function buildResumePlanNotice(
 			'',
 			`An in-progress plan exists: ${executing.filePath} (Phase ${current}/${total}).`,
 			'',
-			'Before starting new work, use `askuser-ask_question` to ask the user whether to ' +
-				'**CONTINUE this plan** or **START OVER** with a new plan. ' +
-				'If the user chooses to continue, resume from the first unchecked step of the current phase.',
+			'Before starting new work, use `askuser-ask_question` with options ' +
+				'["Continue this plan", "Start over"] (or 继续该计划 / 开始新计划). ' +
+				'Choosing **Continue this plan** machine-adopts the unfinished plan into this session ' +
+				'(rebinds session id, status=executing, restores the plan gate and scope). ' +
+				'You may also call `plan-manage {action:"adopt"}` explicitly. ' +
+				'Resume from the first unchecked step of the current phase.',
 			'',
 		].join('\n');
 	} catch {

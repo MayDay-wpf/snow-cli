@@ -47,6 +47,7 @@ import {
 	readFileWithEncoding,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
+import {normalizePlanWritePath} from '../utils/execution/planPaths.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -539,7 +540,7 @@ export class FilesystemMCPService {
 						fileOverwrite,
 					),
 				(path, result) => ({
-					path,
+					path: result.filePath ?? path,
 					content: result.content,
 				}),
 			);
@@ -568,8 +569,15 @@ export class FilesystemMCPService {
 		createDirectories: boolean = true,
 		overwrite: boolean = false,
 	): Promise<{message: string; filePath: string; content: string}> {
+		// Force top-level .snow/plan/*.md creates into today's date directory.
+		// Skip SSH remotes — path helpers are local-only.
+		const cwdForPlan = this.basePath || process.cwd();
+		const normalizedPath = this.isSSHPath(filePath)
+			? filePath
+			: normalizePlanWritePath(filePath, cwdForPlan);
+
 		try {
-			const fullPath = this.resolvePath(filePath);
+			const fullPath = this.resolvePath(normalizedPath);
 
 			let fileExisted = false;
 			let originalContent: string | undefined;
@@ -578,7 +586,7 @@ export class FilesystemMCPService {
 			try {
 				await fs.access(fullPath);
 				if (!overwrite) {
-					throw new Error(`File already exists: ${filePath}`);
+					throw new Error(`File already exists: ${normalizedPath}`);
 				}
 				fileExisted = true;
 				originalContent = await readFileWithEncoding(fullPath);
@@ -590,7 +598,7 @@ export class FilesystemMCPService {
 
 			// Backup for rollback
 			await backupFileBeforeMutation({
-				filePath,
+				filePath: normalizedPath,
 				basePath: this.basePath,
 				fileExisted,
 				originalContent,
@@ -605,23 +613,30 @@ export class FilesystemMCPService {
 			await writeFileWithEncoding(fullPath, content);
 
 			let message = fileExisted
-				? `File overwritten successfully: ${filePath}`
-				: `File created successfully: ${filePath}`;
+				? `File overwritten successfully: ${normalizedPath}`
+				: `File created successfully: ${normalizedPath}`;
+			if (normalizedPath !== filePath) {
+				message += ' (redirected from top-level .snow/plan)';
+			}
 
 			// Try to fetch fresh diagnostics after create/overwrite to avoid stale results
 			try {
 				const diagnostics = await getFreshDiagnostics(fullPath);
 				if (diagnostics.length > 0) {
-					message = appendDiagnosticsSummary(message, filePath, diagnostics);
+					message = appendDiagnosticsSummary(
+						message,
+						normalizedPath,
+						diagnostics,
+					);
 				}
 			} catch {
 				// Optional diagnostics retrieval, do not block create success
 			}
 
-			return {message, filePath, content};
+			return {message, filePath: normalizedPath, content};
 		} catch (error) {
 			throw new Error(
-				`Failed to create file ${filePath}: ${
+				`Failed to create file ${normalizedPath}: ${
 					error instanceof Error ? error.message : 'Unknown error'
 				}`,
 			);

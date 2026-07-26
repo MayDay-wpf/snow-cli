@@ -12,6 +12,7 @@ import path from 'node:path';
 import {getPlanStrictness} from '../config/projectSettings.js';
 import {
 	findActivePlan,
+	findSessionPlanFiles,
 	validatePlanDocument,
 	writePlanFrontmatter,
 	type PlanDoc,
@@ -488,11 +489,16 @@ export function isPlanApprovalAnswer(input: {
 			opt.includes('execute entire plan') ||
 			opt.includes('yes - execute') ||
 			opt.includes('continue the plan') ||
+			opt.includes('continue this plan') ||
+			opt.includes('resume plan') ||
 			opt.includes('执行整个计划') ||
 			opt.includes('批准并执行') ||
 			opt.includes('批准计划') ||
 			opt.includes('开始执行') ||
-			opt.includes('继续执行')
+			opt.includes('继续执行') ||
+			opt.includes('继续该计划') ||
+			opt.includes('继续此计划') ||
+			opt.includes('继续计划')
 		) {
 			return true;
 		}
@@ -643,7 +649,28 @@ export async function maybeApprovePlanFromAskUser(input: {
 		})
 	) {
 		const cwd = input.cwd || process.cwd();
-		const validation = await validatePlanBeforeApproval(cwd, input.sessionId);
+		let validation = await validatePlanBeforeApproval(cwd, input.sessionId);
+
+		// CONTINUE unfinished plan from another session: adopt then re-validate.
+		if (!validation.ok) {
+			try {
+				const orphan =
+					(await findSessionPlanFiles(cwd, null))
+						.filter(d => d.frontmatter.status === 'executing')
+						.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
+				if (orphan) {
+					await writePlanFrontmatter(orphan.filePath, {
+						session: input.sessionId ?? orphan.frontmatter.session,
+						status: 'executing',
+						current_phase: Math.max(1, orphan.frontmatter.current_phase),
+					});
+					validation = await validatePlanBeforeApproval(cwd, input.sessionId);
+				}
+			} catch {
+				// Best-effort adopt; fall through to original rejection.
+			}
+		}
+
 		if (!validation.ok) {
 			setPlanApproved(input.sessionId, false);
 			return {approved: false, error: validation.message};

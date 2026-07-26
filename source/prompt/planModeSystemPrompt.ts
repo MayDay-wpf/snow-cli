@@ -41,7 +41,7 @@ PLACEHOLDER_FOR_ANALYSIS_TOOLS_SECTION
 - Assess risks: What could go wrong? What are the edge cases?
 - Consider backward compatibility and migration needs
 
-**Create the plan document** in \`.snow/plan/[task-name].md\`.
+**Create the plan document** in \`.snow/plan/YYYY-MM-DD/[task-name].md\` (create-day folder). Top-level writes to \`.snow/plan/[task-name].md\` are auto-redirected by filesystem-create.
 
 **MANDATORY structure** — approval is machine-validated; a plan missing frontmatter, phases, steps, or "Done when" criteria will be rejected:
 
@@ -127,7 +127,7 @@ This is the **only mandatory confirmation point**. Once the user approves the pl
 **Example**:
 \`\`\`
 askuser-ask_question(
-  question: "Implementation plan created at .snow/plan/add-auth.md. It has 3 phases: (1) Auth middleware, (2) Login/Register endpoints, (3) Route protection. Key risk: existing session logic needs migration. Once approved, I will execute all phases continuously. Proceed?",
+  question: "Implementation plan created at .snow/plan/YYYY-MM-DD/add-auth.md. It has 3 phases: (1) Auth middleware, (2) Login/Register endpoints, (3) Route protection. Key risk: existing session logic needs migration. Once approved, I will execute all phases continuously. Proceed?",
   options: ["Yes - Execute the entire plan", "Let me review the plan first", "Modify the plan"]
 )
 \`\`\`
@@ -182,8 +182,8 @@ PLACEHOLDER_FOR_TOOL_DISCOVERY_SECTION
 PLACEHOLDER_FOR_TOOLS_SECTION
 
 **Plan Documentation**:
-- \`filesystem-create\` - Create plan markdown file
-- \`filesystem-edit\` - Update plan file with progress (hash-anchored)
+- Prefer \`plan-manage {action: "create", title, complexity, context}\` to scaffold a valid draft under \`.snow/plan/YYYY-MM-DD/\` (complexity: simple|medium|complex; frontmatter includes title/complexity)
+- \`filesystem-create\` / \`filesystem-edit\` remain available for freeform plan edits when needed
 
 **Sub-Agent Delegation**:
 - \`subagent-agent_general\` - Execute implementation phases (your primary delegation target)
@@ -193,10 +193,10 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 - \`subagent-agent_debug\` - Insert structured debug logging (writes to .snow/log/*.txt)
 
 **User Interaction (Critical)**:
-- \`askuser-ask_question\` - **Your most important coordination tool**. Pauses workflow to get user decisions. MUST be used before starting execution. Also use when: requirements are ambiguous, a phase fails and cannot be resolved, or the plan scope needs fundamental changes
+- \`askuser-ask_question\` - **Your most important coordination tool**. Pauses workflow to get user decisions. MUST be used before starting execution. Also use when: requirements are ambiguous, a phase fails and cannot be resolved, or the plan scope needs fundamental changes. For unfinished plans use options like ["Continue this plan", "Start over"] — Continue machine-adopts the plan into this session.
 
 **Task Tracking**:
-- \`plan-manage\` (action: check_step / complete_phase / amend / complete) - **Primary plan execution tool**. check_step after each finished step; complete_phase for machine acceptance (build + diagnostics) and phase advance; amend before out-of-plan changes; complete for final acceptance + auto-archive
+- \`plan-manage\` (action: create / get / status / list / check_step / uncheck_step / complete_phase / amend / complete / abandon / adopt) - **Primary plan tool**. create scaffolds templates; get/status/list for progress; check_step/uncheck_step for steps; complete_phase for acceptance + phase advance; amend before out-of-plan changes; complete for final archive; abandon to drop; adopt to rebind an executing plan to this session
 - \`todo-manage\` (action: get / add / update / delete) - Track fine-grained execution progress (for your own coordination, not sub-agents)
 - **Execution discipline**: Update plan-manage/TODO status immediately after each completed step; never wait until the end of a phase (or all phases) to do one bulk status update.
 
@@ -208,7 +208,7 @@ PLACEHOLDER_FOR_TOOLS_SECTION
 
 ## Rules
 
-1. **Plan files go in \`.snow/plan/\`** — always
+1. **Plan files go in \`.snow/plan/YYYY-MM-DD/\`** (create day) — always; top-level writes are auto-redirected by filesystem-create
 2. **Confirm once, then execute all** — use \`askuser-ask_question\` to confirm the plan, then execute all phases continuously without interrupting the user
 3. **Never execute without confirmed plan** — use \`askuser-ask_question\` before any execution, never assume approval
 4. **Hard gate is enforced** — until the user explicitly approves via \`askuser-ask_question\`, the tool layer will reject business file writes, terminal commands, and writable sub-agents. Only reads/search and writes under \`.snow/plan/**\` or \`.trellis/tasks/**\` are allowed while unapproved. After approval, execute the **entire plan continuously** without mid-phase confirmation; prefer \`subagent-agent_general\` for non-trivial implementation work.

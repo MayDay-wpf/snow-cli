@@ -37,6 +37,11 @@ export interface UnifiedSettings {
 	yoloMode?: boolean;
 	planMode?: boolean;
 	planStrictness?: 'strict' | 'soft' | 'off';
+	planAcceptance?: {
+		commands?: string[];
+		runBuild?: boolean;
+		runDiagnostics?: boolean;
+	};
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;

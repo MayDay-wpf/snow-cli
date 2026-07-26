@@ -12,6 +12,10 @@ import {
 	findSessionPlanFiles,
 	findActivePlan,
 } from '../utils/execution/planDocument.js';
+import {
+	dateFolderName,
+	normalizePlanWritePath,
+} from '../utils/execution/planPaths.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -52,8 +56,11 @@ async function writeSamplePlan(
 	dir: string,
 	name = 'auth.md',
 	content = SAMPLE_PLAN,
+	subdir?: string,
 ) {
-	const planDir = path.join(dir, '.snow', 'plan');
+	const planDir = subdir
+		? path.join(dir, '.snow', 'plan', subdir)
+		: path.join(dir, '.snow', 'plan');
 	await fs.mkdir(planDir, {recursive: true});
 	const filePath = path.join(planDir, name);
 	await fs.writeFile(filePath, content, 'utf8');
@@ -65,6 +72,22 @@ test('normalizeFrontmatter fills defaults and rejects invalid values', t => {
 	t.is(fm.status, 'draft');
 	t.is(fm.current_phase, 0);
 	t.is(fm.session, '');
+});
+
+test('normalizeFrontmatter parses abandoned status and complexity tiers', t => {
+	const fm = normalizeFrontmatter({
+		status: 'abandoned',
+		complexity: 'complex',
+		title: ' My Plan ',
+		updated_at: '2026-07-26T01:00:00.000Z',
+	});
+	t.is(fm.status, 'abandoned');
+	t.is(fm.complexity, 'complex');
+	t.is(fm.title, 'My Plan');
+	t.is(fm.updated_at, '2026-07-26T01:00:00.000Z');
+
+	const ignored = normalizeFrontmatter({complexity: 'huge'});
+	t.is(ignored.complexity, undefined);
 });
 
 test('parsePlanDocument parses frontmatter, phases, files, steps', async t => {
@@ -162,6 +185,33 @@ test('validatePlanDocument accepts existing files and (new) markers', async t =>
 	t.deepEqual(validatePlanDocument(doc, dir), []);
 });
 
+test('validatePlanDocument requires Risks or Rollback for complex plans', async t => {
+	const dir = await makeTmpDir();
+	const filePath = await writeSamplePlan(
+		dir,
+		'complex.md',
+		[
+			'---',
+			'status: draft',
+			'current_phase: 0',
+			"created: '2026-07-26T00:00:00.000Z'",
+			"session: ''",
+			'complexity: complex',
+			'---',
+			'# Complex',
+			'',
+			'### Phase 1: X',
+			'- **Steps**:',
+			'  - [ ] do it',
+			'- **Done when**: done',
+			'',
+		].join('\n'),
+	);
+	const doc = await parsePlanDocument(filePath);
+	const codes = validatePlanDocument(doc, dir).map(i => i.code);
+	t.true(codes.includes('complex_missing_sections'));
+});
+
 test('setStepChecked toggles only the target step line', async t => {
 	const dir = await makeTmpDir();
 	const filePath = await writeSamplePlan(dir);
@@ -194,6 +244,35 @@ test('writePlanFrontmatter merges patch and upgrades legacy files', async t => {
 	t.is(doc.frontmatter.status, 'executing');
 	t.is(doc.frontmatter.session, 's9');
 	t.true(doc.raw.includes('# Old plan'));
+});
+
+test('writePlanFrontmatter fills created when empty and stamps updated_at', async t => {
+	const dir = await makeTmpDir();
+	const filePath = await writeSamplePlan(
+		dir,
+		'empty-created.md',
+		[
+			'---',
+			'status: draft',
+			'current_phase: 0',
+			"created: ''",
+			"session: ''",
+			'---',
+			'# X',
+			'',
+			'### Phase 1: Y',
+			'- **Steps**:',
+			'  - [ ] a',
+			'- **Done when**: ok',
+			'',
+		].join('\n'),
+	);
+	await writePlanFrontmatter(filePath, {status: 'draft'});
+	const doc = await parsePlanDocument(filePath);
+	t.truthy(doc.frontmatter.created);
+	t.not(doc.frontmatter.created, '');
+	t.truthy(doc.frontmatter.updated_at);
+	t.true(doc.frontmatter.updated_at!.includes('T'));
 });
 
 test('findSessionPlanFiles filters by session with legacy fallback', async t => {
@@ -243,4 +322,65 @@ test('findActivePlan prefers executing over draft and returns null when none', a
 	);
 	const stillExec = await findActivePlan(dir, 'sess-1');
 	t.is(stillExec?.frontmatter.status, 'executing');
+});
+
+test('findSessionPlanFiles discovers plans in date subdirs and ignores archive', async t => {
+	const dir = await makeTmpDir();
+	await writeSamplePlan(dir, 'legacy.md');
+	await writeSamplePlan(dir, 'day-one.md', SAMPLE_PLAN, '2026-07-20');
+	await writeSamplePlan(
+		dir,
+		'day-two.md',
+		SAMPLE_PLAN.replace('session: sess-1', 'session: sess-2'),
+		'2026-07-21',
+	);
+	await writeSamplePlan(
+		dir,
+		'archived.md',
+		SAMPLE_PLAN.replace('status: executing', 'status: archived'),
+		path.join('archive', '2026-07-22'),
+	);
+	// Non-date folders must be ignored
+	await writeSamplePlan(dir, 'misc.md', SAMPLE_PLAN, 'notes');
+
+	const all = await findSessionPlanFiles(dir, null);
+	const basenames = all.map(d => path.basename(d.filePath)).sort();
+	t.deepEqual(basenames, ['day-one.md', 'day-two.md', 'legacy.md']);
+
+	const forSess1 = await findSessionPlanFiles(dir, 'sess-1');
+	t.deepEqual(forSess1.map(d => path.basename(d.filePath)).sort(), [
+		'day-one.md',
+		'legacy.md',
+	]);
+	t.true(
+		forSess1.some(d =>
+			d.filePath.includes(path.join('2026-07-20', 'day-one.md')),
+		),
+	);
+});
+
+test('normalizePlanWritePath redirects top-level plan md into today folder', t => {
+	const cwd = path.resolve(path.sep + path.join('tmp', 'snow-plan-cwd'));
+	const today = dateFolderName(new Date('2026-07-26T12:00:00'));
+	const now = new Date('2026-07-26T12:00:00');
+
+	const relativeIn = path.join('.snow', 'plan', 'task.md');
+	const relativeOut = normalizePlanWritePath(relativeIn, cwd, now);
+	t.is(relativeOut, path.join('.snow', 'plan', today, 'task.md'));
+
+	const absoluteIn = path.join(cwd, '.snow', 'plan', 'task.md');
+	const absoluteOut = normalizePlanWritePath(absoluteIn, cwd, now);
+	t.is(absoluteOut, path.join(cwd, '.snow', 'plan', today, 'task.md'));
+
+	const alreadyDated = path.join('.snow', 'plan', '2026-07-20', 'task.md');
+	t.is(normalizePlanWritePath(alreadyDated, cwd, now), alreadyDated);
+
+	const archivePath = path.join('.snow', 'plan', 'archive', today, 'task.md');
+	t.is(normalizePlanWritePath(archivePath, cwd, now), archivePath);
+
+	const nonMd = path.join('.snow', 'plan', 'notes.txt');
+	t.is(normalizePlanWritePath(nonMd, cwd, now), nonMd);
+
+	const outside = path.join('src', 'a.ts');
+	t.is(normalizePlanWritePath(outside, cwd, now), outside);
 });

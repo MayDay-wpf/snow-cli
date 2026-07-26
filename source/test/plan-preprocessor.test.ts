@@ -81,6 +81,8 @@ test('buildResumePlanNotice detects executing plans from other sessions', async 
 	const notice = await buildResumePlanNotice(dir, 'other-session');
 	t.truthy(notice?.includes('Unfinished Plan Detected'));
 	t.truthy(notice?.includes('Phase 1/2'));
+	t.truthy(notice?.includes('Continue this plan'));
+	t.truthy(notice?.includes('machine-adopts') || notice?.includes('adopt'));
 
 	const emptyDir = await makePlanDir();
 	t.is(await buildResumePlanNotice(emptyDir, 'x'), null);

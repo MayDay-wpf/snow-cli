@@ -5,6 +5,12 @@ import {
 	type UnifiedSettings,
 } from './unifiedSettings.js';
 
+export interface PlanAcceptanceSettings {
+	commands?: string[];
+	runBuild?: boolean;
+	runDiagnostics?: boolean;
+}
+
 export interface ProjectSettings {
 	toolSearchEnabled?: boolean;
 	autoFormatEnabled?: boolean;
@@ -13,6 +19,7 @@ export interface ProjectSettings {
 	yoloMode?: boolean;
 	planMode?: boolean;
 	planStrictness?: 'strict' | 'soft' | 'off';
+	planAcceptance?: PlanAcceptanceSettings;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;
@@ -65,6 +72,7 @@ function loadSettings(): ProjectSettings {
 		yoloMode: pick('yoloMode'),
 		planMode: pick('planMode'),
 		planStrictness: pick('planStrictness'),
+		planAcceptance: pick('planAcceptance'),
 		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		imageCompressEnabled: pick('imageCompressEnabled'),
@@ -160,9 +168,29 @@ export function getPlanStrictness(): PlanStrictness {
 		? value
 		: 'soft';
 }
-
 export function setPlanStrictness(value: PlanStrictness): void {
 	setField('planStrictness', value);
+}
+
+export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
+	const settings = loadSettings();
+	const value = settings.planAcceptance;
+	if (!value || typeof value !== 'object') {
+		return {runBuild: true, runDiagnostics: true};
+	}
+	return {
+		commands: Array.isArray(value.commands)
+			? value.commands.filter(
+					(c): c is string => typeof c === 'string' && c.trim().length > 0,
+			  )
+			: undefined,
+		runBuild: value.runBuild !== false,
+		runDiagnostics: value.runDiagnostics !== false,
+	};
+}
+
+export function setPlanAcceptanceSettings(value: PlanAcceptanceSettings): void {
+	setField('planAcceptance', value);
 }
 
 export function getVulnerabilityHuntingMode(): boolean {

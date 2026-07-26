@@ -5,18 +5,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
-	getPlanDir,
 	parsePlanDocument,
 	writePlanFrontmatter,
 	type PlanDoc,
 } from './planDocument.js';
-
-function dateFolderName(date = new Date()): string {
-	const y = date.getFullYear();
-	const m = String(date.getMonth() + 1).padStart(2, '0');
-	const d = String(date.getDate()).padStart(2, '0');
-	return `${y}-${m}-${d}`;
-}
+import {
+	dateFolderName,
+	getPlanDir,
+	listActivePlanMarkdownPaths,
+} from './planPaths.js';
 
 async function moveFile(from: string, to: string): Promise<void> {
 	try {
@@ -29,11 +26,15 @@ async function moveFile(from: string, to: string): Promise<void> {
 }
 
 /**
- * Mark a plan as archived and move it into the dated archive folder.
+ * Mark a plan as archived/abandoned and move it into the dated archive folder.
  * Returns the new file path.
  */
-export async function archivePlan(doc: PlanDoc, cwd: string): Promise<string> {
-	await writePlanFrontmatter(doc.filePath, {status: 'archived'});
+export async function archivePlan(
+	doc: PlanDoc,
+	cwd: string,
+	finalStatus: 'archived' | 'abandoned' = 'archived',
+): Promise<string> {
+	await writePlanFrontmatter(doc.filePath, {status: finalStatus});
 
 	const archiveDir = path.join(getPlanDir(cwd), 'archive', dateFolderName());
 	await fs.mkdir(archiveDir, {recursive: true});
@@ -60,21 +61,11 @@ export async function archivePlan(doc: PlanDoc, cwd: string): Promise<string> {
  * as a fallback when plan mode is turned off. Returns archived target paths.
  */
 export async function sweepCompletedPlans(cwd: string): Promise<string[]> {
-	const planDir = getPlanDir(cwd);
-	let entries: string[];
-	try {
-		entries = await fs.readdir(planDir);
-	} catch {
-		return [];
-	}
-
+	const planPaths = await listActivePlanMarkdownPaths(cwd);
 	const archived: string[] = [];
-	for (const entry of entries) {
-		if (!entry.toLowerCase().endsWith('.md')) {
-			continue;
-		}
+	for (const planPath of planPaths) {
 		try {
-			const doc = await parsePlanDocument(path.join(planDir, entry));
+			const doc = await parsePlanDocument(planPath);
 			if (doc.frontmatter.status === 'completed') {
 				archived.push(await archivePlan(doc, cwd));
 			}

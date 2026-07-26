@@ -6,20 +6,45 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
 	findActivePlan,
+	findSessionPlanFiles,
 	parsePlanDocument,
 	setStepChecked,
 	writePlanFrontmatter,
+	type PlanComplexity,
 	type PlanDoc,
 	type PlanPhase,
 } from '../utils/execution/planDocument.js';
 import {
 	setPlanScope,
 	resolvePlanScopeFiles,
+	setPlanApproved,
+	resetPlanGate,
 } from '../utils/execution/planModeGate.js';
 import {archivePlan} from '../utils/execution/planArchive.js';
+import {runAcceptance} from '../utils/execution/planAcceptance.js';
+import {
+	buildPlanMarkdown,
+	slugifyPlanTitle,
+} from '../utils/execution/planTemplate.js';
+import {getPlanDateDir} from '../utils/execution/planPaths.js';
+import {getPlanAcceptanceSettings} from '../utils/config/projectSettings.js';
 import {sessionManager} from '../utils/session/sessionManager.js';
 
-const MAX_ACCEPTANCE_OUTPUT = 4000;
+const PLAN_ACTIONS = [
+	'check_step',
+	'complete_phase',
+	'amend',
+	'complete',
+	'get',
+	'status',
+	'list',
+	'uncheck_step',
+	'abandon',
+	'adopt',
+	'create',
+] as const;
+
+type PlanAction = (typeof PLAN_ACTIONS)[number];
 
 /**
  * Plan Mode 执行期管理工具：勾选步骤、阶段验收推进、修订计划、完成归档。
@@ -28,12 +53,19 @@ const MAX_ACCEPTANCE_OUTPUT = 4000;
 export const planManageTools: Tool[] = [
 	{
 		name: 'plan-manage',
-		description: `Manage the active plan under .snow/plan/ during Plan Mode execution. Required field "action":
+		description: `Manage plans under .snow/plan/ during Plan Mode (active plans may live in date subdirs YYYY-MM-DD/). Required field "action":
 
-- check_step: Mark a step done in the current phase. Required "step_index" (1-based). Call immediately after finishing each step.
-- complete_phase: Run acceptance (build + IDE diagnostics) for the current phase. On success advances current_phase and returns the next phase's steps. All steps of the phase must be checked first.
-- amend: Update the plan when scope changes. Optional "phase_index" (defaults to current), "add_files" (paths to add to the phase's Files list), "add_steps" (steps to append), required "reason". Use BEFORE editing files outside the plan's file list.
-- complete: Final acceptance after ALL phases are done; archives the plan to .snow/plan/archive/YYYY-MM-DD/.
+- create: Create a new draft plan from a template. Required "title". Optional "slug", "complexity" (simple|medium|complex), "context", "session".
+- get: Summarize the active plan for this session (path, status, phase, step progress, next step, files).
+- status: Compact progress line for the active plan.
+- list: List all active plans (all sessions) under .snow/plan date dirs + legacy top-level.
+- check_step: Mark a step done. Required "step_index" (1-based). Optional "phase_index" (defaults current).
+- uncheck_step: Unmark a step. Required "step_index". Optional "phase_index".
+- complete_phase: Run acceptance for the current phase; advance current_phase. All steps must be checked first.
+- amend: Update the plan when scope changes. Optional "phase_index", "add_files", "add_steps", required "reason".
+- complete: Final acceptance after ALL phases; archives the plan to .snow/plan/archive/YYYY-MM-DD/.
+- abandon: Abandon active plan. Required "reason". Sets status abandoned, clears gate, archives.
+- adopt: Rebind an executing plan to this session and restore the gate. Optional "plan_path"; else latest executing plan any session.
 
 The plan file is the source of truth — keep it in sync with reality via these actions.`,
 		inputSchema: {
@@ -41,13 +73,13 @@ The plan file is the source of truth — keep it in sync with reality via these 
 			properties: {
 				action: {
 					type: 'string',
-					enum: ['check_step', 'complete_phase', 'amend', 'complete'],
+					enum: [...PLAN_ACTIONS],
 					description: 'Which plan operation to run.',
 				},
 				step_index: {
 					type: 'number',
 					description:
-						'For action=check_step: 1-based step index within the current phase.',
+						'For action=check_step/uncheck_step: 1-based step index within the phase.',
 				},
 				phase_index: {
 					type: 'number',
@@ -68,7 +100,34 @@ The plan file is the source of truth — keep it in sync with reality via these 
 				reason: {
 					type: 'string',
 					description:
-						'For action=amend: why the plan changed (recorded in the plan file).',
+						'For action=amend/abandon: why the plan changed or was abandoned.',
+				},
+				title: {
+					type: 'string',
+					description: 'For action=create: plan title (required).',
+				},
+				slug: {
+					type: 'string',
+					description: 'For action=create: optional file slug (kebab-case).',
+				},
+				complexity: {
+					type: 'string',
+					enum: ['simple', 'medium', 'complex'],
+					description: 'For action=create: plan complexity tier.',
+				},
+				context: {
+					type: 'string',
+					description: 'For action=create: optional context body text.',
+				},
+				session: {
+					type: 'string',
+					description:
+						'For action=create: optional session id (defaults to current).',
+				},
+				plan_path: {
+					type: 'string',
+					description:
+						'For action=adopt: optional absolute/relative plan path.',
 				},
 			},
 			required: ['action'],
@@ -80,10 +139,6 @@ function textResult(text: string, isError = false): CallToolResult {
 	return {content: [{type: 'text', text}], ...(isError ? {isError: true} : {})};
 }
 
-function truncate(text: string, max = MAX_ACCEPTANCE_OUTPUT): string {
-	return text.length > max ? text.slice(0, max) + '\n... (truncated)' : text;
-}
-
 function getSessionId(): string | null {
 	return sessionManager.getCurrentSession()?.id ?? null;
 }
@@ -93,88 +148,59 @@ function currentPhaseOf(doc: PlanDoc): PlanPhase | undefined {
 	return doc.phases.find(p => p.index === idx) ?? doc.phases[0];
 }
 
-/**
- * Code-level acceptance: run the project's build script (if any) and check
- * IDE diagnostics. Missing build script / disconnected IDE are skipped, not
- * failures.
- */
-export async function runAcceptance(
-	cwd: string,
-	abortSignal?: AbortSignal,
-): Promise<{ok: boolean; output: string}> {
-	const parts: string[] = [];
-
-	if (abortSignal?.aborted) {
-		return {ok: false, output: 'aborted'};
-	}
-
-	let hasBuild = false;
-	try {
-		const pkgRaw = await fs.readFile(path.join(cwd, 'package.json'), 'utf8');
-		const pkg = JSON.parse(pkgRaw);
-		hasBuild = typeof pkg?.scripts?.build === 'string';
-	} catch {
-		parts.push('build: no package.json, skipped');
-	}
-
-	if (hasBuild) {
-		try {
-			const {terminalService} = await import('./bash.js');
-			const result = await terminalService.executeCommand(
-				'npm run build',
-				300000,
-				abortSignal,
-			);
-			const exitCode = result.exitCode;
-			const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
-			if (typeof exitCode === 'number' && exitCode !== 0) {
-				return {
-					ok: false,
-					output: `build FAILED (exit ${exitCode}):\n${truncate(output)}`,
-				};
-			}
-			parts.push('build: passed');
-		} catch (error) {
-			return {
-				ok: false,
-				output: `build FAILED: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			};
-		}
-	} else if (parts.length === 0) {
-		parts.push('build: no build script, skipped');
-	}
-
-	if (abortSignal?.aborted) {
-		return {ok: false, output: 'aborted'};
-	}
-
-	try {
-		const {executeMCPTool} = await import(
-			'../utils/execution/mcpToolsManager.js'
-		);
-		const diag = await executeMCPTool('ide-get_diagnostics', {}, abortSignal);
-		const diagText =
-			typeof diag === 'string' ? diag : JSON.stringify(diag ?? '');
-		const errorCount = (
-			diagText.match(/"severity"\s*:\s*"?(error|1)"?/gi) || []
-		).length;
-		if (errorCount > 0) {
-			return {
-				ok: false,
-				output: `${parts.join(
-					'; ',
-				)}; diagnostics FAILED (${errorCount} errors):\n${truncate(diagText)}`,
-			};
-		}
-		parts.push('diagnostics: no errors');
-	} catch {
-		parts.push('diagnostics: IDE not connected, skipped');
-	}
-
-	return {ok: true, output: parts.join('; ')};
+function resolvePhaseIndex(doc: PlanDoc, args: any): number {
+	return Number.isInteger(Number(args?.phase_index))
+		? Number(args.phase_index)
+		: Math.max(1, doc.frontmatter.current_phase || 1);
 }
+
+function summarizePlan(doc: PlanDoc): string {
+	const phase = currentPhaseOf(doc);
+	const totalSteps = doc.phases.reduce((n, p) => n + p.steps.length, 0);
+	const checkedSteps = doc.phases.reduce(
+		(n, p) => n + p.steps.filter(s => s.checked).length,
+		0,
+	);
+	const phaseChecked = phase?.steps.filter(s => s.checked).length ?? 0;
+	const phaseTotal = phase?.steps.length ?? 0;
+	const next = phase?.steps.find(s => !s.checked);
+	const files = phase?.files?.length
+		? phase.files.join(', ')
+		: doc.affectedFiles.join(', ') || '(none)';
+	const title =
+		doc.frontmatter.title || doc.title || path.basename(doc.filePath);
+
+	return [
+		`Plan: ${title}`,
+		`Path: ${doc.filePath}`,
+		`Status: ${doc.frontmatter.status}`,
+		`Session: ${doc.frontmatter.session || '(none)'}`,
+		`Complexity: ${doc.frontmatter.complexity || '(unset)'}`,
+		`Phase: ${doc.frontmatter.current_phase}/${doc.phases.length}${
+			phase ? ` (${phase.title})` : ''
+		}`,
+		`Steps: ${checkedSteps}/${totalSteps} overall; phase ${phaseChecked}/${phaseTotal}`,
+		`Next step: ${next ? next.text : '(all steps in current phase checked)'}`,
+		`Files (scope): ${files}`,
+	].join('\n');
+}
+
+function statusLine(doc: PlanDoc): string {
+	const phase = currentPhaseOf(doc);
+	const phaseChecked = phase?.steps.filter(s => s.checked).length ?? 0;
+	const phaseTotal = phase?.steps.length ?? 0;
+	const next = phase?.steps.find(s => !s.checked);
+	const title =
+		doc.frontmatter.title || doc.title || path.basename(doc.filePath);
+	return `status=${doc.frontmatter.status} phase=${
+		doc.frontmatter.current_phase
+	}/${doc.phases.length} steps=${phaseChecked}/${phaseTotal} next="${
+		next?.text ?? 'done'
+	}" title="${title}" path=${doc.filePath}`;
+}
+
+// Re-export for tests that imported runAcceptance from planManage.
+export {runAcceptance} from '../utils/execution/planAcceptance.js';
 
 async function requireActivePlan(
 	cwd: string,
@@ -183,7 +209,7 @@ async function requireActivePlan(
 	if (!doc) {
 		return {
 			error: textResult(
-				'Error: no active plan found under .snow/plan/. Create and get the plan approved first.',
+				'Error: no active plan found under .snow/plan/ (including YYYY-MM-DD/ date subdirs). Create and get the plan approved first.',
 				true,
 			),
 		};
@@ -194,15 +220,18 @@ async function requireActivePlan(
 async function handleCheckStep(
 	doc: PlanDoc,
 	args: any,
+	checked: boolean,
 ): Promise<CallToolResult> {
-	const phase = currentPhaseOf(doc);
+	const actionName = checked ? 'check_step' : 'uncheck_step';
+	const phaseIndex = resolvePhaseIndex(doc, args);
+	const phase = doc.phases.find(p => p.index === phaseIndex);
 	if (!phase) {
-		return textResult('Error: plan has no phases.', true);
+		return textResult(`Error: phase ${phaseIndex} not found.`, true);
 	}
 	const stepIndex = Number(args?.step_index);
 	if (!Number.isInteger(stepIndex) || stepIndex < 1) {
 		return textResult(
-			'Error: action=check_step requires "step_index" (1-based number).',
+			`Error: action=${actionName} requires "step_index" (1-based number).`,
 			true,
 		);
 	}
@@ -212,10 +241,19 @@ async function handleCheckStep(
 			true,
 		);
 	}
-	await setStepChecked(doc.filePath, phase.index, stepIndex, true);
+	await setStepChecked(doc.filePath, phase.index, stepIndex, checked);
 	const updated = await parsePlanDocument(doc.filePath);
-	const updatedPhase = currentPhaseOf(updated)!;
+	const updatedPhase = updated.phases.find(p => p.index === phase.index)!;
 	const remaining = updatedPhase.steps.filter(s => !s.checked);
+	if (!checked) {
+		return textResult(
+			`Step ${stepIndex} unchecked in phase ${
+				updatedPhase.index
+			}. Remaining unchecked: ${
+				remaining.map(s => s.text).join(' | ') || '(none)'
+			}`,
+		);
+	}
 	return textResult(
 		remaining.length === 0
 			? `Step ${stepIndex} checked. All steps of phase ${updatedPhase.index} are done — call plan-manage {action:"complete_phase"} to run acceptance and advance.`
@@ -244,7 +282,11 @@ async function handleCompletePhase(
 		);
 	}
 
-	const acceptance = await runAcceptance(cwd, abortSignal);
+	const acceptance = await runAcceptance(
+		cwd,
+		abortSignal,
+		getPlanAcceptanceSettings(),
+	);
 	if (!acceptance.ok) {
 		return textResult(
 			`Phase ${phase.index} acceptance FAILED — fix the issues and call complete_phase again.\n${acceptance.output}`,
@@ -263,6 +305,7 @@ async function handleCompletePhase(
 
 	const nextIndex = phase.index + 1;
 	await writePlanFrontmatter(doc.filePath, {current_phase: nextIndex});
+
 	const updated = await parsePlanDocument(doc.filePath);
 	setPlanScope(getSessionId(), {
 		planPath: updated.filePath,
@@ -290,9 +333,7 @@ async function handleAmend(
 	if (!reason) {
 		return textResult('Error: action=amend requires "reason".', true);
 	}
-	const phaseIndex = Number.isInteger(Number(args?.phase_index))
-		? Number(args.phase_index)
-		: Math.max(1, doc.frontmatter.current_phase);
+	const phaseIndex = resolvePhaseIndex(doc, args);
 	const phase = doc.phases.find(p => p.index === phaseIndex);
 	if (!phase) {
 		return textResult(`Error: phase ${phaseIndex} not found.`, true);
@@ -312,7 +353,7 @@ async function handleAmend(
 
 	// Insert after the last existing entry of each section (line-anchored).
 	const matter = (await import('gray-matter')).default;
-	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^﻿/, '');
+	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^\uFEFF/, '');
 	const parsed = matter(raw);
 	const lines = parsed.content.split(/\r?\n/);
 
@@ -355,18 +396,22 @@ async function handleAmend(
  * Find the line index right after a phase's `**Section**` label (creating the
  * section at the end of the phase when missing). Returns an insertion index.
  */
+function isPhaseHeadingLine(line: string, phaseIndex: number): boolean {
+	const match = /^#{2,3}\s+Phase\s+(\d+)\b/i.exec(line);
+	return Boolean(match && Number(match[1]) === phaseIndex);
+}
+
 function findSectionAnchor(
 	lines: string[],
 	phaseIndex: number,
 	section: 'Files' | 'Steps',
 ): number {
-	const phaseRe = new RegExp(`^#{2,3}\\s+Phase\\s+${phaseIndex}\\b`, 'i');
-	const sectionRe = new RegExp(`^(?:[-*]\\s+)?\\*\\*${section}`, 'i');
+	const sectionNeedle = `**${section}`;
 	let inPhase = false;
 	let phaseEnd = lines.length;
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i]!;
-		if (phaseRe.test(line)) {
+		if (isPhaseHeadingLine(line, phaseIndex)) {
 			inPhase = true;
 			continue;
 		}
@@ -374,7 +419,7 @@ function findSectionAnchor(
 			phaseEnd = i;
 			break;
 		}
-		if (inPhase && sectionRe.test(line)) {
+		if (inPhase && line.includes(sectionNeedle)) {
 			return i + 1;
 		}
 	}
@@ -401,7 +446,11 @@ async function handleComplete(
 		);
 	}
 
-	const acceptance = await runAcceptance(cwd, abortSignal);
+	const acceptance = await runAcceptance(
+		cwd,
+		abortSignal,
+		getPlanAcceptanceSettings(),
+	);
 	if (!acceptance.ok) {
 		return textResult(
 			`Final acceptance FAILED — fix the issues and call complete again.\n${acceptance.output}`,
@@ -417,6 +466,141 @@ async function handleComplete(
 	);
 }
 
+async function handleAbandon(
+	doc: PlanDoc,
+	cwd: string,
+	args: any,
+): Promise<CallToolResult> {
+	const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
+	if (!reason) {
+		return textResult('Error: action=abandon requires "reason".', true);
+	}
+
+	const matter = (await import('gray-matter')).default;
+	const raw = (await fs.readFile(doc.filePath, 'utf8')).replace(/^\uFEFF/, '');
+	const parsed = matter(raw);
+	const body = parsed.content.endsWith('\n')
+		? parsed.content
+		: parsed.content + '\n';
+	const nextBody =
+		body +
+		`\n> Abandoned: ${reason} (${new Date().toISOString().slice(0, 10)})\n`;
+	await fs.writeFile(
+		doc.filePath,
+		matter.stringify(nextBody, parsed.data),
+		'utf8',
+	);
+
+	await writePlanFrontmatter(doc.filePath, {status: 'abandoned'});
+	resetPlanGate(getSessionId());
+	const abandonedDoc = await parsePlanDocument(doc.filePath);
+	const archivedTo = await archivePlan(abandonedDoc, cwd, 'abandoned');
+	return textResult(`Plan abandoned and archived to ${archivedTo}.`);
+}
+
+async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
+	const sessionId = getSessionId();
+	let doc: PlanDoc | null = null;
+
+	if (typeof args?.plan_path === 'string' && args.plan_path.trim()) {
+		const planPath = path.isAbsolute(args.plan_path)
+			? args.plan_path
+			: path.resolve(cwd, args.plan_path);
+		try {
+			doc = await parsePlanDocument(planPath);
+		} catch (error) {
+			return textResult(
+				`Error: cannot parse plan at ${planPath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+				true,
+			);
+		}
+	} else {
+		const docs = await findSessionPlanFiles(cwd, null);
+		doc =
+			docs
+				.filter(d => d.frontmatter.status === 'executing')
+				.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] ?? null;
+	}
+
+	if (!doc) {
+		return textResult(
+			'Error: no executing plan found to adopt. Pass plan_path or leave an unfinished executing plan under .snow/plan/.',
+			true,
+		);
+	}
+
+	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
+	// Always rebind to the current session id (empty string when no session manager entry).
+	const boundSession = sessionId ?? '';
+	await writePlanFrontmatter(doc.filePath, {
+		session: boundSession,
+		status: 'executing',
+		current_phase: currentPhase,
+	});
+	const updated = await parsePlanDocument(doc.filePath);
+	setPlanApproved(sessionId, true);
+	setPlanScope(sessionId, {
+		planPath: updated.filePath,
+		files: resolvePlanScopeFiles(updated),
+		cwd,
+	});
+	return textResult(
+		`Adopted plan ${updated.filePath} into session ${
+			boundSession || '(default)'
+		}; status=executing phase=${currentPhase}; gate approved.`,
+	);
+}
+
+async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
+	const title = typeof args?.title === 'string' ? args.title.trim() : '';
+	if (!title) {
+		return textResult('Error: action=create requires "title".', true);
+	}
+	const complexityRaw =
+		typeof args?.complexity === 'string' ? args.complexity : 'simple';
+	const complexity: PlanComplexity =
+		complexityRaw === 'medium' || complexityRaw === 'complex'
+			? complexityRaw
+			: 'simple';
+	const session =
+		typeof args?.session === 'string' && args.session.trim()
+			? args.session.trim()
+			: getSessionId() ?? '';
+	const context = typeof args?.context === 'string' ? args.context : undefined;
+	const baseSlug =
+		typeof args?.slug === 'string' && args.slug.trim()
+			? slugifyPlanTitle(args.slug)
+			: slugifyPlanTitle(title);
+
+	const dateDir = getPlanDateDir(cwd);
+	await fs.mkdir(dateDir, {recursive: true});
+
+	let slug = baseSlug;
+	let filePath = path.join(dateDir, `${slug}.md`);
+	for (let n = 2; ; n++) {
+		try {
+			await fs.access(filePath);
+			slug = `${baseSlug}-${n}`;
+			filePath = path.join(dateDir, `${slug}.md`);
+		} catch {
+			break;
+		}
+	}
+
+	const content = buildPlanMarkdown({
+		title,
+		session,
+		complexity,
+		context,
+	});
+	await fs.writeFile(filePath, content, 'utf8');
+	return textResult(
+		`Created draft plan at ${filePath} (complexity=${complexity}). Review, then ask for approval via askuser-ask_question.`,
+	);
+}
+
 export async function executePlanManageTool(
 	toolName: string,
 	args: any,
@@ -426,14 +610,39 @@ export async function executePlanManageTool(
 	void toolName;
 	const cwd = cwdOverride || process.cwd();
 	try {
-		const action = typeof args?.action === 'string' ? args.action : '';
-		if (
-			!['check_step', 'complete_phase', 'amend', 'complete'].includes(action)
-		) {
+		const action = (typeof args?.action === 'string' ? args.action : '') as
+			| PlanAction
+			| '';
+		if (!PLAN_ACTIONS.includes(action as PlanAction)) {
 			return textResult(
-				'Error: "action" must be one of: check_step, complete_phase, amend, complete',
+				`Error: "action" must be one of: ${PLAN_ACTIONS.join(', ')}`,
 				true,
 			);
+		}
+
+		if (action === 'list') {
+			const docs = await findSessionPlanFiles(cwd, null);
+			if (docs.length === 0) {
+				return textResult('No active plans under .snow/plan/.');
+			}
+			const lines = docs
+				.sort((a, b) => b.mtimeMs - a.mtimeMs)
+				.map(d => {
+					const title =
+						d.frontmatter.title || d.title || path.basename(d.filePath);
+					return `- [${d.frontmatter.status}] ${title} | session=${
+						d.frontmatter.session || '(none)'
+					} | phase=${d.frontmatter.current_phase} | ${d.filePath}`;
+				});
+			return textResult(`Active plans (${docs.length}):\n${lines.join('\n')}`);
+		}
+
+		if (action === 'create') {
+			return await handleCreate(cwd, args);
+		}
+
+		if (action === 'adopt') {
+			return await handleAdopt(cwd, args);
 		}
 
 		const found = await requireActivePlan(cwd);
@@ -442,14 +651,22 @@ export async function executePlanManageTool(
 		}
 
 		switch (action) {
+			case 'get':
+				return textResult(summarizePlan(found.doc));
+			case 'status':
+				return textResult(statusLine(found.doc));
 			case 'check_step':
-				return await handleCheckStep(found.doc, args);
+				return await handleCheckStep(found.doc, args, true);
+			case 'uncheck_step':
+				return await handleCheckStep(found.doc, args, false);
 			case 'complete_phase':
 				return await handleCompletePhase(found.doc, cwd, abortSignal);
 			case 'amend':
 				return await handleAmend(found.doc, cwd, args);
 			case 'complete':
 				return await handleComplete(found.doc, cwd, abortSignal);
+			case 'abandon':
+				return await handleAbandon(found.doc, cwd, args);
 			default:
 				return textResult(`Unknown plan action: ${action}`, true);
 		}
