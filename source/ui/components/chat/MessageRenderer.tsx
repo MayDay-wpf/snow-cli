@@ -6,6 +6,7 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
+import SubAgentSummaryCard from './SubAgentSummaryCard.js';
 import {
 	getToolResultSummary,
 	type ToolResultSummaryContext,
@@ -912,9 +913,22 @@ function MessageRendererImpl({
 												)}
 											</Box>
 										)}
+									{/* Foldable-style summary card for completed outer sub-agent runs */}
+									{message.subAgentSummary &&
+										(message.messageStatus === 'success' ||
+											message.messageStatus === 'error') &&
+										toolDisplayMode !== 'hidden' && (
+											<Box marginTop={0}>
+												<SubAgentSummaryCard
+													summary={message.subAgentSummary}
+													expanded={toolDisplayMode === 'full'}
+												/>
+											</Box>
+										)}
 									{/* Show tool result preview for successful tool executions */}
 									{message.messageStatus === 'success' &&
 										message.toolResult &&
+										!message.subAgentSummary &&
 										// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
 										!(
 											message.toolCall &&

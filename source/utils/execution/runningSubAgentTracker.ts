@@ -87,6 +87,12 @@ class RunningSubAgentTracker {
 	private interAgentQueues: Map<string, InterAgentMessage[]> = new Map();
 
 	/**
+	 * Per-instance AbortControllers for stopping a single sub-agent from Detail TUI.
+	 * Linked to parent abort signals when provided so ESC still aborts all children.
+	 */
+	private abortControllers: Map<string, AbortController> = new Map();
+
+	/**
 	 * Completed results from sub-agents spawned by other sub-agents.
 	 * Drained by the main conversation flow and injected as user messages.
 	 */
@@ -110,8 +116,55 @@ class RunningSubAgentTracker {
 		if (this.agents.delete(instanceId)) {
 			this.messageQueues.delete(instanceId);
 			this.interAgentQueues.delete(instanceId);
+			this.abortControllers.delete(instanceId);
 			this.rebuildSnapshot();
 			this.notifyListeners();
+		}
+	}
+
+	/**
+	 * Create and store an AbortController for a sub-agent instance.
+	 * If a parent abort signal is provided, it is linked so the instance aborts
+	 * when either the parent fires or abortAgent() is called.
+	 */
+	createAbortController(
+		instanceId: string,
+		parentSignal?: AbortSignal,
+	): AbortController {
+		const controller = new AbortController();
+		this.abortControllers.set(instanceId, controller);
+		if (parentSignal) {
+			const onParentAbort = () => controller.abort();
+			if (parentSignal.aborted) {
+				controller.abort();
+			} else {
+				parentSignal.addEventListener('abort', onParentAbort, {once: true});
+			}
+		}
+		return controller;
+	}
+
+	/**
+	 * Get the AbortController for a specific sub-agent instance.
+	 */
+	getAbortController(instanceId: string): AbortController | undefined {
+		return this.abortControllers.get(instanceId);
+	}
+
+	/**
+	 * Abort a single running sub-agent by instance ID.
+	 * Returns true if an abort signal was sent.
+	 */
+	abortAgent(instanceId: string): boolean {
+		const controller = this.abortControllers.get(instanceId);
+		if (!controller || controller.signal.aborted) {
+			return false;
+		}
+		try {
+			controller.abort();
+			return true;
+		} catch {
+			return false;
 		}
 	}
 

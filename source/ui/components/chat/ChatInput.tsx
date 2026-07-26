@@ -15,6 +15,9 @@ const ProfilePanel = lazy(() => import('../panels/ProfilePanel.js'));
 const RunningAgentsPanel = lazy(
 	() => import('../panels/RunningAgentsPanel.js'),
 );
+const SubAgentDetailPanel = lazy(
+	() => import('../panels/SubAgentDetailPanel.js'),
+);
 const RollbackMenuPanel = lazy(() => import('../panels/RollbackMenuPanel.js'));
 const CommandArgsPanel = lazy(() => import('../panels/CommandArgsPanel.js'));
 import {useInputBuffer} from '../../../hooks/input/useInputBuffer.js';
@@ -494,6 +497,24 @@ export default function ChatInput({
 		confirmRunningAgentsSelection,
 		closeRunningAgentsPicker,
 		updateRunningAgentsPickerState,
+		showSubAgentDetail,
+		detailAgent,
+		detailFocus,
+		detailInputValue,
+		detailTimelineOffset,
+		detailSendFeedback,
+		openSubAgentDetail,
+		closeSubAgentDetail,
+		toggleDetailFocus,
+		scrollDetailTimeline,
+		appendDetailInput,
+		backspaceDetailInput,
+		sendDetailMessage,
+		setDetailFocus,
+		openSubAgentDetailByIndex,
+		switchDetailAgentByIndex,
+		abortDetailAgent,
+		openLiveSlotDetailByIndex,
 	} = useRunningAgentsPicker(buffer, triggerUpdate);
 
 	// Use clipboard hook
@@ -640,6 +661,24 @@ export default function ChatInput({
 		confirmRunningAgentsSelection,
 		closeRunningAgentsPicker,
 		updateRunningAgentsPickerState,
+		showSubAgentDetail,
+		detailAgent,
+		detailFocus,
+		detailInputValue,
+		detailTimelineOffset,
+		detailSendFeedback,
+		openSubAgentDetail,
+		closeSubAgentDetail,
+		toggleDetailFocus,
+		scrollDetailTimeline,
+		appendDetailInput,
+		backspaceDetailInput,
+		sendDetailMessage,
+		setDetailFocus,
+		openSubAgentDetailByIndex,
+		switchDetailAgentByIndex,
+		abortDetailAgent,
+		openLiveSlotDetailByIndex,
 		showArgsPicker,
 		setShowArgsPicker,
 		argsSelectedIndex,
@@ -1313,6 +1352,17 @@ export default function ChatInput({
 								selectedAgents={selectedRunningAgents}
 								visible={showRunningAgentsPicker}
 								maxHeight={5}
+							/>
+						</Suspense>
+						<Suspense fallback={null}>
+							<SubAgentDetailPanel
+								agent={detailAgent}
+								visible={showSubAgentDetail}
+								focus={detailFocus}
+								inputValue={detailInputValue}
+								timelineOffset={detailTimelineOffset}
+								maxHeight={8}
+								sendFeedback={detailSendFeedback}
 							/>
 						</Suspense>
 					</Box>

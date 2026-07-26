@@ -286,6 +286,22 @@ export function liveOnToolStart(input: LiveToolStartInput): void {
 	slot.status = slot.pendingTools.size > 1 ? 'multi_pending' : 'tool_focus';
 	slot.isReasoning = false;
 	commitSlot(slot, now);
+
+	// Mirror tool activity into durable history for post-run review.
+	try {
+		const {ensureSubAgentRun, appendSubAgentRunHistory} =
+			require('./subAgentRunStore.js') as typeof import('./subAgentRunStore.js');
+		ensureSubAgentRun({
+			instanceId: input.agentId,
+			agentId: input.agentId,
+			agentName: input.agentName || slot.agentName,
+		});
+		if (histTitle) {
+			appendSubAgentRunHistory(input.agentId, histTitle);
+		}
+	} catch {
+		// optional history
+	}
 }
 
 export function liveOnToolEnd(input: LiveToolEndInput): void {
@@ -396,6 +412,18 @@ export function liveOnAgentDone(
 	slot.otherPendingCount = 0;
 	// Keep historyLines for residual multi-mode cards until turn-end clear.
 	commitSlot(slot, now);
+	try {
+		const {completeSubAgentRun} =
+			require('./subAgentRunStore.js') as typeof import('./subAgentRunStore.js');
+		completeSubAgentRun(agentId, {
+			error: options?.error,
+			durationMs: slot.durationMs,
+			tokenCount: slot.tokenCount,
+			endedAt: now,
+		});
+	} catch {
+		// optional
+	}
 }
 
 /** Flush throttled listener notifications immediately (tests / shutdown). */

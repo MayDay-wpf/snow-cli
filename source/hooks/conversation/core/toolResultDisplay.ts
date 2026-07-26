@@ -100,13 +100,74 @@ export function buildToolResultMessages(
 		// Sub-agent tools
 		if (toolCall.function.name.startsWith('subagent-')) {
 			let usage: any = undefined;
+			let resultPreview: string | undefined;
+			let errorMessage: string | undefined;
+			let agentName =
+				toolCall.function.name.substring('subagent-'.length) || 'Sub-agent';
+			let agentId = agentName;
+			let prompt: string | undefined;
+
+			try {
+				const callArgs = JSON.parse(toolCall.function.arguments || '{}');
+				if (typeof callArgs.prompt === 'string') {
+					prompt = callArgs.prompt;
+				}
+			} catch {
+				// ignore
+			}
+
 			if (!isError) {
 				try {
 					const subAgentResult = JSON.parse(result.content);
 					usage = subAgentResult.usage;
+					if (typeof subAgentResult.result === 'string') {
+						resultPreview = subAgentResult.result
+							.replace(/\x1b\[[0-9;]*m/g, '')
+							.trim();
+					}
+					if (typeof subAgentResult.error === 'string') {
+						errorMessage = subAgentResult.error;
+					}
 				} catch {
 					// Ignore parsing errors
 				}
+			} else if (result.content.startsWith('Error:')) {
+				errorMessage = result.content.slice('Error:'.length).trim();
+			}
+
+			// Prefer durable run record (prompt/history/tokens/name) when available.
+			let historyLines: string[] | undefined;
+			let tokenCount: number | undefined;
+			try {
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const {getSubAgentRun} =
+					require('./subAgentRunStore.js') as typeof import('./subAgentRunStore.js');
+				const run = getSubAgentRun(result.tool_call_id);
+				if (run) {
+					agentName = run.agentName || agentName;
+					agentId = run.agentId || agentId;
+					prompt = run.prompt || prompt;
+					historyLines = run.historyLines?.length
+						? [...run.historyLines]
+						: undefined;
+					tokenCount = run.tokenCount || undefined;
+					if (!resultPreview && run.finalSummary) {
+						resultPreview = run.finalSummary;
+					}
+					if (!errorMessage && run.errorMessage) {
+						errorMessage = run.errorMessage;
+					}
+				}
+			} catch {
+				// optional
+			}
+
+			if (tokenCount === undefined && usage && typeof usage === 'object') {
+				const inTok =
+					typeof usage.inputTokens === 'number' ? usage.inputTokens : 0;
+				const outTok =
+					typeof usage.outputTokens === 'number' ? usage.outputTokens : 0;
+				tokenCount = inTok + outTok || undefined;
 			}
 
 			resultMessages.push({
@@ -117,6 +178,19 @@ export function buildToolResultMessages(
 				toolCallId: result.tool_call_id,
 				toolResult: !isError ? result.content : undefined,
 				subAgentUsage: usage,
+				subAgentSummary: {
+					instanceId: result.tool_call_id,
+					agentId,
+					agentName,
+					prompt,
+					status: isError ? 'error' : 'completed',
+					durationMs,
+					tokenCount,
+					historyLines,
+					resultPreview,
+					errorMessage,
+					toolCount: historyLines?.length,
+				},
 				parallelGroup: parallelGroupId,
 				...(typeof durationMs === 'number' ? {toolDurationMs: durationMs} : {}),
 				...(typeof groupElapsedMs === 'number'

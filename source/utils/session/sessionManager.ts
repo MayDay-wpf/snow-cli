@@ -67,8 +67,25 @@ export interface Session {
 	// /goal 相关：标记本会话当前是否绑定了一个未完结的 Ralph Loop 目标。
 	// - true：goal- MCP 工具应该注册供模型调用
 	// - false / undefined：普通会话，goal- 工具不会注册
-	// 由 goalManager 在 createGoal / resumeGoal / clearGoal / modelUpdateGoal 中同步维护
+	// 由 goalManager 在 createGoal / resumeGoal / modelUpdateGoal 中同步维护
 	hasGoal?: boolean;
+	/** Completed/recent sub-agent run records for history UI (not sent to API). */
+	subAgentRuns?: Array<{
+		instanceId: string;
+		agentId: string;
+		agentName: string;
+		prompt: string;
+		sourceType: 'subagent' | 'teammate';
+		status: 'running' | 'completed' | 'error';
+		startedAt: number;
+		endedAt?: number;
+		durationMs?: number;
+		tokenCount: number;
+		historyLines: string[];
+		finalSummary?: string;
+		errorMessage?: string;
+		sessionId?: string;
+	}>;
 }
 
 export interface SessionListItem {
@@ -1054,6 +1071,16 @@ class SessionManager {
 		this.currentSession = session;
 		this.pendingNewSessionId = undefined;
 		this.notifyMessagesChanged();
+		try {
+			// Sync require: keep setCurrentSession sync for callers.
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				hydrateSubAgentRunsFromSession,
+			} = require('../../hooks/conversation/core/subAgentRunStore.js');
+			hydrateSubAgentRunsFromSession(session);
+		} catch {
+			// optional
+		}
 	}
 
 	clearCurrentSession(): void {
@@ -1062,6 +1089,15 @@ class SessionManager {
 		this.pendingNewSessionId = undefined;
 		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				clearSubAgentRuns,
+			} = require('../../hooks/conversation/core/subAgentRunStore.js');
+			clearSubAgentRuns();
+		} catch {
+			// optional
+		}
 
 		// Drop plan approval for the cleared session.
 		if (previousId) {

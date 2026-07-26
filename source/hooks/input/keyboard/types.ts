@@ -198,6 +198,36 @@ export type KeyboardInputOptions = {
 	confirmRunningAgentsSelection: () => any[];
 	closeRunningAgentsPicker: () => void;
 	updateRunningAgentsPickerState: (text: string, cursorPos: number) => void;
+	// Sub-agent detail TUI
+	showSubAgentDetail: boolean;
+	detailAgent: {
+		instanceId: string;
+		agentId: string;
+		agentName: string;
+		prompt: string;
+		startedAt: Date;
+		sourceType: 'subagent' | 'teammate';
+	} | null;
+	detailFocus: 'timeline' | 'input';
+	detailInputValue: string;
+	detailTimelineOffset: number;
+	detailSendFeedback: string | null;
+	openSubAgentDetail: (instanceId?: string) => boolean;
+	closeSubAgentDetail: () => void;
+	toggleDetailFocus: () => void;
+	scrollDetailTimeline: (delta: number) => void;
+	appendDetailInput: (ch: string) => void;
+	backspaceDetailInput: () => void;
+	sendDetailMessage: () => boolean;
+	setDetailFocus: (focus: 'timeline' | 'input') => void;
+	/** Open detail by 1-based picker index (1-9). */
+	openSubAgentDetailByIndex?: (oneBasedIndex: number) => boolean;
+	/** Switch detail agent by 1-based running-agent index (1-9). */
+	switchDetailAgentByIndex?: (oneBasedIndex: number) => boolean;
+	/** Abort/stop the currently viewed running agent. */
+	abortDetailAgent?: () => boolean;
+	/** Open detail from live cards when main input is empty. */
+	openLiveSlotDetailByIndex?: (oneBasedIndex?: number) => boolean;
 	// Command args picker
 	showArgsPicker: boolean;
 	setShowArgsPicker: (show: boolean) => void;

@@ -1,6 +1,10 @@
 import {useRef, useEffect} from 'react';
 import {useInput, useStdin} from 'ink';
-import type {HandlerContext, HandlerRefs, KeyboardInputOptions} from './keyboard/types.js';
+import type {
+	HandlerContext,
+	HandlerRefs,
+	KeyboardInputOptions,
+} from './keyboard/types.js';
 import {createHelpers} from './keyboard/context.js';
 import {focusFilterHandler} from './keyboard/handlers/focusFilter.js';
 import {modeToggleHandler} from './keyboard/handlers/modeToggle.js';
@@ -11,6 +15,7 @@ import {argsPickerHandler} from './keyboard/handlers/pickers/argsPicker.js';
 import {skillsPickerHandler} from './keyboard/handlers/pickers/skillsPicker.js';
 import {gitLinePickerHandler} from './keyboard/handlers/pickers/gitLinePicker.js';
 import {profilePickerHandler} from './keyboard/handlers/pickers/profilePicker.js';
+import {subAgentDetailHandler} from './keyboard/handlers/pickers/subAgentDetail.js';
 import {runningAgentsPickerHandler} from './keyboard/handlers/pickers/runningAgentsPicker.js';
 import {todoPickerHandler} from './keyboard/handlers/pickers/todoPicker.js';
 import {agentPickerHandler} from './keyboard/handlers/pickers/agentPicker.js';
@@ -112,6 +117,7 @@ export function useKeyboardInput(options: KeyboardInputOptions) {
 		if (skillsPickerHandler(ctx)) return;
 		if (gitLinePickerHandler(ctx)) return;
 		if (profilePickerHandler(ctx)) return;
+		if (subAgentDetailHandler(ctx)) return;
 		if (runningAgentsPickerHandler(ctx)) return;
 		if (todoPickerHandler(ctx)) return;
 		if (agentPickerHandler(ctx)) return;

@@ -153,6 +153,10 @@ function SubAgentLiveSlotsImpl({
 		toolDisplayMode === 'hidden' || subAgentDisplayMode === 'compact';
 	const showMultiHistory = subAgentDisplayMode === 'multi' && !hideFocus;
 
+	const activeSlots = slots.filter(
+		s => s.status !== 'completed' && s.status !== 'error',
+	);
+
 	return (
 		<Box flexDirection="column">
 			{slots.map(slot => {
@@ -175,6 +179,13 @@ function SubAgentLiveSlotsImpl({
 				);
 				const isTerminal =
 					slot.status === 'completed' || slot.status === 'error';
+				const activeIndex = activeSlots.findIndex(
+					s => s.agentId === slot.agentId,
+				);
+				const indexLabel =
+					!isTerminal && activeIndex >= 0 && activeIndex < 9
+						? String(activeIndex + 1)
+						: '';
 
 				// Tool focus wins; content preview only while writing with no tool focus.
 				// Terminal slots hide body — header alone is the residual Done card.
@@ -195,7 +206,8 @@ function SubAgentLiveSlotsImpl({
 								}
 								bold
 							>
-								{'  ◈ '}
+								{'  '}
+								{indexLabel ? `${indexLabel}◈ ` : '◈ '}
 								{slot.agentName}
 							</Text>
 							{headerMeta ? (
@@ -237,6 +249,13 @@ function SubAgentLiveSlotsImpl({
 					</Box>
 				);
 			})}
+			{activeSlots.length > 0 ? (
+				<Box>
+					<Text color={theme.colors.menuSecondary} dimColor>
+						{'  ▸ Enter / 1-9 open detail'}
+					</Text>
+				</Box>
+			) : null}
 		</Box>
 	);
 }

@@ -82,7 +82,8 @@ const RunningAgentsPanel = memo(
 							{t.runningAgentsPanel.title}{' '}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{t.runningAgentsPanel.keyboardHint}
+							{t.runningAgentsPanel.keyboardHintDetail ||
+								t.runningAgentsPanel.keyboardHint}
 						</Text>
 					</>
 				}
@@ -102,9 +103,15 @@ const RunningAgentsPanel = memo(
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.runningAgentsPanel.scrollHint}
 						{above > 0 &&
-							` · ${t.runningAgentsPanel.moreAbove.replace('{count}', String(above))}`}
+							` · ${t.runningAgentsPanel.moreAbove.replace(
+								'{count}',
+								String(above),
+							)}`}
 						{below > 0 &&
-							` · ${t.runningAgentsPanel.moreBelow.replace('{count}', String(below))}`}
+							` · ${t.runningAgentsPanel.moreBelow.replace(
+								'{count}',
+								String(below),
+							)}`}
 					</Text>
 				)}
 				renderItem={(agent: PickerAgent, isSelected: boolean) => {
@@ -113,9 +120,17 @@ const RunningAgentsPanel = memo(
 						? truncatePrompt(agent.prompt, 80)
 						: '';
 					const isTeammate = agent.sourceType === 'teammate';
-					const typeLabel = isTeammate
+					const isHistory = !!agent.isHistory;
+					const typeLabel = isHistory
+						? t.runningAgentsPanel.historyLabel || '[History]'
+						: isTeammate
 						? t.runningAgentsPanel.teammateLabel
 						: t.runningAgentsPanel.subAgentLabel;
+					const statusText = isHistory
+						? agent.historyStatus === 'error'
+							? t.subAgentDetailPanel?.statusError || 'Error'
+							: t.subAgentDetailPanel?.statusDone || 'Done'
+						: formatElapsed(agent.startedAt);
 
 					return (
 						<>
@@ -128,12 +143,15 @@ const RunningAgentsPanel = memo(
 								bold={isSelected}
 							>
 								{isSelected ? '❯ ' : '  '}
-								{isChecked ? '[✓]' : '[ ]'} {agent.agentName}
+								{isHistory ? '[·]' : isChecked ? '[✓]' : '[ ]'}{' '}
+								{agent.agentName}
 							</Text>
 							<Box marginLeft={5} overflow="hidden">
 								<Text
 									color={
-										isTeammate
+										isHistory
+											? theme.colors.menuSecondary
+											: isTeammate
 											? theme.colors.warning
 											: theme.colors.cyan
 									}
@@ -142,11 +160,12 @@ const RunningAgentsPanel = memo(
 									{typeLabel}
 								</Text>
 								<Text color={theme.colors.cyan} dimColor>
-									{' '}#{agent.agentId}
+									{' '}
+									#{agent.agentId}
 								</Text>
 								<Text color={theme.colors.menuSecondary} dimColor>
 									{' '}
-									{formatElapsed(agent.startedAt)}
+									{statusText}
 								</Text>
 							</Box>
 							{promptText ? (

@@ -464,6 +464,28 @@ export async function executeToolCall(
 					prompt: subAgentPrompt,
 					startedAt: new Date(),
 				});
+				// Per-instance abort so Detail TUI can stop this agent without killing the whole turn.
+				const subAgentAbortController =
+					runningSubAgentTracker.createAbortController(
+						toolCall.id,
+						abortSignal,
+					);
+				const subAgentAbortSignal = subAgentAbortController.signal;
+				try {
+					const {startSubAgentRun} = await import(
+						'../../hooks/conversation/core/subAgentRunStore.js'
+					);
+					startSubAgentRun({
+						instanceId: toolCall.id,
+						agentId,
+						agentName,
+						prompt: subAgentPrompt,
+						sourceType: 'subagent',
+						startedAt: new Date(),
+					});
+				} catch {
+					// optional history
+				}
 
 				// Create a tool confirmation adapter for sub-agent
 				const subAgentToolConfirmation = requestToolConfirmation
@@ -488,7 +510,7 @@ export async function executeToolCall(
 						prompt: subAgentPrompt,
 						instanceId: toolCall.id,
 						onMessage: onSubAgentMessage,
-						abortSignal,
+						abortSignal: subAgentAbortSignal,
 						requestToolConfirmation: subAgentToolConfirmation
 							? async (toolCall: ToolCall) => {
 									// Use the adapter to convert to the expected signature
@@ -509,7 +531,7 @@ export async function executeToolCall(
 
 					// Race with abort signal. Keep a const reference so TypeScript
 					// preserves narrowing inside the nested Promise callback.
-					const activeAbortSignal = abortSignal;
+					const activeAbortSignal = subAgentAbortSignal;
 					let subAgentResult: Awaited<typeof subAgentPromise>;
 					if (activeAbortSignal) {
 						subAgentResult = await Promise.race([
@@ -558,6 +580,56 @@ export async function executeToolCall(
 				} finally {
 					// Always unregister the sub-agent when it completes (success or error)
 					runningSubAgentTracker.unregister(toolCall.id);
+					try {
+						const {completeSubAgentRun} = await import(
+							'../../hooks/conversation/core/subAgentRunStore.js'
+						);
+						let finalSummary: string | undefined;
+						let tokenCount: number | undefined;
+						let error = false;
+						try {
+							const parsed = JSON.parse(
+								typeof result?.content === 'string' ? result.content : '',
+							);
+							if (parsed && typeof parsed === 'object') {
+								error = parsed.success === false;
+								const raw =
+									typeof parsed.result === 'string'
+										? parsed.result
+										: typeof parsed.error === 'string'
+										? parsed.error
+										: undefined;
+								if (raw) {
+									finalSummary = raw
+										.replace(/\x1b\[[0-9;]*m/g, '')
+										.replace(/[\r\n]+/g, ' ')
+										.trim()
+										.slice(0, 240);
+								}
+								const usage = parsed.usage;
+								if (usage && typeof usage === 'object') {
+									const inTok =
+										typeof usage.inputTokens === 'number'
+											? usage.inputTokens
+											: 0;
+									const outTok =
+										typeof usage.outputTokens === 'number'
+											? usage.outputTokens
+											: 0;
+									tokenCount = inTok + outTok || undefined;
+								}
+							}
+						} catch {
+							// ignore parse failures
+						}
+						completeSubAgentRun(toolCall.id, {
+							error,
+							finalSummary,
+							tokenCount,
+						});
+					} catch {
+						// optional history
+					}
 				}
 			} else {
 				// Regular tool execution

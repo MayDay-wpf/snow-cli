@@ -197,6 +197,21 @@ async function runSubAgentPayload(
 			prompt: payload.prompt,
 			startedAt: new Date(),
 		});
+		try {
+			const {startSubAgentRun} = await import(
+				'../../hooks/conversation/core/subAgentRunStore.js'
+			);
+			startSubAgentRun({
+				instanceId: payload.instanceId,
+				agentId: payload.agentId,
+				agentName: payload.agentId,
+				prompt: payload.prompt,
+				sourceType: 'subagent',
+				startedAt: new Date(),
+			});
+		} catch {
+			// optional history
+		}
 	}
 
 	try {

@@ -363,13 +363,34 @@ export async function interceptSpawnSubAgent(
 					prompt: spawnPrompt,
 					startedAt: new Date(),
 				});
+				const spawnAbortController =
+					runningSubAgentTracker.createAbortController(
+						spawnInstanceId,
+						ctx.abortSignal,
+					);
+				try {
+					// Sync require: this callback is not async.
+					// eslint-disable-next-line @typescript-eslint/no-require-imports
+					const {startSubAgentRun} =
+						require('../../hooks/conversation/core/subAgentRunStore.js') as typeof import('../../hooks/conversation/core/subAgentRunStore.js');
+					startSubAgentRun({
+						instanceId: spawnInstanceId,
+						agentId: spawnAgentId,
+						agentName: spawnAgentName,
+						prompt: spawnPrompt,
+						sourceType: 'subagent',
+						startedAt: new Date(),
+					});
+				} catch {
+					// optional history
+				}
 
 				const parentContext = context.active();
 				executeSubAgentFn(
 					spawnAgentId,
 					spawnPrompt,
 					ctx.onMessage,
-					ctx.abortSignal,
+					spawnAbortController.signal,
 					ctx.requestToolConfirmation,
 					ctx.isToolAutoApproved,
 					ctx.yoloMode,
