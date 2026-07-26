@@ -32,6 +32,9 @@ import type {
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
 import {GradientText} from './statusline/GradientText.js';
+import {formatPlanProgressLabel} from '../../../utils/ui/planProgress.js';
+import {findActivePlan} from '../../../utils/execution/planDocument.js';
+import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {formatTokens, pctColorName} from '../../utils/formatTokens.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
@@ -378,6 +381,34 @@ export default function StatusLine({
 		[contextUsage],
 	);
 	const [privacyRevision, setPrivacyRevision] = React.useState(0);
+	const [planProgressLabel, setPlanProgressLabel] = React.useState<string | null>(null);
+
+	// Poll active plan progress while plan mode is on (StatusLine chrome).
+	React.useEffect(() => {
+		if (!planMode) {
+			setPlanProgressLabel(null);
+			return;
+		}
+		let cancelled = false;
+		const refresh = async () => {
+			try {
+				const sessionId = sessionManager.getCurrentSession()?.id ?? null;
+				const doc = await findActivePlan(process.cwd(), sessionId);
+				if (cancelled) return;
+				setPlanProgressLabel(doc ? formatPlanProgressLabel(doc) : null);
+			} catch {
+				if (!cancelled) setPlanProgressLabel(null);
+			}
+		};
+		void refresh();
+		const id = setInterval(() => {
+			void refresh();
+		}, 3000);
+		return () => {
+			cancelled = true;
+			clearInterval(id);
+		};
+	}, [planMode]);
 	React.useEffect(() => {
 		const handleConfigChange = (event: {type: string; value: any}) => {
 			if (event.type === 'privacy') {
@@ -662,7 +693,10 @@ export default function StatusLine({
 		}
 
 		if (planMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modePlan)) {
-			statusItems.push({text: '⚐ Plan', color: '#60A5FA'});
+			statusItems.push({
+				text: planProgressLabel || '⚐ Plan',
+				color: '#60A5FA',
+			});
 		}
 
 		if (
@@ -940,7 +974,7 @@ export default function StatusLine({
 			{planMode && !isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.modePlan) && (
 				<Box>
 					<Text color="#60A5FA" dimColor>
-						{t.chatScreen.planModeActive}
+						{planProgressLabel || t.chatScreen.planModeActive}
 					</Text>
 				</Box>
 			)}

@@ -326,9 +326,11 @@ export default function ChatScreen({
 			return;
 		}
 
+		// 1s is enough for Action Required attention without hammering
+		// process.title / OSC on Windows Terminal (was 500ms).
 		const intervalId = setInterval(() => {
 			setTerminalTitleFrame(frame => frame + 1);
-		}, 500);
+		}, 1000);
 
 		return () => {
 			clearInterval(intervalId);
@@ -653,6 +655,7 @@ export default function ChatScreen({
 				pendingMessages={pendingMessages}
 				pendingToolConfirmation={pendingToolConfirmation}
 				pendingUserQuestion={pendingUserQuestion}
+				planMode={planMode}
 				bashSensitiveCommand={bashSensitiveCommand}
 				terminalExecutionState={terminalExecutionState}
 				schedulerExecutionState={schedulerExecutionState}

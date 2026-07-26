@@ -596,8 +596,19 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		context,
 	});
 	await fs.writeFile(filePath, content, 'utf8');
+
+	// Surface a compact plan body in the tool result so the CLI history shows
+	// what was created (not only a path). Full review still happens at askuser
+	// via PlanApprovalPreview, which loads the on-disk document.
+	const previewLines = content
+		.split(/\r?\n/)
+		.filter(line => !line.startsWith('---'))
+		.slice(0, 40)
+		.join('\n');
 	return textResult(
-		`Created draft plan at ${filePath} (complexity=${complexity}). Review, then ask for approval via askuser-ask_question.`,
+		`Created draft plan at ${filePath} (complexity=${complexity}).\n` +
+			`Review the plan below (and/or open the file), then ask for approval via askuser-ask_question.\n\n` +
+			`${previewLines}${content.split(/\r?\n/).length > 40 ? '\n…' : ''}`,
 	);
 }
 

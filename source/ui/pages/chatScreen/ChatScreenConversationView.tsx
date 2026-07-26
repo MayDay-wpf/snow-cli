@@ -6,6 +6,7 @@ import PendingToolCalls from '../../components/chat/PendingToolCalls.js';
 import SubAgentLiveSlots from '../../components/chat/SubAgentLiveSlots.js';
 import ToolConfirmation from '../../components/tools/ToolConfirmation.js';
 import AskUserQuestion from '../../components/special/AskUserQuestion.js';
+import PlanApprovalPreview from '../../components/special/PlanApprovalPreview.js';
 import {
 	BashCommandConfirmation,
 	BashCommandExecutionStatus,
@@ -46,6 +47,7 @@ type Props = {
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
+	planMode: boolean;
 	bashSensitiveCommand: BashSensitiveCommandState;
 	terminalExecutionState: any;
 	schedulerExecutionState: any;
@@ -72,6 +74,7 @@ export default function ChatScreenConversationView({
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
+	planMode,
 	bashSensitiveCommand,
 	terminalExecutionState,
 	schedulerExecutionState,
@@ -246,11 +249,20 @@ export default function ChatScreenConversationView({
 				)}
 
 			{pendingUserQuestion && (
-				<AskUserQuestion
-					question={pendingUserQuestion.question}
-					options={pendingUserQuestion.options}
-					onAnswer={handleUserQuestionAnswer}
-				/>
+				<>
+					{/* Plan Mode: show the plan document above the approval prompt. */}
+					<PlanApprovalPreview
+						enabled={Boolean(planMode)}
+						question={pendingUserQuestion.question}
+						workingDirectory={workingDirectory}
+						terminalWidth={terminalWidth}
+					/>
+					<AskUserQuestion
+						question={pendingUserQuestion.question}
+						options={pendingUserQuestion.options}
+						onAnswer={handleUserQuestionAnswer}
+					/>
+				</>
 			)}
 		</>
 	);
