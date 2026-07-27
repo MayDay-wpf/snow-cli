@@ -371,6 +371,14 @@ class RunningSubAgentTracker {
 		if (!fromAgent) {
 			return false; // Sender agent is not running
 		}
+		const targetAgent = this.agents.get(targetInstanceId);
+		if (!targetAgent) {
+			return false;
+		}
+		// Reject cross-session / cross-project delivery (do not silently enqueue).
+		if (!this.areAgentsPeerCompatible(fromAgent, targetAgent)) {
+			return false;
+		}
 
 		const message: InterAgentMessage = {
 			fromInstanceId,
@@ -424,13 +432,27 @@ class RunningSubAgentTracker {
 	}
 
 	/**
-	 * Find a running sub-agent instance by agentId (type).
-	 * If multiple instances of the same type are running, returns the first match.
-	 * Use this to resolve agentId -> instanceId for inter-agent messaging.
+	 * Get a running agent by instance id (all sessions).
 	 */
-	findInstanceByAgentId(agentId: string): RunningSubAgent | undefined {
+	getAgent(instanceId: string): RunningSubAgent | undefined {
+		return this.agents.get(instanceId);
+	}
+
+	/**
+	 * Find a running sub-agent instance by agentId (type).
+	 * Default: only match agents in the current session (plus unscoped).
+	 * Pass explicit sessionId/projectId to scope to a sender's session, or {all:true}.
+	 * If multiple instances of the same type match, returns the first match.
+	 */
+	findInstanceByAgentId(
+		agentId: string,
+		options?: RunningSubAgentQueryOptions,
+	): RunningSubAgent | undefined {
 		for (const agent of this.agents.values()) {
-			if (agent.agentId === agentId) {
+			if (
+				agent.agentId === agentId &&
+				matchesRunningAgentFilter(agent, options)
+			) {
 				return agent;
 			}
 		}
@@ -439,15 +461,74 @@ class RunningSubAgentTracker {
 
 	/**
 	 * Find all running sub-agent instances by agentId (type).
+	 * Same session/project filtering as findInstanceByAgentId.
 	 */
-	findAllInstancesByAgentId(agentId: string): RunningSubAgent[] {
+	findAllInstancesByAgentId(
+		agentId: string,
+		options?: RunningSubAgentQueryOptions,
+	): RunningSubAgent[] {
 		const result: RunningSubAgent[] = [];
 		for (const agent of this.agents.values()) {
-			if (agent.agentId === agentId) {
+			if (
+				agent.agentId === agentId &&
+				matchesRunningAgentFilter(agent, options)
+			) {
 				result.push(agent);
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * Whether two running agents may collaborate (same session + project when set).
+	 * Unscoped (legacy) agents are treated as compatible with any peer.
+	 */
+	areAgentsPeerCompatible(
+		fromAgent: RunningSubAgent,
+		toAgent: RunningSubAgent,
+	): boolean {
+		if (
+			fromAgent.sessionId &&
+			toAgent.sessionId &&
+			fromAgent.sessionId !== toAgent.sessionId
+		) {
+			return false;
+		}
+		if (
+			fromAgent.projectId &&
+			toAgent.projectId &&
+			fromAgent.projectId !== toAgent.projectId
+		) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Peers visible to a running agent for collaboration tools.
+	 * Prefer the sender's own session/project scope over the UI current session,
+	 * so background agents stay isolated after a session switch.
+	 */
+	getPeerAgents(selfInstanceId?: string): RunningSubAgent[] {
+		if (!selfInstanceId) {
+			return this.getRunningAgents();
+		}
+		const self = this.agents.get(selfInstanceId);
+		if (!self) {
+			return this.getRunningAgents().filter(
+				a => a.instanceId !== selfInstanceId,
+			);
+		}
+		const scope: RunningSubAgentQueryOptions = {};
+		if (self.sessionId) {
+			scope.sessionId = self.sessionId;
+		}
+		if (self.projectId) {
+			scope.projectId = self.projectId;
+		}
+		return this.getRunningAgents(
+			self.sessionId || self.projectId ? scope : undefined,
+		).filter(a => a.instanceId !== selfInstanceId);
 	}
 
 	// ── Inter-agent message listeners (for UI notifications) ──

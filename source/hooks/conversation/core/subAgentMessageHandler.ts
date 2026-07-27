@@ -190,12 +190,21 @@ export function clearAllTeammateStreamEntries(): void {
 	notifyTeammateStreamListeners();
 }
 
-export function clearAllSubAgentStreamEntries(): void {
-	if (_subAgentStreamMap.size > 0) {
-		_subAgentStreamMap.clear();
-		_subAgentStreamSnapshot = [];
-		notifySubAgentStreamListeners();
+/**
+ * Clear only the ephemeral sub-agent stream map used by LoadingIndicator.
+ * Does NOT touch live slots (use clearSubAgentLiveSlotsNotInSession / clearAll).
+ */
+export function clearSubAgentStreamEntriesOnly(): void {
+	if (_subAgentStreamMap.size === 0) {
+		return;
 	}
+	_subAgentStreamMap.clear();
+	_subAgentStreamSnapshot = [];
+	notifySubAgentStreamListeners();
+}
+
+export function clearAllSubAgentStreamEntries(): void {
+	clearSubAgentStreamEntriesOnly();
 	// Keep live slots in sync with stop/clear/rollback stream cleanup paths.
 	clearAllSubAgentLiveSlots();
 }

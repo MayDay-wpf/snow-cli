@@ -413,6 +413,51 @@ export function useRunningAgentsPicker(
 		}
 	}, [showSubAgentDetail, detailAgentInstanceId, detailTimelineOffset]);
 
+	// Close detail when the viewed agent no longer belongs to the current
+	// session's filtered lists (e.g. after switching sessions).
+	useEffect(() => {
+		if (!showSubAgentDetail || !detailAgentInstanceId) return;
+		const stillVisible =
+			runningAgents.some(a => a.instanceId === detailAgentInstanceId) ||
+			pickerAgents.some(a => a.instanceId === detailAgentInstanceId) ||
+			Boolean(getSubAgentRun(detailAgentInstanceId));
+		if (!stillVisible && !detailAgentSnapshotRef.current) {
+			setShowSubAgentDetail(false);
+			setDetailAgentInstanceId(null);
+			setDetailFocus('timeline');
+			setDetailInputValue('');
+			setDetailTimelineOffset(0);
+			setDetailSendFeedback(null);
+		}
+		// If only the last-known snapshot remains after a session switch,
+		// drop it so detail does not stick to a foreign agent.
+		if (
+			!stillVisible &&
+			detailAgentSnapshotRef.current?.instanceId === detailAgentInstanceId
+		) {
+			const snapshotSession = (
+				detailAgentSnapshotRef.current as {sessionId?: string}
+			).sessionId;
+			// PickerAgent has no sessionId; when neither running nor history has
+			// the agent, the snapshot is stale after session filter changes.
+			if (!snapshotSession) {
+				detailAgentSnapshotRef.current = null;
+				setShowSubAgentDetail(false);
+				setDetailAgentInstanceId(null);
+				setDetailFocus('timeline');
+				setDetailInputValue('');
+				setDetailTimelineOffset(0);
+				setDetailSendFeedback(null);
+			}
+		}
+	}, [
+		showSubAgentDetail,
+		detailAgentInstanceId,
+		runningAgents,
+		pickerAgents,
+		runHistory,
+	]);
+
 	const openSubAgentDetail = useCallback(
 		(instanceId?: string) => {
 			const targetId =

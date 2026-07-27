@@ -1077,7 +1077,33 @@ class SessionManager {
 			const {
 				hydrateSubAgentRunsFromSession,
 			} = require('../../hooks/conversation/core/subAgentRunStore.js');
+			// Restore this session's history first.
 			hydrateSubAgentRunsFromSession(session);
+		} catch {
+			// optional
+		}
+
+		// UI isolation on session switch:
+		// - clear live slots that belong to other sessions
+		// - clear ephemeral stream entries shown in LoadingIndicator
+		// Do NOT abort or unregister background agents from the previous session.
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				clearSubAgentLiveSlotsNotInSession,
+			} = require('../../hooks/conversation/core/subAgentLiveStore.js');
+			clearSubAgentLiveSlotsNotInSession(session.id);
+		} catch {
+			// optional
+		}
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				clearSubAgentStreamEntriesOnly,
+			} = require('../../hooks/conversation/core/subAgentMessageHandler.js');
+			// Stream map is global/ephemeral; wipe on switch so LoadingIndicator
+			// does not show agents from the previous session.
+			clearSubAgentStreamEntriesOnly();
 		} catch {
 			// optional
 		}
@@ -1095,6 +1121,25 @@ class SessionManager {
 				clearSubAgentRuns,
 			} = require('../../hooks/conversation/core/subAgentRunStore.js');
 			clearSubAgentRuns();
+		} catch {
+			// optional
+		}
+		// Clear live/stream UI state; keep running agents in tracker (no abort).
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				clearAllSubAgentLiveSlots,
+			} = require('../../hooks/conversation/core/subAgentLiveStore.js');
+			clearAllSubAgentLiveSlots();
+		} catch {
+			// optional
+		}
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const {
+				clearSubAgentStreamEntriesOnly,
+			} = require('../../hooks/conversation/core/subAgentMessageHandler.js');
+			clearSubAgentStreamEntriesOnly();
 		} catch {
 			// optional
 		}

@@ -106,9 +106,8 @@ export function buildPeerAgentsContext(
 	instanceId: string | undefined,
 	canSpawn: boolean,
 ): string {
-	const otherAgents = runningSubAgentTracker
-		.getRunningAgents()
-		.filter(a => a.instanceId !== instanceId);
+	// Scope peers to the caller's session/project, not the UI current session.
+	const otherAgents = runningSubAgentTracker.getPeerAgents(instanceId);
 
 	if (otherAgents.length > 0) {
 		const agentList = otherAgents
