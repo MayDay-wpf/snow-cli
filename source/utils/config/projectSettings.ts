@@ -5,6 +5,18 @@ import {
 	type UnifiedSettings,
 } from './unifiedSettings.js';
 
+export type PlanAcceptancePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+
+export interface PlanAcceptanceSettings {
+	commands?: string[];
+	runBuild?: boolean;
+	runDiagnostics?: boolean;
+	/** Preferred package manager when no lockfile is present. */
+	preferPackageManager?: PlanAcceptancePackageManager;
+	/** Fallback commands when no build script / explicit commands are set. */
+	fallbackCommands?: string[];
+}
+
 export interface ProjectSettings {
 	toolSearchEnabled?: boolean;
 	autoFormatEnabled?: boolean;
@@ -12,6 +24,8 @@ export interface ProjectSettings {
 	fileListDisplayMode?: 'list' | 'tree';
 	yoloMode?: boolean;
 	planMode?: boolean;
+	planStrictness?: 'strict' | 'soft' | 'off';
+	planAcceptance?: PlanAcceptanceSettings;
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;
@@ -63,6 +77,8 @@ function loadSettings(): ProjectSettings {
 		fileListDisplayMode: pick('fileListDisplayMode'),
 		yoloMode: pick('yoloMode'),
 		planMode: pick('planMode'),
+		planStrictness: pick('planStrictness'),
+		planAcceptance: pick('planAcceptance'),
 		vulnerabilityHuntingMode: pick('vulnerabilityHuntingMode'),
 		hybridCompressEnabled: pick('hybridCompressEnabled'),
 		imageCompressEnabled: pick('imageCompressEnabled'),
@@ -147,6 +163,103 @@ export function getPlanMode(): boolean {
 
 export function setPlanMode(enabled: boolean): void {
 	setField('planMode', enabled);
+}
+
+export type PlanStrictness = 'strict' | 'soft' | 'off';
+
+/** Process-local override for tests; does not write settings.json. */
+let planStrictnessOverride: PlanStrictness | null = null;
+
+export function setPlanStrictnessOverride(value: PlanStrictness | null): void {
+	planStrictnessOverride = value;
+}
+
+export function clearPlanStrictnessOverride(): void {
+	planStrictnessOverride = null;
+}
+
+export async function withPlanStrictness<T>(
+	value: PlanStrictness,
+	fn: () => T | Promise<T>,
+): Promise<T> {
+	const previous = planStrictnessOverride;
+	planStrictnessOverride = value;
+	try {
+		return await fn();
+	} finally {
+		planStrictnessOverride = previous;
+	}
+}
+
+export function getPlanStrictness(): PlanStrictness {
+	if (
+		planStrictnessOverride === 'strict' ||
+		planStrictnessOverride === 'soft' ||
+		planStrictnessOverride === 'off'
+	) {
+		return planStrictnessOverride;
+	}
+	const settings = loadSettings();
+	const value = settings.planStrictness;
+	return value === 'strict' || value === 'soft' || value === 'off'
+		? value
+		: 'soft';
+}
+export function setPlanStrictness(value: PlanStrictness): void {
+	setField('planStrictness', value);
+}
+
+const PLAN_ACCEPTANCE_PACKAGE_MANAGERS: PlanAcceptancePackageManager[] = [
+	'npm',
+	'pnpm',
+	'yarn',
+	'bun',
+];
+
+function normalizePreferPackageManager(
+	value: unknown,
+): PlanAcceptancePackageManager | undefined {
+	if (
+		typeof value === 'string' &&
+		(PLAN_ACCEPTANCE_PACKAGE_MANAGERS as string[]).includes(value)
+	) {
+		return value as PlanAcceptancePackageManager;
+	}
+	return undefined;
+}
+
+export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
+	const settings = loadSettings();
+	const value = settings.planAcceptance;
+	if (!value || typeof value !== 'object') {
+		return {runBuild: true, runDiagnostics: true};
+	}
+	const preferPackageManager = normalizePreferPackageManager(
+		value.preferPackageManager,
+	);
+	const fallbackCommands = Array.isArray(value.fallbackCommands)
+		? value.fallbackCommands.filter(
+				(c): c is string => typeof c === 'string' && c.trim().length > 0,
+		  )
+		: undefined;
+	return {
+		commands: Array.isArray(value.commands)
+			? value.commands.filter(
+					(c): c is string => typeof c === 'string' && c.trim().length > 0,
+			  )
+			: undefined,
+		runBuild: value.runBuild !== false,
+		runDiagnostics: value.runDiagnostics !== false,
+		preferPackageManager,
+		fallbackCommands:
+			fallbackCommands && fallbackCommands.length > 0
+				? fallbackCommands
+				: undefined,
+	};
+}
+
+export function setPlanAcceptanceSettings(value: PlanAcceptanceSettings): void {
+	setField('planAcceptance', value);
 }
 
 export function getVulnerabilityHuntingMode(): boolean {

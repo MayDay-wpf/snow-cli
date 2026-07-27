@@ -11,6 +11,17 @@ import {
 	formatDurationMs,
 	MIN_TOOL_DURATION_DISPLAY_MS,
 } from '../../../utils/core/textUtils.js';
+import {
+	SUBAGENT_LIVE_SLOTS_ENABLED,
+	clearAllSubAgentLiveSlots,
+	liveOnAgentDone,
+	liveOnAgentStatus,
+	liveOnToolEnd,
+	liveOnToolStart,
+} from './subAgentLiveStore.js';
+import {getSubAgentDisplayMode} from '../../../utils/config/themeConfig.js';
+
+export {SUBAGENT_LIVE_SLOTS_ENABLED};
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -179,11 +190,31 @@ export function clearAllTeammateStreamEntries(): void {
 	notifyTeammateStreamListeners();
 }
 
-export function clearAllSubAgentStreamEntries(): void {
-	if (_subAgentStreamMap.size === 0) return;
+/**
+ * Clear only the ephemeral sub-agent stream map used by LoadingIndicator.
+ * Does NOT touch live slots (use clearSubAgentLiveSlotsNotInSession / clearAll).
+ */
+export function clearSubAgentStreamEntriesOnly(): void {
+	if (_subAgentStreamMap.size === 0) {
+		return;
+	}
 	_subAgentStreamMap.clear();
 	_subAgentStreamSnapshot = [];
 	notifySubAgentStreamListeners();
+}
+
+export function clearAllSubAgentStreamEntries(): void {
+	clearSubAgentStreamEntriesOnly();
+	// Keep live slots in sync with stop/clear/rollback stream cleanup paths.
+	clearAllSubAgentLiveSlots();
+}
+
+function shouldUseSubAgentLiveSlots(agentId: string): boolean {
+	if (!SUBAGENT_LIVE_SLOTS_ENABLED || agentId.startsWith('teammate-')) {
+		return false;
+	}
+	// /subagent-display hidden restores legacy toolPending flooding path.
+	return getSubAgentDisplayMode() !== 'hidden';
 }
 
 // ── Types ──
@@ -218,6 +249,56 @@ function formatTokenCount(tokens: number | undefined): string {
 	return String(tokens);
 }
 
+/** Max characters for live slot content preview (single-line). */
+const LIVE_CONTENT_PREVIEW_MAX = 120;
+
+/** Max characters for live tool title/params preview (single-line). */
+const LIVE_TOOL_PARAM_PREVIEW_MAX = 100;
+
+/**
+ * Build a short single-line preview for SubAgentLiveSlots writing status.
+ * Uses the last non-empty line, collapses whitespace, and truncates aggressively.
+ */
+function formatLiveContentPreview(
+	content: string,
+	maxChars: number = LIVE_CONTENT_PREVIEW_MAX,
+): string {
+	if (!content) return '';
+	const lines = content.split(/\r?\n/);
+	let lastLine = '';
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const trimmed = (lines[i] ?? '').replace(/\s+/g, ' ').trim();
+		if (trimmed) {
+			lastLine = trimmed;
+			break;
+		}
+	}
+	if (!lastLine) return '';
+	if (lastLine.length <= maxChars) return lastLine;
+	return `…${lastLine.slice(-(maxChars - 1))}`;
+}
+
+/**
+ * Collapse multi-line tool params (e.g. terminal-execute commands) into a
+ * single-line live title/paramsPreview fragment. Full args stay elsewhere.
+ */
+function formatLiveToolParamDisplay(
+	raw: string,
+	maxChars: number = LIVE_TOOL_PARAM_PREVIEW_MAX,
+): string {
+	if (!raw) return '';
+	const singleLine = String(raw).replace(/\s+/g, ' ').trim();
+	if (!singleLine) return '';
+	if (singleLine.length <= maxChars) return singleLine;
+	if (maxChars <= 3) return singleLine.slice(0, maxChars);
+	return `${singleLine.slice(0, maxChars - 3)}...`;
+}
+
+/** Join base tool title with already-sanitized param display. */
+function formatLiveToolTitle(baseTitle: string, paramDisplay: string): string {
+	return `${baseTitle}${paramDisplay || ''}`;
+}
+
 function extractRejectionReason(content: string): string | undefined {
 	const match = content.match(
 		/^Error: Tool execution rejected by user:([\s\S]+)$/,
@@ -235,6 +316,17 @@ export class SubAgentUIHandler {
 	private readonly streamStates: Record<string, StreamState> = {};
 	private readonly activeReasoningAgents = new Set<string>();
 	private readonly agentNameMap: Record<string, string> = {};
+	/** Duration tracking for two-step tools when pending rows are skipped (live slots). */
+	private readonly toolStartedAtByCallId = new Map<string, number>();
+	/**
+	 * Tracks agents that already received a live-slot completion summary.
+	 * Only final done events may mark this; intermediate stream `done`s are ignored.
+	 * Do not clear this set on later tool_calls/content/reasoning — multi-turn
+	 * activity within one instance must not reopen summarization.
+	 */
+	private readonly completionSummaryEmitted = new Set<string>();
+	/** Wall-clock start for completion duration (first live activity per agent). */
+	private readonly agentWallClockStartedAt = new Map<string, number>();
 	private readonly FLUSH_INTERVAL = 100;
 
 	/** Sequential display queue: only one agent streams visible content at a time */
@@ -327,6 +419,44 @@ export class SubAgentUIHandler {
 		this.updateGlobalTokenCount();
 		removeTeammateStreamEntry(agentId);
 		removeSubAgentStreamEntry(agentId);
+		// Drop any leftover start-time markers for this agent.
+		for (const key of this.toolStartedAtByCallId.keys()) {
+			if (key.startsWith(`${agentId}:`)) {
+				this.toolStartedAtByCallId.delete(key);
+			}
+		}
+	}
+
+	/** Record first live activity timestamp used for completion duration. */
+	private markAgentWallClockStart(agentId: string): void {
+		if (!this.agentWallClockStartedAt.has(agentId)) {
+			this.agentWallClockStartedAt.set(agentId, Date.now());
+		}
+	}
+
+	private toolStartKey(agentId: string, toolCallId: string): string {
+		return `${agentId}:${toolCallId}`;
+	}
+
+	private rememberToolStart(
+		agentId: string,
+		toolCallId: string,
+		startedAt: number,
+	): void {
+		this.toolStartedAtByCallId.set(
+			this.toolStartKey(agentId, toolCallId),
+			startedAt,
+		);
+	}
+
+	private takeToolStart(
+		agentId: string,
+		toolCallId: string,
+	): number | undefined {
+		const key = this.toolStartKey(agentId, toolCallId);
+		const startedAt = this.toolStartedAtByCallId.get(key);
+		this.toolStartedAtByCallId.delete(key);
+		return startedAt;
 	}
 
 	private updateGlobalTokenCount(): void {
@@ -691,6 +821,18 @@ export class SubAgentUIHandler {
 		const state = this.getStreamState(subAgentMessage.agentId);
 		if (!state.hasReceivedContentChunk) {
 			this.setAgentReasoning(subAgentMessage.agentId, true);
+			if (shouldUseSubAgentLiveSlots(subAgentMessage.agentId)) {
+				this.markAgentWallClockStart(subAgentMessage.agentId);
+				liveOnAgentStatus({
+					agentId: subAgentMessage.agentId,
+					agentName: subAgentMessage.agentName,
+					status: 'thinking',
+					isReasoning: true,
+					tokenCount: state.tokenCount,
+					// Clear prior writing preview so thinking UI does not keep stale text.
+					preview: '',
+				});
+			}
 		}
 		return prev;
 	}
@@ -711,8 +853,22 @@ export class SubAgentUIHandler {
 		state.fullThinkingContent += incomingDelta;
 		this.addTokens(subAgentMessage.agentId, incomingDelta);
 		const now = Date.now();
-		if (this.shouldFlush(state, now)) {
+		const shouldUpdateTokens = this.shouldFlush(state, now);
+		if (shouldUpdateTokens) {
 			this.flushTokenCount(subAgentMessage.agentId, now);
+			// Keep live slot tokens fresh; do not stream thinking body into preview.
+			if (
+				!state.hasReceivedContentChunk &&
+				shouldUseSubAgentLiveSlots(subAgentMessage.agentId)
+			) {
+				liveOnAgentStatus({
+					agentId: subAgentMessage.agentId,
+					agentName: subAgentMessage.agentName,
+					status: 'thinking',
+					isReasoning: true,
+					tokenCount: state.tokenCount,
+				});
+			}
 		}
 		if (state.hasReceivedContentChunk || !this.streamingEnabled) {
 			return prev;
@@ -1003,8 +1159,12 @@ export class SubAgentUIHandler {
 
 		const newMessages: Message[] = [];
 		const inheritedCtxUsage = this.latestCtxUsage[subAgentMessage.agentId];
+		const useLiveSlots = shouldUseSubAgentLiveSlots(subAgentMessage.agentId);
+		if (useLiveSlots) {
+			this.markAgentWallClockStart(subAgentMessage.agentId);
+		}
 
-		// Time-consuming tools: individual messages with full details
+		// Time-consuming tools: live focus when enabled; otherwise pending message rows.
 		for (const toolCall of timeConsumingTools) {
 			const toolDisplay = formatToolCallMessage(toolCall);
 			let toolArgs;
@@ -1023,25 +1183,46 @@ export class SubAgentUIHandler {
 
 			let paramDisplay = '';
 			if (toolCall.function.name === 'terminal-execute' && toolArgs.command) {
-				paramDisplay = ` "${toolArgs.command}"`;
+				const cmd = formatLiveToolParamDisplay(String(toolArgs.command));
+				paramDisplay = cmd ? ` "${cmd}"` : '';
 			} else if (toolDisplay.args.length > 0) {
-				const params = toolDisplay.args
-					.map((arg: any) => `${arg.key}: ${arg.value}`)
-					.join(', ');
-				paramDisplay = ` (${params})`;
+				const params = formatLiveToolParamDisplay(
+					toolDisplay.args
+						.map((arg: any) => `${arg.key}: ${arg.value}`)
+						.join(', '),
+				);
+				paramDisplay = params ? ` (${params})` : '';
+			}
+
+			const startedAt = Date.now();
+			const title = formatLiveToolTitle(
+				formatToolTitleLine(toolCall.function.name, 'pending'),
+				paramDisplay,
+			);
+
+			if (useLiveSlots) {
+				this.rememberToolStart(subAgentMessage.agentId, toolCall.id, startedAt);
+				liveOnToolStart({
+					agentId: subAgentMessage.agentId,
+					agentName: subAgentMessage.agentName,
+					toolCallId: toolCall.id,
+					toolName: toolCall.function.name,
+					title,
+					startedAt,
+					paramsPreview: paramDisplay || undefined,
+				});
+				// Skip toolPending message rows; final history is written on tool_result.
+				continue;
 			}
 
 			newMessages.push({
 				role: 'subagent' as const,
-				content: `\x1b[38;2;184;122;206m⚇ ${formatToolTitleLine(
-					toolCall.function.name,
-					'pending',
-				)}${paramDisplay}\x1b[0m`,
+				content: `\x1b[38;2;184;122;206m⚇ ${title}\x1b[0m`,
 				streaming: false,
 				toolCall: {name: toolCall.function.name, arguments: enrichedArgs},
 				toolCallId: toolCall.id,
 				toolPending: true,
-				toolStartedAt: Date.now(),
+				toolStartedAt: startedAt,
 				messageStatus: 'pending',
 				subAgent: {
 					agentId: subAgentMessage.agentId,
@@ -1053,35 +1234,63 @@ export class SubAgentUIHandler {
 			});
 		}
 
-		// Quick tools: compact tree display
+		// Quick tools: live focus when enabled; otherwise compact tree history rows.
 		if (quickTools.length > 0) {
-			const toolLines = quickTools.map((tc: any, index: any) => {
-				const display = formatToolCallMessage(tc);
-				const isLast = index === quickTools.length - 1;
-				const prefix = isLast ? '└─' : '├─';
-				const params = display.args
-					.map((arg: any) => `${arg.key}: ${arg.value}`)
-					.join(', ');
-				return `\n  \x1b[2m${prefix} ${display.toolName}${
-					params ? ` (${params})` : ''
-				}\x1b[0m`;
-			});
+			if (useLiveSlots) {
+				for (const toolCall of quickTools) {
+					const display = formatToolCallMessage(toolCall);
+					const params = formatLiveToolParamDisplay(
+						display.args
+							.map((arg: any) => `${arg.key}: ${arg.value}`)
+							.join(', '),
+					);
+					const paramDisplay = params ? ` (${params})` : '';
+					const startedAt = Date.now();
+					const title = formatLiveToolTitle(display.toolName, paramDisplay);
+					this.rememberToolStart(
+						subAgentMessage.agentId,
+						toolCall.id,
+						startedAt,
+					);
+					liveOnToolStart({
+						agentId: subAgentMessage.agentId,
+						agentName: subAgentMessage.agentName,
+						toolCallId: toolCall.id,
+						toolName: toolCall.function.name,
+						title,
+						startedAt,
+						paramsPreview: paramDisplay || undefined,
+					});
+				}
+			} else {
+				const toolLines = quickTools.map((tc: any, index: any) => {
+					const display = formatToolCallMessage(tc);
+					const isLast = index === quickTools.length - 1;
+					const prefix = isLast ? '└─' : '├─';
+					const params = display.args
+						.map((arg: any) => `${arg.key}: ${arg.value}`)
+						.join(', ');
+					return `\n  \x1b[2m${prefix} ${display.toolName}${
+						params ? ` (${params})` : ''
+					}\x1b[0m`;
+				});
 
-			newMessages.push({
-				role: 'subagent' as const,
-				content: `\x1b[36m⚇ ${subAgentMessage.agentName}\x1b[0m${toolLines.join(
-					'',
-				)}`,
-				streaming: false,
-				subAgent: {
-					agentId: subAgentMessage.agentId,
-					agentName: subAgentMessage.agentName,
-					isComplete: false,
-				},
-				subAgentInternal: true,
-				pendingToolIds: quickTools.map((tc: any) => tc.id),
-				subAgentContextUsage: inheritedCtxUsage,
-			});
+				newMessages.push({
+					role: 'subagent' as const,
+					content: `\x1b[36m⚇ ${
+						subAgentMessage.agentName
+					}\x1b[0m${toolLines.join('')}`,
+					streaming: false,
+					subAgent: {
+						agentId: subAgentMessage.agentId,
+						agentName: subAgentMessage.agentName,
+						isComplete: false,
+					},
+					subAgentInternal: true,
+					pendingToolIds: quickTools.map((tc: any) => tc.id),
+					subAgentContextUsage: inheritedCtxUsage,
+				});
+			}
 		}
 
 		// Fire-and-forget save
@@ -1154,7 +1363,37 @@ export class SubAgentUIHandler {
 			);
 		}
 
-		// Quick tool: error → new message, success → update pending
+		// Quick tools with live slots: focus only; no compact success history rows.
+		if (shouldUseSubAgentLiveSlots(subAgentMessage.agentId)) {
+			liveOnToolEnd({
+				agentId: subAgentMessage.agentId,
+				toolCallId: msg.tool_call_id,
+				ok: !isError,
+			});
+			if (!isError) {
+				return prev;
+			}
+			const statusText = rejectionReason
+				? `\n  └─ Rejection reason: ${rejectionReason}`
+				: '';
+			return [
+				...prev,
+				{
+					role: 'subagent' as const,
+					content: `\x1b[38;2;255;100;100m⚇✗ ${msg.tool_name}\x1b[0m${statusText}`,
+					streaming: false,
+					messageStatus: 'error' as const,
+					subAgent: {
+						agentId: subAgentMessage.agentId,
+						agentName: subAgentMessage.agentName,
+						isComplete: false,
+					},
+					subAgentInternal: true,
+				},
+			];
+		}
+
+		// Quick tool (legacy history path): error → new message, success → update pending
 		if (isError) {
 			const statusText = rejectionReason
 				? `\n  └─ Rejection reason: ${rejectionReason}`
@@ -1315,10 +1554,31 @@ export class SubAgentUIHandler {
 				m.toolCallId === msg.tool_call_id &&
 				m.subAgent?.agentId === subAgentMessage.agentId,
 		);
-		const startedAt =
+		const startedAtFromPending =
 			pendingIndex >= 0 && typeof prev[pendingIndex]?.toolStartedAt === 'number'
 				? prev[pendingIndex]!.toolStartedAt!
 				: undefined;
+		// Prefer pending-message timestamp; fall back to remembered live-slot start.
+		const startedAt =
+			startedAtFromPending ??
+			this.takeToolStart(subAgentMessage.agentId, msg.tool_call_id);
+		// Ensure remembered start is dropped even when pending message provided it.
+		if (startedAtFromPending !== undefined) {
+			this.toolStartedAtByCallId.delete(
+				this.toolStartKey(subAgentMessage.agentId, msg.tool_call_id),
+			);
+		}
+		if (shouldUseSubAgentLiveSlots(subAgentMessage.agentId)) {
+			liveOnToolEnd({
+				agentId: subAgentMessage.agentId,
+				toolCallId: msg.tool_call_id,
+				ok: !isError,
+			});
+			// Live-slot path: success stays in the slot only; errors still append history.
+			if (!isError) {
+				return prev;
+			}
+		}
 		const durationMs =
 			typeof startedAt === 'number' ? Date.now() - startedAt : undefined;
 		const durationLabel =
@@ -1351,6 +1611,14 @@ export class SubAgentUIHandler {
 			subAgentInternal: true,
 		};
 
+		// Live-slot errors have no pending row; always append.
+		if (
+			shouldUseSubAgentLiveSlots(subAgentMessage.agentId) &&
+			pendingIndex < 0
+		) {
+			return [...prev, resultMessage];
+		}
+
 		// 替换对应 pending 消息，而不是只 append（避免残留进行中）
 		if (pendingIndex >= 0) {
 			const updated = [...prev];
@@ -1372,14 +1640,36 @@ export class SubAgentUIHandler {
 			return prev;
 		}
 
+		const firstContentChunk = !state.hasReceivedContentChunk;
 		state.fullContent += incomingContent;
 		this.addTokens(subAgentMessage.agentId, incomingContent);
 		const now = Date.now();
-		if (this.shouldFlush(state, now)) {
+		const shouldUpdateTokens = this.shouldFlush(state, now);
+		if (shouldUpdateTokens) {
 			this.flushTokenCount(subAgentMessage.agentId, now);
 		}
 
 		state.hasReceivedContentChunk = true;
+
+		// Live status always OK; truncated preview only when streaming is enabled.
+		// Throttle subsequent preview/token updates via the same flush interval.
+		if (
+			shouldUseSubAgentLiveSlots(subAgentMessage.agentId) &&
+			(firstContentChunk || (this.streamingEnabled && shouldUpdateTokens))
+		) {
+			this.markAgentWallClockStart(subAgentMessage.agentId);
+			liveOnAgentStatus({
+				agentId: subAgentMessage.agentId,
+				agentName: subAgentMessage.agentName,
+				status: 'writing',
+				isReasoning: false,
+				tokenCount: state.tokenCount,
+				// Explicit empty string when streaming is off so stale previews are cleared.
+				preview: this.streamingEnabled
+					? formatLiveContentPreview(state.fullContent)
+					: '',
+			});
+		}
 		if (!this.streamingEnabled) {
 			return prev;
 		}
@@ -1391,8 +1681,9 @@ export class SubAgentUIHandler {
 		prev: Message[],
 		subAgentMessage: SubAgentMessage,
 	): Message[] {
-		const state = this.getStreamState(subAgentMessage.agentId);
-		this.setAgentReasoning(subAgentMessage.agentId, false);
+		const agentId = subAgentMessage.agentId;
+		const state = this.getStreamState(agentId);
+		this.setAgentReasoning(agentId, false);
 		const finalLines: Message[] = [];
 		if (!state.hasReceivedContentChunk) {
 			this.flushThinkingBuffer(state, finalLines, subAgentMessage);
@@ -1401,10 +1692,40 @@ export class SubAgentUIHandler {
 		}
 		this.flushRemainingContentBuffers(state, finalLines, subAgentMessage);
 		this.persistCompletedResponse(state, subAgentMessage);
-		this.clearStreamState(subAgentMessage.agentId);
+
+		const useLiveSlots = shouldUseSubAgentLiveSlots(agentId);
+		// Stream API `done` is intermediate; only executor final done completes the agent.
+		const isFinal =
+			(subAgentMessage.message as {final?: boolean}).final === true;
+
+		if (!useLiveSlots) {
+			this.clearStreamState(agentId);
+			if (agentId === this.activeDisplayAgentId) {
+				const flushed = this.flushNextQueuedAgent();
+				if (flushed.length > 0) finalLines.push(...flushed);
+			}
+			return finalLines.length > 0 ? [...prev, ...finalLines] : prev;
+		}
+
+		if (!isFinal) {
+			// Intermediate/spurious done: keep live slot + do not summarize.
+			// Stream text has already been flushed/persisted above; leave round state.
+			return finalLines.length > 0 ? [...prev, ...finalLines] : prev;
+		}
+
+		// Final cleanup only. Do NOT push a history "completed" line here —
+		// the main-agent tool result already renders:
+		//   ✓ subagent-agent_* (Ys)
+		// A second "Agent completed (Xs)" row is redundant noise.
+		if (!this.completionSummaryEmitted.has(agentId)) {
+			this.completionSummaryEmitted.add(agentId);
+		}
+		liveOnAgentDone(agentId);
+		this.agentWallClockStartedAt.delete(agentId);
+		this.clearStreamState(agentId);
 
 		// Display queue: when the active agent finishes, flush next queued agent(s)
-		if (subAgentMessage.agentId === this.activeDisplayAgentId) {
+		if (agentId === this.activeDisplayAgentId) {
 			const flushed = this.flushNextQueuedAgent();
 			if (flushed.length > 0) finalLines.push(...flushed);
 		}

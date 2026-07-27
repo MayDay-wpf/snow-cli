@@ -23,6 +23,7 @@ import {
 	mcpTools as notebookTools,
 	executeNotebookTool,
 } from '../../mcp/notebook.js';
+import {planManageTools, executePlanManageTool} from '../../mcp/planManage.js';
 import {
 	getMCPTools as getSubAgentTools,
 	subAgentService,
@@ -146,6 +147,7 @@ export function getRegisteredServicePrefixes(): string[] {
 	const builtInPrefixes = [
 		'todo-',
 		'notebook-',
+		'plan-',
 		'filesystem-',
 		'terminal-',
 		'ace-',
@@ -324,6 +326,17 @@ async function refreshToolsCache(): Promise<void> {
 			inputSchema: t.inputSchema,
 		})),
 		'notebook',
+	);
+
+	// Add built-in Plan management tools (Plan Mode execution tracking)
+	addBuiltInService(
+		'plan',
+		planManageTools.map(t => ({
+			name: t.name,
+			description: t.description || '',
+			inputSchema: t.inputSchema,
+		})),
+		'plan',
 	);
 
 	// Add built-in ACE Code Search tools
@@ -1149,6 +1162,67 @@ export async function closeAllMCPConnections(): Promise<void> {
 }
 
 /**
+ * Reject missing / empty-string / empty-array filePath before write tools no-op.
+ * `![]` is false in JS, so empty arrays used to slip past `if (!args.filePath)` and
+ * return a fake "0 succeeded, 0 failed" batch success.
+ */
+function assertNonEmptyFilePathParam(
+	filePath: unknown,
+	toolName: string,
+	allowArray: boolean = true,
+): void {
+	if (filePath === undefined || filePath === null) {
+		throw new Error(
+			`Missing required parameter 'filePath' for ${toolName} tool.\n` +
+				`AI Tip: Provide a non-empty string path` +
+				(allowArray ? ', or a non-empty array of paths / file configs.' : '.') +
+				` Never pass filePath: [] or "".`,
+		);
+	}
+
+	if (typeof filePath === 'string') {
+		const trimmed = filePath.trim();
+		if (!trimmed) {
+			throw new Error(
+				`Empty 'filePath' for ${toolName} tool.\n` +
+					`AI Tip: Provide an exact non-empty path string. Never pass "" or whitespace-only paths.`,
+			);
+		}
+		// Models sometimes emit the literal string "[]" instead of a real path.
+		if (trimmed === '[]') {
+			throw new Error(
+				`Empty 'filePath' array for ${toolName} tool.\n` +
+					`Received filePath as the string "[]".\n` +
+					`AI Tip: Pass a non-empty string path, or a non-empty array of file configs. ` +
+					`Never use filePath: [] or filePath: "[]".`,
+			);
+		}
+		return;
+	}
+
+	if (Array.isArray(filePath)) {
+		if (!allowArray) {
+			throw new Error(
+				`Invalid type for parameter 'filePath' for ${toolName} tool. ` +
+					`Expected a non-empty string but received an array.\n` +
+					`AI Tip: Pass a single path string, not an array.`,
+			);
+		}
+		if (filePath.length === 0) {
+			throw new Error(
+				`Empty 'filePath' array for ${toolName} tool.\n` +
+					`Batch mode requires at least one path.\n` +
+					`AI Tip: Pass a non-empty string path, or a non-empty array of file configs. ` +
+					`Never use filePath: [] — that creates/edits nothing and looks like a false success.`,
+			);
+		}
+		return;
+	}
+
+	// Leave non-string/non-array types to the per-tool validators below.
+}
+
+/**
  * Execute an MCP tool by parsing the prefixed tool name
  * Only connects to the service when actually needed
  */
@@ -1222,6 +1296,9 @@ export async function executeMCPTool(
 		} else if (toolName.startsWith('notebook-')) {
 			serviceName = 'notebook';
 			actualToolName = toolName.substring('notebook-'.length);
+		} else if (toolName.startsWith('plan-')) {
+			serviceName = 'plan';
+			actualToolName = toolName.substring('plan-'.length);
 		} else if (toolName.startsWith('filesystem-')) {
 			serviceName = 'filesystem';
 			actualToolName = toolName.substring('filesystem-'.length);
@@ -1295,6 +1372,7 @@ export async function executeMCPTool(
 		const builtInServices = [
 			'todo',
 			'notebook',
+			'plan',
 			'filesystem',
 			'terminal',
 			'ace',
@@ -1353,6 +1431,9 @@ export async function executeMCPTool(
 		} else if (serviceName === 'notebook') {
 			// Handle built-in Notebook tools (no connection needed)
 			result = await executeNotebookTool(actualToolName, args);
+		} else if (serviceName === 'plan') {
+			// Handle built-in Plan management tools (Plan Mode execution)
+			result = await executePlanManageTool(actualToolName, args, abortSignal);
 		} else if (serviceName === 'filesystem') {
 			// Handle built-in filesystem tools (no connection needed)
 			const {filesystemService} = await import('../../mcp/filesystem.js');
@@ -1376,14 +1457,8 @@ export async function executeMCPTool(
 					);
 					break;
 				case 'create':
-					// Validate required parameters
-					if (!args.filePath) {
-						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-create tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
-						);
-					}
+					// Validate required parameters (also rejects empty [] which is truthy)
+					assertNonEmptyFilePathParam(args.filePath, 'filesystem-create');
 					if (Array.isArray(args.filePath)) {
 						// Batch mode: validate each item
 						for (let i = 0; i < args.filePath.length; i++) {
@@ -1451,13 +1526,7 @@ export async function executeMCPTool(
 					}
 					break;
 				case 'edit':
-					if (!args.filePath) {
-						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-edit tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}\n` +
-								`AI Tip: Make sure to provide the 'filePath' parameter as a string or array.`,
-						);
-					}
+					assertNonEmptyFilePathParam(args.filePath, 'filesystem-edit');
 					if (
 						typeof args.filePath === 'string' &&
 						(!args.operations ||
@@ -1495,12 +1564,7 @@ export async function executeMCPTool(
 					break;
 				case 'replaceedit':
 					// Default-on tool (can be disabled in MCP panel)
-					if (!args.filePath) {
-						throw new Error(
-							`Missing required parameter 'filePath' for filesystem-replaceedit tool.\n` +
-								`Received args: ${JSON.stringify(args, null, 2)}`,
-						);
-					}
+					assertNonEmptyFilePathParam(args.filePath, 'filesystem-replaceedit');
 					if (
 						args.searchContent !== undefined &&
 						args.searchContent !== null &&

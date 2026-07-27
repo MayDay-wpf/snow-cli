@@ -1,5 +1,6 @@
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useSyncExternalStore, useRef} from 'react';
 import type {UsageInfo} from '../../api/chat.js';
+import {pauseGate, type PauseState} from '../../utils/execution/pauseGate.js';
 
 export type RetryStatus = {
 	isRetrying: boolean;
@@ -27,6 +28,15 @@ export function useStreamingState() {
 	const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
 	const isStreaming = streamStatus === 'streaming';
 	const isStopping = streamStatus === 'stopping';
+
+	// PauseGate subscription
+	const subscribeToPauseGate = (cb: () => void) => pauseGate.subscribe(cb);
+	const getPauseSnapshot = (): PauseState => pauseGate.state;
+	const pauseState = useSyncExternalStore(
+		subscribeToPauseGate,
+		getPauseSnapshot,
+	);
+	const isPaused = pauseState === 'paused';
 
 	const setIsStreaming: React.Dispatch<
 		React.SetStateAction<boolean>
@@ -64,6 +74,8 @@ export function useStreamingState() {
 	const [contextUsage, setContextUsage] = useState<UsageInfo | null>(null);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
+	const pauseStartRef = useRef<number | null>(null);
+	const pauseAccumulatedMsRef = useRef(0);
 	const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null);
 	const [animationFrame, setAnimationFrame] = useState(0);
 	const [codebaseSearchStatus, setCodebaseSearchStatus] =
@@ -85,7 +97,7 @@ export function useStreamingState() {
 
 	// Animation for streaming/saving indicator
 	useEffect(() => {
-		if (!isStreaming) return;
+		if (!isStreaming || isPaused) return;
 
 		const interval = setInterval(() => {
 			setAnimationFrame(prev => (prev + 1) % 2);
@@ -95,13 +107,25 @@ export function useStreamingState() {
 			clearInterval(interval);
 			setAnimationFrame(0);
 		};
-	}, [isStreaming]);
+	}, [isStreaming, isPaused]);
+
+	// Track pause intervals to compensate elapsed time
+	useEffect(() => {
+		if (isPaused) {
+			pauseStartRef.current = Date.now();
+		} else if (pauseStartRef.current !== null) {
+			pauseAccumulatedMsRef.current += Date.now() - pauseStartRef.current;
+			pauseStartRef.current = null;
+		}
+	}, [isPaused]);
 
 	// Timer for tracking request duration
 	useEffect(() => {
 		if (isStreaming && timerStartTime === null) {
 			// Start timer when streaming begins
 			setTimerStartTime(Date.now());
+			pauseAccumulatedMsRef.current = 0;
+			pauseStartRef.current = null;
 			setElapsedSeconds(0);
 		} else if (!isStreaming && timerStartTime !== null) {
 			// Stop timer when streaming ends
@@ -109,12 +133,15 @@ export function useStreamingState() {
 		}
 	}, [isStreaming, timerStartTime]);
 
-	// Update elapsed time every second
+	// Update elapsed time every second (frozen during pause)
 	useEffect(() => {
 		if (timerStartTime === null) return;
 
 		const interval = setInterval(() => {
-			const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+			if (pauseStartRef.current !== null) return; // frozen during pause
+			const elapsed = Math.floor(
+				(Date.now() - timerStartTime - pauseAccumulatedMsRef.current) / 1000,
+			);
 			setElapsedSeconds(elapsed);
 		}, 1000);
 
@@ -204,5 +231,7 @@ export function useStreamingState() {
 		setIsAutoCompressing,
 		compressBlockToast,
 		setCompressBlockToast,
+		isPaused,
+		pauseGate,
 	};
 }

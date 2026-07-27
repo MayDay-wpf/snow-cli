@@ -47,6 +47,7 @@ import {
 	readFileWithEncoding,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
+import {normalizePlanWritePath} from '../utils/execution/planPaths.js';
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -504,6 +505,11 @@ export class FilesystemMCPService {
 	): Promise<FileCreateResult> {
 		// Handle array of files (batch mode)
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			return await executeBatchOperation<
 				FileCreateConfig,
 				{message: string; filePath: string; content: string},
@@ -539,7 +545,7 @@ export class FilesystemMCPService {
 						fileOverwrite,
 					),
 				(path, result) => ({
-					path,
+					path: result.filePath ?? path,
 					content: result.content,
 				}),
 			);
@@ -568,8 +574,15 @@ export class FilesystemMCPService {
 		createDirectories: boolean = true,
 		overwrite: boolean = false,
 	): Promise<{message: string; filePath: string; content: string}> {
+		// Force top-level .snow/plan/*.md creates into today's date directory.
+		// Skip SSH remotes — path helpers are local-only.
+		const cwdForPlan = this.basePath || process.cwd();
+		const normalizedPath = this.isSSHPath(filePath)
+			? filePath
+			: normalizePlanWritePath(filePath, cwdForPlan);
+
 		try {
-			const fullPath = this.resolvePath(filePath);
+			const fullPath = this.resolvePath(normalizedPath);
 
 			let fileExisted = false;
 			let originalContent: string | undefined;
@@ -578,7 +591,7 @@ export class FilesystemMCPService {
 			try {
 				await fs.access(fullPath);
 				if (!overwrite) {
-					throw new Error(`File already exists: ${filePath}`);
+					throw new Error(`File already exists: ${normalizedPath}`);
 				}
 				fileExisted = true;
 				originalContent = await readFileWithEncoding(fullPath);
@@ -590,7 +603,7 @@ export class FilesystemMCPService {
 
 			// Backup for rollback
 			await backupFileBeforeMutation({
-				filePath,
+				filePath: normalizedPath,
 				basePath: this.basePath,
 				fileExisted,
 				originalContent,
@@ -605,23 +618,30 @@ export class FilesystemMCPService {
 			await writeFileWithEncoding(fullPath, content);
 
 			let message = fileExisted
-				? `File overwritten successfully: ${filePath}`
-				: `File created successfully: ${filePath}`;
+				? `File overwritten successfully: ${normalizedPath}`
+				: `File created successfully: ${normalizedPath}`;
+			if (normalizedPath !== filePath) {
+				message += ' (redirected from top-level .snow/plan)';
+			}
 
 			// Try to fetch fresh diagnostics after create/overwrite to avoid stale results
 			try {
 				const diagnostics = await getFreshDiagnostics(fullPath);
 				if (diagnostics.length > 0) {
-					message = appendDiagnosticsSummary(message, filePath, diagnostics);
+					message = appendDiagnosticsSummary(
+						message,
+						normalizedPath,
+						diagnostics,
+					);
 				}
 			} catch {
 				// Optional diagnostics retrieval, do not block create success
 			}
 
-			return {message, filePath, content};
+			return {message, filePath: normalizedPath, content};
 		} catch (error) {
 			throw new Error(
-				`Failed to create file ${filePath}: ${
+				`Failed to create file ${normalizedPath}: ${
 					error instanceof Error ? error.message : 'Unknown error'
 				}`,
 			);
@@ -722,6 +742,11 @@ export class FilesystemMCPService {
 	): Promise<EditBySearchResult> {
 		// Handle array of files
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			return await executeBatchOperation<
 				EditBySearchConfig,
 				EditBySearchSingleResult,
@@ -811,8 +836,13 @@ export class FilesystemMCPService {
 		contextLines: number = 8,
 	): Promise<EditByHashlineResult> {
 		if (Array.isArray(filePath)) {
+			if (filePath.length === 0) {
+				throw new Error(
+					'filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+				);
+			}
 			// string[] + shared operations (same batch shape as filesystem-replaceedit)
-			if (filePath.length > 0 && typeof filePath[0] === 'string') {
+			if (typeof filePath[0] === 'string') {
 				if (!operations || operations.length === 0) {
 					throw new Error(
 						'operations array is required when filePath is an array of path strings',
@@ -989,7 +1019,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
+			'Create a new file with content. **PATH REQUIREMENT**: Prefer a single non-empty string `filePath` plus top-level `content`. Never use empty paths, placeholders like "path/to/file", `filePath: []`, or `filePath: "[]"`. Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH (optional)**: prefer `[{path, content, overwrite?, createDirectories?}]` object arrays; bare path-string arrays are discouraged.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -997,15 +1027,19 @@ export const mcpTools = [
 					oneOf: [
 						{
 							type: 'string',
-							description: 'Path where the file should be created',
+							minLength: 1,
+							description:
+								'Single-file path (preferred). Must be a non-empty string — never "", "[]", or placeholders.',
 						},
 						{
 							type: 'array',
+							minItems: 1,
 							items: {
 								type: 'object',
 								properties: {
 									path: {
 										type: 'string',
+										minLength: 1,
 										description: 'Path where the file should be created',
 									},
 									content: {
@@ -1025,7 +1059,8 @@ export const mcpTools = [
 								},
 								required: ['path', 'content'],
 							},
-							description: 'Array of file configs for batch creation',
+							description:
+								'Non-empty array of {path, content} configs for batch creation. Never pass [].',
 						},
 					],
 				},

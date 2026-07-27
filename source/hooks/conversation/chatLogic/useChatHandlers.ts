@@ -83,6 +83,12 @@ export function useChatHandlers(
 		try {
 			const session = await sessionManager.loadSession(sessionId);
 			if (session) {
+				// loadSession -> setCurrentSession already:
+				// - hydrates sub-agent run history for this session
+				// - clears other-session live slots
+				// - clears ephemeral stream map
+				// Background agents from the previous session keep running (no abort).
+
 				const uiMessages = convertSessionMessagesToUI(session.messages);
 
 				stdout.write(ansiEscapes.clearTerminal);

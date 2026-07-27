@@ -18,6 +18,24 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 
 	// Regular character input
 	if (input && !key.ctrl && !key.meta && !key.escape) {
+		// When input is empty, digits 1-9 open live-card detail for that agent index.
+		const {
+			showSubAgentDetail,
+			showRunningAgentsPicker,
+			openLiveSlotDetailByIndex,
+		} = options;
+		if (
+			!showSubAgentDetail &&
+			!showRunningAgentsPicker &&
+			openLiveSlotDetailByIndex &&
+			/^[1-9]$/.test(input) &&
+			buffer.getFullText().trim().length === 0
+		) {
+			if (openLiveSlotDetailByIndex(Number(input))) {
+				return true;
+			}
+		}
+
 		// Reset history navigation when user starts typing
 		if (currentHistoryIndex !== -1) {
 			resetHistoryNavigation();

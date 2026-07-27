@@ -15,6 +15,8 @@ export function escapeHandler(ctx: HandlerContext): boolean {
 		closeSkillsPicker,
 		showGitLinePicker,
 		closeGitLinePicker,
+		showSubAgentDetail,
+		closeSubAgentDetail,
 		showRunningAgentsPicker,
 		closeRunningAgentsPicker,
 		showTodoPicker,
@@ -65,6 +67,12 @@ export function escapeHandler(ctx: HandlerContext): boolean {
 
 	if (showGitLinePicker) {
 		closeGitLinePicker();
+		setPickerActive(true);
+		return true;
+	}
+
+	if (showSubAgentDetail) {
+		closeSubAgentDetail();
 		setPickerActive(true);
 		return true;
 	}

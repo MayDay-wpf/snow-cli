@@ -305,7 +305,9 @@ Options
 		--task-list   Show background AI task list
 		--loop-daemon-execute Start or continue a detached loop daemon from encoded state (internal)
 		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
-		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
+		--yolo-p      Skip welcome screen and enable YOLO+Plan mode (TUI; headless with --ask resumes preapproved plan if present)
+		--plan        Headless opt-in: with --ask, try restore executing plan for session (no interactive approval)
+		--plan-file   Headless: resume a specific preapproved/executing plan file (path)
 		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
 		--dev         Enable developer mode with persistent userId for testing
 
@@ -367,6 +369,14 @@ Options
 				type: 'boolean',
 				default: false,
 				alias: 'yolo-p',
+			},
+			plan: {
+				type: 'boolean',
+				default: false,
+			},
+			planFile: {
+				type: 'string',
+				alias: 'plan-file',
 			},
 			cYolo: {
 				type: 'boolean',
@@ -680,6 +690,7 @@ const Startup = ({
 	isDevMode,
 	enableYolo,
 	enablePlan,
+	headlessPlanFile,
 }: {
 	version: string | undefined;
 	skipWelcome: boolean;
@@ -691,6 +702,7 @@ const Startup = ({
 	isDevMode: boolean;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
+	headlessPlanFile?: string;
 }) => {
 	const [appReady, setAppReady] = React.useState(false);
 	const [AppComponent, setAppComponent] = React.useState<any>(null);
@@ -783,6 +795,7 @@ const Startup = ({
 			showTaskList={showTaskList}
 			enableYolo={enableYolo}
 			enablePlan={enablePlan}
+			headlessPlanFile={headlessPlanFile}
 		/>
 	);
 };
@@ -954,6 +967,23 @@ runFatalExitCleanup = (err: unknown, code: number) => {
 const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
 const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
 
+const headlessPrompt =
+	typeof cli.flags['ask'] === 'string'
+		? (cli.flags['ask'] as string)
+		: undefined;
+// Headless plan opt-in: --plan-file, --plan, or --yolo-p with --ask.
+// Default headless remains planMode false unless one of these is set.
+const headlessPlanFile =
+	typeof cli.flags.planFile === 'string' && cli.flags.planFile.trim()
+		? cli.flags.planFile.trim()
+		: undefined;
+const enablePlanFlag = Boolean(
+	cli.flags.yoloP ||
+		cli.flags.plan ||
+		headlessPlanFile ||
+		(headlessPrompt && cli.flags.yoloP),
+);
+
 const mainInk = render(
 	<Startup
 		version={VERSION}
@@ -962,18 +992,15 @@ const mainInk = render(
 		)}
 		autoResume={isResumeMode}
 		resumeSessionId={resumeSessionId}
-		headlessPrompt={
-			typeof cli.flags['ask'] === 'string'
-				? (cli.flags['ask'] as string)
-				: undefined
-		}
+		headlessPrompt={headlessPrompt}
 		headlessSessionId={isResumeMode ? undefined : cli.input[0]}
 		showTaskList={cli.flags.taskList}
 		isDevMode={cli.flags.dev}
 		enableYolo={
 			cli.flags.yolo || cli.flags.yoloP || cli.flags.cYolo ? true : undefined
 		}
-		enablePlan={cli.flags.yoloP ? true : undefined}
+		enablePlan={enablePlanFlag ? true : undefined}
+		headlessPlanFile={headlessPlanFile}
 	/>,
 	{
 		exitOnCtrlC: false,

@@ -3,6 +3,7 @@ import type {CompressionStatus} from '../../../ui/components/compression/Compres
 import type {ThinkingStatus} from '../../../ui/components/chat/ThinkingStatus.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
+import type {PauseGate} from '../../../utils/execution/pauseGate.js';
 
 export type UserQuestionResult = {
 	selected: string | string[];
@@ -96,6 +97,7 @@ export type ConversationHandlerOptions = {
 	onThinkingStatus?: (status: ThinkingStatus | null) => void;
 	setIsAutoCompressing?: (value: boolean) => void;
 	onBuddyProgress?: (event: BuddyProgressEvent) => void;
+	pauseGate?: PauseGate;
 };
 
 export type TokenEncoder = {

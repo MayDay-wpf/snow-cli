@@ -11,9 +11,14 @@ on:
         required: true
         type: string
 
+# 最小权限原则：默认只读，需要写权限的 job 单独提升
 permissions:
-  contents: write
-  packages: write
+  contents: read
+
+# 避免并发发布：同一 ref 的多次触发排队执行，绝不取消进行中的发布
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-native:
@@ -31,20 +36,21 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
       - name: Build native accelerator
         shell: bash
         run: SNOW_NATIVE_TARGET=${{ matrix.platform }} node scripts/build-native.cjs
 
       - name: Upload native accelerator
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: snow-native-${{ matrix.platform }}
           path: bundle/native/*.node
@@ -53,33 +59,48 @@ jobs:
   publish:
     needs: build-native
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # 创建 GitHub Release
+      id-token: write # npm provenance (SLSA 供应链来源证明)
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
       - name: Use CI npm config
         run: cp .npmrc.ci .npmrc
 
+      - name: Verify tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch: package.json=$PKG_VERSION, tag=$TAG_VERSION"
+            exit 1
+          fi
+          echo "Version matches: $PKG_VERSION"
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build project
         run: npm run build
 
       - name: Download cross-platform native accelerators
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: snow-native-*
           path: bundle/native
@@ -89,13 +110,13 @@ jobs:
         run: npm pack --dry-run
 
       - name: Publish to NPM
-        run: npm publish
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
@@ -104,7 +125,16 @@ jobs:
 
             ### What's New
 
-            - Emergency fix for destructive update, configuration file hot reload disabled
+            #### Features
+            - AI Loop pause/continue: pause the AI loop mid-processing with `/pause` and resume with `/continue`; timer and stream-delay indicators freeze during pause, ESC still interrupts
+
+            #### Fixes
+            - Fix silent failures of summaryAgent / compactAgent / visionAgent / codebaseReviewAgent / bashOutputSummaryAgent / unifiedHooksExecutor on OpenAI-compatible endpoints (LM Studio, Ollama, vLLM) caused by wrong StreamChunk format reading
+            - Simplify i18n user message sample translations and improve theme colors
+
+            #### Docs
+            - Add relay station recommendations to README
+            - Update Bloome links for consistency
 
             ### Installation
             ```bash

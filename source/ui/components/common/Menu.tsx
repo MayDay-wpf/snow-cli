@@ -134,7 +134,7 @@ function Menu({
 			{hasMoreAbove && (
 				<Box>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						↑ +{moreAboveCount} more above
+						{t.menu.moreAbove.replace('{count}', String(moreAboveCount))}
 					</Text>
 				</Box>
 			)}
@@ -162,7 +162,7 @@ function Menu({
 			{hasMoreBelow && (
 				<Box>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						↓ +{moreBelowCount} more below
+						{t.menu.moreBelow.replace('{count}', String(moreBelowCount))}
 					</Text>
 				</Box>
 			)}

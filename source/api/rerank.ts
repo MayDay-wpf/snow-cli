@@ -1,7 +1,7 @@
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
-import {getVersionHeader} from '../utils/core/version.js';
+import {mergeApiRequestHeaders} from '../utils/core/version.js';
 
 export interface RerankOptions {
 	model?: string;
@@ -54,10 +54,7 @@ async function countTokens(text: string): Promise<number> {
 /**
  * Truncate text to fit within a token budget.
  */
-async function truncateText(
-	text: string,
-	maxTokens: number,
-): Promise<string> {
+async function truncateText(text: string, maxTokens: number): Promise<string> {
 	try {
 		const {encoding_for_model} = await import('tiktoken');
 		let encoder;
@@ -202,7 +199,10 @@ function normalizeRerankResponse(data: any): RerankResponse {
 		};
 	}
 	throw new Error(
-		`Unexpected rerank API response format: ${JSON.stringify(data).slice(0, 200)}`,
+		`Unexpected rerank API response format: ${JSON.stringify(data).slice(
+			0,
+			200,
+		)}`,
 	);
 }
 
@@ -225,13 +225,10 @@ async function callRerankAPI(options: {
 		requestBody['top_n'] = topN;
 	}
 
-	const headers: Record<string, string> = {
+	const headers = mergeApiRequestHeaders({
 		'Content-Type': 'application/json',
-		'x-snow': getVersionHeader(),
-	};
-	if (apiKey) {
-		headers['Authorization'] = `Bearer ${apiKey}`;
-	}
+		...(apiKey ? {Authorization: `Bearer ${apiKey}`} : {}),
+	});
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'POST',
@@ -271,8 +268,7 @@ export async function rerankDocuments(
 	const baseUrl = options.baseUrl || rerankingConfig.baseUrl;
 	const apiKey = options.apiKey || rerankingConfig.apiKey;
 	const topN = options.topN ?? rerankingConfig.topN;
-	const contextLength =
-		options.contextLength ?? rerankingConfig.contextLength;
+	const contextLength = options.contextLength ?? rerankingConfig.contextLength;
 	const {query, documents} = options;
 
 	if (!model) {
@@ -304,8 +300,7 @@ export async function rerankDocuments(
 	}
 
 	const url = resolveRerankEndpoint(baseUrl);
-	const effectiveTopN =
-		topN >= fitResult.documents.length ? undefined : topN;
+	const effectiveTopN = topN >= fitResult.documents.length ? undefined : topN;
 
 	let lastError: Error | null = null;
 

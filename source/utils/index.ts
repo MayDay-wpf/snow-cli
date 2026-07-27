@@ -4,6 +4,8 @@ import {Command} from '../types/index.js';
 import './commands/addDir.js';
 import './commands/agentsInject.js';
 import './commands/agent.js';
+import './commands/pause.js';
+import './commands/continue.js';
 import './commands/backend.js';
 import './commands/branch.js';
 import './commands/buddy.js';

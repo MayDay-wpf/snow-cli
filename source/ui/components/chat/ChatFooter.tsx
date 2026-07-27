@@ -66,6 +66,7 @@ type ChatFooterProps = {
 	disabled: boolean;
 	isStopping: boolean;
 	isProcessing: boolean;
+	isPaused: boolean;
 	chatHistory: Message[];
 	yoloMode: boolean;
 	setYoloMode: (value: boolean) => void;
@@ -341,6 +342,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							isSaving={props.isSaving}
 							isCompressing={props.isCompressing}
 							isAutoCompressing={props.isAutoCompressing}
+							isPaused={props.isPaused}
 							hasPendingToolConfirmation={props.hasPendingToolConfirmation}
 							hasPendingUserQuestion={props.hasPendingUserQuestion}
 							hasBlockingOverlay={props.hasBlockingOverlay}
@@ -388,6 +390,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 									disabled={props.disabled}
 									disableKeyboardNavigation={props.showBackgroundPanel}
 									isProcessing={props.isProcessing}
+									isPaused={props.isPaused}
 									chatHistory={props.chatHistory}
 									onHistorySelect={props.handleHistorySelect}
 									yoloMode={props.yoloMode}

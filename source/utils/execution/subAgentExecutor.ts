@@ -160,7 +160,7 @@ export async function executeSubAgent(
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
 					if (abortSignal?.aborted) {
-						emitSubAgentMessage(ctx, {type: 'done'});
+						// Final done is emitted once from the outer finally block.
 						return {
 							success: false,
 							result: ctx.finalResponse,
@@ -275,12 +275,12 @@ export async function executeSubAgent(
 			error: error instanceof Error ? error.message : 'Unknown error',
 		};
 	} finally {
-		// Always emit a final 'done' so the UI handler can clear stream entries.
-		// handleDone is idempotent (clearStreamState only removes existing entries),
-		// so emitting an extra 'done' on already-cleaned-up paths is safe.
+		// Sole terminal emitter: only this path marks agent completion for the UI.
+		// Intermediate stream `done` events (from the model API) are non-final and
+		// must not write the completed summary or clear the live slot.
 		if (ctx) {
 			try {
-				emitSubAgentMessage(ctx, {type: 'done'});
+				emitSubAgentMessage(ctx, {type: 'done', final: true});
 			} catch {
 				/* noop */
 			}
@@ -397,7 +397,7 @@ async function handleSpawnedChildren(
 		});
 	}
 
-	emitSubAgentMessage(ctx, {type: 'done'});
+	// Intermediate round (spawned children finished) — agent continues, so do NOT emit done.
 	return true;
 }
 
@@ -428,10 +428,8 @@ async function handleCompletionHooks(
 			}
 		}
 
-		if (interpreted.shouldContinueConversation) {
-			emitSubAgentMessage(ctx, {type: 'done'});
-		}
-
+		// Hooks continuing means the agent is not finished — do not emit done here.
+		// True completion is emitted once from executeSubAgent's finally block.
 		return interpreted.shouldContinueConversation || false;
 	} catch (error) {
 		console.error('onSubAgentComplete hook execution failed:', error);

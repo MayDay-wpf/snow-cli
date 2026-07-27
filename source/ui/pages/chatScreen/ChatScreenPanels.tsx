@@ -32,6 +32,9 @@ const NewPromptPanel = lazy(
 const SubAgentDepthPanel = lazy(
 	() => import('../../components/panels/SubAgentDepthPanel.js'),
 );
+const DisplayPanel = lazy(
+	() => import('../../components/panels/DisplayPanel.js'),
+);
 const ProfileEditPanel = lazy(
 	() => import('../../components/panels/ProfileEditPanel.js'),
 );
@@ -66,6 +69,8 @@ type Props = {
 	setShowPermissionsPanel: Dispatch<SetStateAction<boolean>>;
 	showSubAgentDepthPanel: boolean;
 	setShowSubAgentDepthPanel: Dispatch<SetStateAction<boolean>>;
+	showDisplayPanel: boolean;
+	setShowDisplayPanel: Dispatch<SetStateAction<boolean>>;
 	modelsPanelAdvancedModel: string;
 	modelsPanelBasicModel: string;
 	alwaysApprovedTools: Set<string>;
@@ -96,6 +101,8 @@ export default function ChatScreenPanels({
 	setShowPermissionsPanel,
 	showSubAgentDepthPanel,
 	setShowSubAgentDepthPanel,
+	showDisplayPanel,
+	setShowDisplayPanel,
 	modelsPanelAdvancedModel,
 	modelsPanelBasicModel,
 	alwaysApprovedTools,
@@ -423,7 +430,8 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -447,7 +455,8 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -460,13 +469,34 @@ export default function ChatScreenPanels({
 				</Box>
 			)}
 
+			{showDisplayPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
+								</Text>
+							</Box>
+						}
+					>
+						<DisplayPanel
+							visible={showDisplayPanel}
+							onClose={() => setShowDisplayPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
 			{showPermissionsPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<Suspense
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -539,7 +569,8 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -561,7 +592,8 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -586,7 +618,8 @@ export default function ChatScreenPanels({
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}

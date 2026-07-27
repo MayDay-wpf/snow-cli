@@ -154,6 +154,8 @@ export const zh: TranslationKeys = {
 	},
 	menu: {
 		navigate: '使用 ↑↓ 键导航,按 Enter 选择:',
+		moreAbove: '↑ 上方还有 {count} 项',
+		moreBelow: '↓ 下方还有 {count} 项',
 	},
 	proxyConfig: {
 		title: '代理配置',
@@ -582,6 +584,15 @@ export const zh: TranslationKeys = {
 		diffOpacity: 'Diff 高亮强度:',
 		diffOpacityInfo:
 			'调整差异高亮显示强度，默认 100%，最低 30%，回车按 10% 循环切换',
+		toolDisplay: '工具显示:',
+		toolDisplayInfo:
+			'工具调用密度 完整(full)/精简(compact)/隐藏(hidden)（回车循环；等同 /tool-display）',
+		thinkDisplay: '思考显示:',
+		thinkDisplayInfo:
+			'思考内容 完整(full)/精简(compact)（回车循环；等同 /think-display）',
+		subAgentDisplay: '子代理显示:',
+		subAgentDisplayInfo:
+			'子代理实时面板 槽位(slots)/多行(multi)/精简(compact)/隐藏(hidden)（回车循环；等同 /subagent-display）',
 		enabled: '[✓] 已启用',
 		disabled: '[ ] 已禁用',
 		darkTheme: '深色主题',
@@ -868,16 +879,22 @@ export const zh: TranslationKeys = {
 			deepresearch:
 				'执行自主多步联网深度研究，并将带引用的 Markdown 报告保存到 .snow/deepresearch/',
 			toolDisplay:
-				'控制工具调用显示模式。用法: /tool-display [full|compact|hidden|status]',
+				'控制工具调用显示：完整(full)/精简(compact)/隐藏(hidden)。用法: /tool-display [full|compact|hidden|status]',
 			toolIcons:
 				'控制工具类型图标。用法: /tool-icons [on|off|status|<tool>:<emoji>]',
 			toolNames:
 				'自定义工具显示名（官方路径，勿整文件改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
 			thinkDisplay:
-				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
+				'控制思考内容显示：完整(full)/精简(compact)。用法: /think-display [full|compact|status]',
+			subAgentDisplay:
+				'控制子代理实时显示：槽位(slots，默认)/多行(multi)/精简(compact)/隐藏(hidden)。用法: /subagent-display [slots|multi|compact|hidden|status]',
+			display:
+				'打开显示设置面板（工具/思考/子代理）。用法: /display | status | tool|think|subagent [mode]',
 			speedometer:
 				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
 			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
+			pause: '在下一轮暂停 AI Loop',
+			continue: '在 /pause 后继续 AI Loop',
 			quit: '退出应用程序',
 		},
 		copyLastFeedback: {
@@ -921,14 +938,35 @@ export const zh: TranslationKeys = {
 			},
 			// 工具显示模式命令消息
 			toolDisplay: {
-				status: (mode: string) =>
-					`工具显示模式: ${mode}` +
-					(mode === 'full'
-						? '（显示工具名 + 参数 + 结果）'
-						: mode === 'compact'
-						? '（仅显示工具名 + 简要状态）'
-						: '（隐藏所有工具调用，仅显示 AI 回复）'),
-				set: (mode: string) => `工具显示模式已设置为: ${mode}`,
+				status: (mode: string) => {
+					const label =
+						mode === 'full'
+							? '完整'
+							: mode === 'compact'
+							? '精简'
+							: mode === 'hidden'
+							? '隐藏'
+							: mode;
+					return (
+						`工具显示模式: ${label} (${mode})` +
+						(mode === 'full'
+							? '（显示工具名 + 参数 + 结果）'
+							: mode === 'compact'
+							? '（仅显示工具名 + 简要状态）'
+							: '（隐藏所有工具调用，仅显示 AI 回复）')
+					);
+				},
+				set: (mode: string) => {
+					const label =
+						mode === 'full'
+							? '完整'
+							: mode === 'compact'
+							? '精简'
+							: mode === 'hidden'
+							? '隐藏'
+							: mode;
+					return `工具显示模式已设置为: ${label} (${mode})`;
+				},
 				invalid: '无效的模式。用法: /tool-display [full|compact|hidden|status]',
 			},
 			// 工具类型图标 + 状态前缀命令消息
@@ -987,13 +1025,81 @@ export const zh: TranslationKeys = {
 			},
 			// 思考显示模式命令消息
 			thinkDisplay: {
-				status: (mode: string) =>
-					`思考显示模式: ${mode}` +
-					(mode === 'full'
-						? '（全量思考内容移入静态区）'
-						: '（缩减思考内容后移入静态区）'),
-				set: (mode: string) => `思考显示模式已设置为: ${mode}`,
+				status: (mode: string) => {
+					const label =
+						mode === 'full' ? '完整' : mode === 'compact' ? '精简' : mode;
+					return (
+						`思考显示模式: ${label} (${mode})` +
+						(mode === 'full'
+							? '（全量思考内容移入静态区）'
+							: '（缩减思考内容后移入静态区）')
+					);
+				},
+				set: (mode: string) => {
+					const label =
+						mode === 'full' ? '完整' : mode === 'compact' ? '精简' : mode;
+					return `思考显示模式已设置为: ${label} (${mode})`;
+				},
 				invalid: '无效的模式。用法: /think-display [full|compact|status]',
+			},
+			subAgentDisplay: {
+				status: (mode: string) => {
+					const labels: Record<string, string> = {
+						slots: '槽位',
+						multi: '多行',
+						compact: '精简',
+						hidden: '隐藏',
+					};
+					const label = labels[mode] ?? mode;
+					return (
+						`子代理显示模式: ${label} (${mode})` +
+						(mode === 'slots'
+							? ' (agent 容器 + 单行焦点覆盖)'
+							: mode === 'multi'
+							? ' (agent 容器 + 多行历史)'
+							: mode === 'compact'
+							? ' (仅 agent 标题行)'
+							: ' (关闭实时面板，回退旧工具卡片)')
+					);
+				},
+				set: (mode: string) => {
+					const labels: Record<string, string> = {
+						slots: '槽位',
+						multi: '多行',
+						compact: '精简',
+						hidden: '隐藏',
+					};
+					const label = labels[mode] ?? mode;
+					return `子代理显示模式已设为: ${label} (${mode})`;
+				},
+				invalid:
+					'无效的模式。用法: /subagent-display [slots|multi|compact|hidden|status]',
+			},
+			display: {
+				status: (tool: string, think: string, subagent: string) => {
+					const labels: Record<string, string> = {
+						full: '完整',
+						compact: '精简',
+						hidden: '隐藏',
+						slots: '槽位',
+						multi: '多行',
+					};
+					const fmt = (m: string) => {
+						const label = labels[m];
+						return label ? `${label} (${m})` : m;
+					};
+					return `显示设置: 工具=${fmt(tool)} · 思考=${fmt(
+						think,
+					)} · 子代理=${fmt(subagent)}`;
+				},
+				help:
+					'用法: /display [status]\n' +
+					'      /display tool [full|compact|hidden|status]\n' +
+					'      /display think [full|compact|status]\n' +
+					'      /display subagent [slots|multi|compact|hidden|status]\n' +
+					'兼容: /tool-display · /think-display · /subagent-display',
+				invalid: '无效参数。用法: /display [status|tool|think|subagent] [mode]',
+				opening: '正在打开显示设置面板',
 			},
 			// 测速仪命令消息
 			speedometer: {
@@ -1133,6 +1239,11 @@ export const zh: TranslationKeys = {
 			cut: {
 				usage: '用法: /cut <消息>',
 			},
+			// Pause/Continue (暂停/继续) 命令消息
+			pause: {
+				paused: 'AI Loop 已暂停。使用 /continue 继续，或按 ESC 中断。',
+				resumed: 'AI Loop 已继续。',
+			},
 			// BTW 命令消息
 			btw: {
 				usage: '用法: /btw <你的问题>',
@@ -1268,6 +1379,49 @@ export const zh: TranslationKeys = {
 		confirmClearAll: '清除全部权限？',
 		yes: '是',
 		no: '否',
+	},
+	displayPanel: {
+		title: '显示设置',
+		tool: '工具显示:',
+		think: '思考显示:',
+		subagent: '子代理显示:',
+		toolInfo:
+			'回车循环 完整(full) → 精简(compact) → 隐藏(hidden)（等同 /display tool）',
+		thinkInfo: '回车循环 精简(compact) → 完整(full)（等同 /display think）',
+		subagentInfo:
+			'回车循环 槽位(slots) → 多行(multi) → 精简(compact) → 隐藏(hidden)（等同 /display subagent）',
+		close: '← 关闭',
+		closeInfo: '返回聊天',
+		hint: '↑↓ 导航 · Enter 切换 · Esc 关闭 · 也可: /display tool|think|subagent',
+		modeLabels: {
+			full: '完整',
+			compact: '精简',
+			hidden: '隐藏',
+			slots: '槽位',
+			multi: '多行',
+		},
+		formatMode: (mode: string) => {
+			const labels: Record<string, string> = {
+				full: '完整',
+				compact: '精简',
+				hidden: '隐藏',
+				slots: '槽位',
+				multi: '多行',
+			};
+			const label = labels[mode];
+			return label ? `${label} (${mode})` : mode;
+		},
+		statusLine: (tool: string, think: string, subagent: string) => {
+			const labels: Record<string, string> = {
+				full: '完整',
+				compact: '精简',
+				hidden: '隐藏',
+				slots: '槽位',
+				multi: '多行',
+			};
+			const fmt = (m: string) => labels[m] ?? m;
+			return `工具=${fmt(tool)} · 思考=${fmt(think)} · 子代理=${fmt(subagent)}`;
+		},
 	},
 	subAgentDepthPanel: {
 		title: '子代理深度设置',
@@ -1542,6 +1696,7 @@ export const zh: TranslationKeys = {
 		statusFinishing: '收尾中...',
 		statusStreaming: '流式传输中',
 		statusWorking: '工作中',
+		statusWaitingSubAgents: '等待子代理中...',
 		statusIndexing: '索引代码库...',
 		statusWatcherActive: '文件监视器已激活 - 监控代码变化',
 		statusWatcherActiveShort: '文件监视',
@@ -1555,6 +1710,7 @@ export const zh: TranslationKeys = {
 		statusConnectionFailed:
 			'连接失败(这不会影响任何使用) - 请确保在你的 IDE 中安装并激活了 Snow CLI 插件',
 		statusStopping: '停止中...',
+		statusPaused: '已暂停 - 使用 /continue 继续或按 ESC 中断',
 		inputCopySuccess: '已复制输入框内容到剪贴板',
 		inputCopyFailedPrefix: '复制输入框内容失败',
 		// Profile switch
@@ -1575,6 +1731,9 @@ export const zh: TranslationKeys = {
 		// Parallel execution
 		parallelStart: '┌─ 并行执行',
 		parallelEnd: '└─ 执行完成',
+		parallelEndWithDuration: '└─ 执行完成 ({duration})',
+		pendingToolsMore: '还有 {count} 个工具运行中…',
+		pendingToolsSummary: '{count} 个工具运行中… ({elapsed})',
 		// Messages
 		userMessage: '你',
 		assistantMessage: '助手',
@@ -1767,6 +1926,16 @@ export const zh: TranslationKeys = {
 		expandedViewHint: '展开视图 • Ctrl+T 切换',
 		yoloModeActive: '⧴ YOLO 模式已激活 - 所有工具将自动批准无需确认',
 		planModeActive: '⚐ Plan 模式已激活 - 专业规划与协调助手',
+		planBadge: '⚐ 计划',
+		planStatusDraft: '草稿',
+		planStatusApproved: '已批准',
+		planStatusExecuting: '执行中',
+		planStatusCompleted: '已完成',
+		planStatusArchived: '已归档',
+		planStatusAbandoned: '已放弃',
+		planPhaseCount: '{count} 个阶段',
+		planPhaseProgress: '阶段 {current}/{total}',
+		planNextStep: '下一步',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting 模式已激活 - 专注漏洞挖掘与安全分析',
 		toolSearchEnabled: '♾︎ 工具搜索已开启 - 按需搜索加载工具',
@@ -1790,7 +1959,11 @@ export const zh: TranslationKeys = {
 		messagesCount: '{count} 条消息',
 		markedCount: '{count} 个已标记',
 		navigationHint:
-			'↑↓ 导航 • 空格 标记 • D 删除 • R 刷新 • Enter 查看 • ESC 关闭',
+			'↑↓ 导航 • 空格 标记 • D 删除 • R 刷新 • G 范围 • Enter 查看 • ESC 关闭',
+		scopeCurrent: '当前项目',
+		scopeAll: '全部项目',
+		scopeHint: 'G 切换范围',
+		legacyProject: '旧版任务',
 		moreAbove: '↑ 上方还有 {count} 个',
 		moreBelow: '↓ 下方还有 {count} 个',
 		deleteConfirm: '再次按 D 确认删除任务',
@@ -2043,6 +2216,8 @@ export const zh: TranslationKeys = {
 		commandPagerStatus: '{page}/{total}',
 		commandPagerHint: 'Tab 下一页(循环)',
 		multiToolPagerHint: 'Tab 查看下一组工具 ({page}/{total})',
+		diffPreviewTitle: '差异预览:',
+		diffPreviewTruncated: '还有 {count} 个文件变更 - 批准后可查看完整差异',
 		selectAction: '选择操作:',
 		enterRejectionReason: '输入拒绝原因:',
 		pressEnterToSubmit: '按 Enter 提交',
@@ -2333,12 +2508,39 @@ export const zh: TranslationKeys = {
 		title: '\u8fd0\u884c\u4e2d\u7684\u4ee3\u7406',
 		noAgentsRunning: '当前没有运行中的代理或队友',
 		keyboardHint: '(空格: 切换 · 回车: 确认 · Esc: 取消)',
+		keyboardHintDetail:
+			'(Enter/v: 详情 · 1-9: 跳转 · m: 发消息 · 空格: 多选 · Esc: 取消)',
 		selected: '已选择: {count}',
 		scrollHint: '↑↓ 滚动',
 		moreAbove: '上方还有 {count} 个',
 		moreBelow: '下方还有 {count} 个',
 		subAgentLabel: '[代理]',
 		teammateLabel: '[队友]',
+		historyLabel: '[历史]',
+	},
+	subAgentDetailPanel: {
+		timelineTitle: '工具时间线',
+		inputLabel: '发送消息给该代理',
+		inputPlaceholder: '输入消息，Enter 发送…',
+		hint: 'Tab 切换焦点 · ↑↓ 滚动 · Enter 发送 · Esc 返回',
+		hintRunning:
+			'Tab 焦点 · ↑↓ 滚动 · Enter 发送 · 1-9 切换 · x 停止 · Esc 返回',
+		moreAbove: '上方还有 {count} 条',
+		moreBelow: '下方还有 {count} 条',
+		statusRunning: '运行中',
+		statusWaiting: '等待中',
+		statusDone: '已完成',
+		statusError: '错误',
+		historyReadOnly: '历史回看 · 只读',
+	},
+	subAgentSummaryCard: {
+		statusDone: '已完成',
+		statusError: '错误',
+		promptLabel: '任务',
+		resultLabel: '结果',
+		errorLabel: '错误',
+		toolsCount: '{count} 个工具',
+		historyHint: '▸ 输入 >> 可回看完整时间线',
 	},
 	sseServer: {
 		started: '✓ SSE 服务器已启动',

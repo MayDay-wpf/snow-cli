@@ -123,43 +123,86 @@ export async function interceptSendMessage(
 
 				let success = false;
 				let resultText = '';
+				const sender = runningSubAgentTracker.getAgent(ctx.instanceId!);
+				const peerScope =
+					sender?.sessionId || sender?.projectId
+						? {
+								...(sender.sessionId ? {sessionId: sender.sessionId} : {}),
+								...(sender.projectId ? {projectId: sender.projectId} : {}),
+						  }
+						: undefined;
 
 				if (!msgContent) {
 					resultText = 'Error: message content is empty';
 				} else if (targetInstanceId) {
-					success = runningSubAgentTracker.sendInterAgentMessage(
-						ctx.instanceId!,
-						targetInstanceId,
-						msgContent,
-					);
-					if (success) {
-						const targetAgent = runningSubAgentTracker
-							.getRunningAgents()
-							.find(a => a.instanceId === targetInstanceId);
-						resultText = `Message sent to ${
-							targetAgent?.agentName || targetInstanceId
-						}`;
-					} else {
+					const targetAgent = runningSubAgentTracker.getAgent(targetInstanceId);
+					if (!targetAgent) {
 						resultText = `Error: Target agent instance "${targetInstanceId}" is not running`;
-					}
-				} else if (targetAgentId) {
-					const targetAgent =
-						runningSubAgentTracker.findInstanceByAgentId(targetAgentId);
-					if (targetAgent && targetAgent.instanceId !== ctx.instanceId) {
+					} else if (
+						sender &&
+						!runningSubAgentTracker.areAgentsPeerCompatible(sender, targetAgent)
+					) {
+						resultText = `Error: Target agent instance "${targetInstanceId}" is outside this session/project and cannot receive peer messages`;
+					} else {
 						success = runningSubAgentTracker.sendInterAgentMessage(
 							ctx.instanceId!,
-							targetAgent.instanceId,
+							targetInstanceId,
 							msgContent,
 						);
 						if (success) {
-							resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
+							resultText = `Message sent to ${
+								targetAgent?.agentName || targetInstanceId
+							}`;
 						} else {
-							resultText = `Error: Failed to send message to ${targetAgentId}`;
+							resultText = `Error: Failed to send message to "${targetInstanceId}"`;
+						}
+					}
+				} else if (targetAgentId) {
+					const targetAgent = runningSubAgentTracker.findInstanceByAgentId(
+						targetAgentId,
+						peerScope,
+					);
+					if (targetAgent && targetAgent.instanceId !== ctx.instanceId) {
+						if (
+							sender &&
+							!runningSubAgentTracker.areAgentsPeerCompatible(
+								sender,
+								targetAgent,
+							)
+						) {
+							resultText = `Error: Agent "${targetAgentId}" is outside this session/project and cannot receive peer messages`;
+						} else {
+							success = runningSubAgentTracker.sendInterAgentMessage(
+								ctx.instanceId!,
+								targetAgent.instanceId,
+								msgContent,
+							);
+							if (success) {
+								resultText = `Message sent to ${targetAgent.agentName} (instance: ${targetAgent.instanceId})`;
+							} else {
+								resultText = `Error: Failed to send message to ${targetAgentId}`;
+							}
 						}
 					} else if (targetAgent && targetAgent.instanceId === ctx.instanceId) {
 						resultText = 'Error: Cannot send a message to yourself';
 					} else {
-						resultText = `Error: No running agent found with ID "${targetAgentId}"`;
+						// Distinguish "exists elsewhere" from "not running at all".
+						const anyInstance = runningSubAgentTracker.findInstanceByAgentId(
+							targetAgentId,
+							{all: true},
+						);
+						if (
+							anyInstance &&
+							sender &&
+							!runningSubAgentTracker.areAgentsPeerCompatible(
+								sender,
+								anyInstance,
+							)
+						) {
+							resultText = `Error: Agent "${targetAgentId}" is running in another session/project and cannot receive peer messages`;
+						} else {
+							resultText = `Error: No running agent found with ID "${targetAgentId}"`;
+						}
 					}
 				} else {
 					resultText =
@@ -173,20 +216,22 @@ export async function interceptSendMessage(
 					content: resultContent,
 				});
 
+				const resolvedTargetName =
+					(targetInstanceId
+						? runningSubAgentTracker.getAgent(targetInstanceId)?.agentName
+						: targetAgentId
+						? runningSubAgentTracker.findInstanceByAgentId(
+								targetAgentId,
+								peerScope,
+						  )?.agentName
+						: undefined) ||
+					targetAgentId ||
+					'unknown';
+
 				emitSubAgentMessage(ctx, {
 					type: 'inter_agent_sent',
 					targetAgentId: targetAgentId || targetInstanceId || 'unknown',
-					targetAgentName:
-						(targetInstanceId
-							? runningSubAgentTracker
-									.getRunningAgents()
-									.find(a => a.instanceId === targetInstanceId)?.agentName
-							: targetAgentId
-							? runningSubAgentTracker.findInstanceByAgentId(targetAgentId)
-									?.agentName
-							: undefined) ||
-						targetAgentId ||
-						'unknown',
+					targetAgentName: resolvedTargetName,
 					content: msgContent,
 					success,
 				});
@@ -221,7 +266,12 @@ export async function interceptQueryStatus(
 			queryTool,
 			queryTool.function.arguments,
 			() => {
-				const allAgents = runningSubAgentTracker.getRunningAgents();
+				// Same-session peers only (include self for isSelf marking).
+				const peers = runningSubAgentTracker.getPeerAgents(ctx.instanceId);
+				const self = ctx.instanceId
+					? runningSubAgentTracker.getAgent(ctx.instanceId)
+					: undefined;
+				const allAgents = self ? [self, ...peers] : peers;
 				const statusList = allAgents.map(a => ({
 					instanceId: a.instanceId,
 					agentId: a.agentId,
@@ -356,20 +406,48 @@ export async function interceptSpawnSubAgent(
 
 				ctx.spawnedChildInstanceIds.add(spawnInstanceId);
 
+				const currentSession = sessionManager.getCurrentSession();
+				const sessionId = currentSession?.id;
+				const projectId =
+					currentSession?.projectId ?? sessionManager.getProjectId?.();
+
 				runningSubAgentTracker.register({
 					instanceId: spawnInstanceId,
 					agentId: spawnAgentId,
 					agentName: spawnAgentName,
 					prompt: spawnPrompt,
 					startedAt: new Date(),
+					sessionId,
+					projectId,
 				});
+				const spawnAbortController =
+					runningSubAgentTracker.createAbortController(
+						spawnInstanceId,
+						ctx.abortSignal,
+					);
+				try {
+					// Sync require: this callback is not async.
+					// eslint-disable-next-line @typescript-eslint/no-require-imports
+					const {startSubAgentRun} =
+						require('../../hooks/conversation/core/subAgentRunStore.js') as typeof import('../../hooks/conversation/core/subAgentRunStore.js');
+					startSubAgentRun({
+						instanceId: spawnInstanceId,
+						agentId: spawnAgentId,
+						agentName: spawnAgentName,
+						prompt: spawnPrompt,
+						sourceType: 'subagent',
+						startedAt: new Date(),
+					});
+				} catch {
+					// optional history
+				}
 
 				const parentContext = context.active();
 				executeSubAgentFn(
 					spawnAgentId,
 					spawnPrompt,
 					ctx.onMessage,
-					ctx.abortSignal,
+					spawnAbortController.signal,
 					ctx.requestToolConfirmation,
 					ctx.isToolAutoApproved,
 					ctx.yoloMode,

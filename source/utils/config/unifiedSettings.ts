@@ -36,6 +36,14 @@ export interface UnifiedSettings {
 	fileListDisplayMode?: 'list' | 'tree';
 	yoloMode?: boolean;
 	planMode?: boolean;
+	planStrictness?: 'strict' | 'soft' | 'off';
+	planAcceptance?: {
+		commands?: string[];
+		runBuild?: boolean;
+		runDiagnostics?: boolean;
+		preferPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+		fallbackCommands?: string[];
+	};
 	vulnerabilityHuntingMode?: boolean;
 	hybridCompressEnabled?: boolean;
 	imageCompressEnabled?: boolean;

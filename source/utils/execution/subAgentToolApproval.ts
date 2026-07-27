@@ -189,7 +189,7 @@ export async function executeMcpTools(
 
 	for (const toolCall of approvedToolCalls) {
 		if (ctx.abortSignal?.aborted) {
-			emitSubAgentMessage(ctx, {type: 'done'});
+			// Final done is emitted once from executeSubAgent's finally block.
 			return {
 				aborted: true,
 				abortResult: {

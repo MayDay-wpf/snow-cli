@@ -28,6 +28,9 @@ export function submitHandler(ctx: HandlerContext): boolean {
 		onSubmit,
 		triggerUpdate,
 		forceUpdate,
+		showSubAgentDetail,
+		showRunningAgentsPicker,
+		openLiveSlotDetailByIndex,
 	} = options;
 
 	if (!key.return) return false;
@@ -35,6 +38,20 @@ export function submitHandler(ctx: HandlerContext): boolean {
 	// Prevent submission if multi-char input (paste/IME) is still being processed
 	if (refs.isProcessingInput.current) {
 		return true; // Ignore Enter key while processing
+	}
+
+	// Live-card Enter: when main input is empty and live slots are visible,
+	// open the first active sub-agent detail instead of submitting an empty message.
+	if (
+		!showSubAgentDetail &&
+		!showRunningAgentsPicker &&
+		buffer.getFullText().trim().length === 0 &&
+		openLiveSlotDetailByIndex
+	) {
+		if (openLiveSlotDetailByIndex(1)) {
+			helpers.forceStateUpdate();
+			return true;
+		}
 	}
 
 	// Check if we should insert newline instead of submitting

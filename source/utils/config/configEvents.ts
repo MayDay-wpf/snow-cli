@@ -9,6 +9,7 @@ export type ConfigChangeEvent = {
 		| 'toolStatusIcons'
 		| 'toolDisplayNames'
 		| 'thinkDisplayMode'
+		| 'subAgentDisplayMode'
 		| 'yoloMode'
 		| 'planMode'
 		| 'teamMode'

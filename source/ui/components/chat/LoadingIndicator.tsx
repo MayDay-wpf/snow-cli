@@ -11,6 +11,11 @@ import {
 	subscribeSubAgentStream,
 	getSubAgentStreamSnapshot,
 } from '../../../hooks/conversation/core/subAgentMessageHandler.js';
+import {
+	subscribeSubAgentLive,
+	getSubAgentLiveSnapshot,
+	SUBAGENT_LIVE_SLOTS_ENABLED,
+} from '../../../hooks/conversation/core/subAgentLiveStore.js';
 
 /**
  * 截断错误消息，避免过长显示
@@ -87,6 +92,7 @@ type LoadingIndicatorProps = {
 	isSaving: boolean;
 	isCompressing: boolean;
 	isAutoCompressing?: boolean;
+	isPaused?: boolean;
 	hasPendingToolConfirmation: boolean;
 	hasPendingUserQuestion: boolean;
 	hasBlockingOverlay: boolean;
@@ -122,6 +128,7 @@ export default function LoadingIndicator({
 	isSaving,
 	isCompressing,
 	isAutoCompressing = false,
+	isPaused = false,
 	hasPendingToolConfirmation,
 	hasPendingUserQuestion,
 	hasBlockingOverlay,
@@ -146,6 +153,10 @@ export default function LoadingIndicator({
 		subscribeSubAgentStream,
 		getSubAgentStreamSnapshot,
 	);
+	const subAgentLiveSlots = useSyncExternalStore(
+		subscribeSubAgentLive,
+		getSubAgentLiveSnapshot,
+	);
 
 	const streamActivityMarker = [
 		streamTokenCount,
@@ -168,7 +179,8 @@ export default function LoadingIndicator({
 	const isStreamingStarted = isStreaming && !wasStreamingRef.current;
 	wasStreamingRef.current = isStreaming;
 
-	const shouldIgnoreStreamDelay = isCompressing || isAutoCompressing;
+	const shouldIgnoreStreamDelay =
+		isCompressing || isAutoCompressing || isPaused;
 
 	if (
 		!isStreaming ||
@@ -207,11 +219,26 @@ export default function LoadingIndicator({
 	}
 
 	const showTeamTree = teamMode && teammateStream.length > 0 && isStreaming;
-	const showSubAgentTree = subAgentStream.length > 0 && isStreaming;
+	// When live slots are rendering detailed per-agent status, skip the
+	// LoadingIndicator sub-agent tree to avoid double-listing agent names.
+	// Team teammate tree is unaffected.
+	// Only active (non-terminal) slots mean the main agent is waiting.
+	// Residual Done cards must not show "Waiting for sub-agents...".
+	const activeLiveSubAgentCount = SUBAGENT_LIVE_SLOTS_ENABLED
+		? subAgentLiveSlots.filter(
+				s => s.status !== 'completed' && s.status !== 'error',
+		  ).length
+		: 0;
+	const hasActiveLiveSubAgentSlots = activeLiveSubAgentCount > 0;
+	const hasLiveSubAgentSlots =
+		SUBAGENT_LIVE_SLOTS_ENABLED && subAgentLiveSlots.length > 0;
+	const showSubAgentTree =
+		subAgentStream.length > 0 && isStreaming && !hasLiveSubAgentSlots;
 	const isRetryResending =
 		retryStatus?.isRetrying === true &&
 		(retryStatus.remainingSeconds === undefined ||
 			retryStatus.remainingSeconds === 0);
+
 	const loadingTips = t.chatScreen.loadingTips;
 	const loadingTip =
 		loadingTips.length > 0
@@ -406,7 +433,11 @@ export default function LoadingIndicator({
 							<Text color={loadingTextColor} dimColor bold>
 								<ShimmerText
 									text={
-										isReasoning
+										// Only while sub-agents are still running — residual Done cards
+										// must not flip the main bar to "Waiting for sub-agents...".
+										hasActiveLiveSubAgentSlots
+											? t.chatScreen.statusWaitingSubAgents
+											: isReasoning
 											? t.chatScreen.statusDeepThinking
 											: streamTokenCount > 0
 											? t.chatScreen.statusWriting
@@ -423,14 +454,29 @@ export default function LoadingIndicator({
 									</>
 								)}
 								{formatElapsedTime(elapsedSeconds)}
-								{' · '}
-								<Text color={loadingTokenColor}>
-									↓ {formatTokens(streamTokenCount)} tokens
-								</Text>
+								{hasActiveLiveSubAgentSlots ? (
+									<>
+										{' · '}
+										{activeLiveSubAgentCount} agent
+										{activeLiveSubAgentCount === 1 ? '' : 's'}
+									</>
+								) : (
+									<>
+										{' · '}
+										<Text color={loadingTokenColor}>
+											↓ {formatTokens(streamTokenCount)} tokens
+										</Text>
+									</>
+								)}
 								{')'}
 							</Text>
 						)}
 						{renderLoadingTip()}
+						{isPaused && (
+							<Text color={theme.colors.warning} dimColor>
+								└─ {t.chatScreen.statusPaused}
+							</Text>
+						)}
 					</>
 				) : (
 					<Text color={theme.colors.menuSecondary} dimColor>

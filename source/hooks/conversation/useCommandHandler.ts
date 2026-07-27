@@ -840,6 +840,7 @@ type CommandHandlerOptions = {
 	setShowContextPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowModelsPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSubAgentDepthPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowDisplayPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowCustomCommandConfig: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsCreation: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowSkillsInstall: React.Dispatch<React.SetStateAction<boolean>>;
@@ -895,6 +896,8 @@ type CommandHandlerOptions = {
 	handleInterrupt?: () => boolean;
 	/** Ref set to true when /cut triggers the interrupt, to suppress discontinued UI */
 	cutInterruptRef?: React.MutableRefObject<boolean>;
+	/** PauseGate for AI loop pause/resume */
+	pauseGate?: import('../../utils/execution/pauseGate.js').PauseGate;
 };
 
 export function useCommandHandler(options: CommandHandlerOptions) {
@@ -1297,6 +1300,29 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 					commandName: commandName,
 				};
 				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'pause') {
+				// /pause - AI loop pause is handled by the pauseGate in the command file.
+				// Just show a status message.
+				const pauseMessage: Message = {
+					role: 'command',
+					content:
+						t.commandPanel?.commandOutput?.pause?.paused ||
+						'AI loop paused. Use /continue to resume or ESC to interrupt.',
+					commandName: 'pause',
+				};
+				options.setMessages(prev => [...prev, pauseMessage]);
+			} else if (result.success && result.action === 'resume') {
+				// /continue - AI loop resume is handled by the pauseGate in the command file.
+				// Just show a status message.
+				const resumeMessage: Message = {
+					role: 'command',
+					content:
+						t.commandPanel?.commandOutput?.pause?.resumed || 'AI loop resumed.',
+					commandName: 'continue',
+				};
+				options.setMessages(prev => [...prev, resumeMessage]);
+			} else if (result.success && result.action === 'btw' && result.prompt) {
+				options.setBtwPrompt(result.prompt);
 			} else if (result.success && result.action === 'showRoleCreation') {
 				options.setShowRoleCreation(true);
 				const commandMessage: Message = {
@@ -1471,6 +1497,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setShowNewPromptPanel(true);
 			} else if (result.success && result.action === 'showSubAgentDepthPanel') {
 				options.setShowSubAgentDepthPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showDisplayPanel') {
+				options.setShowDisplayPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

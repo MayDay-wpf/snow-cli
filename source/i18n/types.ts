@@ -152,6 +152,8 @@ export type TranslationKeys = {
 	// Menu
 	menu: {
 		navigate: string;
+		moreAbove: string;
+		moreBelow: string;
 	};
 	// Proxy Config Screen
 	proxyConfig: {
@@ -570,6 +572,12 @@ export type TranslationKeys = {
 		simpleModeInfo: string;
 		diffOpacity: string;
 		diffOpacityInfo: string;
+		toolDisplay: string;
+		toolDisplayInfo: string;
+		thinkDisplay: string;
+		thinkDisplayInfo: string;
+		subAgentDisplay: string;
+		subAgentDisplayInfo: string;
 		enabled: string;
 		disabled: string;
 		darkTheme: string;
@@ -843,8 +851,12 @@ export type TranslationKeys = {
 			toolIcons: string;
 			toolNames: string;
 			thinkDisplay: string;
+			subAgentDisplay: string;
+			display: string;
 			speedometer: string;
 			cut: string;
+			pause: string;
+			continue: string;
 			quit: string;
 		};
 		copyLastFeedback: {
@@ -915,6 +927,19 @@ export type TranslationKeys = {
 				status: (mode: string) => string;
 				set: (mode: string) => string;
 				invalid: string;
+			};
+			// Sub-agent live panel display mode
+			subAgentDisplay: {
+				status: (mode: string) => string;
+				set: (mode: string) => string;
+				invalid: string;
+			};
+			// Unified /display command messages
+			display: {
+				status: (tool: string, think: string, subagent: string) => string;
+				help: string;
+				invalid: string;
+				opening: string;
 			};
 			// Speedometer command messages
 			speedometer: {
@@ -1039,6 +1064,11 @@ export type TranslationKeys = {
 			// Cut (interrupt) command messages
 			cut: {
 				usage: string;
+			};
+			// Pause/Continue command messages
+			pause: {
+				paused: string;
+				resumed: string;
 			};
 			// BTW command messages
 			btw: {
@@ -1251,6 +1281,32 @@ export type TranslationKeys = {
 		no: string;
 	};
 
+	// Unified /display settings panel (tool / think / sub-agent)
+	displayPanel: {
+		title: string;
+		tool: string;
+		think: string;
+		subagent: string;
+		toolInfo: string;
+		thinkInfo: string;
+		subagentInfo: string;
+		close: string;
+		closeInfo: string;
+		hint: string;
+		/** Localized labels for display mode enums (full|compact|hidden|slots|multi) */
+		modeLabels: {
+			full: string;
+			compact: string;
+			hidden: string;
+			slots: string;
+			multi: string;
+		};
+		/** Format mode as "完整 (full)" / "Full (full)" */
+		formatMode: (mode: string) => string;
+		/** Top status line: 工具=完整 · 思考=完整 · 子代理=精简 */
+		statusLine: (tool: string, think: string, subagent: string) => string;
+	};
+
 	subAgentDepthPanel: {
 		title: string;
 		description: string;
@@ -1446,6 +1502,8 @@ export type TranslationKeys = {
 		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;
+		/** Main agent is idle while sub-agent live slots are running */
+		statusWaitingSubAgents: string;
 		statusIndexing: string;
 		statusWatcherActive: string;
 		statusWatcherActiveShort: string;
@@ -1458,6 +1516,7 @@ export type TranslationKeys = {
 		statusConnected: string;
 		statusConnectionFailed: string;
 		statusStopping: string;
+		statusPaused: string;
 		inputCopySuccess: string;
 		inputCopyFailedPrefix: string;
 		// Profile switch
@@ -1478,6 +1537,9 @@ export type TranslationKeys = {
 		// Parallel execution
 		parallelStart: string;
 		parallelEnd: string;
+		parallelEndWithDuration: string;
+		pendingToolsMore: string;
+		pendingToolsSummary: string;
 		// Messages
 		userMessage: string;
 		assistantMessage: string;
@@ -1623,6 +1685,20 @@ export type TranslationKeys = {
 		expandedViewHint: string;
 		yoloModeActive: string;
 		planModeActive: string;
+		/** Compact StatusLine badge, e.g. "⚐ Plan" / "⚐ 计划" */
+		planBadge: string;
+		planStatusDraft: string;
+		planStatusApproved: string;
+		planStatusExecuting: string;
+		planStatusCompleted: string;
+		planStatusArchived: string;
+		planStatusAbandoned: string;
+		/** Template with {count}, e.g. "{count} phase(s)" / "{count} 个阶段" */
+		planPhaseCount: string;
+		/** Detail helper: "phase {current}/{total}" */
+		planPhaseProgress: string;
+		/** Detail helper prefix for next step: "next" */
+		planNextStep: string;
 		vulnerabilityHuntingModeActive: string;
 		toolSearchEnabled: string;
 		hybridCompressEnabled: string;
@@ -1644,6 +1720,10 @@ export type TranslationKeys = {
 		messagesCount: string;
 		markedCount: string;
 		navigationHint: string;
+		scopeCurrent: string;
+		scopeAll: string;
+		scopeHint: string;
+		legacyProject: string;
 		moreAbove: string;
 		moreBelow: string;
 		deleteConfirm: string;
@@ -1887,6 +1967,8 @@ export type TranslationKeys = {
 		commandPagerStatus: string;
 		commandPagerHint: string;
 		multiToolPagerHint: string;
+		diffPreviewTitle: string;
+		diffPreviewTruncated: string;
 		selectAction: string;
 		enterRejectionReason: string;
 		pressEnterToSubmit: string;
@@ -2170,17 +2252,47 @@ export type TranslationKeys = {
 	commandArgsPanel: {
 		navigationHint: string;
 	};
-	// Running Agents Panel
 	runningAgentsPanel: {
 		title: string;
 		noAgentsRunning: string;
 		keyboardHint: string;
+		/** Enter 进入详情 · m 选目标发消息 · Space 多选 · Esc 取消 */
+		keyboardHintDetail?: string;
 		selected: string;
 		scrollHint: string;
 		moreAbove: string;
 		moreBelow: string;
 		subAgentLabel: string;
 		teammateLabel: string;
+		/** Completed history row label in >> picker */
+		historyLabel: string;
+	};
+	// Sub-Agent Detail TUI
+	subAgentDetailPanel: {
+		timelineTitle: string;
+		inputLabel: string;
+		inputPlaceholder: string;
+		hint: string;
+		moreAbove: string;
+		moreBelow: string;
+		statusRunning: string;
+		statusWaiting: string;
+		statusDone: string;
+		statusError: string;
+		/** Shown instead of input when viewing a completed history run */
+		historyReadOnly: string;
+		/** Hint when viewing a running agent (includes abort / numeric switch) */
+		hintRunning?: string;
+	};
+	// Main-chat completed sub-agent summary card
+	subAgentSummaryCard: {
+		statusDone: string;
+		statusError: string;
+		promptLabel: string;
+		resultLabel: string;
+		errorLabel: string;
+		toolsCount: string;
+		historyHint: string;
 	};
 	sseServer: {
 		started: string;

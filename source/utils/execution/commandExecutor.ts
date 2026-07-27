@@ -34,6 +34,7 @@ export interface CommandResult {
 		| 'showProfilePanel'
 		| 'showModelsPanel'
 		| 'showSubAgentDepthPanel'
+		| 'showDisplayPanel'
 		| 'showSkillsPicker'
 		| 'showGitLinePicker'
 		| 'help'
@@ -78,7 +79,9 @@ export interface CommandResult {
 		| 'showGoalSessionPanel'
 		| 'showGamesPanel'
 		| 'quit'
-		| 'disconnect';
+		| 'disconnect'
+		| 'pause'
+		| 'resume';
 	prompt?: string;
 	sessionId?: string; // For /resume <sessionId> direct session loading
 	location?: 'global' | 'project'; // For custom commands to specify location

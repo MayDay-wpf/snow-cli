@@ -26,6 +26,8 @@ import {getToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {ToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import {getSubAgentDisplayMode} from '../../../utils/config/themeConfig.js';
+import type {SubAgentDisplayMode} from '../../../utils/config/themeConfig.js';
 
 type Options = {
 	enableYolo?: boolean;
@@ -74,6 +76,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 	const [thinkDisplayMode, setThinkDisplayMode] = useState<ThinkDisplayMode>(
 		() => getThinkDisplayMode(),
 	);
+	const [subAgentDisplayMode, setSubAgentDisplayMode] =
+		useState<SubAgentDisplayMode>(() => getSubAgentDisplayMode());
 
 	useEffect(() => {
 		persistYoloMode(yoloMode);
@@ -160,6 +164,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 				setToolDisplayMode(event.value);
 			} else if (event.type === 'thinkDisplayMode') {
 				setThinkDisplayMode(event.value);
+			} else if (event.type === 'subAgentDisplayMode') {
+				setSubAgentDisplayMode(event.value);
 			} else if (event.type === 'yoloMode') {
 				setYoloMode(prev => {
 					const next = Boolean(event.value);
@@ -245,5 +251,6 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		showThinking,
 		toolDisplayMode,
 		thinkDisplayMode,
+		subAgentDisplayMode,
 	};
 }

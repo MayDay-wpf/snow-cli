@@ -2,6 +2,11 @@ import type {ChatMessage} from '../../../api/chat.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {formatTodoContext} from '../../../utils/core/todoPreprocessor.js';
+import {
+	buildPlanReminder,
+	buildResumePlanNotice,
+} from '../../../utils/core/planPreprocessor.js';
+import {restorePlanGateFromDisk} from '../../../utils/execution/planModeGate.js';
 import {getSystemPromptForMode} from '../../../prompt/systemPrompt.js';
 import {getCompanionSystemPromptAddon} from '../../../buddy/prompt.js';
 import {resolvePersistedUserContent} from '../../../prompt/contextInject/stripPersistedAgents.js';
@@ -34,6 +39,11 @@ export async function initializeConversationSession(
 
 	const todoService = getTodoService();
 	const existingTodoList = await todoService.getTodoList(currentSession.id);
+
+	// Plan Mode: restore gate approval from plan frontmatter after resume
+	if (planMode) {
+		await restorePlanGateFromDisk(process.cwd(), currentSession.id);
+	}
 
 	// Build conversation history with TODO context as pinned user message
 	const baseSystemPrompt = getSystemPromptForMode(
@@ -69,6 +79,24 @@ export async function initializeConversationSession(
 			role: 'user',
 			content: todoContext,
 		});
+	}
+
+	// Plan Mode: pin plan progress (or an unfinished-plan resume notice)
+	if (planMode) {
+		const planReminder = await buildPlanReminder(
+			process.cwd(),
+			currentSession.id,
+			planMode,
+		);
+		const planContext =
+			planReminder ??
+			(await buildResumePlanNotice(process.cwd(), currentSession.id));
+		if (planContext) {
+			conversationMessages.push({
+				role: 'user',
+				content: planContext,
+			});
+		}
 	}
 
 	if (session && session.messages.length > 0) {

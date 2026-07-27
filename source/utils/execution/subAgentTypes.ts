@@ -7,6 +7,11 @@ export interface SubAgentMessage {
 	type: 'sub_agent_message';
 	agentId: string;
 	agentName: string;
+	/**
+	 * Payload from the executor / stream.
+	 * For `{type:'done'}`, set `final: true` only when executeSubAgent truly finished.
+	 * Stream API `done` events are non-final and must not complete the live UI.
+	 */
 	message: any;
 }
 
@@ -83,7 +88,9 @@ export function emitSubAgentMessage(
 	if (ctx.onMessage) {
 		ctx.onMessage({
 			type: 'sub_agent_message',
-			agentId: ctx.agent.id,
+			// Prefer instanceId (toolCall.id) so concurrent runs of the same agent type
+			// keep separate live-slot / completion-summary identity.
+			agentId: ctx.instanceId || ctx.agent.id,
 			agentName: ctx.agent.name,
 			message,
 		});

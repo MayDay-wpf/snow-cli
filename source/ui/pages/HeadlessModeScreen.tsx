@@ -24,6 +24,10 @@ type Props = {
 	prompt: string;
 	sessionId?: string;
 	onComplete: () => void;
+	/** Opt-in headless plan resume (preapproved/executing only) */
+	enablePlan?: boolean;
+	/** Explicit plan file path for headless resume */
+	planFile?: string;
 };
 
 // Console-based markdown renderer functions
@@ -352,6 +356,8 @@ export default function HeadlessModeScreen({
 	prompt,
 	sessionId,
 	onComplete,
+	enablePlan = false,
+	planFile,
 }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isComplete, setIsComplete] = useState(false);
@@ -564,6 +570,35 @@ export default function HeadlessModeScreen({
 				`\x1b[94m╰─────────────────────────────────────────────────────────╯\x1b[0m`,
 			);
 
+			// Headless plan resume: opt-in only, preapproved/executing plans.
+			// Never unlock writes via interactive askuser (unsupported here).
+			let planModeEnabled = false;
+			if (enablePlan || planFile) {
+				const {tryResumeHeadlessPlan} = await import(
+					'../../utils/execution/headlessPlanResume.js'
+				);
+				const {setPlanMode} = await import(
+					'../../utils/config/projectSettings.js'
+				);
+				const resume = await tryResumeHeadlessPlan({
+					cwd: workingDirectory,
+					sessionId: currentSessionId ?? sessionManager.getCurrentSession()?.id,
+					planFile,
+					enablePlan: enablePlan || Boolean(planFile),
+				});
+				planModeEnabled = resume.planMode && resume.approved;
+				if (planModeEnabled) {
+					setPlanMode(true);
+					console.log(
+						`\n\x1b[32m✓ Plan mode resumed (preapproved)${
+							resume.planPath ? `: ${resume.planPath}` : ''
+						}\x1b[0m`,
+					);
+				} else if (resume.message) {
+					console.log(`\n\x1b[33m⚠ ${resume.message}\x1b[0m`);
+				}
+			}
+
 			// Print session info if continuing conversation
 			if (loadedMessages.length > 0) {
 				console.log(`\n\x1b[36m┌─ Continuing Session\x1b[0m`);
@@ -644,12 +679,15 @@ export default function HeadlessModeScreen({
 					return confirmation;
 				},
 				requestUserQuestion: async () => {
-					throw new Error('askuser tool is not supported in headless mode');
+					throw new Error(
+						'askuser tool is not supported in headless mode (interactive plan approval is unavailable; resume with --plan-file after preapproval)',
+					);
 				},
 				isToolAutoApproved,
 				addMultipleToAlwaysApproved,
 				yoloModeRef: {current: true}, // Always use YOLO mode in headless
-				planMode: false, // HeadlessMode doesn't support Plan mode
+				// Default false; only true after successful preapproved resume
+				planMode: planModeEnabled,
 				setContextUsage: streamingState.setContextUsage,
 				useBasicModel: false,
 				getPendingMessages: () => [],

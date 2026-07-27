@@ -58,11 +58,12 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// OTEL not started
 	}
 
-	// 6. Clear sub-agent stream state maps
+	// 6. Clear sub-agent stream + live slot state maps
 	try {
 		const {clearAllTeammateStreamEntries, clearAllSubAgentStreamEntries} =
 			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
 		clearAllTeammateStreamEntries();
+		// Also clears live slots (see clearAllSubAgentStreamEntries implementation).
 		clearAllSubAgentStreamEntries();
 	} catch {
 		// Not loaded

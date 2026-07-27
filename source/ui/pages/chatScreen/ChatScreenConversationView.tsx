@@ -3,8 +3,10 @@ import {Box, Static} from 'ink';
 import type {Message} from '../../components/chat/MessageList.js';
 import PendingMessages from '../../components/chat/PendingMessages.js';
 import PendingToolCalls from '../../components/chat/PendingToolCalls.js';
+import SubAgentLiveSlots from '../../components/chat/SubAgentLiveSlots.js';
 import ToolConfirmation from '../../components/tools/ToolConfirmation.js';
 import AskUserQuestion from '../../components/special/AskUserQuestion.js';
+import PlanApprovalPreview from '../../components/special/PlanApprovalPreview.js';
 import {
 	BashCommandConfirmation,
 	BashCommandExecutionStatus,
@@ -23,6 +25,7 @@ import type {CompressionStatus as CompressionStatusType} from '../../components/
 import {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
 import type {ThinkingStatus as ThinkingStatusType} from '../../components/chat/ThinkingStatus.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import type {SubAgentDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
 	BashSensitiveCommandState,
@@ -40,9 +43,11 @@ type Props = {
 	showThinking: boolean;
 	toolDisplayMode: 'full' | 'compact' | 'hidden';
 	thinkDisplayMode: ThinkDisplayMode;
+	subAgentDisplayMode: SubAgentDisplayMode;
 	pendingMessages: PendingMessageInput[];
 	pendingToolConfirmation: any;
 	pendingUserQuestion: PendingUserQuestionState;
+	planMode: boolean;
 	bashSensitiveCommand: BashSensitiveCommandState;
 	terminalExecutionState: any;
 	schedulerExecutionState: any;
@@ -65,9 +70,11 @@ export default function ChatScreenConversationView({
 	showThinking,
 	toolDisplayMode,
 	thinkDisplayMode,
+	subAgentDisplayMode,
 	pendingMessages,
 	pendingToolConfirmation,
 	pendingUserQuestion,
+	planMode,
 	bashSensitiveCommand,
 	terminalExecutionState,
 	schedulerExecutionState,
@@ -122,6 +129,11 @@ export default function ChatScreenConversationView({
 			</Static>
 
 			<Box paddingX={1} width={terminalWidth} flexDirection="column">
+				<SubAgentLiveSlots
+					toolDisplayMode={toolDisplayMode}
+					subAgentDisplayMode={subAgentDisplayMode}
+					terminalWidth={terminalWidth}
+				/>
 				<PendingToolCalls messages={messages} />
 				<PendingMessages pendingMessages={pendingMessages} />
 			</Box>
@@ -238,11 +250,20 @@ export default function ChatScreenConversationView({
 				)}
 
 			{pendingUserQuestion && (
-				<AskUserQuestion
-					question={pendingUserQuestion.question}
-					options={pendingUserQuestion.options}
-					onAnswer={handleUserQuestionAnswer}
-				/>
+				<>
+					{/* Plan Mode: show the plan document above the approval prompt. */}
+					<PlanApprovalPreview
+						isEnabled={Boolean(planMode)}
+						question={pendingUserQuestion.question}
+						workingDirectory={workingDirectory}
+						terminalWidth={terminalWidth}
+					/>
+					<AskUserQuestion
+						question={pendingUserQuestion.question}
+						options={pendingUserQuestion.options}
+						onAnswer={handleUserQuestionAnswer}
+					/>
+				</>
 			)}
 		</>
 	);

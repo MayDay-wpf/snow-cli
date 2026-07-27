@@ -78,7 +78,26 @@ export interface Message {
 		inputTokens: number;
 		maxTokens: number;
 	};
+	/** Foldable summary card for completed outer subagent-* tool results in main chat */
+	subAgentSummary?: {
+		instanceId: string;
+		agentId: string;
+		agentName: string;
+		prompt?: string;
+		status: 'completed' | 'error';
+		durationMs?: number;
+		tokenCount?: number;
+		historyLines?: string[];
+		resultPreview?: string;
+		errorMessage?: string;
+		toolCount?: number;
+	};
 	parallelGroup?: string; // Group ID for parallel tool execution (same ID = executed together)
+	// Total elapsed time (ms) for the parallel group this message belongs to.
+	// Computed in buildToolResultMessages as (last completedAt - earliest startedAt)
+	// and rendered on the parallelEnd indicator so users can see the batch-level
+	// wall-clock cost separate from each tool's own durationMs.
+	parallelGroupElapsedMs?: number;
 	hookError?: {
 		type: 'warning' | 'error';
 		exitCode: number;

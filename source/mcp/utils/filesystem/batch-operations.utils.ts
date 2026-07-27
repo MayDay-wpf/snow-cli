@@ -82,6 +82,13 @@ export async function executeBatchOperation<
 		result: TSingleResult,
 	) => Omit<TBatchItem, 'success' | 'error'>,
 ): Promise<BatchOperationResult<TBatchItem>> {
+	// Empty batch would otherwise return "0 succeeded, 0 failed" and look successful.
+	if (!Array.isArray(fileItems) || fileItems.length === 0) {
+		throw new Error(
+			'Batch filePath array is empty. Provide at least one path or file config. Never use filePath: [].',
+		);
+	}
+
 	const results: TBatchItem[] = [];
 
 	for (const fileItem of fileItems) {

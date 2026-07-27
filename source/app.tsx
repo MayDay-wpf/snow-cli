@@ -41,6 +41,8 @@ type Props = {
 	showTaskList?: boolean;
 	enableYolo?: boolean;
 	enablePlan?: boolean;
+	/** Headless-only: explicit plan file for preapproved resume */
+	headlessPlanFile?: string;
 };
 
 // ShowTaskListWrapper: Handles task list mode with session conversion support
@@ -332,6 +334,7 @@ export default function App({
 	showTaskList,
 	enableYolo,
 	enablePlan,
+	headlessPlanFile,
 }: Props) {
 	// If headless prompt is provided, use headless mode
 	// Wrap in I18nProvider since HeadlessModeScreen might use hooks that depend on it
@@ -346,6 +349,8 @@ export default function App({
 							prompt={headlessPrompt}
 							sessionId={headlessSessionId}
 							onComplete={() => gracefulExit()}
+							enablePlan={enablePlan}
+							planFile={headlessPlanFile}
 						/>
 					</Suspense>
 				</ThemeProvider>

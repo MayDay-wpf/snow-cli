@@ -61,6 +61,8 @@ interface ThemeConfig {
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
 	thinkDisplayMode?: ThinkDisplayMode;
+	/** Sub-agent live panel density. Default slots (single focus overwrite). */
+	subAgentDisplayMode?: SubAgentDisplayMode;
 	/** Tool category symbols + optional status prefixes; default true. */
 	toolIcons?: ToolIconsConfig;
 	/**
@@ -72,6 +74,14 @@ interface ThemeConfig {
 
 export type ToolDisplayMode = 'full' | 'compact' | 'hidden';
 export type ThinkDisplayMode = 'full' | 'compact';
+/**
+ * Sub-agent live panel modes:
+ * - slots: agent container + single focus line overwrite (default)
+ * - multi: agent container + recent focus history lines
+ * - compact: agent header only
+ * - hidden: disable live slots (legacy tool cards path)
+ */
+export type SubAgentDisplayMode = 'slots' | 'multi' | 'compact' | 'hidden';
 
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'tiffany',
@@ -79,6 +89,7 @@ const DEFAULT_CONFIG: ThemeConfig = {
 	diffOpacity: 1,
 	toolDisplayMode: 'full',
 	thinkDisplayMode: 'compact',
+	subAgentDisplayMode: 'slots',
 	toolIcons: true,
 };
 
@@ -222,6 +233,22 @@ export function getThinkDisplayMode(): ThinkDisplayMode {
 export function setThinkDisplayMode(mode: ThinkDisplayMode): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, thinkDisplayMode: mode});
+}
+
+/**
+ * Get sub-agent live display mode setting
+ */
+export function getSubAgentDisplayMode(): SubAgentDisplayMode {
+	const config = loadThemeConfig();
+	return config.subAgentDisplayMode ?? 'slots';
+}
+
+/**
+ * Set sub-agent live display mode and persist to file system
+ */
+export function setSubAgentDisplayMode(mode: SubAgentDisplayMode): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, subAgentDisplayMode: mode});
 }
 
 export type NormalizedToolStatusConfig = {

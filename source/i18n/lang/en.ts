@@ -162,6 +162,8 @@ export const en: TranslationKeys = {
 	},
 	menu: {
 		navigate: 'Use ↑↓ keys to navigate, press Enter to select:',
+		moreAbove: '↑ +{count} more above',
+		moreBelow: '↓ +{count} more below',
 	},
 	proxyConfig: {
 		title: 'Proxy Configuration',
@@ -619,6 +621,15 @@ export const en: TranslationKeys = {
 		diffOpacity: 'Diff Highlight Strength:',
 		diffOpacityInfo:
 			'Adjust diff highlight strength, default 100%, minimum 30%, press Enter to cycle by 10%',
+		toolDisplay: 'Tool display:',
+		toolDisplayInfo:
+			'Tool call density full/compact/hidden (Enter to cycle; same as /tool-display)',
+		thinkDisplay: 'Think display:',
+		thinkDisplayInfo:
+			'Thinking content full/compact (Enter to cycle; same as /think-display)',
+		subAgentDisplay: 'Sub-agent display:',
+		subAgentDisplayInfo:
+			'Sub-agent live panel slots/multi/compact/hidden (Enter to cycle; same as /subagent-display)',
 		enabled: '[✓] Enabled',
 		disabled: '[ ] Disabled',
 		darkTheme: 'Dark Theme',
@@ -923,16 +934,22 @@ export const en: TranslationKeys = {
 			deepresearch:
 				'Run an autonomous multi-step web research workflow and save a cited markdown report to .snow/deepresearch/',
 			toolDisplay:
-				'Control tool call display mode. Usage: /tool-display [full|compact|hidden|status]',
+				'Control tool call display: full / compact / hidden. Usage: /tool-display [full|compact|hidden|status]',
 			toolIcons:
 				'Control tool category icons. Usage: /tool-icons [on|off|status|<tool>:<emoji>]',
 			toolNames:
 				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
 			thinkDisplay:
-				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
+				'Control thinking content display: full / compact. Usage: /think-display [full|compact|status]',
+			subAgentDisplay:
+				'Control sub-agent live display: slots (default) / multi / compact / hidden. Usage: /subagent-display [slots|multi|compact|hidden|status]',
+			display:
+				'Open display settings panel (tool/think/subagent). Usage: /display | status | tool|think|subagent [mode]',
 			speedometer:
 				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
+			pause: 'Pause the AI loop at the next round',
+			continue: 'Resume the AI loop after /pause',
 			quit: 'Exit the application',
 		},
 		copyLastFeedback: {
@@ -1054,6 +1071,33 @@ export const en: TranslationKeys = {
 						: ' (compact thinking content then move to static area)'),
 				set: (mode: string) => `Think display mode set to: ${mode}`,
 				invalid: 'Invalid mode. Usage: /think-display [full|compact|status]',
+			},
+			subAgentDisplay: {
+				status: (mode: string) =>
+					`Sub-agent display mode: ${mode}` +
+					(mode === 'slots'
+						? ' (agent container + single focus overwrite)'
+						: mode === 'multi'
+						? ' (agent container + recent multi-line history)'
+						: mode === 'compact'
+						? ' (agent header only)'
+						: ' (live panel off; legacy tool cards)'),
+				set: (mode: string) => `Sub-agent display mode set to: ${mode}`,
+				invalid:
+					'Invalid mode. Usage: /subagent-display [slots|multi|compact|hidden|status]',
+			},
+			display: {
+				status: (tool: string, think: string, subagent: string) =>
+					`Display: tool=${tool} · think=${think} · subagent=${subagent}`,
+				help:
+					'Usage: /display [status]\n' +
+					'       /display tool [full|compact|hidden|status]\n' +
+					'       /display think [full|compact|status]\n' +
+					'       /display subagent [slots|multi|compact|hidden|status]\n' +
+					'Compat: /tool-display · /think-display · /subagent-display',
+				invalid:
+					'Invalid args. Usage: /display [status|tool|think|subagent] [mode]',
+				opening: 'Opening display settings panel',
 			},
 			// Speedometer command messages
 			speedometer: {
@@ -1204,6 +1248,11 @@ export const en: TranslationKeys = {
 			cut: {
 				usage: 'Usage: /cut <message>',
 			},
+			// Pause/Continue command messages
+			pause: {
+				paused: 'AI loop paused. Use /continue to resume or ESC to interrupt.',
+				resumed: 'AI loop resumed.',
+			},
 			// BTW command messages
 			btw: {
 				usage: 'Usage: /btw <your question>',
@@ -1348,6 +1397,50 @@ export const en: TranslationKeys = {
 		confirmClearAll: 'Clear all permissions?',
 		yes: 'Yes',
 		no: 'No',
+	},
+	displayPanel: {
+		title: 'Display settings',
+		tool: 'Tool display:',
+		think: 'Think display:',
+		subagent: 'Sub-agent display:',
+		toolInfo: 'Enter to cycle full → compact → hidden (same as /display tool)',
+		thinkInfo: 'Enter to cycle compact → full (same as /display think)',
+		subagentInfo:
+			'Enter to cycle slots → multi → compact → hidden (same as /display subagent)',
+		close: '← Close',
+		closeInfo: 'Return to chat',
+		hint: '↑↓ navigate · Enter cycle · Esc close · also: /display tool|think|subagent',
+		modeLabels: {
+			full: 'Full',
+			compact: 'Compact',
+			hidden: 'Hidden',
+			slots: 'Slots',
+			multi: 'Multi',
+		},
+		formatMode: (mode: string) => {
+			const labels: Record<string, string> = {
+				full: 'Full',
+				compact: 'Compact',
+				hidden: 'Hidden',
+				slots: 'Slots',
+				multi: 'Multi',
+			};
+			const label = labels[mode];
+			return label ? `${label} (${mode})` : mode;
+		},
+		statusLine: (tool: string, think: string, subagent: string) => {
+			const labels: Record<string, string> = {
+				full: 'Full',
+				compact: 'Compact',
+				hidden: 'Hidden',
+				slots: 'Slots',
+				multi: 'Multi',
+			};
+			const fmt = (m: string) => labels[m] ?? m;
+			return `tool=${fmt(tool)} · think=${fmt(think)} · subagent=${fmt(
+				subagent,
+			)}`;
+		},
 	},
 	subAgentDepthPanel: {
 		title: 'Sub-Agent Depth',
@@ -1632,6 +1725,7 @@ export const en: TranslationKeys = {
 		statusFinishing: 'Finishing...',
 		statusStreaming: 'Streaming',
 		statusWorking: 'Working',
+		statusWaitingSubAgents: 'Waiting for sub-agents...',
 		statusIndexing: 'Indexing codebase...',
 		statusWatcherActive: 'File watcher active - monitoring code changes',
 		statusWatcherActiveShort: 'Watcher',
@@ -1645,6 +1739,7 @@ export const en: TranslationKeys = {
 		statusConnectionFailed:
 			'Connection Failed (this will not affect any usage) - Make sure Snow CLI plugin is installed and active in your IDE',
 		statusStopping: 'Stopping...',
+		statusPaused: 'Paused - use /continue to resume or ESC to interrupt',
 		inputCopySuccess: 'Input content copied to clipboard',
 		inputCopyFailedPrefix: 'Failed to copy input content',
 		// Profile switch
@@ -1665,6 +1760,9 @@ export const en: TranslationKeys = {
 		// Parallel execution
 		parallelStart: '┌─ Parallel execution',
 		parallelEnd: '└─ Execution completed',
+		parallelEndWithDuration: '└─ Execution completed ({duration})',
+		pendingToolsMore: '+{count} more tool(s) running…',
+		pendingToolsSummary: '{count} tool(s) running… ({elapsed})',
 		// Messages
 		userMessage: 'You',
 		assistantMessage: 'Assistant',
@@ -1864,6 +1962,16 @@ export const en: TranslationKeys = {
 			'⧴ YOLO MODE ACTIVE - All tools will be auto-approved without confirmation',
 		planModeActive:
 			'⚐ Plan mode active - Specialized planning and coordination agent',
+		planBadge: '⚐ Plan',
+		planStatusDraft: 'Draft',
+		planStatusApproved: 'Approved',
+		planStatusExecuting: 'Executing',
+		planStatusCompleted: 'Completed',
+		planStatusArchived: 'Archived',
+		planStatusAbandoned: 'Abandoned',
+		planPhaseCount: '{count} phase(s)',
+		planPhaseProgress: 'phase {current}/{total}',
+		planNextStep: 'next',
 		vulnerabilityHuntingModeActive:
 			'⍨ Vulnerability Hunting Mode Active - Focused on vulnerability discovery and security analysis',
 		toolSearchEnabled: '♾︎ Tool Search ON - Tools loaded on demand',
@@ -1890,7 +1998,11 @@ export const en: TranslationKeys = {
 		messagesCount: '{count} msgs',
 		markedCount: '{count} marked',
 		navigationHint:
-			'↑↓ navigate • Space mark • D delete • R refresh • Enter view • ESC close',
+			'↑↓ navigate • Space mark • D delete • R refresh • G scope • Enter view • ESC close',
+		scopeCurrent: 'Current project',
+		scopeAll: 'All projects',
+		scopeHint: 'G switch scope',
+		legacyProject: 'Legacy task',
 		moreAbove: '↑ {count} more above',
 		moreBelow: '↓ {count} more below',
 		deleteConfirm: 'Press D again to delete task',
@@ -2163,6 +2275,9 @@ export const en: TranslationKeys = {
 		commandPagerStatus: '{page}/{total}',
 		commandPagerHint: 'Tab: Next page (wraps)',
 		multiToolPagerHint: 'Tab: View next tool group ({page}/{total})',
+		diffPreviewTitle: 'Diff preview:',
+		diffPreviewTruncated:
+			'{count} more file(s) changed - approve to see full diff',
 		selectAction: 'Select action:',
 		enterRejectionReason: 'Enter rejection reason:',
 		pressEnterToSubmit: 'Press Enter to submit',
@@ -2459,12 +2574,39 @@ export const en: TranslationKeys = {
 		title: 'Running Agents',
 		noAgentsRunning: 'No agents or teammates are currently running',
 		keyboardHint: '(Space: toggle · Enter: confirm · Esc: cancel)',
+		keyboardHintDetail:
+			'(Enter/v: detail · 1-9: jump · m: message · Space: multi · Esc: cancel)',
 		selected: 'Selected: {count}',
 		scrollHint: '↑↓ to scroll',
 		moreAbove: '{count} more above',
 		moreBelow: '{count} more below',
 		subAgentLabel: '[Agent]',
 		teammateLabel: '[Team]',
+		historyLabel: '[History]',
+	},
+	subAgentDetailPanel: {
+		timelineTitle: 'Tool Timeline',
+		inputLabel: 'Message this agent',
+		inputPlaceholder: 'Type a message, Enter to send…',
+		hint: 'Tab switch focus · ↑↓ scroll · Enter send · Esc back',
+		hintRunning:
+			'Tab focus · ↑↓ scroll · Enter send · 1-9 switch · x stop · Esc back',
+		moreAbove: '{count} more above',
+		moreBelow: '{count} more below',
+		statusRunning: 'Running',
+		statusWaiting: 'Waiting',
+		statusDone: 'Done',
+		statusError: 'Error',
+		historyReadOnly: 'History view · read only',
+	},
+	subAgentSummaryCard: {
+		statusDone: 'Done',
+		statusError: 'Error',
+		promptLabel: 'prompt',
+		resultLabel: 'result',
+		errorLabel: 'error',
+		toolsCount: '{count} tools',
+		historyHint: '▸ use >> history for full timeline',
 	},
 	sseServer: {
 		started: '✓ SSE Server Started',

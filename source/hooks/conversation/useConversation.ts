@@ -156,6 +156,19 @@ async function runConversationWithTools(
 				break;
 			}
 
+			// Pause gate: block here if the user has paused the AI loop.
+			// The wait resolves when the user resumes or when the abort
+			// signal fires (ESC interrupt).
+			if (options.pauseGate) {
+				await options.pauseGate.waitForResume(controller.signal);
+			}
+
+			// Check abort again after pause (user may have ESC'd during pause)
+			if (controller.signal.aborted) {
+				freeEncoder();
+				break;
+			}
+
 			const streamResult = await processStreamRound({
 				config,
 				model,

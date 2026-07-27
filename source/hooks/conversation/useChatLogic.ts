@@ -176,6 +176,8 @@ export function useChatLogic(props: UseChatLogicProps) {
 		streamingState.setIsStopping(true);
 		streamingState.setRetryStatus(null);
 		streamingState.setCodebaseSearchStatus(null);
+		// Resume pauseGate to unblock any pending waitForResume
+		streamingState.pauseGate?.resume();
 		streamingState.abortController.abort();
 		teamTracker.abortAllTeammates();
 		clearAllTeammateStreamEntries();

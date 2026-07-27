@@ -6,12 +6,21 @@ import {type Message} from './MessageList.js';
 import MarkdownRenderer from '../common/MarkdownRenderer.js';
 import DiffViewer from '../tools/DiffViewer.js';
 import ToolResultPreview from '../tools/ToolResultPreview.js';
-import {getToolResultSummary} from '../tools/ToolResultPreview.js';
+import SubAgentSummaryCard from './SubAgentSummaryCard.js';
+import {
+	getToolResultSummary,
+	type ToolResultSummaryContext,
+} from '../../../utils/ui/toolResultSummary.js';
 import {HookErrorDisplay} from '../special/HookErrorDisplay.js';
 import {maskSkillInjectedText} from '../../../utils/ui/skillMask.js';
 import {maskGitLineText} from '../../../utils/ui/gitLineMask.js';
 import {maskHookInjectedText} from '../../../utils/ui/hookInjectMask.js';
-import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
+import {
+	toCodePoints,
+	visualWidth,
+	formatDurationMs,
+	MIN_TOOL_DURATION_DISPLAY_MS,
+} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import {getToolStatusIcon} from '../special/toolIcons.js';
@@ -592,17 +601,43 @@ function MessageRendererImpl({
 													<>
 														<Text color={toolStatusColor}>
 															{removeAnsiCodes(titleLine)}
-															{/* compact mode: append brief result summary */}
-															{toolDisplayMode === 'compact' &&
-																message.messageStatus === 'success' &&
+															{/* compact mode: append brief result summary (path/action when known) */}
+															{(toolDisplayMode === 'compact' ||
+																toolDisplayMode === 'full') &&
+																(message.messageStatus === 'success' ||
+																	message.messageStatus === 'error') &&
 																message.toolResult &&
 																(() => {
 																	const toolName = getMessageToolName(
 																		removeAnsiCodes(titleLine),
 																	);
+																	// Only inject compact inline summary for tools
+																	// that benefit from path/action (read/plan/meta).
+																	// full mode still uses ToolResultPreview body;
+																	// keep inline summary for compact always, and
+																	// for full only when no tree body would show
+																	// (plan-manage plain text / quick tools).
+																	if (
+																		toolDisplayMode === 'full' &&
+																		toolName !== 'plan-manage' &&
+																		toolName !== 'filesystem-read'
+																	) {
+																		return null;
+																	}
+																	const summaryContext: ToolResultSummaryContext =
+																		{
+																			displayArgs: message.toolDisplay?.args,
+																			rawArgs:
+																				message.toolCall?.arguments &&
+																				typeof message.toolCall.arguments ===
+																					'object'
+																					? message.toolCall.arguments
+																					: undefined,
+																		};
 																	const summary = getToolResultSummary(
 																		toolName,
 																		message.toolResult,
+																		summaryContext,
 																	);
 																	return summary ? ` — ${summary}` : null;
 																})()}
@@ -878,9 +913,22 @@ function MessageRendererImpl({
 												)}
 											</Box>
 										)}
+									{/* Foldable-style summary card for completed outer sub-agent runs */}
+									{message.subAgentSummary &&
+										(message.messageStatus === 'success' ||
+											message.messageStatus === 'error') &&
+										toolDisplayMode !== 'hidden' && (
+											<Box marginTop={0}>
+												<SubAgentSummaryCard
+													summary={message.subAgentSummary}
+													expanded={toolDisplayMode === 'full'}
+												/>
+											</Box>
+										)}
 									{/* Show tool result preview for successful tool executions */}
 									{message.messageStatus === 'success' &&
 										message.toolResult &&
+										!message.subAgentSummary &&
 										// 只在没有 diff 数据时显示预览（有 diff 的工具会用 DiffViewer 显示）
 										!(
 											message.toolCall &&
@@ -951,7 +999,23 @@ function MessageRendererImpl({
 					{!message.plainOutput && effectiveIsLastInGroup && (
 						<Box marginTop={0}>
 							<Text color={theme.colors.menuInfo} dimColor>
-								{t.chatScreen.parallelEnd}
+								{(() => {
+									// Group-level wall-clock duration (last completedAt -
+									// earliest startedAt). Attached by buildToolResultMessages
+									// so the parallelEnd indicator can show batch cost
+									// separate from each tool's own durationMs.
+									const groupMs = message.parallelGroupElapsedMs;
+									if (
+										typeof groupMs === 'number' &&
+										groupMs >= MIN_TOOL_DURATION_DISPLAY_MS
+									) {
+										return t.chatScreen.parallelEndWithDuration.replace(
+											'{duration}',
+											formatDurationMs(groupMs),
+										);
+									}
+									return t.chatScreen.parallelEnd;
+								})()}
 							</Text>
 						</Box>
 					)}

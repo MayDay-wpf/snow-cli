@@ -1300,15 +1300,13 @@ ${role ? `Your role: ${role}` : ''}
 		// Always emit a final 'done' so the UI handler clears stream entries
 		// for this teammate (covers abort / error / early-return paths that
 		// would otherwise leave a stale "Idle" entry visible in the UI).
-		// handleDone is idempotent — clearStreamState ignores already-cleared
-		// entries — so a duplicate 'done' on the success path is safe.
 		if (onMessage) {
 			try {
 				onMessage({
 					type: 'sub_agent_message',
 					agentId: `teammate-${memberId}`,
 					agentName: memberName,
-					message: {type: 'done'},
+					message: {type: 'done', final: true},
 				});
 			} catch {
 				/* noop */

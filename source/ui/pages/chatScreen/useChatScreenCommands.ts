@@ -51,8 +51,6 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/autoformat.js'),
 			import('../../../utils/commands/toolsearch.js'),
 			import('../../../utils/commands/ultraTodo.js'),
-			import('../../../utils/commands/hybridCompress.js'),
-			import('../../../utils/commands/team.js'),
 			import('../../../utils/commands/btw.js'),
 			import('../../../utils/commands/deepresearch.js'),
 			import('../../../utils/commands/pixel.js'),
@@ -61,6 +59,8 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/toolIcons.js'),
 			import('../../../utils/commands/toolNames.js'),
 			import('../../../utils/commands/thinkDisplay.js'),
+			import('../../../utils/commands/subagentDisplay.js'),
+			import('../../../utils/commands/display.js'),
 			import('../../../utils/commands/speedometer.js'),
 			import('../../../utils/commands/interrupt.js'),
 		])

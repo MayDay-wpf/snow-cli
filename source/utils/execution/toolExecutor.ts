@@ -17,69 +17,17 @@ import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
 import {getPlanMode} from '../config/projectSettings.js';
 import {evaluatePlanGate, maybeApprovePlanFromAskUser} from './planModeGate.js';
+import {
+	parseToolArgumentsDetailed,
+	safeParseToolArguments,
+} from './toolArgsParse.js';
 
-//安全解析JSON，处理可能被拼接的多个JSON对象
-function safeParseToolArguments(argsString: string): Record<string, any> {
-	if (!argsString || argsString.trim() === '') {
-		return {};
-	}
-
-	try {
-		return JSON.parse(argsString);
-	} catch (error) {
-		//尝试只解析第一个完整的JSON对象
-		//这处理了多个工具调用参数被错误拼接的情况
-		const firstBraceIndex = argsString.indexOf('{');
-		if (firstBraceIndex === -1) {
-			return {};
-		}
-
-		let braceCount = 0;
-		let inString = false;
-		let escapeNext = false;
-
-		for (let i = firstBraceIndex; i < argsString.length; i++) {
-			const char = argsString[i];
-
-			if (escapeNext) {
-				escapeNext = false;
-				continue;
-			}
-
-			if (char === '\\') {
-				escapeNext = true;
-				continue;
-			}
-
-			if (char === '"') {
-				inString = !inString;
-				continue;
-			}
-
-			if (!inString) {
-				if (char === '{') {
-					braceCount++;
-				} else if (char === '}') {
-					braceCount--;
-					if (braceCount === 0) {
-						//找到第一个完整的JSON对象
-						const firstJsonObject = argsString.substring(
-							firstBraceIndex,
-							i + 1,
-						);
-						try {
-							return JSON.parse(firstJsonObject);
-						} catch {
-							return {};
-						}
-					}
-				}
-			}
-		}
-
-		return {};
-	}
-}
+// Re-export parse helpers so existing import sites can keep using toolExecutor.
+export {
+	parseToolArgumentsDetailed,
+	safeParseToolArguments,
+	type ToolArgsParseResult,
+} from './toolArgsParse.js';
 
 export interface ToolCall {
 	id: string;
@@ -105,6 +53,15 @@ export interface ToolResult {
 		output?: string;
 		error?: string;
 	}; // Hook error details for UI rendering
+	// Per-tool start timestamp (ms since epoch). Stamped by executeToolCalls
+	// immediately before executeToolCall so sequential siblings in the same
+	// resource group report their own runtime, not "batch start → my end".
+	startedAt?: number;
+	// Per-tool completion timestamp (ms since epoch). Stamped by executeToolCalls
+	// immediately after executeToolCall resolves, so parallel siblings don't
+	// inherit the slowest tool's end time. Consumed by buildToolResultMessages
+	// to compute accurate per-tool durationMs.
+	completedAt?: number;
 }
 
 export type SubAgentMessageCallback = (message: SubAgentMessage) => void;
@@ -275,7 +232,22 @@ export async function executeToolCall(
 		}
 
 		try {
-			const args = safeParseToolArguments(toolCall.function.arguments);
+			const parsedArgs = parseToolArgumentsDetailed(
+				toolCall.function.arguments,
+			);
+			if (!parsedArgs.ok) {
+				const preview = parsedArgs.rawPreview
+					? ` Raw preview: ${parsedArgs.rawPreview}`
+					: '';
+				result = {
+					tool_call_id: toolCall.id,
+					role: 'tool',
+					content: `Error: Tool "${toolCall.function.name}" received invalid tool arguments JSON. ${parsedArgs.error}.${preview}`,
+					messageStatus: 'error',
+				};
+				return result;
+			}
+			const args = parsedArgs.args;
 			recordToolContent(
 				telemetry.span,
 				'tool.input',
@@ -318,7 +290,7 @@ export async function executeToolCall(
 			// Runs after beforeToolCall so hooks can still observe attempts, but
 			// before team/subagent/MCP side effects. YOLO cannot bypass this.
 			const planModeEnabled = getPlanMode();
-			const gateDecision = evaluatePlanGate({
+			const gateDecision = await evaluatePlanGate({
 				planMode: planModeEnabled,
 				sessionId,
 				toolName: toolCall.function.name,
@@ -351,9 +323,10 @@ export async function executeToolCall(
 						hookAnswer.customInput,
 					);
 
-					maybeApprovePlanFromAskUser({
+					const gateApproval = await maybeApprovePlanFromAskUser({
 						planMode: planModeEnabled,
 						sessionId,
+						cwd: workingDirectory || process.cwd(),
 						question:
 							typeof args['question'] === 'string'
 								? args['question']
@@ -365,11 +338,15 @@ export async function executeToolCall(
 					result = {
 						tool_call_id: toolCall.id,
 						role: 'tool',
-						content: JSON.stringify({
-							answer: answerText,
-							selected: hookAnswer.selected,
-							customInput: hookAnswer.customInput,
-						}),
+						content:
+							JSON.stringify({
+								answer: answerText,
+								selected: hookAnswer.selected,
+								customInput: hookAnswer.customInput,
+							}) +
+							(gateApproval.error
+								? `\n\n[Plan Gate] ${gateApproval.error}`
+								: ''),
 					};
 					return result;
 				}
@@ -442,6 +419,13 @@ export async function executeToolCall(
 					// Fallback to agentId if lookup fails
 				}
 
+				// Bind session/project scope for multi-session isolation.
+				const {sessionManager} = await import('../session/sessionManager.js');
+				const currentSession = sessionManager.getCurrentSession();
+				const sessionId = currentSession?.id;
+				const projectId =
+					currentSession?.projectId ?? sessionManager.getProjectId?.();
+
 				// Register this sub-agent as running
 				runningSubAgentTracker.register({
 					instanceId: toolCall.id,
@@ -449,7 +433,31 @@ export async function executeToolCall(
 					agentName,
 					prompt: subAgentPrompt,
 					startedAt: new Date(),
+					sessionId,
+					projectId,
 				});
+				// Per-instance abort so Detail TUI can stop this agent without killing the whole turn.
+				const subAgentAbortController =
+					runningSubAgentTracker.createAbortController(
+						toolCall.id,
+						abortSignal,
+					);
+				const subAgentAbortSignal = subAgentAbortController.signal;
+				try {
+					const {startSubAgentRun} = await import(
+						'../../hooks/conversation/core/subAgentRunStore.js'
+					);
+					startSubAgentRun({
+						instanceId: toolCall.id,
+						agentId,
+						agentName,
+						prompt: subAgentPrompt,
+						sourceType: 'subagent',
+						startedAt: new Date(),
+					});
+				} catch {
+					// optional history
+				}
 
 				// Create a tool confirmation adapter for sub-agent
 				const subAgentToolConfirmation = requestToolConfirmation
@@ -474,7 +482,7 @@ export async function executeToolCall(
 						prompt: subAgentPrompt,
 						instanceId: toolCall.id,
 						onMessage: onSubAgentMessage,
-						abortSignal,
+						abortSignal: subAgentAbortSignal,
 						requestToolConfirmation: subAgentToolConfirmation
 							? async (toolCall: ToolCall) => {
 									// Use the adapter to convert to the expected signature
@@ -495,7 +503,7 @@ export async function executeToolCall(
 
 					// Race with abort signal. Keep a const reference so TypeScript
 					// preserves narrowing inside the nested Promise callback.
-					const activeAbortSignal = abortSignal;
+					const activeAbortSignal = subAgentAbortSignal;
 					let subAgentResult: Awaited<typeof subAgentPromise>;
 					if (activeAbortSignal) {
 						subAgentResult = await Promise.race([
@@ -544,6 +552,56 @@ export async function executeToolCall(
 				} finally {
 					// Always unregister the sub-agent when it completes (success or error)
 					runningSubAgentTracker.unregister(toolCall.id);
+					try {
+						const {completeSubAgentRun} = await import(
+							'../../hooks/conversation/core/subAgentRunStore.js'
+						);
+						let finalSummary: string | undefined;
+						let tokenCount: number | undefined;
+						let error = false;
+						try {
+							const parsed = JSON.parse(
+								typeof result?.content === 'string' ? result.content : '',
+							);
+							if (parsed && typeof parsed === 'object') {
+								error = parsed.success === false;
+								const raw =
+									typeof parsed.result === 'string'
+										? parsed.result
+										: typeof parsed.error === 'string'
+										? parsed.error
+										: undefined;
+								if (raw) {
+									finalSummary = raw
+										.replace(/\x1b\[[0-9;]*m/g, '')
+										.replace(/[\r\n]+/g, ' ')
+										.trim()
+										.slice(0, 240);
+								}
+								const usage = parsed.usage;
+								if (usage && typeof usage === 'object') {
+									const inTok =
+										typeof usage.inputTokens === 'number'
+											? usage.inputTokens
+											: 0;
+									const outTok =
+										typeof usage.outputTokens === 'number'
+											? usage.outputTokens
+											: 0;
+									tokenCount = inTok + outTok || undefined;
+								}
+							}
+						} catch {
+							// ignore parse failures
+						}
+						completeSubAgentRun(toolCall.id, {
+							error,
+							finalSummary,
+							tokenCount,
+						});
+					} catch {
+						// optional history
+					}
 				}
 			} else {
 				// Regular tool execution
@@ -592,7 +650,9 @@ export async function executeToolCall(
 				result = {
 					tool_call_id: toolCall.id,
 					role: 'tool',
-					content: textContent,
+					content: gateDecision.warning
+						? `${textContent}\n\n${gateDecision.warning}`
+						: textContent,
 					images,
 					editDiffData,
 				};
@@ -657,13 +717,15 @@ export async function executeToolCall(
 					);
 
 					// Plan Mode: capture explicit approval from interactive askuser.
+					let gateApprovalError: string | undefined;
 					try {
 						const parsedArgs = safeParseToolArguments(
 							toolCall.function.arguments,
 						);
-						maybeApprovePlanFromAskUser({
+						const gateApproval = await maybeApprovePlanFromAskUser({
 							planMode: getPlanMode(),
 							sessionId,
+							cwd: workingDirectory || process.cwd(),
 							question:
 								typeof parsedArgs['question'] === 'string'
 									? parsedArgs['question']
@@ -673,6 +735,7 @@ export async function executeToolCall(
 							selected: response.selected,
 							customInput: response.customInput,
 						});
+						gateApprovalError = gateApproval.error;
 					} catch {
 						// ignore approval parse failures
 					}
@@ -680,11 +743,13 @@ export async function executeToolCall(
 					result = {
 						tool_call_id: toolCall.id,
 						role: 'tool',
-						content: JSON.stringify({
-							answer: answerText,
-							selected: response.selected,
-							customInput: response.customInput,
-						}),
+						content:
+							JSON.stringify({
+								answer: answerText,
+								selected: response.selected,
+								customInput: response.customInput,
+							}) +
+							(gateApprovalError ? `\n\n[Plan Gate] ${gateApprovalError}` : ''),
 					};
 				} else {
 					// No callback provided, return error
@@ -801,8 +866,9 @@ function getToolResourceType(toolName: string): string {
 		return 'user-interaction';
 	}
 
-	// Terminal commands must be sequential to avoid race conditions
-	// (e.g., npm install -> npm build, port conflicts, file locks)
+	// Terminal commands are independent by default so parallel tool calls
+	// (e.g. sleep 3 / sleep 8 / sleep 1) actually run concurrently.
+	// Dependent sequences should use shell chaining (&& / ;) or separate turns.
 	if (toolName === 'terminal-execute') {
 		return 'terminal-execution';
 	}
@@ -864,7 +930,10 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 	}
 
 	if (resourceType === 'terminal-execution') {
-		return 'terminal-execution'; // All terminal commands share same execution context
+		// One lane per tool call so concurrent terminal-execute requests
+		// run in parallel. Wall-clock group elapsed then reflects the
+		// slowest command (~8s for sleep 3/8/1) instead of the serial sum.
+		return `terminal-execution:${toolCall.id}`;
 	}
 
 	if (resourceType === 'filesystem') {
@@ -933,6 +1002,10 @@ export async function executeToolCalls(
 					break;
 				}
 
+				// Stamp the real start time right before execution so sequential
+				// tools in the same resource group (todo/notebook/askuser)
+				// report self-duration, not "batch start → my end".
+				const toolStartedAt = Date.now();
 				const result = await executeToolCall(
 					toolCall,
 					abortSignal,
@@ -946,7 +1019,16 @@ export async function executeToolCalls(
 					sessionId,
 					workingDirectory,
 				);
-				groupResults.push(result);
+				// Stamp per-tool completion time immediately so parallel
+				// siblings don't inherit the slowest tool's end time.
+				// buildToolResultMessages uses this instead of a single
+				// batch-level Date.now() (which only fires after Promise.all
+				// resolves, i.e. at the last tool's completion).
+				groupResults.push({
+					...result,
+					startedAt: toolStartedAt,
+					completedAt: Date.now(),
+				});
 
 				// If hook failed or aborted, stop executing remaining tools
 				if (result.hookFailed || abortSignal?.aborted) {

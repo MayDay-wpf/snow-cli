@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.8.18",
+	"version": "0.8.20",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -159,6 +159,10 @@
 		"tough-cookie": "^6.0.0"
 	},
 	"ava": {
+		"files": [
+			"source/test/**/*.test.ts",
+			"source/test/**/*.test.tsx"
+		],
 		"extensions": {
 			"ts": "module",
 			"tsx": "module"

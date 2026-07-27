@@ -50,6 +50,7 @@ import {
 	loadCodebaseConfig,
 } from '../config/codebaseConfig.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {translations} from '../../i18n/index.js';
 import {getSnowConfig, updateSnowConfig} from '../config/apiConfig.js';
 import {readSettings} from '../config/unifiedSettings.js';
 import {
@@ -314,7 +315,8 @@ export function handleTheme(
 						return failResult(
 							meta.id,
 							'INVALID_ARGS',
-							'toolDisplay must be full|compact|hidden',
+							translations[getCurrentLanguage()].commandPanel.commandOutput
+								.toolDisplay.invalid,
 							meta.risk,
 						);
 					}
@@ -416,7 +418,8 @@ export function handleTheme(
 						return failResult(
 							meta.id,
 							'INVALID_ARGS',
-							'thinkDisplay must be full|compact',
+							translations[getCurrentLanguage()].commandPanel.commandOutput
+								.thinkDisplay.invalid,
 							meta.risk,
 						);
 					}

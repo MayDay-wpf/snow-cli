@@ -8,6 +8,8 @@ export function runningAgentsPickerHandler(ctx: HandlerContext): boolean {
 		setRunningAgentsSelectedIndex,
 		toggleRunningAgentSelection,
 		confirmRunningAgentsSelection,
+		openSubAgentDetail,
+		openSubAgentDetailByIndex,
 	} = options;
 
 	if (!showRunningAgentsPicker) return false;
@@ -33,9 +35,40 @@ export function runningAgentsPickerHandler(ctx: HandlerContext): boolean {
 		return true;
 	}
 
-	// Enter - confirm selection and insert visual tags.
-	if (key.return) {
+	// 'm' - confirm selection for message targeting (multi-select tags)
+	if (input === 'm' || input === 'M') {
 		confirmRunningAgentsSelection();
+		helpers.forceStateUpdate();
+		return true;
+	}
+
+	// 'v' - open detail (view)
+	if (input === 'v' || input === 'V') {
+		openSubAgentDetail?.();
+		helpers.forceStateUpdate();
+		return true;
+	}
+
+	// 1-9 - jump to / open nth agent in picker list
+	if (input && /^[1-9]$/.test(input) && !key.ctrl && !key.meta) {
+		const index = Number(input);
+		if (openSubAgentDetailByIndex) {
+			openSubAgentDetailByIndex(index);
+		} else if (openSubAgentDetail && index <= runningAgents.length) {
+			const agent = runningAgents[index - 1];
+			if (agent) openSubAgentDetail(agent.instanceId);
+		}
+		helpers.forceStateUpdate();
+		return true;
+	}
+
+	// Enter - open detail TUI for highlighted agent
+	if (key.return) {
+		if (openSubAgentDetail) {
+			openSubAgentDetail();
+		} else {
+			confirmRunningAgentsSelection();
+		}
 		helpers.forceStateUpdate();
 		return true;
 	}

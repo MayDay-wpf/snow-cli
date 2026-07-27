@@ -1,4 +1,4 @@
-import {
+﻿import {
 	useState,
 	useCallback,
 	useMemo,
@@ -12,6 +12,7 @@ import {commandUsageManager} from '../../utils/session/commandUsageManager.js';
 import {runningSubAgentTracker} from '../../utils/execution/runningSubAgentTracker.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
 import {getAllProfiles} from '../../utils/config/configManager.js';
+import {getCurrentLanguage} from '../../utils/config/languageConfig.js';
 import {
 	findInlineCommandTrigger,
 	isInlineCommand,
@@ -81,14 +82,18 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	connect: '[apiUrl]',
 	export: '[txt|md|html|json]',
 	config: '<export|import>',
-	'tool-display': '[full|compact|hidden|status]',
+	'tool-display': '[完整full|精简compact|隐藏hidden|status]',
 	'tool-icons':
 		'[on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
 	'tool-names': '[status|clear|<tool>:<name> …]',
 	'tool-name': '[status|clear|<tool>:<name> …]',
-	'think-display': '[full|compact|status]',
+	'think-display': '[完整full|精简compact|status]',
+	// 参数提示：默认 slots；status 只查询，不切换
+	'subagent-display': '[槽位slots|多行multi|精简compact|隐藏hidden|status]',
+	display: '[status|tool|think|subagent] [mode]',
 	speedometer: '[on|off|status]',
 };
+
 
 // 指令参数可选值列表：用于 Tab 弹出参数选择面板
 // key 为指令名（不含斜杠），value 为可选参数值数组
@@ -123,6 +128,8 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	'tool-names': ['status', 'clear'],
 	'tool-name': ['status', 'clear'],
 	'think-display': ['full', 'compact', 'status'],
+	'subagent-display': ['slots', 'multi', 'compact', 'hidden', 'status'],
+	display: ['status', 'tool', 'think', 'subagent', 'help'],
 	speedometer: ['on', 'off', 'status'],
 };
 
@@ -139,6 +146,112 @@ function getBuddyProfileArgOptions(): CommandArgOption[] {
 	];
 }
 
+function isZhLanguage(): boolean {
+	const lang = getCurrentLanguage();
+	return lang === 'zh' || lang === 'zh-TW';
+}
+
+/** Labeled choices so the args picker explains each mode (not bare tokens). */
+function getToolDisplayArgOptions(): CommandArgOption[] {
+	if (isZhLanguage()) {
+		return [
+			{value: 'full', label: '完整 (full) · 显示工具名 + 参数 + 结果'},
+			{value: 'compact', label: '精简 (compact) · 仅工具名 + 简要状态'},
+			{value: 'hidden', label: '隐藏 (hidden) · 不显示工具调用'},
+			{value: 'status', label: 'status · 查看当前模式（不切换）'},
+		];
+	}
+	return [
+		{value: 'full', label: 'full · show tool name + args + result'},
+		{value: 'compact', label: 'compact · tool name + brief status only'},
+		{value: 'hidden', label: 'hidden · hide tool calls'},
+		{value: 'status', label: 'status · show current mode (no change)'},
+	];
+}
+
+function getThinkDisplayArgOptions(): CommandArgOption[] {
+	if (isZhLanguage()) {
+		return [
+			{value: 'full', label: '完整 (full) · 全量思考内容'},
+			{value: 'compact', label: '精简 (compact) · 压缩后的思考摘要'},
+			{value: 'status', label: 'status · 查看当前模式（不切换）'},
+		];
+	}
+	return [
+		{value: 'full', label: 'full · full thinking content'},
+		{value: 'compact', label: 'compact · condensed thinking summary'},
+		{value: 'status', label: 'status · show current mode (no change)'},
+	];
+}
+
+function getSubAgentDisplayArgOptions(): CommandArgOption[] {
+	if (isZhLanguage()) {
+		return [
+			{
+				value: 'slots',
+				label: '槽位 (slots) · 默认：agent 容器 + 当前焦点覆盖',
+			},
+			{
+				value: 'multi',
+				label: '多行 (multi) · agent 容器 + 最近多行历史',
+			},
+			{
+				value: 'compact',
+				label: '精简 (compact) · 仅 agent 标题/耗时',
+			},
+			{
+				value: 'hidden',
+				label: '隐藏 (hidden) · 关闭实时面板（旧工具卡片）',
+			},
+			{
+				value: 'status',
+				label: 'status · 查看当前模式（不切换）',
+			},
+		];
+	}
+	return [
+		{
+			value: 'slots',
+			label: 'slots · default: agent container + focus overwrite',
+		},
+		{
+			value: 'multi',
+			label: 'multi · agent container + recent multi-line history',
+		},
+		{
+			value: 'compact',
+			label: 'compact · agent header / elapsed only',
+		},
+		{
+			value: 'hidden',
+			label: 'hidden · disable live panel (legacy tool cards)',
+		},
+		{
+			value: 'status',
+			label: 'status · show current mode (no change)',
+		},
+	];
+}
+
+function getDisplayArgOptions(): CommandArgOption[] {
+	if (isZhLanguage()) {
+		return [
+			{value: 'status', label: 'status · 查看当前显示设置'},
+			{value: 'tool', label: 'tool · 切换工具显示模式'},
+			{value: 'think', label: 'think · 切换思考显示模式'},
+			{value: 'subagent', label: 'subagent · 切换子代理显示模式'},
+			{value: 'help', label: 'help · 查看用法'},
+		];
+	}
+	return [
+		{value: 'status', label: 'status · show current display settings'},
+		{value: 'tool', label: 'tool · cycle tool display mode'},
+		{value: 'think', label: 'think · cycle think display mode'},
+		{value: 'subagent', label: 'subagent · cycle sub-agent display mode'},
+		{value: 'help', label: 'help · show usage'},
+	];
+}
+
 export function getCommandArgsOptions(
 	commandName: string,
 	inputText?: string,
@@ -148,6 +261,19 @@ export function getCommandArgsOptions(
 		/^\/buddy\s+profile\s*$/.test(inputText ?? '')
 	) {
 		return getBuddyProfileArgOptions();
+	}
+
+	if (commandName === 'tool-display') {
+		return getToolDisplayArgOptions();
+	}
+	if (commandName === 'think-display') {
+		return getThinkDisplayArgOptions();
+	}
+	if (commandName === 'subagent-display') {
+		return getSubAgentDisplayArgOptions();
+	}
+	if (commandName === 'display') {
+		return getDisplayArgOptions();
 	}
 
 	// Check static dictionary first
@@ -178,7 +304,11 @@ export function getCommandArgsHint(commandName: string): string {
 	return customCmd?.argsHint ?? '';
 }
 
-export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
+export function useCommandPanel(
+	buffer: TextBuffer,
+	isProcessing = false,
+	isPaused = false,
+) {
 	const {t} = useI18n();
 
 	const subAgents = useSyncExternalStore(
@@ -503,6 +633,18 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 					'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			},
 			{
+				name: 'subagent-display',
+				description:
+					t.commandPanel.commands.subAgentDisplay ||
+					'Control sub-agent live panel. Usage: /subagent-display [slots|multi|compact|hidden|status]',
+			},
+			{
+				name: 'display',
+				description:
+					t.commandPanel.commands.display ||
+					'Display settings panel. Usage: /display | /display status | /display tool|think|subagent [mode]',
+			},
+			{
 				name: 'speedometer',
 				description:
 					t.commandPanel.commands.speedometer ||
@@ -512,6 +654,19 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 				name: 'cut',
 				description:
 					t.commandPanel.commands.cut || 'Interrupt AI and send a message',
+				allowDuringProcessing: true,
+			},
+			{
+				name: 'pause',
+				description:
+					t.commandPanel.commands.pause ||
+					'Pause the AI loop at the next round',
+				allowDuringProcessing: true,
+			},
+			{
+				name: 'continue',
+				description:
+					t.commandPanel.commands.continue || 'Resume the AI loop after /pause',
 				allowDuringProcessing: true,
 			},
 		],
@@ -599,10 +754,16 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 			? allCommands.filter(
 					command =>
 						command.type === 'prompt' &&
-						!(command.mainFlowOnly && hasRunningAgentsOrTeam),
+						!(command.mainFlowOnly && hasRunningAgentsOrTeam) &&
+						// Hide 'pause' when already paused; hide 'continue' when not paused
+						!(command.name === 'pause' && isPaused) &&
+						!(command.name === 'continue' && !isPaused),
 			  )
 			: trigger.isAtStart
-			? allCommands
+			? allCommands.filter(
+					// /pause and /continue only make sense during AI processing
+					command => command.name !== 'pause' && command.name !== 'continue',
+			  )
 			: allCommands.filter(isInlineCommand);
 
 		return filterAndRankCommands(
@@ -615,6 +776,7 @@ export function useCommandPanel(buffer: TextBuffer, isProcessing = false) {
 		buffer,
 		getAllCommands,
 		isProcessing,
+		isPaused,
 		hasRunningAgentsOrTeam,
 		usageLoaded,
 		buildRankOptions,

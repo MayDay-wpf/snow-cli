@@ -37,3 +37,31 @@ export function getPackageVersion(): string {
 export function getVersionHeader(): string {
 	return `v${getPackageVersion()}`;
 }
+
+/**
+ * Default User-Agent for API requests when no custom headers are configured.
+ * Claude-style product token: snow-cli/<version> (cli)
+ * Version is always read from package.json (auto-updates with releases).
+ */
+export function getDefaultUserAgent(): string {
+	return `snow-cli/${getPackageVersion()} (cli)`;
+}
+
+/**
+ * Merge base request headers with optional custom headers.
+ * When custom headers are empty/absent, inject User-Agent: snow-cli/<version> (cli).
+ * Always attaches x-snow (custom headers may override it).
+ */
+export function mergeApiRequestHeaders(
+	baseHeaders: Record<string, string>,
+	customHeaders?: Record<string, string> | null,
+): Record<string, string> {
+	const custom = customHeaders ?? {};
+	const hasCustom = Object.keys(custom).length > 0;
+
+	return {
+		...baseHeaders,
+		'x-snow': getVersionHeader(),
+		...(hasCustom ? custom : {'User-Agent': getDefaultUserAgent()}),
+	};
+}

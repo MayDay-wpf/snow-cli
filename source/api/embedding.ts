@@ -1,7 +1,7 @@
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import {logger} from '../utils/core/logger.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
-import {getVersionHeader} from '../utils/core/version.js';
+import {mergeApiRequestHeaders} from '../utils/core/version.js';
 
 export interface EmbeddingOptions {
 	model?: string;
@@ -382,22 +382,22 @@ export async function createEmbeddings(
 		url = resolveOpenAICompatibleEmbeddingsEndpoint(baseUrl);
 	}
 
-	// Build headers - only include Authorization if API key is provided
-	const headers: Record<string, string> = {
+	// Build headers - only include Authorization if API key is provided.
+	// No custom headers path here, so default User-Agent is always applied.
+	const authHeaders: Record<string, string> = {
 		'Content-Type': 'application/json',
-		'x-snow': getVersionHeader(),
 	};
 
 	if (embeddingType === 'gemini') {
 		// Gemini uses x-goog-api-key header instead of Authorization
 		if (apiKey) {
-			headers['x-goog-api-key'] = apiKey;
+			authHeaders['x-goog-api-key'] = apiKey;
 		}
-	} else {
-		if (apiKey) {
-			headers['Authorization'] = `Bearer ${apiKey}`;
-		}
+	} else if (apiKey) {
+		authHeaders['Authorization'] = `Bearer ${apiKey}`;
 	}
+
+	const headers = mergeApiRequestHeaders(authHeaders);
 
 	const fetchOptions = addProxyToFetchOptions(url, {
 		method: 'POST',

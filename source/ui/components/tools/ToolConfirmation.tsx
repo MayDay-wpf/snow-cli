@@ -13,6 +13,11 @@ import {
 } from '../../../utils/execution/hookResultInterpreter.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import fs from 'fs';
+import DiffViewer from './DiffViewer.js';
+import {
+	collectDiffPreviewEntries,
+	type DiffPreviewEntry,
+} from '../../../utils/ui/diffPreview.js';
 
 export type ConfirmationResult =
 	| 'approve'
@@ -195,6 +200,34 @@ export default function ToolConfirmation({
 			return null;
 		}
 	}, [toolName, toolArguments]);
+
+	// Inline diff preview for filesystem-edit/replaceedit/create.
+	// Non-YOLO users must see the diff BEFORE deciding to approve; without this
+	// the only diff path was vscodeConnection.showDiff, which silently no-ops
+	// when VSCode is disconnected. We compute preview entries from the pending
+	// tool args (readOriginalFile + apply preview transform) so the rendered diff
+	// matches what DiffViewer will show on success.
+	const MAX_INLINE_DIFF_FILES = 3;
+	const inlineDiffEntries = useMemo<DiffPreviewEntry[]>(() => {
+		if (
+			toolName !== 'filesystem-edit' &&
+			toolName !== 'filesystem-replaceedit' &&
+			toolName !== 'filesystem-create'
+		) {
+			return [];
+		}
+		// For multi-tool confirmations, allTools drives the diff dispatch
+		// effect below; here we only render the primary tool's preview to
+		// keep the confirmation box compact.
+		if (allTools && allTools.length > 0) {
+			return collectDiffPreviewEntries(
+				allTools[0]!.function.name,
+				allTools[0]!.function.arguments,
+			);
+		}
+		if (!toolArguments) return [];
+		return collectDiffPreviewEntries(toolName, toolArguments);
+	}, [toolName, toolArguments, allTools]);
 
 	useEffect(() => {
 		// 切换到新命令时重置翻阅位置
@@ -765,6 +798,40 @@ export default function ToolConfirmation({
 									</Text>
 								</Box>
 							))}
+						</Box>
+					) : null}
+
+					{/* Inline DiffViewer so non-YOLO users can review changes before
+				approving. Without this, the only diff path is VSCode dispatch,
+				which silently no-ops when VSCode is disconnected. */}
+					{inlineDiffEntries.length > 0 ? (
+						<Box flexDirection="column" marginBottom={1}>
+							<Text dimColor>{t.toolConfirmation.diffPreviewTitle}</Text>
+							{inlineDiffEntries
+								.slice(0, MAX_INLINE_DIFF_FILES)
+								.map((entry, index) => (
+									<Box key={index} flexDirection="column">
+										{inlineDiffEntries.length > 1 ? (
+											<Text bold color="cyan">
+												{`File ${index + 1}: ${entry.filePath}`}
+											</Text>
+										) : null}
+										<DiffViewer
+											oldContent={entry.oldContent}
+											newContent={entry.newContent}
+											filename={entry.filePath}
+											showFilenameInHeader={inlineDiffEntries.length <= 1}
+										/>
+									</Box>
+								))}
+							{inlineDiffEntries.length > MAX_INLINE_DIFF_FILES ? (
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.toolConfirmation.diffPreviewTruncated.replace(
+										'{count}',
+										String(inlineDiffEntries.length - MAX_INLINE_DIFF_FILES),
+									)}
+								</Text>
+							) : null}
 						</Box>
 					) : null}
 

@@ -133,6 +133,18 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		'Get or set think display density',
 	),
 	meta(
+		'subagent-display',
+		'subagent-display',
+		'low_write',
+		'Get or set sub-agent live panel density',
+	),
+	meta(
+		'display',
+		'display',
+		'low_write',
+		'Unified display settings for tool/think/subagent',
+	),
+	meta(
 		'image-compress',
 		'image-compress',
 		'low_write',

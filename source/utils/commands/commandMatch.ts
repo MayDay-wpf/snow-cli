@@ -83,6 +83,12 @@ export const BUILTIN_COMMAND_META: Record<
 	init: {category: 'settings', rankBoost: 30},
 	role: {category: 'settings', rankBoost: 30},
 	'role-subagent': {category: 'settings', rankBoost: 30},
+	display: {category: 'settings', rankBoost: 35},
+	'tool-display': {category: 'settings', rankBoost: 30},
+	'tool-icons': {category: 'settings', rankBoost: 30},
+	'tool-names': {category: 'settings', rankBoost: 30},
+	'think-display': {category: 'settings', rankBoost: 30},
+	'subagent-display': {category: 'settings', rankBoost: 30},
 	'new-prompt': {category: 'settings', rankBoost: 30},
 	team: {category: 'settings', rankBoost: 30},
 	'tool-search': {category: 'settings', rankBoost: 30},
@@ -94,10 +100,6 @@ export const BUILTIN_COMMAND_META: Record<
 	simple: {category: 'settings', rankBoost: 30},
 	speedometer: {category: 'settings', rankBoost: 30},
 	'auto-format': {category: 'settings', rankBoost: 30},
-	'tool-display': {category: 'settings', rankBoost: 30},
-	'tool-icons': {category: 'settings', rankBoost: 30},
-	'tool-names': {category: 'settings', rankBoost: 30},
-	'think-display': {category: 'settings', rankBoost: 30},
 	permissions: {category: 'settings', rankBoost: 30},
 	config: {category: 'settings', rankBoost: 30},
 	telemetry: {category: 'settings', rankBoost: 30},
@@ -258,7 +260,16 @@ export function compareRankedCommands<T extends MatchableCommand>(
 ): number {
 	const q = query.trim();
 	if (!q) {
-		// Empty query with recent flags: recent first (by lastUsed), then frequent sort
+		// Empty query: pin high-boost frequent commands (clear/help/...) first,
+		// then recent usage, then remaining frequent by usage/boost.
+		const aPinned = a.rankBoost >= 100;
+		const bPinned = b.rankBoost >= 100;
+		if (aPinned !== bPinned) return aPinned ? -1 : 1;
+		if (aPinned && bPinned) {
+			if (a.rankBoost !== b.rankBoost) return b.rankBoost - a.rankBoost;
+			if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount;
+			return a.command.name.localeCompare(b.command.name);
+		}
 		if (Boolean(a.isRecent) !== Boolean(b.isRecent)) {
 			return a.isRecent ? -1 : 1;
 		}
@@ -266,7 +277,7 @@ export function compareRankedCommands<T extends MatchableCommand>(
 			if (a.lastUsed !== b.lastUsed) return b.lastUsed - a.lastUsed;
 			return a.command.name.localeCompare(b.command.name);
 		}
-		// Frequent pool: usage → boost → name
+		// Remaining pool: usage → boost → name
 		if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount;
 		if (a.rankBoost !== b.rankBoost) return b.rankBoost - a.rankBoost;
 		return a.command.name.localeCompare(b.command.name);

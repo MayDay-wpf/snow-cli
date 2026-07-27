@@ -122,15 +122,16 @@ test('abbreviation hc matches hybrid-compress', t => {
 	t.true(ranked.some(c => c.name === 'hybrid-compress'));
 });
 
-test('empty query merges recent ahead of frequent', t => {
+test('empty query keeps pinned frequent ahead of recent', t => {
 	const ranked = filterAndRankCommands(samplePool, '', () => 0, {
 		categoryFilter: 'frequent',
 		recentNames: ['deepresearch', 'games'],
 		getLastUsed: name =>
 			name === 'deepresearch' ? 200 : name === 'games' ? 100 : 0,
 	});
-	t.is(ranked[0]?.name, 'deepresearch');
-	t.is(ranked[1]?.name, 'games');
+	t.true(['help', 'models', 'mcp', 'compact'].includes(ranked[0]?.name ?? ''));
+	t.true(ranked.some(c => c.name === 'deepresearch'));
+	t.true(ranked.some(c => c.name === 'games'));
 	t.true(ranked.some(c => c.name === 'models'));
 	t.true(ranked.length <= 20);
 });

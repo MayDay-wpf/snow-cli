@@ -5,6 +5,8 @@
  * and a per-instance message queue for injecting user messages into running sub-agents.
  */
 
+import {sessionManager} from '../session/sessionManager.js';
+
 export interface InterAgentMessage {
 	/** Instance ID of the sender sub-agent */
 	fromInstanceId: string;
@@ -29,7 +31,18 @@ export interface RunningSubAgent {
 	prompt: string;
 	/** When this sub-agent started */
 	startedAt: Date;
+	/** Session that spawned this sub-agent (for multi-session isolation) */
+	sessionId?: string;
+	/** Project that owns the session (for multi-project isolation) */
+	projectId?: string;
 }
+
+export type RunningSubAgentQueryOptions = {
+	sessionId?: string;
+	projectId?: string;
+	/** When true, return every running agent regardless of session/project. */
+	all?: boolean;
+};
 
 /**
  * Result from a sub-agent that was spawned by another sub-agent.
@@ -66,11 +79,14 @@ class RunningSubAgentTracker {
 	private agents: Map<string, RunningSubAgent> = new Map();
 	private listeners: Set<Listener> = new Set();
 	/**
-	 * Cached snapshot array for useSyncExternalStore compatibility.
+	 * Cached snapshots for useSyncExternalStore compatibility.
 	 * useSyncExternalStore requires getSnapshot to return the same reference
-	 * if the data hasn't changed, so we cache it and only rebuild on mutation.
+	 * if the data hasn't changed, so we cache them and only rebuild on mutation.
 	 */
+	private cachedAllSnapshot: RunningSubAgent[] = [];
+	/** Default public snapshot: agents for the current session (plus unscoped). */
 	private cachedSnapshot: RunningSubAgent[] = [];
+	private cachedFilterSessionId: string | undefined;
 
 	/**
 	 * Per-instance message queue.
@@ -85,6 +101,12 @@ class RunningSubAgentTracker {
 	 * Consumed by the receiving sub-agent's while loop and injected as context.
 	 */
 	private interAgentQueues: Map<string, InterAgentMessage[]> = new Map();
+
+	/**
+	 * Per-instance AbortControllers for stopping a single sub-agent from Detail TUI.
+	 * Linked to parent abort signals when provided so ESC still aborts all children.
+	 */
+	private abortControllers: Map<string, AbortController> = new Map();
 
 	/**
 	 * Completed results from sub-agents spawned by other sub-agents.
@@ -110,22 +132,97 @@ class RunningSubAgentTracker {
 		if (this.agents.delete(instanceId)) {
 			this.messageQueues.delete(instanceId);
 			this.interAgentQueues.delete(instanceId);
+			this.abortControllers.delete(instanceId);
 			this.rebuildSnapshot();
 			this.notifyListeners();
 		}
 	}
 
 	/**
-	 * Get all currently running sub-agents (returns cached snapshot).
-	 * Safe for useSyncExternalStore - returns the same reference
-	 * until the data changes.
+	 * Create and store an AbortController for a sub-agent instance.
+	 * If a parent abort signal is provided, it is linked so the instance aborts
+	 * when either the parent fires or abortAgent() is called.
 	 */
-	getRunningAgents(): RunningSubAgent[] {
+	createAbortController(
+		instanceId: string,
+		parentSignal?: AbortSignal,
+	): AbortController {
+		const controller = new AbortController();
+		this.abortControllers.set(instanceId, controller);
+		if (parentSignal) {
+			const onParentAbort = () => controller.abort();
+			if (parentSignal.aborted) {
+				controller.abort();
+			} else {
+				parentSignal.addEventListener('abort', onParentAbort, {once: true});
+			}
+		}
+		return controller;
+	}
+
+	/**
+	 * Get the AbortController for a specific sub-agent instance.
+	 */
+	getAbortController(instanceId: string): AbortController | undefined {
+		return this.abortControllers.get(instanceId);
+	}
+
+	/**
+	 * Abort a single running sub-agent by instance ID.
+	 * Returns true if an abort signal was sent.
+	 */
+	abortAgent(instanceId: string): boolean {
+		const controller = this.abortControllers.get(instanceId);
+		if (!controller || controller.signal.aborted) {
+			return false;
+		}
+		try {
+			controller.abort();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Get currently running sub-agents.
+	 * Default (no options / not all): current session only (plus unscoped agents).
+	 * Pass {all: true} or use getAllRunningAgents() for the unfiltered list.
+	 * Safe for useSyncExternalStore when called with default options - returns the
+	 * same reference until agents mutate (or the current session id changes).
+	 */
+	getRunningAgents(options?: RunningSubAgentQueryOptions): RunningSubAgent[] {
+		if (options?.all) {
+			return this.cachedAllSnapshot;
+		}
+
+		if (options?.sessionId !== undefined || options?.projectId !== undefined) {
+			return this.cachedAllSnapshot.filter(agent =>
+				matchesRunningAgentFilter(agent, options),
+			);
+		}
+
+		// Refresh default filtered cache if the active session changed.
+		const currentSessionId = sessionManager.getCurrentSession()?.id;
+		if (currentSessionId !== this.cachedFilterSessionId) {
+			this.cachedFilterSessionId = currentSessionId;
+			this.cachedSnapshot = this.cachedAllSnapshot.filter(agent =>
+				matchesRunningAgentFilter(agent, undefined),
+			);
+		}
+
 		return this.cachedSnapshot;
 	}
 
 	/**
-	 * Get count of currently running sub-agents
+	 * Unfiltered alias for getRunningAgents({all: true}).
+	 */
+	getAllRunningAgents(): RunningSubAgent[] {
+		return this.cachedAllSnapshot;
+	}
+
+	/**
+	 * Get count of currently running sub-agents (all sessions).
 	 */
 	getCount(): number {
 		return this.agents.size;
@@ -274,6 +371,14 @@ class RunningSubAgentTracker {
 		if (!fromAgent) {
 			return false; // Sender agent is not running
 		}
+		const targetAgent = this.agents.get(targetInstanceId);
+		if (!targetAgent) {
+			return false;
+		}
+		// Reject cross-session / cross-project delivery (do not silently enqueue).
+		if (!this.areAgentsPeerCompatible(fromAgent, targetAgent)) {
+			return false;
+		}
 
 		const message: InterAgentMessage = {
 			fromInstanceId,
@@ -327,13 +432,27 @@ class RunningSubAgentTracker {
 	}
 
 	/**
-	 * Find a running sub-agent instance by agentId (type).
-	 * If multiple instances of the same type are running, returns the first match.
-	 * Use this to resolve agentId -> instanceId for inter-agent messaging.
+	 * Get a running agent by instance id (all sessions).
 	 */
-	findInstanceByAgentId(agentId: string): RunningSubAgent | undefined {
+	getAgent(instanceId: string): RunningSubAgent | undefined {
+		return this.agents.get(instanceId);
+	}
+
+	/**
+	 * Find a running sub-agent instance by agentId (type).
+	 * Default: only match agents in the current session (plus unscoped).
+	 * Pass explicit sessionId/projectId to scope to a sender's session, or {all:true}.
+	 * If multiple instances of the same type match, returns the first match.
+	 */
+	findInstanceByAgentId(
+		agentId: string,
+		options?: RunningSubAgentQueryOptions,
+	): RunningSubAgent | undefined {
 		for (const agent of this.agents.values()) {
-			if (agent.agentId === agentId) {
+			if (
+				agent.agentId === agentId &&
+				matchesRunningAgentFilter(agent, options)
+			) {
 				return agent;
 			}
 		}
@@ -342,15 +461,74 @@ class RunningSubAgentTracker {
 
 	/**
 	 * Find all running sub-agent instances by agentId (type).
+	 * Same session/project filtering as findInstanceByAgentId.
 	 */
-	findAllInstancesByAgentId(agentId: string): RunningSubAgent[] {
+	findAllInstancesByAgentId(
+		agentId: string,
+		options?: RunningSubAgentQueryOptions,
+	): RunningSubAgent[] {
 		const result: RunningSubAgent[] = [];
 		for (const agent of this.agents.values()) {
-			if (agent.agentId === agentId) {
+			if (
+				agent.agentId === agentId &&
+				matchesRunningAgentFilter(agent, options)
+			) {
 				result.push(agent);
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * Whether two running agents may collaborate (same session + project when set).
+	 * Unscoped (legacy) agents are treated as compatible with any peer.
+	 */
+	areAgentsPeerCompatible(
+		fromAgent: RunningSubAgent,
+		toAgent: RunningSubAgent,
+	): boolean {
+		if (
+			fromAgent.sessionId &&
+			toAgent.sessionId &&
+			fromAgent.sessionId !== toAgent.sessionId
+		) {
+			return false;
+		}
+		if (
+			fromAgent.projectId &&
+			toAgent.projectId &&
+			fromAgent.projectId !== toAgent.projectId
+		) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Peers visible to a running agent for collaboration tools.
+	 * Prefer the sender's own session/project scope over the UI current session,
+	 * so background agents stay isolated after a session switch.
+	 */
+	getPeerAgents(selfInstanceId?: string): RunningSubAgent[] {
+		if (!selfInstanceId) {
+			return this.getRunningAgents();
+		}
+		const self = this.agents.get(selfInstanceId);
+		if (!self) {
+			return this.getRunningAgents().filter(
+				a => a.instanceId !== selfInstanceId,
+			);
+		}
+		const scope: RunningSubAgentQueryOptions = {};
+		if (self.sessionId) {
+			scope.sessionId = self.sessionId;
+		}
+		if (self.projectId) {
+			scope.projectId = self.projectId;
+		}
+		return this.getRunningAgents(
+			self.sessionId || self.projectId ? scope : undefined,
+		).filter(a => a.instanceId !== selfInstanceId);
 	}
 
 	// ── Inter-agent message listeners (for UI notifications) ──
@@ -444,7 +622,11 @@ class RunningSubAgentTracker {
 	}
 
 	private rebuildSnapshot(): void {
-		this.cachedSnapshot = Array.from(this.agents.values());
+		this.cachedAllSnapshot = Array.from(this.agents.values());
+		this.cachedFilterSessionId = sessionManager.getCurrentSession()?.id;
+		this.cachedSnapshot = this.cachedAllSnapshot.filter(agent =>
+			matchesRunningAgentFilter(agent, undefined),
+		);
 	}
 
 	private notifyListeners(): void {
@@ -456,6 +638,48 @@ class RunningSubAgentTracker {
 			}
 		}
 	}
+}
+
+function matchesRunningAgentFilter(
+	agent: RunningSubAgent,
+	options?: RunningSubAgentQueryOptions,
+): boolean {
+	if (options?.all) {
+		return true;
+	}
+
+	const sessionId =
+		options?.sessionId ?? sessionManager.getCurrentSession()?.id;
+	const projectId =
+		options?.projectId ??
+		sessionManager.getCurrentSession()?.projectId ??
+		sessionManager.getProjectId?.();
+
+	// Explicit filters take precedence when provided.
+	if (options?.sessionId !== undefined) {
+		// Unscoped agents (legacy / tests) are included for the active query.
+		if (agent.sessionId && agent.sessionId !== options.sessionId) {
+			return false;
+		}
+	} else if (sessionId) {
+		if (agent.sessionId && agent.sessionId !== sessionId) {
+			return false;
+		}
+	}
+
+	if (options?.projectId !== undefined) {
+		if (agent.projectId && agent.projectId !== options.projectId) {
+			return false;
+		}
+	} else if (projectId && options?.sessionId === undefined) {
+		// Only apply default project filter when no explicit session filter was given.
+		// Default path already scopes by current session; keep unscoped agents.
+		if (agent.projectId && agent.projectId !== projectId) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 export const runningSubAgentTracker = new RunningSubAgentTracker();

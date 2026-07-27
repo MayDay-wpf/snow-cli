@@ -13,7 +13,20 @@ import UserMessagePreview from '../components/chat/UserMessagePreview.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';
-import {getSimpleMode, setSimpleMode} from '../../utils/config/themeConfig.js';
+import {
+	getSimpleMode,
+	setSimpleMode,
+	getToolDisplayMode,
+	setToolDisplayMode,
+	getThinkDisplayMode,
+	setThinkDisplayMode,
+	getSubAgentDisplayMode,
+	setSubAgentDisplayMode,
+	type ToolDisplayMode,
+	type ThinkDisplayMode,
+	type SubAgentDisplayMode,
+} from '../../utils/config/themeConfig.js';
+import {configEvents} from '../../utils/config/configEvents.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
 const CustomThemeScreen = React.lazy(() => import('./CustomThemeScreen.js'));
@@ -24,6 +37,15 @@ type Props = {
 };
 
 type Screen = 'main' | 'custom';
+
+const TOOL_DISPLAY_CYCLE: ToolDisplayMode[] = ['full', 'compact', 'hidden'];
+const THINK_DISPLAY_CYCLE: ThinkDisplayMode[] = ['compact', 'full'];
+const SUBAGENT_DISPLAY_CYCLE: SubAgentDisplayMode[] = [
+	'slots',
+	'multi',
+	'compact',
+	'hidden',
+];
 
 const sampleOldCode = `function greet(name) {
   console.log("Hello " + name);
@@ -51,12 +73,22 @@ export default function ThemeSettingsScreen({
 	const [simpleMode, setSimpleModeState] = useState<boolean>(() =>
 		getSimpleMode(),
 	);
+	const [toolDisplayMode, setToolDisplayModeState] = useState<ToolDisplayMode>(
+		() => getToolDisplayMode(),
+	);
+	const [thinkDisplayMode, setThinkDisplayModeState] =
+		useState<ThinkDisplayMode>(() => getThinkDisplayMode());
+	const [subAgentDisplayMode, setSubAgentDisplayModeState] =
+		useState<SubAgentDisplayMode>(() => getSubAgentDisplayMode());
 	const terminalHeight = stdout?.rows || 24;
 	const themeMenuHeight = Math.max(4, Math.min(8, terminalHeight - 18));
 
-	// Load simple mode on mount
+	// Load simple mode + display modes on mount
 	useEffect(() => {
 		setSimpleModeState(getSimpleMode());
+		setToolDisplayModeState(getToolDisplayMode());
+		setThinkDisplayModeState(getThinkDisplayMode());
+		setSubAgentDisplayModeState(getSubAgentDisplayMode());
 	}, []);
 
 	const handleToggleSimpleMode = useCallback(() => {
@@ -69,6 +101,34 @@ export default function ThemeSettingsScreen({
 		const nextOpacity = diffOpacity >= 1 ? 0.3 : diffOpacity + 0.1;
 		setDiffOpacity(Number(nextOpacity.toFixed(2)));
 	}, [diffOpacity, setDiffOpacity]);
+
+	const handleCycleToolDisplay = useCallback(() => {
+		const idx = TOOL_DISPLAY_CYCLE.indexOf(toolDisplayMode);
+		const next =
+			TOOL_DISPLAY_CYCLE[(idx + 1) % TOOL_DISPLAY_CYCLE.length] ?? 'full';
+		setToolDisplayModeState(next);
+		setToolDisplayMode(next);
+		configEvents.emitConfigChange({type: 'toolDisplayMode', value: next});
+	}, [toolDisplayMode]);
+
+	const handleCycleThinkDisplay = useCallback(() => {
+		const idx = THINK_DISPLAY_CYCLE.indexOf(thinkDisplayMode);
+		const next =
+			THINK_DISPLAY_CYCLE[(idx + 1) % THINK_DISPLAY_CYCLE.length] ?? 'compact';
+		setThinkDisplayModeState(next);
+		setThinkDisplayMode(next);
+		configEvents.emitConfigChange({type: 'thinkDisplayMode', value: next});
+	}, [thinkDisplayMode]);
+
+	const handleCycleSubAgentDisplay = useCallback(() => {
+		const idx = SUBAGENT_DISPLAY_CYCLE.indexOf(subAgentDisplayMode);
+		const next =
+			SUBAGENT_DISPLAY_CYCLE[(idx + 1) % SUBAGENT_DISPLAY_CYCLE.length] ??
+			'slots';
+		setSubAgentDisplayModeState(next);
+		setSubAgentDisplayMode(next);
+		configEvents.emitConfigChange({type: 'subAgentDisplayMode', value: next});
+	}, [subAgentDisplayMode]);
 
 	const themeOptions = useMemo(
 		() => [
@@ -85,6 +145,27 @@ export default function ThemeSettingsScreen({
 				)}%`,
 				value: 'diff-opacity',
 				infoText: t.themeSettings.diffOpacityInfo,
+			},
+			{
+				label: `${t.themeSettings.toolDisplay} ${t.displayPanel.formatMode(
+					toolDisplayMode,
+				)}`,
+				value: 'tool-display',
+				infoText: t.themeSettings.toolDisplayInfo,
+			},
+			{
+				label: `${t.themeSettings.thinkDisplay} ${t.displayPanel.formatMode(
+					thinkDisplayMode,
+				)}`,
+				value: 'think-display',
+				infoText: t.themeSettings.thinkDisplayInfo,
+			},
+			{
+				label: `${t.themeSettings.subAgentDisplay} ${t.displayPanel.formatMode(
+					subAgentDisplayMode,
+				)}`,
+				value: 'subagent-display',
+				infoText: t.themeSettings.subAgentDisplayInfo,
 			},
 			{
 				label:
@@ -194,7 +275,15 @@ export default function ThemeSettingsScreen({
 				infoText: t.themeSettings.backInfo,
 			},
 		],
-		[selectedTheme, simpleMode, diffOpacity, t],
+		[
+			selectedTheme,
+			simpleMode,
+			diffOpacity,
+			toolDisplayMode,
+			thinkDisplayMode,
+			subAgentDisplayMode,
+			t,
+		],
 	);
 
 	const handleSelect = useCallback(
@@ -208,6 +297,12 @@ export default function ThemeSettingsScreen({
 				handleToggleSimpleMode();
 			} else if (value === 'diff-opacity') {
 				handleAdjustDiffOpacity();
+			} else if (value === 'tool-display') {
+				handleCycleToolDisplay();
+			} else if (value === 'think-display') {
+				handleCycleThinkDisplay();
+			} else if (value === 'subagent-display') {
+				handleCycleSubAgentDisplay();
 			} else if (value === 'edit-custom') {
 				// Go to custom theme editor
 				setScreen('custom');
@@ -224,6 +319,9 @@ export default function ThemeSettingsScreen({
 			selectedTheme,
 			handleToggleSimpleMode,
 			handleAdjustDiffOpacity,
+			handleCycleToolDisplay,
+			handleCycleThinkDisplay,
+			handleCycleSubAgentDisplay,
 		],
 	);
 
@@ -235,9 +333,12 @@ export default function ThemeSettingsScreen({
 				value === 'back' ||
 				value === 'edit-custom' ||
 				value === 'simple-mode' ||
-				value === 'diff-opacity'
+				value === 'diff-opacity' ||
+				value === 'tool-display' ||
+				value === 'think-display' ||
+				value === 'subagent-display'
 			) {
-				// Restore to selected theme when hovering on "Back", "Edit Custom", or "Simple Mode"
+				// Restore to selected theme when hovering non-theme rows
 				setThemeType(selectedTheme);
 			} else {
 				// Preview the theme
