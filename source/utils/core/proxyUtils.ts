@@ -1,4 +1,4 @@
-import {getProxyConfig} from '../config/proxyConfig.js';
+import {getProxyConfig, sanitizeProxyHost} from '../config/proxyConfig.js';
 import {ProxyAgent, setGlobalDispatcher} from 'undici';
 
 let globalProxyInitialized = false;
@@ -17,11 +17,15 @@ export function initGlobalProxy(): void {
 	//优先使用Snow代理配置
 	const proxyConfig = getProxyConfig();
 	if (proxyConfig.enabled) {
-		proxyUrl = `http://127.0.0.1:${proxyConfig.port}`;
+		const host = sanitizeProxyHost(proxyConfig.host);
+		proxyUrl = `http://${host}:${proxyConfig.port}`;
 	} else {
 		//其次使用系统环境变量
-		proxyUrl = process.env['https_proxy'] || process.env['HTTPS_PROXY'] || 
-		           process.env['http_proxy'] || process.env['HTTP_PROXY'];
+		proxyUrl =
+			process.env['https_proxy'] ||
+			process.env['HTTPS_PROXY'] ||
+			process.env['http_proxy'] ||
+			process.env['HTTP_PROXY'];
 	}
 
 	if (proxyUrl) {
@@ -49,7 +53,8 @@ export function createProxyAgent(_targetUrl: string): ProxyAgent | undefined {
 	}
 
 	// 构建代理 URL
-	const proxyUrl = `http://127.0.0.1:${proxyConfig.port}`;
+	const host = sanitizeProxyHost(proxyConfig.host);
+	const proxyUrl = `http://${host}:${proxyConfig.port}`;
 
 	try {
 		return new ProxyAgent(proxyUrl);
