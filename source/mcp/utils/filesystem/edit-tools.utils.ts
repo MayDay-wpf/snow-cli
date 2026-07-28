@@ -29,6 +29,8 @@ import {
 import {
 	applyTextEditsWithNative,
 	scanFuzzyMatchesWithNative,
+	readFileWithNative,
+	writeFileWithNative,
 	type NativeTextEdit,
 } from '../../utils/filesystem/native-edit.utils.js';
 import {
@@ -46,6 +48,35 @@ import {
 	appendStructureWarnings,
 } from '../../utils/filesystem/message-format.utils.js';
 import {backupFileBeforeMutation} from '../../utils/filesystem/backup.utils.js';
+
+/**
+ * Read a file using Rust native I/O (encoding-aware, runs on libuv thread),
+ * falling back to the Node.js implementation if the native accelerator is
+ * unavailable or fails.
+ */
+async function readFileSmart(fullPath: string): Promise<string> {
+	const native = await readFileWithNative(fullPath);
+	if (native !== undefined) {
+		return native;
+	}
+	return readFileWithEncoding(fullPath);
+}
+
+/**
+ * Write a file using Rust native I/O (preserves original encoding, runs on
+ * libuv thread), falling back to the Node.js implementation if the native
+ * accelerator is unavailable or fails.
+ */
+async function writeFileSmart(
+	fullPath: string,
+	content: string,
+): Promise<void> {
+	const ok = await writeFileWithNative(fullPath, content);
+	if (ok) {
+		return;
+	}
+	await writeFileWithEncoding(fullPath, content);
+}
 
 type EditToolContext = {
 	basePath: string;
@@ -220,7 +251,7 @@ export async function executeEditBySearchSingle(
 			if (!isAbsolute(filePath)) {
 				await ctx.validatePath(fullPath);
 			}
-			content = await readFileWithEncoding(fullPath);
+			content = await readFileSmart(fullPath);
 		}
 
 		const lines = content.split('\n');
@@ -244,7 +275,7 @@ export async function executeEditBySearchSingle(
 			endLine: number;
 			similarity: number;
 		}> = [];
-		const threshold = 0.75;
+		const threshold = 0.85;
 		const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
 		const usePreFilter = searchLines.length >= 5;
 		const preFilterThreshold = 0.2;
@@ -437,7 +468,7 @@ export async function executeEditBySearchSingle(
 		if (isRemote) {
 			await ctx.writeRemoteFile(fullPath, modifiedContent);
 		} else {
-			await writeFileWithEncoding(fullPath, modifiedContent);
+			await writeFileSmart(fullPath, modifiedContent);
 		}
 
 		const diffContextEnd = Math.min(
@@ -462,7 +493,7 @@ export async function executeEditBySearchSingle(
 				if (isRemote) {
 					await ctx.writeRemoteFile(fullPath, finalContent);
 				} else {
-					await writeFileWithEncoding(fullPath, finalContent);
+					await writeFileSmart(fullPath, finalContent);
 				}
 				finalLines = finalContent.split('\n');
 				finalTotalLines = finalLines.length;
@@ -571,7 +602,7 @@ export async function executeHashlineEditSingle(
 			if (!isAbsolute(filePath)) {
 				await ctx.validatePath(fullPath);
 			}
-			content = await readFileWithEncoding(fullPath);
+			content = await readFileSmart(fullPath);
 		}
 
 		const lines = content.split('\n');
@@ -842,7 +873,7 @@ export async function executeHashlineEditSingle(
 		if (isRemote) {
 			await ctx.writeRemoteFile(fullPath, modifiedContent);
 		} else {
-			await writeFileWithEncoding(fullPath, modifiedContent);
+			await writeFileSmart(fullPath, modifiedContent);
 		}
 
 		let finalLines = mutableLines;
@@ -867,7 +898,7 @@ export async function executeHashlineEditSingle(
 				if (isRemote) {
 					await ctx.writeRemoteFile(fullPath, formatted);
 				} else {
-					await writeFileWithEncoding(fullPath, formatted);
+					await writeFileSmart(fullPath, formatted);
 				}
 				finalLines = formatted.split('\n');
 				finalTotalLines = finalLines.length;

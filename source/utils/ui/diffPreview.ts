@@ -106,7 +106,7 @@ export function computeReplaceEditPreview(
 		endLine: number;
 		similarity: number;
 	}> = [];
-	const threshold = 0.75;
+	const threshold = 0.85;
 	const usePreFilter = searchLines.length >= 5;
 
 	for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
