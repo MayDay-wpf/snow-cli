@@ -25,6 +25,8 @@ type NativeEditAccelerator = {
 		preFilterThreshold: number,
 	) => Promise<NativeMatch[]>;
 	applyTextEdits: (content: string, edits: NativeTextEdit[]) => Promise<string>;
+	readFile: (path: string) => Promise<string>;
+	writeFile: (path: string, content: string) => Promise<void>;
 };
 
 let accelerator: NativeEditAccelerator | null | undefined;
@@ -84,5 +86,27 @@ export async function applyTextEditsWithNative(
 		return await getNativeEditAccelerator()?.applyTextEdits(content, edits);
 	} catch {
 		return undefined;
+	}
+}
+
+export async function readFileWithNative(
+	path: string,
+): Promise<string | undefined> {
+	try {
+		return await getNativeEditAccelerator()?.readFile(path);
+	} catch {
+		return undefined;
+	}
+}
+
+export async function writeFileWithNative(
+	path: string,
+	content: string,
+): Promise<boolean> {
+	try {
+		await getNativeEditAccelerator()?.writeFile(path, content);
+		return true;
+	} catch {
+		return false;
 	}
 }

@@ -11,6 +11,7 @@ import {
 	readFileLinesStreaming,
 	readFileWithEncoding,
 } from './encoding.utils.js';
+import {readFileWithNative} from './native-edit.utils.js';
 import {readOfficeDocument} from './office-parser.utils.js';
 import {formatLineWithHash} from './hashline.utils.js';
 
@@ -159,7 +160,10 @@ export async function executeGetFileContentCore(
 					lines = streamed.lines;
 					totalLines = streamed.totalLines;
 				} else {
-					content = await readFileWithEncoding(fullPath);
+					content = (await readFileWithNative(fullPath)) ?? '';
+					if (!content) {
+						content = await readFileWithEncoding(fullPath);
+					}
 					lines = content.split('\n');
 					totalLines = lines.length;
 				}
@@ -372,7 +376,10 @@ export async function executeGetFileContentCore(
 		};
 	}
 
-	content = await readFileWithEncoding(fullPath);
+	content = (await readFileWithNative(fullPath)) ?? '';
+	if (!content) {
+		content = await readFileWithEncoding(fullPath);
+	}
 	lines = content.split('\n');
 	totalLines = lines.length;
 	const actualStartLine = startLine ?? 1;

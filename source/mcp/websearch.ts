@@ -3,7 +3,10 @@ import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {extname, join} from 'node:path';
 import {spawn, type ChildProcess} from 'node:child_process';
-import {getProxyConfig} from '../utils/config/proxyConfig.js';
+import {
+	getProxyConfig,
+	sanitizeProxyHost,
+} from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {logger} from '../utils/core/logger.js';
 // Type definitions
@@ -246,7 +249,8 @@ export class WebSearchService {
 
 		// Only add proxy if enabled
 		if (proxyConfig.enabled) {
-			launchArgs.unshift(`--proxy-server=http://127.0.0.1:${proxyConfig.port}`);
+			const host = sanitizeProxyHost(proxyConfig.host);
+			launchArgs.unshift(`--proxy-server=http://${host}:${proxyConfig.port}`);
 		}
 
 		// On Windows, puppeteer.launch() is unreliable with Edge/Chrome: the
