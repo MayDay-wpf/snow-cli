@@ -17,6 +17,8 @@ import {
 } from './planCache.js';
 import {planEvents} from './planEvents.js';
 import {listActivePlanMarkdownPaths} from './planPaths.js';
+import {replacePlanFileAtomically} from './plan-persistence.js';
+import {measurePlanOperation} from './plan-metrics.js';
 
 export type PlanStatus =
 	| 'draft'
@@ -309,40 +311,47 @@ export function parsePhasesFromMarkdown(content: string): {
 }
 
 export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
-	const absPath = path.resolve(filePath);
-	const cached = await getCachedPlanDoc(absPath);
-	if (cached) {
-		return cached;
-	}
+	return measurePlanOperation(
+		{operation: 'parse', detail: 'document'},
+		async timing => {
+			const absPath = path.resolve(filePath);
+			const cached = await getCachedPlanDoc(absPath);
+			if (cached) {
+				timing.cache = 'hit';
+				return cached;
+			}
+			timing.cache = 'miss';
 
-	const [rawBuffer, stat] = await Promise.all([
-		fs.readFile(absPath, 'utf8'),
-		fs.stat(absPath),
-	]);
-	const raw = rawBuffer.replace(/^\uFEFF/, '');
-	const parsed = matter(raw);
-	const legacy = !parsed.data || Object.keys(parsed.data).length === 0;
-	const frontmatter = normalizeFrontmatter(parsed.data);
-	if (!frontmatter.created) {
-		frontmatter.created = stat.mtime.toISOString();
-	}
-	const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
-	const {title, affectedFiles, phases} = parsePhasesFromMarkdown(
-		parsed.content,
+			const [rawBuffer, stat] = await Promise.all([
+				fs.readFile(absPath, 'utf8'),
+				fs.stat(absPath),
+			]);
+			const raw = rawBuffer.replace(/^\uFEFF/, '');
+			const parsed = matter(raw);
+			const legacy = !parsed.data || Object.keys(parsed.data).length === 0;
+			const frontmatter = normalizeFrontmatter(parsed.data);
+			if (!frontmatter.created) {
+				frontmatter.created = stat.mtime.toISOString();
+			}
+			const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
+			const {title, affectedFiles, phases} = parsePhasesFromMarkdown(
+				parsed.content,
+			);
+			const doc: PlanDoc = {
+				filePath: absPath,
+				frontmatter,
+				title,
+				affectedFiles,
+				phases,
+				raw: parsed.content,
+				legacy,
+				eol,
+				mtimeMs: stat.mtimeMs,
+			};
+			setCachedPlanDoc(doc, stat.size);
+			return doc;
+		},
 	);
-	const doc: PlanDoc = {
-		filePath: absPath,
-		frontmatter,
-		title,
-		affectedFiles,
-		phases,
-		raw: parsed.content,
-		legacy,
-		eol,
-		mtimeMs: stat.mtimeMs,
-	};
-	setCachedPlanDoc(doc, stat.size);
-	return doc;
 }
 
 export type WritePlanFrontmatterOptions = {
@@ -424,7 +433,7 @@ export async function mutatePlanDocument(
 	merged.updated_at = now;
 
 	const output = matter.stringify(change.content ?? parsed.content, merged);
-	await fs.writeFile(absPath, output, 'utf8');
+	await replacePlanFileAtomically(absPath, output);
 	invalidatePlanCache(absPath);
 	invalidateActivePlanPathsCacheForPlanPath(absPath);
 	planEvents.emitPlanEvent({type: 'plan-changed', planPath: absPath});

@@ -88,6 +88,13 @@ const toolDuration = metrics
 		unit: 'ms',
 	});
 
+const planOperationDuration = metrics
+	.getMeter(METER_NAME)
+	.createHistogram('snow.plan.operation.duration_ms', {
+		description: 'Duration of bounded Plan storage operations in milliseconds',
+		unit: 'ms',
+	});
+
 export type TelemetryChatAttributes = {
 	provider: string;
 	model?: string;
@@ -1131,6 +1138,45 @@ export type TelemetryPlanAttributes = {
 	toolName?: string;
 	reason?: string;
 };
+
+export type TelemetryPlanOperationAttributes = {
+	operation: 'discover' | 'parse' | 'lock' | 'write';
+	detail:
+		| 'active_paths'
+		| 'document'
+		| 'acquire'
+		| 'verify'
+		| 'refresh'
+		| 'release'
+		| 'create'
+		| 'replace';
+	outcome: 'success' | 'error';
+	cache: 'hit' | 'miss' | 'none';
+	durationMs: number;
+};
+
+/** Best-effort low-cardinality Plan storage timing. */
+export function recordPlanOperationDuration(
+	attributes: TelemetryPlanOperationAttributes,
+): void {
+	try {
+		// Storage timing is a hot path. Telemetry is initialized by application
+		// startup; never perform config I/O or SDK startup from Plan operations.
+		if (!telemetryStarted) {
+			return;
+		}
+
+		planOperationDuration.record(Math.max(0, attributes.durationMs), {
+			'snow.mode.plan': true,
+			'snow.plan.operation': attributes.operation,
+			'snow.plan.detail': attributes.detail,
+			'snow.plan.outcome': attributes.outcome,
+			'snow.plan.cache': attributes.cache,
+		});
+	} catch {
+		// Telemetry must never break Plan execution.
+	}
+}
 
 /**
  * Best-effort plan lifecycle telemetry. No-ops when telemetry is disabled.

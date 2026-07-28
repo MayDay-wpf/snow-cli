@@ -190,6 +190,31 @@ test('create writes plan under date dir', async t => {
 	t.true(doc.phases.length >= 1);
 });
 
+test('concurrent same-title creates use distinct exclusive paths', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plancreate-race-'));
+	const results = await Promise.all([
+		run(dir, {action: 'create', title: 'Concurrent Plan'}),
+		run(dir, {action: 'create', title: 'Concurrent Plan'}),
+	]);
+
+	t.true(results.every(result => !result.isError));
+	const paths = results.map(result => {
+		const match = resultText(result).match(
+			/Created draft plan at (.+?) \(complexity=/,
+		);
+		t.truthy(match);
+		return match![1]!.trim();
+	});
+	t.is(new Set(paths).size, 2);
+	t.deepEqual(paths.map(filePath => path.basename(filePath)).sort(), [
+		'concurrent-plan-2.md',
+		'concurrent-plan.md',
+	]);
+
+	const docs = await Promise.all(paths.map(parsePlanDocument));
+	t.true(docs.every(doc => doc.title === 'Concurrent Plan'));
+});
+
 test('create with phases produces files/steps and validates clean', async t => {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plancreate-ph-'));
 	// Existing file so missing_file does not fire for it.

@@ -286,6 +286,8 @@ test('writePlanFrontmatter merges patch and upgrades legacy files', async t => {
 	t.is(doc.frontmatter.status, 'executing');
 	t.is(doc.frontmatter.session, 's9');
 	t.true(doc.raw.includes('# Old plan'));
+	const entries = await fs.readdir(path.dirname(filePath));
+	t.false(entries.some(entry => entry.endsWith('.tmp')));
 });
 
 test('writePlanFrontmatter fills created when empty and stamps updated_at', async t => {

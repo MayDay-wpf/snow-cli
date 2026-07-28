@@ -52,6 +52,7 @@ import {
 	stripPlanFrontmatter,
 } from '../utils/execution/planTemplate.js';
 import {getPlanDateDir} from '../utils/execution/planPaths.js';
+import {createPlanFileExclusively} from '../utils/execution/plan-persistence.js';
 import {getPlanAcceptanceSettings} from '../utils/config/projectSettings.js';
 import {sessionManager} from '../utils/session/sessionManager.js';
 import {recordPlanEvent} from '../utils/telemetry/otel.js';
@@ -1022,18 +1023,6 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 	const dateDir = getPlanDateDir(cwd);
 	await fs.mkdir(dateDir, {recursive: true});
 
-	let slug = baseSlug;
-	let filePath = path.join(dateDir, `${slug}.md`);
-	for (let n = 2; ; n++) {
-		try {
-			await fs.access(filePath);
-			slug = `${baseSlug}-${n}`;
-			filePath = path.join(dateDir, `${slug}.md`);
-		} catch {
-			break;
-		}
-	}
-
 	const phases = parsePlanPhasesArg(args?.phases);
 	const analysis =
 		typeof args?.analysis === 'string' ? args.analysis : undefined;
@@ -1050,7 +1039,16 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		risks,
 		rollback,
 	});
-	await fs.writeFile(filePath, content, 'utf8');
+
+	let filePath = '';
+	for (let n = 1; ; n++) {
+		const slug = n === 1 ? baseSlug : `${baseSlug}-${n}`;
+		const candidate = path.join(dateDir, `${slug}.md`);
+		if (await createPlanFileExclusively(candidate, content)) {
+			filePath = candidate;
+			break;
+		}
+	}
 
 	// Surface a compact plan body in the tool result so the CLI history shows
 	// what was created (not only a path). Full review still happens at askuser
