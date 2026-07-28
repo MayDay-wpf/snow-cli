@@ -29,6 +29,8 @@ type NativeEditAccelerator = {
 	writeFile: (path: string, content: string) => Promise<void>;
 };
 
+type NativeFileWriter = Pick<NativeEditAccelerator, 'writeFile'>;
+
 let accelerator: NativeEditAccelerator | null | undefined;
 
 function getNativeEditAccelerator(): NativeEditAccelerator | undefined {
@@ -103,8 +105,24 @@ export async function writeFileWithNative(
 	path: string,
 	content: string,
 ): Promise<boolean> {
+	return tryWriteFileWithNativeAccelerator(
+		getNativeEditAccelerator(),
+		path,
+		content,
+	);
+}
+
+export async function tryWriteFileWithNativeAccelerator(
+	accelerator: NativeFileWriter | undefined,
+	path: string,
+	content: string,
+): Promise<boolean> {
+	if (!accelerator) {
+		return false;
+	}
+
 	try {
-		await getNativeEditAccelerator()?.writeFile(path, content);
+		await accelerator.writeFile(path, content);
 		return true;
 	} catch {
 		return false;

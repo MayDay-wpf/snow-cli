@@ -67,7 +67,7 @@ async function readFileSmart(fullPath: string): Promise<string> {
  * libuv thread), falling back to the Node.js implementation if the native
  * accelerator is unavailable or fails.
  */
-async function writeFileSmart(
+export async function writeFileSmart(
 	fullPath: string,
 	content: string,
 ): Promise<void> {
