@@ -289,7 +289,11 @@ export async function executeSubAgent(
 		// must not write the completed summary or clear the live slot.
 		if (ctx) {
 			try {
-				emitSubAgentMessage(ctx, {type: 'done', final: true});
+				emitSubAgentMessage(ctx, {
+					type: 'done',
+					final: true,
+					usage: ctx.totalUsage,
+				});
 			} catch {
 				/* noop */
 			}

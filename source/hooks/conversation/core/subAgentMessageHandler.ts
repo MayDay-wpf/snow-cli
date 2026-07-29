@@ -1720,7 +1720,13 @@ export class SubAgentUIHandler {
 		if (!this.completionSummaryEmitted.has(agentId)) {
 			this.completionSummaryEmitted.add(agentId);
 		}
-		liveOnAgentDone(agentId);
+		liveOnAgentDone(agentId, {
+			usage: (
+				subAgentMessage.message as {
+					usage?: import('../../../utils/execution/subAgentTypes.js').TokenUsage;
+				}
+			).usage,
+		});
 		this.agentWallClockStartedAt.delete(agentId);
 		this.clearStreamState(agentId);
 

@@ -15,6 +15,8 @@ import {
 } from '../../../utils/core/textUtils.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
+import {formatTokens} from '../../utils/formatTokens.js';
+import {formatSubAgentFinalUsage} from '../../utils/formatSubAgentUsage.js';
 
 type ToolDisplayMode = 'full' | 'compact' | 'hidden';
 
@@ -50,11 +52,6 @@ function clampLine(text: string, maxCols: number): string {
 const LIVE_LINE_MAX_FALLBACK = 120;
 /** Prefix like `    └─ ` occupies ~7 cols before the title body. */
 const LIVE_LINE_PREFIX_COLS = 7;
-
-function formatTokens(count: number): string {
-	if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
-	return String(count);
-}
 
 function statusLabel(
 	slot: SubAgentLiveSlot,
@@ -194,12 +191,16 @@ function SubAgentLiveSlotsImpl({
 				const label = statusLabel(slot, t);
 				const elapsed = formatSlotElapsed(slot.startedAt, now, slot.durationMs);
 				// Desired header: (elapsed · status · tokens)
+				const finalTokenText = slot.finalUsage
+					? formatSubAgentFinalUsage(slot.finalUsage)
+					: undefined;
 				const headerParts = [
 					elapsed || undefined,
 					label,
-					slot.tokenCount > 0
-						? `↓ ${formatTokens(slot.tokenCount)} tokens`
-						: undefined,
+					finalTokenText ??
+						(slot.tokenCount > 0
+							? `↓ ${formatTokens(slot.tokenCount)} tokens`
+							: undefined),
 				].filter(Boolean);
 				const headerMeta =
 					headerParts.length > 0 ? headerParts.join(' · ') : '';
