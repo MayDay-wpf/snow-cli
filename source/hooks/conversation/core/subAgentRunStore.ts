@@ -17,6 +17,7 @@ export type SubAgentRunRecord = {
 	startedAt: number;
 	endedAt?: number;
 	durationMs?: number;
+	/** Locally estimated streamed output tokens (reasoning/content/tool-call deltas). */
 	tokenCount: number;
 	/** Rolling tool/focus titles for timeline replay. */
 	historyLines: string[];
@@ -46,6 +47,7 @@ let _cachedFilterSessionId: string | undefined;
 let _hydratedSessionId: string | null = null;
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;
 let _dirty = false;
+let _notifyScheduled = false;
 
 function resolveCurrentSessionScope(): {
 	sessionId?: string;
@@ -108,7 +110,7 @@ function rebuildSnapshot(): void {
 	_snapshot = _allSnapshot.filter(run => matchesRunFilter(run, undefined));
 }
 
-function notify(): void {
+function notifyListenersNow(): void {
 	for (const listener of _listeners) {
 		try {
 			listener();
@@ -116,6 +118,15 @@ function notify(): void {
 			// ignore listener errors
 		}
 	}
+}
+
+function scheduleNotify(): void {
+	if (_notifyScheduled) return;
+	_notifyScheduled = true;
+	queueMicrotask(() => {
+		_notifyScheduled = false;
+		notifyListenersNow();
+	});
 }
 
 function schedulePersist(): void {
@@ -131,7 +142,10 @@ function schedulePersist(): void {
 
 function commit(options?: {persistImmediately?: boolean}): void {
 	rebuildSnapshot();
-	notify();
+	// SubAgentUIHandler can commit while React evaluates a ChatScreen state
+	// updater. Notify after that render stack so ChatInput subscribers are not
+	// updated while another component is rendering.
+	scheduleNotify();
 	if (options?.persistImmediately) {
 		if (_persistTimer) {
 			clearTimeout(_persistTimer);
@@ -233,7 +247,7 @@ export function clearSubAgentRuns(): void {
 		clearTimeout(_persistTimer);
 		_persistTimer = null;
 	}
-	notify();
+	scheduleNotify();
 }
 
 /** Load runs from a session (resume). Replaces in-memory history. */
@@ -295,7 +309,7 @@ export function hydrateSubAgentRunsFromSession(
 	}
 	_hydratedSessionId = session.id;
 	rebuildSnapshot();
-	notify();
+	scheduleNotify();
 }
 
 export function startSubAgentRun(input: {

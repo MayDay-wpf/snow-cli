@@ -40,6 +40,7 @@ export type SubAgentLiveSlot = {
 	agentId: string;
 	agentName: string;
 	status: SubAgentLiveStatus;
+	/** Locally estimated streamed output tokens (reasoning/content/tool-call deltas). */
 	tokenCount: number;
 	startedAt: number;
 	/** Frozen wall-clock duration once the agent is terminal (completed/error). */

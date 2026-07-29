@@ -13,6 +13,7 @@ import {
 	getSubAgentRunSnapshot,
 	hydrateSubAgentRunsFromSession,
 	startSubAgentRun,
+	subscribeSubAgentRuns,
 } from '../hooks/conversation/core/subAgentRunStore.js';
 import {runningSubAgentTracker} from '../utils/execution/runningSubAgentTracker.js';
 import {sessionManager, type Session} from '../utils/session/sessionManager.js';
@@ -180,6 +181,33 @@ test.serial('history isolation across session switch + hydrate', t => {
 	// Switch back to A: hydrate + default snapshot show A again.
 	setSession(sessionA);
 	t.true(getSubAgentRunSnapshot().some(r => r.instanceId === 'hist-a'));
+});
+
+test.serial('run history notifications are deferred and batched', async t => {
+	// Flush cleanup notifications scheduled by the test hook before subscribing.
+	await Promise.resolve();
+	let notifications = 0;
+	const unsubscribe = subscribeSubAgentRuns(() => {
+		notifications++;
+	});
+
+	startSubAgentRun({
+		instanceId: 'notify-batch',
+		agentId: 'agent_explore',
+		agentName: 'Explore Agent',
+		prompt: 'verify deferred notifications',
+	});
+	startSubAgentRun({
+		instanceId: 'notify-batch-2',
+		agentId: 'agent_explore',
+		agentName: 'Explore Agent',
+		prompt: 'verify batching',
+	});
+
+	t.is(notifications, 0);
+	await Promise.resolve();
+	t.is(notifications, 1);
+	unsubscribe();
 });
 
 test.serial('peer agents and inter-agent messages respect session scope', t => {

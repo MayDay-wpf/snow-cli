@@ -198,7 +198,7 @@ function SubAgentLiveSlotsImpl({
 					elapsed || undefined,
 					label,
 					slot.tokenCount > 0
-						? `${formatTokens(slot.tokenCount)} tokens`
+						? `↓ ${formatTokens(slot.tokenCount)} tokens`
 						: undefined,
 				].filter(Boolean);
 				const headerMeta =
