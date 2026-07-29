@@ -33,11 +33,7 @@ export interface AggregatedStats {
 export type UsagePeriod = 'hour' | 'day' | 'week' | 'month';
 
 /** Human-readable rolling windows corresponding to UsagePeriod. */
-export type UsageWindow =
-	| 'last_24h'
-	| 'last_7d'
-	| 'last_30d'
-	| 'last_12m';
+export type UsageWindow = 'last_24h' | 'last_7d' | 'last_30d' | 'last_12m';
 
 export const USAGE_PERIODS: readonly UsagePeriod[] = [
 	'hour',
@@ -89,9 +85,7 @@ export function isUsagePeriod(value: string): value is UsagePeriod {
  */
 export function parseUsagePeriod(
 	raw?: string | null,
-):
-	| {ok: true; period: UsagePeriod}
-	| {ok: false; message: string} {
+): {ok: true; period: UsagePeriod} | {ok: false; message: string} {
 	const token = (raw ?? '').trim().toLowerCase();
 	if (!token) {
 		return {ok: true, period: DEFAULT_USAGE_PERIOD};
@@ -170,8 +164,7 @@ export async function loadUsageData(
 									Number(entry.cacheCreationInputTokens) || 0,
 							}),
 							...(entry.cacheReadInputTokens !== undefined && {
-								cacheReadInputTokens:
-									Number(entry.cacheReadInputTokens) || 0,
+								cacheReadInputTokens: Number(entry.cacheReadInputTokens) || 0,
 							}),
 							timestamp: entry.timestamp,
 						});

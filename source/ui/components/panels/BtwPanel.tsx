@@ -207,7 +207,10 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 		<Box>
 			<Text color={theme.colors.menuSecondary} dimColor>
 				{btwText.scrollHint || '↑↓ Scroll'}
-				{` (${scrollOffset + 1}-${Math.min(scrollOffset + VISIBLE_ROWS, visualLines.length)}/${visualLines.length})`}
+				{` (${scrollOffset + 1}-${Math.min(
+					scrollOffset + VISIBLE_ROWS,
+					visualLines.length,
+				)}/${visualLines.length})`}
 			</Text>
 		</Box>
 	);
@@ -239,7 +242,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 							{title}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{separator}{promptPreview}
+							{separator}
+							{promptPreview}
 						</Text>
 					</Text>
 				</Box>
@@ -254,7 +258,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 						{'Enter'}
 					</Text>
 					<Text color={theme.colors.menuSecondary}>
-						{' '}- {btwText.actionClose || 'Close'}
+						{' '}
+						- {btwText.actionClose || 'Close'}
 					</Text>
 				</Box>
 			</Box>
@@ -275,7 +280,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 							{title}
 						</Text>
 						<Text color={theme.colors.menuSecondary} dimColor>
-							{separator}{promptPreview}
+							{separator}
+							{promptPreview}
 						</Text>
 					</Text>
 				</Box>
@@ -306,7 +312,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 						{title}
 					</Text>
 					<Text color={theme.colors.menuSecondary} dimColor>
-						{separator}{promptPreview}
+						{separator}
+						{promptPreview}
 					</Text>
 				</Text>
 			</Box>
@@ -317,7 +324,8 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 					{'Enter'}
 				</Text>
 				<Text color={theme.colors.menuSecondary}>
-					{' '}- {btwText.actionClose || 'Close'}
+					{' '}
+					- {btwText.actionClose || 'Close'}
 				</Text>
 			</Box>
 		</Box>

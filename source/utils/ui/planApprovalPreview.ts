@@ -8,6 +8,7 @@
  */
 
 import type {PlanDoc, PlanPhase} from '../execution/planDocument.js';
+import {getPlanEvidencePath} from '../execution/planEvidence.js';
 
 export type PlanApprovalPreviewOptions = {
 	/** Max steps shown per phase (default 8). */
@@ -135,6 +136,19 @@ function formatPhase(
 		}
 	}
 
+	if ((phase.checks ?? []).length > 0) {
+		lines.push('Checks:');
+		for (const check of phase.checks ?? []) {
+			if (check.type === 'command') {
+				lines.push(`  command: ${check.command}`);
+			} else if (check.type === 'manual') {
+				lines.push(`  manual: ${check.description}`);
+			} else {
+				lines.push('  diagnostics');
+			}
+		}
+	}
+
 	if (phase.doneWhen.length > 0) {
 		lines.push(`Done when: ${phase.doneWhen.join('; ')}`);
 	}
@@ -189,13 +203,16 @@ export function formatPlanApprovalPreview(
 		basenameOfPath(doc.filePath);
 	const status = doc.frontmatter.status || 'draft';
 	const complexity = doc.frontmatter.complexity || 'simple';
+	const acceptancePolicy = doc.frontmatter.acceptance_policy || 'standard';
 	const phaseCount = doc.phases.length;
 
 	const lines: string[] = [
 		'📋 Plan Document',
 		`Title: ${title}`,
 		`Status: ${status} · Complexity: ${complexity} · Phases: ${phaseCount}`,
+		`Acceptance policy: ${acceptancePolicy}`,
 		`Path: ${doc.filePath}`,
+		`Evidence: ${getPlanEvidencePath(doc.filePath)}`,
 	];
 
 	if (doc.affectedFiles.length > 0) {

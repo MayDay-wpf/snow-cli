@@ -746,7 +746,6 @@ export default function ChatInput({
 		triggerUpdate();
 		onInitialContentConsumed?.();
 		// Only run when initialContent changes
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [initialContent]);
 
 	// Restore draft content when input gets remounted (e.g., ChatFooter is conditionally hidden)

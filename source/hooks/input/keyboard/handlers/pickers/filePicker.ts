@@ -67,7 +67,6 @@ export function filePickerHandler(ctx: HandlerContext): boolean {
 					// Backwards-compatible fallback: insert sequentially.
 					(async () => {
 						for (const file of multipleFiles) {
-							// eslint-disable-next-line no-await-in-loop
 							await handleFileSelect(file);
 						}
 					})();

@@ -476,7 +476,8 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -506,7 +507,8 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 						fallback={
 							<Box>
 								<Text>
-									<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+									<Spinner type="dots" />{' '}
+									{(t as any).panelChrome?.loading || 'Loading…'}
 								</Text>
 							</Box>
 						}
@@ -523,7 +525,8 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 					fallback={
 						<Box>
 							<Text>
-								<Spinner type="dots" /> {(t as any).panelChrome?.loading || 'Loading…'}
+								<Spinner type="dots" />{' '}
+								{(t as any).panelChrome?.loading || 'Loading…'}
 							</Text>
 						</Box>
 					}

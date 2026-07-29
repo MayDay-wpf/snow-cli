@@ -5,8 +5,6 @@ import {
 	hasUnresolvedToolCalls,
 } from '../utils/core/subAgentContextCompressor.js';
 
-/* eslint-disable @typescript-eslint/naming-convention -- OpenAI wire fields */
-
 const test = anyTest as unknown as TestFn;
 
 function toolCall(id: string) {
@@ -55,5 +53,3 @@ test('compression refuses to split an active tool-call round', async t => {
 	t.false(result.compressed);
 	t.is(result.messages, messages);
 });
-
-/* eslint-enable @typescript-eslint/naming-convention */

@@ -117,7 +117,9 @@ function resolveDynamicRoleText(definition: BuiltinAgentDefinition): string {
 	return role;
 }
 
-function withDynamicTools(definition: BuiltinAgentDefinition): BuiltinAgentDefinition {
+function withDynamicTools(
+	definition: BuiltinAgentDefinition,
+): BuiltinAgentDefinition {
 	if (definition.id !== 'agent_general' && definition.id !== 'agent_debug') {
 		return definition;
 	}

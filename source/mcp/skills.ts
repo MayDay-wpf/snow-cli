@@ -1,20 +1,21 @@
-import {dirname, join, relative} from 'path';
-import {existsSync} from 'fs';
-import {readFile} from 'fs/promises';
-import {homedir} from 'os';
+import {dirname, join, relative} from 'node:path';
+import {existsSync} from 'node:fs';
+import {readFile} from 'node:fs/promises';
+import {homedir} from 'node:os';
 import matter from 'gray-matter';
 import {getDisabledSkills} from '../utils/config/disabledSkills.js';
 import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
 
-export interface SkillMetadata {
+export type SkillMetadata = {
 	name: string;
 	description: string;
 	allowedTools?: string[];
-}
+	disableModelInvocation?: boolean;
+};
 
 export type SkillSource = 'snow' | 'agents' | 'builtin';
 
-export interface Skill {
+export type Skill = {
 	id: string;
 	name: string;
 	description: string;
@@ -23,7 +24,8 @@ export interface Skill {
 	path: string;
 	content: string;
 	allowedTools?: string[];
-}
+	disableModelInvocation?: boolean;
+};
 
 /**
  * Read and parse SKILL.md file
@@ -81,6 +83,9 @@ async function readSkillFile(skillPath: string): Promise<{
 				name: safeName,
 				description: safeDescription,
 				allowedTools,
+				disableModelInvocation:
+					parsed.data['disable-model-invocation'] === true ||
+					parsed.data['disable-model-invocation'] === 'true',
 			},
 			content,
 		};
@@ -105,7 +110,7 @@ async function loadSkillsFromDirectory(
 	}
 
 	try {
-		const {readdirSync} = await import('fs');
+		const {readdirSync} = await import('node:fs');
 		const pendingDirs: string[] = [baseSkillsDir];
 
 		while (pendingDirs.length > 0) {
@@ -133,6 +138,7 @@ async function loadSkillsFromDirectory(
 					) {
 						continue;
 					}
+
 					pendingDirs.push(join(currentDir, entry.name));
 					continue;
 				}
@@ -167,6 +173,7 @@ async function loadSkillsFromDirectory(
 					path: skillDir,
 					content: skillData.content,
 					allowedTools: skillData.metadata.allowedTools,
+					disableModelInvocation: skillData.metadata.disableModelInvocation,
 				});
 			}
 		}
@@ -216,6 +223,7 @@ async function loadAvailableSkills(
 			'builtin',
 		);
 	}
+
 	await loadSkillsFromDirectory(
 		skills,
 		globalAgentsSkillsDir,
@@ -231,6 +239,7 @@ async function loadAvailableSkills(
 			'agents',
 		);
 	}
+
 	if (projectSnowSkillsDir) {
 		await loadSkillsFromDirectory(
 			skills,
@@ -247,9 +256,10 @@ async function loadAvailableSkills(
  * Generate dynamic skill tool description
  */
 function generateSkillToolDescription(skills: Map<string, Skill>): string {
-	const skillsList = Array.from(skills.values())
-		.map(
-			skill => `<skill>
+	const renderSkills = (items: Skill[]) =>
+		items
+			.map(
+				skill => `<skill>
 <name>
 ${skill.id}
 </name>
@@ -260,8 +270,15 @@ ${skill.description}
 ${skill.location}
 </location>
 </skill>`,
-		)
-		.join('\n');
+			)
+			.join('\n');
+	const allSkills = [...skills.values()];
+	const automaticSkills = renderSkills(
+		allSkills.filter(skill => !skill.disableModelInvocation),
+	);
+	const manualSkills = renderSkills(
+		allSkills.filter(skill => skill.disableModelInvocation),
+	);
 
 	return `Execute a skill within the main conversation
 
@@ -277,14 +294,19 @@ How to use skills:
   - skill: "data-analysis" - invoke the data-analysis skill
 
 Important:
-- Only use skills listed in <available_skills> below
+- You may proactively use skills listed in <available_skills> below
+- Skills in the manual-only section below are user-invoked only. Invoke one only when the user explicitly names that skill or uses its slash-style trigger
 - Do not invoke a skill that is already running
 - Do not use this tool for built-in CLI commands (like /help, /clear, etc.)
 </skills_instructions>
 
 <available_skills>
-${skillsList}
-</available_skills>`;
+${automaticSkills}
+</available_skills>
+
+<manual_skills>
+${manualSkills}
+</manual_skills>`;
 }
 
 /**
@@ -295,7 +317,7 @@ export async function listAvailableSkills(
 ): Promise<Skill[]> {
 	const skills = await loadAvailableSkills(projectRoot);
 	// Stable sort by id for deterministic UI.
-	return Array.from(skills.values()).sort((a, b) => a.id.localeCompare(b.id));
+	return [...skills.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export async function getMCPTools(projectRoot?: string) {
@@ -340,7 +362,7 @@ export async function getMCPTools(projectRoot?: string) {
  */
 async function generateSkillTree(skillPath: string): Promise<string> {
 	try {
-		const {readdirSync} = await import('fs');
+		const {readdirSync} = await import('node:fs');
 		const entries = readdirSync(skillPath, {withFileTypes: true});
 
 		const lines: string[] = [];
@@ -390,7 +412,7 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 		}
 
 		return lines.join('\n');
-	} catch (error) {
+	} catch {
 		return '(Unable to generate directory tree)';
 	}
 }
@@ -425,7 +447,7 @@ export async function executeSkillTool(
 	const skill = skills.get(skillId);
 
 	if (!skill) {
-		const availableSkills = Array.from(skills.keys()).join(', ');
+		const availableSkills = [...skills.keys()].join(', ');
 		throw new Error(
 			`Skill \"${skillId}\" not found. Available skills: ${
 				availableSkills || 'none'

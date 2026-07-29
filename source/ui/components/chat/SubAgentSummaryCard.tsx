@@ -154,7 +154,11 @@ function SubAgentSummaryCardImpl({
 					>
 						{'  └─ '}
 						{expanded
-							? `${isError ? t.subAgentSummaryCard.errorLabel : t.subAgentSummaryCard.resultLabel} · ${truncate(resultText, 140)}`
+							? `${
+									isError
+										? t.subAgentSummaryCard.errorLabel
+										: t.subAgentSummaryCard.resultLabel
+							  } · ${truncate(resultText, 140)}`
 							: truncate(resultText, 100)}
 					</Text>
 				</Box>

@@ -31,8 +31,7 @@ class StartupCommandManager {
 		}
 
 		const command = this.commands[this.nextCommandIndex];
-		this.nextCommandIndex =
-			(this.nextCommandIndex + 1) % this.commands.length;
+		this.nextCommandIndex = (this.nextCommandIndex + 1) % this.commands.length;
 		return command;
 	}
 }

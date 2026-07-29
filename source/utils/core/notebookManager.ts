@@ -311,10 +311,7 @@ export function addNotebooks(
 	}
 
 	if (data[normalizedPath]!.length > MAX_ENTRIES_PER_FILE) {
-		data[normalizedPath] = data[normalizedPath]!.slice(
-			0,
-			MAX_ENTRIES_PER_FILE,
-		);
+		data[normalizedPath] = data[normalizedPath]!.slice(0, MAX_ENTRIES_PER_FILE);
 	}
 
 	saveNotebookData(data);
@@ -326,9 +323,10 @@ export function addNotebooks(
  * @param notebookIds 备忘录ID列表
  * @returns 每个ID是否删除成功的映射
  */
-export function deleteNotebooks(
-	notebookIds: string[],
-): {deleted: string[]; notFound: string[]} {
+export function deleteNotebooks(notebookIds: string[]): {
+	deleted: string[];
+	notFound: string[];
+} {
 	const data = readNotebookData();
 	const idSet = new Set(notebookIds);
 	const deleted: string[] = [];

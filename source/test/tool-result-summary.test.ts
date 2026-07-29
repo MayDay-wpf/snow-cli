@@ -77,8 +77,7 @@ test('plan-manage acceptance failed summary', t => {
 });
 
 test('plan-manage amend summary', t => {
-	const text =
-		'Plan amended (phase 2): +2 files, +1 steps. Scope refreshed.';
+	const text = 'Plan amended (phase 2): +2 files, +1 steps. Scope refreshed.';
 	const summary = getToolResultSummary('plan-manage', text);
 	t.is(summary, `P2 amended ${dot} +2 files ${dot} +1 steps`);
 });

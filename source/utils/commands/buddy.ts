@@ -5,7 +5,13 @@ import {
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/translations.js';
 import type {CompanionStat, Species} from '../../buddy/types.js';
-import {COMPANION_NAMED_COLORS, COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
+import {
+	COMPANION_NAMED_COLORS,
+	COMPANION_STATS,
+	EYES,
+	HATS,
+	SPECIES,
+} from '../../buddy/types.js';
 import {
 	getBuddyAiProfile,
 	getCompanion,

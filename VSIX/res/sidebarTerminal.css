@@ -158,7 +158,8 @@ body {
 	z-index: 1000;
 	max-width: calc(100vw - 12px);
 	padding: 5px 8px;
-	border: 1px solid var(--vscode-editorHoverWidget-border, var(--terminal-border));
+	border: 1px solid
+		var(--vscode-editorHoverWidget-border, var(--terminal-border));
 	border-radius: 4px;
 	background-color: var(--vscode-editorHoverWidget-background, #252526);
 	color: var(--vscode-editorHoverWidget-foreground, var(--terminal-button-fg));

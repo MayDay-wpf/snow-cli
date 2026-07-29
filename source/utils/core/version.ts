@@ -1,8 +1,26 @@
-import {readFileSync} from 'fs';
-import {join, dirname} from 'path';
-import {fileURLToPath} from 'url';
+import {readFileSync} from 'node:fs';
+import {join, dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
-let cachedVersion: string = '';
+let cachedVersion = '';
+
+function parsePackageVersion(content: string): string | undefined {
+	const parsed: unknown = JSON.parse(content);
+	if (!parsed || typeof parsed !== 'object' || !('version' in parsed)) {
+		return undefined;
+	}
+
+	const {version} = parsed as {version?: unknown};
+	return typeof version === 'string' && version ? version : undefined;
+}
+
+function isMissingFile(error: unknown): error is NodeJS.ErrnoException {
+	return (
+		error instanceof Error &&
+		'code' in error &&
+		(error as NodeJS.ErrnoException).code === 'ENOENT'
+	);
+}
 
 /**
  * Get the current package version
@@ -15,14 +33,29 @@ export function getPackageVersion(): string {
 	}
 
 	try {
-		// In bundled code, __filename points to bundle/cli.mjs
-		// So we need to go up one level to reach package.json
 		const currentDir = dirname(fileURLToPath(import.meta.url));
-		const packageJsonPath = join(currentDir, '../package.json');
-		const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-		cachedVersion = packageJson.version || '1.0.0';
-		return cachedVersion;
-	} catch (error) {
+		const candidates = [
+			join(currentDir, '../package.json'),
+			join(currentDir, '../../../package.json'),
+		];
+		for (const packageJsonPath of candidates) {
+			try {
+				const version = parsePackageVersion(
+					readFileSync(packageJsonPath, 'utf8'),
+				);
+				if (version) {
+					cachedVersion = version;
+					return cachedVersion;
+				}
+			} catch (error: unknown) {
+				if (!isMissingFile(error)) throw error;
+			}
+		}
+
+		throw new Error(
+			'package.json was not found from the source or bundle path',
+		);
+	} catch (error: unknown) {
 		// Fallback version if reading fails
 		console.error('Failed to read version from package.json:', error);
 		cachedVersion = '1.0.0';
@@ -54,7 +87,7 @@ export function getDefaultUserAgent(): string {
  */
 export function mergeApiRequestHeaders(
 	baseHeaders: Record<string, string>,
-	customHeaders?: Record<string, string> | null,
+	customHeaders?: Record<string, string> | undefined,
 ): Record<string, string> {
 	const custom = customHeaders ?? {};
 	const hasCustom = Object.keys(custom).length > 0;

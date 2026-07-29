@@ -25,41 +25,37 @@ export const NewPromptPanel: React.FC<Props> = ({onAccept, onCancel}) => {
 	const [scrollOffset, setScrollOffset] = useState(0);
 	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const generatePrompt = useCallback(
-		async (userRequirement: string) => {
-			setStep('generating');
-			setGeneratedPrompt('');
-			setScrollOffset(0);
+	const generatePrompt = useCallback(async (userRequirement: string) => {
+		setStep('generating');
+		setGeneratedPrompt('');
+		setScrollOffset(0);
 
-			const controller = new AbortController();
-			abortControllerRef.current = controller;
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
 
-			try {
-				let fullResponse = '';
-				for await (const chunk of streamGeneratePrompt(
-					userRequirement,
-					controller.signal,
-				)) {
-					if (controller.signal.aborted) break;
-					fullResponse += chunk;
-					setGeneratedPrompt(fullResponse);
-				}
-
-				if (!controller.signal.aborted) {
-					setGeneratedPrompt(fullResponse);
-					setStep('preview');
-				}
-			} catch (error) {
-				if (!controller.signal.aborted) {
-					const msg =
-						error instanceof Error ? error.message : 'Unknown error';
-					setErrorMessage(msg);
-					setStep('error');
-				}
+		try {
+			let fullResponse = '';
+			for await (const chunk of streamGeneratePrompt(
+				userRequirement,
+				controller.signal,
+			)) {
+				if (controller.signal.aborted) break;
+				fullResponse += chunk;
+				setGeneratedPrompt(fullResponse);
 			}
-		},
-		[],
-	);
+
+			if (!controller.signal.aborted) {
+				setGeneratedPrompt(fullResponse);
+				setStep('preview');
+			}
+		} catch (error) {
+			if (!controller.signal.aborted) {
+				const msg = error instanceof Error ? error.message : 'Unknown error';
+				setErrorMessage(msg);
+				setStep('error');
+			}
+		}
+	}, []);
 
 	const handleRequirementSubmit = useCallback(
 		(value: string) => {
@@ -228,11 +224,9 @@ export const NewPromptPanel: React.FC<Props> = ({onAccept, onCancel}) => {
 				</Box>
 				<Box>
 					<Text color={theme.colors.menuSecondary}>
-						{'R'} -{' '}
-						{newPromptText.actionRetry || 'Retry'}
+						{'R'} - {newPromptText.actionRetry || 'Retry'}
 						{'  '}
-						{'ESC'} -{' '}
-						{newPromptText.actionCancel || 'Cancel'}
+						{'ESC'} - {newPromptText.actionCancel || 'Cancel'}
 					</Text>
 				</Box>
 			</Box>
@@ -276,7 +270,9 @@ export const NewPromptPanel: React.FC<Props> = ({onAccept, onCancel}) => {
 				))}
 				{hasScrollable && (
 					<Text color={theme.colors.menuSecondary} dimColor>
-						[{safeOffset + 1}-{Math.min(safeOffset + VISIBLE_LINES, allLines.length)}/{allLines.length}] {scrollHint}
+						[{safeOffset + 1}-
+						{Math.min(safeOffset + VISIBLE_LINES, allLines.length)}/
+						{allLines.length}] {scrollHint}
 					</Text>
 				)}
 			</Box>

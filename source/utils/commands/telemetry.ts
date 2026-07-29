@@ -1,4 +1,7 @@
-import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // Telemetry command handler - opens OpenTelemetry configuration panel
 registerCommand('telemetry', {

@@ -1,28 +1,10 @@
 import React, {useState, useEffect, Suspense} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
-// Lazy load all page components to improve startup time
-// Only load components when they are actually needed
-const WelcomeScreen = React.lazy(() => import('./ui/pages/WelcomeScreen.js'));
-const ChatScreen = React.lazy(() => import('./ui/pages/ChatScreen.js'));
-const HeadlessModeScreen = React.lazy(
-	() => import('./ui/pages/HeadlessModeScreen.js'),
-);
-const TaskManagerScreen = React.lazy(
-	() => import('./ui/pages/TaskManagerScreen.js'),
-);
-const SystemPromptConfigScreen = React.lazy(
-	() => import('./ui/pages/SystemPromptConfigScreen.js'),
-);
-const CustomHeadersScreen = React.lazy(
-	() => import('./ui/pages/CustomHeadersScreen.js'),
-);
-const HelpScreen = React.lazy(() => import('./ui/pages/HelpScreen.js'));
-const ExitScreen = React.lazy(() => import('./ui/pages/ExitScreen.js'));
 
 import {
 	useGlobalExit,
-	ExitNotification as ExitNotificationType,
+	type ExitNotification as ExitNotificationType,
 } from './hooks/integration/useGlobalExit.js';
 import {onNavigate} from './hooks/integration/useGlobalNavigation.js';
 import {useTerminalSize} from './hooks/ui/useTerminalSize.js';
@@ -30,19 +12,39 @@ import {I18nProvider} from './i18n/index.js';
 import {ThemeProvider} from './ui/contexts/ThemeContext.js';
 import {gracefulExit} from './utils/core/processManager.js';
 import {loadConfig} from './utils/config/apiConfig.js';
+// Lazy load all page components to improve startup time
+// Only load components when they are actually needed
+const WelcomeScreen = React.lazy(
+	async () => import('./ui/pages/WelcomeScreen.js'),
+);
+const ChatScreen = React.lazy(async () => import('./ui/pages/ChatScreen.js'));
+const HeadlessModeScreen = React.lazy(
+	async () => import('./ui/pages/HeadlessModeScreen.js'),
+);
+const TaskManagerScreen = React.lazy(
+	async () => import('./ui/pages/TaskManagerScreen.js'),
+);
+const SystemPromptConfigScreen = React.lazy(
+	async () => import('./ui/pages/SystemPromptConfigScreen.js'),
+);
+const CustomHeadersScreen = React.lazy(
+	async () => import('./ui/pages/CustomHeadersScreen.js'),
+);
+const HelpScreen = React.lazy(async () => import('./ui/pages/HelpScreen.js'));
+const ExitScreen = React.lazy(async () => import('./ui/pages/ExitScreen.js'));
 
 type Props = {
-	version?: string;
-	skipWelcome?: boolean;
-	autoResume?: boolean;
-	resumeSessionId?: string;
-	headlessPrompt?: string;
-	headlessSessionId?: string;
-	showTaskList?: boolean;
-	enableYolo?: boolean;
-	enablePlan?: boolean;
+	readonly version?: string;
+	readonly skipWelcome?: boolean;
+	readonly autoResume?: boolean;
+	readonly resumeSessionId?: string;
+	readonly headlessPrompt?: string;
+	readonly headlessSessionId?: string;
+	readonly showTaskList?: boolean;
+	readonly enableYolo?: boolean;
+	readonly enablePlan?: boolean;
 	/** Headless-only: explicit plan file for preapproved resume */
-	headlessPlanFile?: string;
+	readonly headlessPlanFile?: string;
 };
 
 // ShowTaskListWrapper: Handles task list mode with session conversion support
@@ -88,11 +90,7 @@ function ShowTaskListWrapper() {
 		if (currentView === 'chat') {
 			return (
 				<Suspense fallback={loadingFallback}>
-					<ChatScreen
-						key={chatScreenKey}
-						autoResume={true}
-						enableYolo={false}
-					/>
+					<ChatScreen key={chatScreenKey} autoResume enableYolo={false} />
 				</Suspense>
 			);
 		}
@@ -100,12 +98,14 @@ function ShowTaskListWrapper() {
 		return (
 			<Suspense fallback={loadingFallback}>
 				<TaskManagerScreen
-					onBack={() => gracefulExit()}
+					onBack={() => {
+						gracefulExit();
+					}}
 					onResumeTask={() => {
 						// Session is already set by convertTaskToSession
 						// Just navigate to chat view
 						setCurrentView('chat');
-						setChatScreenKey(prev => prev + 1);
+						setChatScreenKey(previous => previous + 1);
 					}}
 				/>
 			</Suspense>
@@ -133,12 +133,12 @@ function AppContent({
 	enableYolo,
 	enablePlan,
 }: {
-	version?: string;
-	skipWelcome?: boolean;
-	autoResume?: boolean;
-	resumeSessionId?: string;
-	enableYolo?: boolean;
-	enablePlan?: boolean;
+	readonly version?: string;
+	readonly skipWelcome?: boolean;
+	readonly autoResume?: boolean;
+	readonly resumeSessionId?: string;
+	readonly enableYolo?: boolean;
+	readonly enablePlan?: boolean;
 }) {
 	const [currentView, setCurrentView] = useState<
 		| 'welcome'
@@ -181,12 +181,14 @@ function AppContent({
 			// When navigating to welcome from chat (e.g., /home command),
 			// increment key so next time chat is entered, it remounts with fresh config
 			if (event.destination === 'welcome' && currentView === 'chat') {
-				setChatScreenKey(prev => prev + 1);
+				setChatScreenKey(previous => previous + 1);
 			}
+
 			// Reset the welcome choice override after leaving chat.
 			if (event.destination !== 'chat' && currentView === 'chat') {
 				setWelcomeChatAutoResume(null);
 			}
+
 			// 'pixel' handled as a panel inside chat, ignore direct navigation
 			if (event.destination !== 'pixel') {
 				setCurrentView(event.destination);
@@ -209,10 +211,11 @@ function AppContent({
 				(value === 'chat' || value === 'resume-last') &&
 				currentView === 'welcome'
 			) {
-				setChatScreenKey(prev => prev + 1);
+				setChatScreenKey(previous => previous + 1);
 				// 初始化配置缓存，避免进入对话页后频繁读取硬盘
 				loadConfig();
 			}
+
 			// Start Chat must force a fresh session; Resume Last Chat opts into auto-resume.
 			setWelcomeChatAutoResume(value === 'resume-last');
 			// Both 'chat' and 'resume-last' go to chat view
@@ -226,18 +229,20 @@ function AppContent({
 		const loadingFallback = null;
 
 		switch (currentView) {
-			case 'welcome':
+			case 'welcome': {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<WelcomeScreen
 							version={version}
-							onMenuSelect={handleMenuSelect}
 							defaultMenuIndex={welcomeMenuIndex}
+							onMenuSelect={handleMenuSelect}
 							onMenuSelectionPersist={setWelcomeMenuIndex}
 						/>
 					</Suspense>
 				);
-			case 'chat':
+			}
+
+			case 'chat': {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<ChatScreen
@@ -249,7 +254,9 @@ function AppContent({
 						/>
 					</Suspense>
 				);
-			case 'settings':
+			}
+
+			case 'settings': {
 				return (
 					<Box flexDirection="column">
 						<Text color="blue">Settings</Text>
@@ -258,57 +265,78 @@ function AppContent({
 						</Text>
 					</Box>
 				);
-			case 'systemprompt':
+			}
+
+			case 'systemprompt': {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<SystemPromptConfigScreen
-							onBack={() => setCurrentView('welcome')}
+							onBack={() => {
+								setCurrentView('welcome');
+							}}
 						/>
 					</Suspense>
 				);
-			case 'help':
+			}
+
+			case 'help': {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<HelpScreen onBackDestination="chat" />
 					</Suspense>
 				);
-			case 'customheaders':
+			}
+
+			case 'customheaders': {
 				return (
 					<Suspense fallback={loadingFallback}>
-						<CustomHeadersScreen onBack={() => setCurrentView('welcome')} />
-					</Suspense>
-				);
-			case 'tasks':
-				return (
-					<Suspense fallback={loadingFallback}>
-						<TaskManagerScreen
-							onBack={() => setCurrentView('chat')}
-							onResumeTask={() => {
-								// Session is already set by convertTaskToSession
-								// Just navigate to chat view
-								setCurrentView('chat');
-								setChatScreenKey(prev => prev + 1);
+						<CustomHeadersScreen
+							onBack={() => {
+								setCurrentView('welcome');
 							}}
 						/>
 					</Suspense>
 				);
-			case 'exit':
+			}
+
+			case 'tasks': {
+				return (
+					<Suspense fallback={loadingFallback}>
+						<TaskManagerScreen
+							onBack={() => {
+								setCurrentView('chat');
+							}}
+							onResumeTask={() => {
+								// Session is already set by convertTaskToSession
+								// Just navigate to chat view
+								setCurrentView('chat');
+								setChatScreenKey(previous => previous + 1);
+							}}
+						/>
+					</Suspense>
+				);
+			}
+
+			case 'exit': {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<ExitScreen version={version} />
 					</Suspense>
 				);
-			default:
+			}
+
+			default: {
 				return (
 					<Suspense fallback={loadingFallback}>
 						<WelcomeScreen
 							version={version}
-							onMenuSelect={handleMenuSelect}
 							defaultMenuIndex={welcomeMenuIndex}
+							onMenuSelect={handleMenuSelect}
 							onMenuSelectionPersist={setWelcomeMenuIndex}
 						/>
 					</Suspense>
 				);
+			}
 		}
 	};
 
@@ -348,9 +376,11 @@ export default function App({
 						<HeadlessModeScreen
 							prompt={headlessPrompt}
 							sessionId={headlessSessionId}
-							onComplete={() => gracefulExit()}
 							enablePlan={enablePlan}
 							planFile={headlessPlanFile}
+							onComplete={() => {
+								gracefulExit();
+							}}
 						/>
 					</Suspense>
 				</ThemeProvider>

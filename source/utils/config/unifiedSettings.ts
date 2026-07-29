@@ -41,6 +41,9 @@ export interface UnifiedSettings {
 		commands?: string[];
 		runBuild?: boolean;
 		runDiagnostics?: boolean;
+		policy?: 'standard' | 'strict';
+		allowedCommandPrefixes?: string[];
+		commandTimeoutMs?: number;
 		preferPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
 		fallbackCommands?: string[];
 	};

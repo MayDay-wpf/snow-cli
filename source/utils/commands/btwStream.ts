@@ -1,5 +1,8 @@
 import {getSnowConfig} from '../config/apiConfig.js';
-import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
+import {
+	createStreamingChatCompletion,
+	type ChatMessage,
+} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
@@ -47,7 +50,10 @@ export async function* streamBtwResponse(
 
 	const messages: ChatMessage[] = [
 		...contextMessages,
-		{role: 'user', content: `[BTW Side-Question]\n${question}\n${BTW_SYSTEM_SUFFIX}`},
+		{
+			role: 'user',
+			content: `[BTW Side-Question]\n${question}\n${BTW_SYSTEM_SUFFIX}`,
+		},
 	];
 
 	let stream: AsyncGenerator<any, void, unknown>;

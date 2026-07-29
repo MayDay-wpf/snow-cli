@@ -152,8 +152,7 @@ export const RoleSubagentListPanel: React.FC<Props> = ({
 						}
 						bold={activeTab === 'global'}
 					>
-						[{activeTab === 'global' ? '✓' : ' '}]{' '}
-						{rs.tabGlobal || 'Global'}
+						[{activeTab === 'global' ? '✓' : ' '}] {rs.tabGlobal || 'Global'}
 					</Text>
 				</Box>
 				<Box>
@@ -165,8 +164,7 @@ export const RoleSubagentListPanel: React.FC<Props> = ({
 						}
 						bold={activeTab === 'project'}
 					>
-						[{activeTab === 'project' ? '✓' : ' '}]{' '}
-						{rs.tabProject || 'Project'}
+						[{activeTab === 'project' ? '✓' : ' '}] {rs.tabProject || 'Project'}
 					</Text>
 				</Box>
 			</Box>
@@ -244,8 +242,7 @@ export const RoleSubagentListPanel: React.FC<Props> = ({
 				<Text dimColor>
 					{pendingDeleteName
 						? rs.confirmDeleteHint || 'Press Y to confirm, N to cancel'
-						: rs.hints ||
-							'Tab: Switch scope | D: Delete | ESC: Close'}
+						: rs.hints || 'Tab: Switch scope | D: Delete | ESC: Close'}
 				</Text>
 			</Box>
 		</Box>

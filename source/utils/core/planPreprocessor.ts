@@ -17,6 +17,7 @@ import {
 	type PlanOwnershipClassification,
 	type PlanOwnershipKind,
 } from '../execution/planOwnership.js';
+import {getPlanEvidencePath} from '../execution/planEvidence.js';
 
 export function formatPlanContext(doc: PlanDoc): string {
 	const total = doc.phases.length;
@@ -28,28 +29,55 @@ export function formatPlanContext(doc: PlanDoc): string {
 		'',
 		`Plan file: ${doc.filePath}`,
 		`Status: ${doc.frontmatter.status}`,
+		`Acceptance policy: ${doc.frontmatter.acceptance_policy || 'standard'}`,
+		`Evidence: ${getPlanEvidencePath(doc.filePath)}`,
 		`Session: ${doc.frontmatter.session || '(none)'}`,
 	];
 
 	if (phase) {
 		lines.push(`Phase ${phase.index}/${total}: ${phase.title}`, '');
+		if (phase.delivers) {
+			lines.push(`**Delivers**: ${phase.delivers}`, '');
+		}
+
+		if (phase.executionStrategy) {
+			lines.push(`**Execution strategy**: ${phase.executionStrategy}`, '');
+		}
+
 		if (phase.files.length > 0) {
 			lines.push('**Files** (current phase write allowlist):');
 			for (const file of phase.files) {
 				lines.push(`- ${file}`);
 			}
+
 			lines.push('');
 		}
+
 		if (phase.steps.length > 0) {
 			lines.push('**Steps**:');
 			for (const step of phase.steps) {
 				lines.push(`${step.checked ? '[x]' : '[ ]'} ${step.text}`);
 			}
+
 			const next = phase.steps.find(s => !s.checked);
 			if (next) {
 				lines.push('', `**Next step**: ${next.text}`);
 			}
 		}
+
+		if ((phase.checks ?? []).length > 0) {
+			lines.push('', '**Checks**:');
+			for (const check of phase.checks ?? []) {
+				if (check.type === 'command') {
+					lines.push(`- command: ${check.command}`);
+				} else if (check.type === 'manual') {
+					lines.push(`- manual: ${check.description}`);
+				} else {
+					lines.push('- diagnostics');
+				}
+			}
+		}
+
 		if (phase.doneWhen.length > 0) {
 			lines.push('', `**Done when**: ${phase.doneWhen.join('; ')}`);
 		}
@@ -59,7 +87,7 @@ export function formatPlanContext(doc: PlanDoc): string {
 		'',
 		'**You MUST follow this plan.** After finishing a step call `plan-manage` with action "check_step"; ' +
 			'after a phase meets its Done-when criteria call `plan-manage` with action "complete_phase" ' +
-			"(it runs build + diagnostics acceptance). Do not edit files outside the current phase's Files list — " +
+			"(it verifies phase checks, workspace scope, build, and diagnostics). Do not edit files outside the current phase's Files list — " +
 			'if the plan needs to change, call `plan-manage` with action "amend" first. ' +
 			'When every phase is done, call `plan-manage` with action "complete" to archive the plan.',
 		'',
@@ -80,6 +108,7 @@ export async function buildPlanReminder(
 	if (!planMode) {
 		return null;
 	}
+
 	try {
 		const doc = await findActivePlan(cwd, sessionId);
 		if (
@@ -92,6 +121,7 @@ export async function buildPlanReminder(
 	} catch {
 		// Injection is best-effort.
 	}
+
 	return null;
 }
 
@@ -102,10 +132,11 @@ const RECOVERABLE_KINDS = new Set<PlanOwnershipKind>([
 ]);
 
 function formatLockShort(ownership: PlanOwnershipClassification): string {
-	const lock = ownership.lock;
+	const {lock} = ownership;
 	if (!lock) {
 		return 'lock=(none)';
 	}
+
 	const soft = ownership.softStale === true;
 	const hard = ownership.stale === true;
 	const staleLabel = hard ? 'hard' : soft ? 'soft' : 'fresh';
@@ -141,7 +172,7 @@ function buildAdoptGuidance(input: {
 }): string[] {
 	const lines: string[] = [
 		'',
-		'Before starting new work, use `askuser-ask_question` with options like:',
+		'Before starting new work, use `askuser-ask_question` with purpose="plan_resume" and options like:',
 	];
 
 	if (input.hasRecoverable && !input.hasForeignLive && !input.hasForeignSoft) {
@@ -225,7 +256,7 @@ export async function buildResumePlanNotice(
 		}
 
 		const unfinished = await listUnfinishedPlans(cwd, {
-			sessionId,
+			sessionId: sessionId ?? undefined,
 			includeDraftsWithProgress: true,
 		});
 		if (unfinished.length === 0) {

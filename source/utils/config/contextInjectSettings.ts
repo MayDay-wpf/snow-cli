@@ -17,9 +17,7 @@ export function getContextInjectEnabled(workingDirectory?: string): boolean {
 	try {
 		const merged = readMergedSettings(workingDirectory);
 		const value = merged.contextInject?.enabled;
-		return typeof value === 'boolean'
-			? value
-			: DEFAULT_CONTEXT_INJECT.enabled;
+		return typeof value === 'boolean' ? value : DEFAULT_CONTEXT_INJECT.enabled;
 	} catch {
 		return DEFAULT_CONTEXT_INJECT.enabled;
 	}

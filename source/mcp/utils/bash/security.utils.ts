@@ -40,7 +40,8 @@ export function isSelfDestructiveCommand(command: string): {
 	if (lower.includes('stop-process') && /\bnode\b/i.test(command)) {
 		return {
 			isSelfDestructive: true,
-			reason: 'Command would terminate Node.js processes, including this CLI itself',
+			reason:
+				'Command would terminate Node.js processes, including this CLI itself',
 			suggestion:
 				`This CLI is running as Node.js (PID: ${cliPid}). ` +
 				`Add a PID exclusion filter, e.g.: Where-Object { ... -and $_.Id -ne ${cliPid} }`,
@@ -51,7 +52,8 @@ export function isSelfDestructiveCommand(command: string): {
 	if (/\btaskkill\b/i.test(command) && /\bnode(\.exe)?\b/i.test(command)) {
 		return {
 			isSelfDestructive: true,
-			reason: 'Command would terminate node.exe processes, including this CLI itself',
+			reason:
+				'Command would terminate node.exe processes, including this CLI itself',
 			suggestion:
 				`This CLI is running as node.exe (PID: ${cliPid}). ` +
 				`Use "taskkill /PID <target_pid>" for specific processes, excluding PID ${cliPid}.`,
@@ -62,7 +64,8 @@ export function isSelfDestructiveCommand(command: string): {
 	if (/\bkillall\s+(-\w+\s+)*node\b/i.test(command)) {
 		return {
 			isSelfDestructive: true,
-			reason: 'killall node would terminate ALL Node.js processes, including this CLI',
+			reason:
+				'killall node would terminate ALL Node.js processes, including this CLI',
 			suggestion: `Use "kill <specific_pid>" to target individual processes, excluding PID ${cliPid}.`,
 		};
 	}
@@ -71,7 +74,8 @@ export function isSelfDestructiveCommand(command: string): {
 	if (/\bpkill\s+(-\w+\s+)*node\b/i.test(command)) {
 		return {
 			isSelfDestructive: true,
-			reason: 'pkill node would terminate Node.js processes, including this CLI',
+			reason:
+				'pkill node would terminate Node.js processes, including this CLI',
 			suggestion: `Use "kill <specific_pid>" to target individual processes, excluding PID ${cliPid}.`,
 		};
 	}

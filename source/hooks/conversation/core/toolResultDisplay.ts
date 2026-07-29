@@ -139,7 +139,6 @@ export function buildToolResultMessages(
 			let historyLines: string[] | undefined;
 			let tokenCount: number | undefined;
 			try {
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
 				const {getSubAgentRun} =
 					require('./subAgentRunStore.js') as typeof import('./subAgentRunStore.js');
 				const run = getSubAgentRun(result.tool_call_id);

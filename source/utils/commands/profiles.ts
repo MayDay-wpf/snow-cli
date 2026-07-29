@@ -1,4 +1,7 @@
-import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // Profiles command handler - opens profile switching panel (same as shortcut)
 registerCommand('profiles', {

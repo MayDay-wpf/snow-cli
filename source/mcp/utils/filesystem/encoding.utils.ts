@@ -41,7 +41,11 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 	const stats = await fs.stat(filePath);
 	if (stats.size > MAX_READABLE_FILE_BYTES) {
 		throw new Error(
-			`File too large to read as text (${Math.round(stats.size / 1024 / 1024)}MB, limit ${Math.round(MAX_READABLE_FILE_BYTES / 1024 / 1024)}MB): ${filePath}`,
+			`File too large to read as text (${Math.round(
+				stats.size / 1024 / 1024,
+			)}MB, limit ${Math.round(
+				MAX_READABLE_FILE_BYTES / 1024 / 1024,
+			)}MB): ${filePath}`,
 		);
 	}
 
@@ -91,7 +95,9 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 			(error as NodeJS.ErrnoException).code === 'ERR_STRING_TOO_LONG'
 		) {
 			throw new Error(
-				`File too large to convert to string: ${filePath} (${Math.round(stats.size / 1024 / 1024)}MB)`,
+				`File too large to convert to string: ${filePath} (${Math.round(
+					stats.size / 1024 / 1024,
+				)}MB)`,
 			);
 		}
 

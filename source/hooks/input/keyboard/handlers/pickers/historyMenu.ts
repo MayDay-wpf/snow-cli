@@ -30,10 +30,7 @@ export function historyMenuHandler(ctx: HandlerContext): boolean {
 
 	// Enter - select history item
 	if (key.return) {
-		if (
-			userMessages.length > 0 &&
-			historySelectedIndex < userMessages.length
-		) {
+		if (userMessages.length > 0 && historySelectedIndex < userMessages.length) {
 			const selectedMessage = userMessages[historySelectedIndex];
 			if (selectedMessage) {
 				handleHistorySelect(selectedMessage.value);

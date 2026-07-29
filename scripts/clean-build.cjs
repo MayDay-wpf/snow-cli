@@ -1,5 +1,3 @@
-/* eslint-disable unicorn/prefer-module */
-
 /**
  * 清理构建产物目录，避免 tsc 残留旧输出导致 bundle 与 source 不一致。
  *

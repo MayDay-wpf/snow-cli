@@ -1,6 +1,6 @@
 ---
 name: snow-docs
-description: "Use when the user asks to install, configure, troubleshoot, or understand Snow CLI itself — Profile/API setup, MCP servers, Skills, Hooks, sub-agents, sensitive commands, proxy/browser, third-party relay, LSP/ACE, Team mode, SSE, privacy, plugins, or docs paths. Loads official bundled usage docs via progressive disclosure (list/search/get) instead of guessing from model memory."
+description: 'Use when the user asks to install, configure, troubleshoot, or understand Snow CLI itself — Profile/API setup, MCP servers, Skills, Hooks, sub-agents, sensitive commands, proxy/browser, third-party relay, LSP/ACE, Team mode, SSE, privacy, plugins, or docs paths. Loads official bundled usage docs via progressive disclosure (list/search/get) instead of guessing from model memory.'
 allowed-tools: snow-docs-list, snow-docs-search, snow-docs-get, filesystem-read, askuser-ask_question
 ---
 
@@ -52,17 +52,17 @@ Docs tools follow the user Language Settings (`zh` / `zh-TW` → Chinese docs, o
 
 ## Quick map
 
-| Topic | Search hints |
-| --- | --- |
-| Install / update | install, 安装 |
+| Topic                  | Search hints           |
+| ---------------------- | ---------------------- |
+| Install / update       | install, 安装          |
 | First config / Profile | profile, 首次配置, api |
-| MCP | mcp, tools |
-| Skills | skills, skill-execute |
-| Hooks | hooks |
-| Sub-agents | subagent, 子代理 |
-| Sensitive commands | sensitive, 敏感命令 |
-| Relay / headers | relay, 中转 |
-| LSP / ACE | lsp, ace |
-| Team / SSE / privacy | team, sse, privacy |
+| MCP                    | mcp, tools             |
+| Skills                 | skills, skill-execute  |
+| Hooks                  | hooks                  |
+| Sub-agents             | subagent, 子代理       |
+| Sensitive commands     | sensitive, 敏感命令    |
+| Relay / headers        | relay, 中转            |
+| LSP / ACE              | lsp, ace               |
+| Team / SSE / privacy   | team, sse, privacy     |
 
 After loading this skill, start with `snow-docs-search` or `snow-docs-list` for the user's topic.

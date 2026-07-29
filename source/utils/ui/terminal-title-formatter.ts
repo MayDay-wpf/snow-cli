@@ -2,7 +2,7 @@ const appName = 'Snow CLI';
 const defaultProjectName = 'Unknown Project';
 const maxProjectNameLength = 24;
 const maxSummaryLength = 80;
-const controlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
+const controlCharacters = /[\u0000-\u001F\u007F]/g;
 
 export const terminalTitleSpinnerFrames = [
 	'⠋',

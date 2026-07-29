@@ -10,7 +10,7 @@ const appId = 'Snow CLI';
 const windowsAppUserModelId = 'Snow.CLI';
 const maxTitleLength = 80;
 const maxBodyLength = 240;
-const notificationControlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
+const notificationControlCharacters = /[\u0000-\u001F\u007F]/g;
 
 export type TaskNotificationStatus = 'completed' | 'failed';
 

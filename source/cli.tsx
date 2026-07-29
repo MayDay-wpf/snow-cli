@@ -3,13 +3,28 @@
 // Force color support for all chalk instances (must be set before any imports)
 // This ensures syntax highlighting works in cli-highlight and other color libraries
 // Remove NO_COLOR first to prevent conflict warning in Node.js 22+
+// Import only critical dependencies synchronously
+import {spawn} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import React from 'react';
+import {render, Text, Box} from 'ink';
+import Spinner from 'ink-spinner';
+import meow from 'meow';
+import {setUpdateNotice} from './utils/ui/updateNotice.js';
+import {runUpdateCheckAndExit} from './utils/core/updateCheck.js';
+import {runDoctorAndExit} from './utils/core/doctor.js';
+import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
+import {shutdownTelemetry} from './utils/telemetry/otel.js';
+
 delete process.env['NO_COLOR'];
 process.env['FORCE_COLOR'] = '3';
 
 // Check Node.js version before anything else
 const MIN_NODE_VERSION = 16;
 const currentVersion = process.version;
-const major = parseInt(currentVersion.slice(1).split('.')[0] || '0', 10);
+const major = Number.parseInt(currentVersion.slice(1).split('.')[0] || '0', 10);
 
 if (major < MIN_NODE_VERSION) {
 	console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -47,6 +62,7 @@ function sanitizeNodeOptions() {
 			if (!next || next.startsWith('-')) {
 				continue;
 			}
+
 			// Keep as-is.
 			cleaned.push(token, next);
 			i++;
@@ -58,6 +74,7 @@ function sanitizeNodeOptions() {
 			if (!value) {
 				continue;
 			}
+
 			cleaned.push(token);
 			continue;
 		}
@@ -85,9 +102,9 @@ if (process.env['SNOW_IGNORE_NODE_OPTIONS'] === '1') {
 const suppressedDepCodes = new Set(['DEP0040', 'DEP0169']);
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function (warning: any, ...args: any[]) {
-	// emitWarning(msg, type, code) — positional form
+	// EmitWarning(msg, type, code) — positional form
 	if (typeof args[1] === 'string' && suppressedDepCodes.has(args[1])) return;
-	// emitWarning(msg, { code }) — options object form
+	// EmitWarning(msg, { code }) — options object form
 	if (
 		args[0] &&
 		typeof args[0] === 'object' &&
@@ -107,36 +124,38 @@ process.emitWarning = function (warning: any, ...args: any[]) {
 // Global safety net: suppress known non-fatal stream errors (e.g. from LSP
 // processes exiting while vscode-jsonrpc still has queued writes) so they
 // don't crash the main CLI process.
-function isStreamDestroyedError(err: unknown): boolean {
-	if (!(err instanceof Error)) return false;
-	const code = (err as NodeJS.ErrnoException).code;
+function isStreamDestroyedError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const {code} = error as NodeJS.ErrnoException;
 	if (code === 'ERR_STREAM_DESTROYED' || code === 'EPIPE') return true;
-	const msg = err.message || '';
+	const message = error.message || '';
 	return (
-		msg.includes('stream was destroyed') ||
-		msg.includes('ERR_STREAM_DESTROYED') ||
-		msg.includes('write after end') ||
-		msg.includes('Cannot call write after a stream was destroyed')
+		message.includes('stream was destroyed') ||
+		message.includes('ERR_STREAM_DESTROYED') ||
+		message.includes('write after end') ||
+		message.includes('Cannot call write after a stream was destroyed')
 	);
 }
 
 // Fatal-exit cleanup is wired after cleanupAsync is defined (see below).
 // Placeholders so early throws still get a best-effort path once registered.
-let runFatalExitCleanup: ((err: unknown, code: number) => void) | null = null;
+let runFatalExitCleanup: ((error: unknown, code: number) => void) | null = null;
 
-process.on('uncaughtException', (err: Error) => {
-	if (isStreamDestroyedError(err)) {
+process.on('uncaughtException', (error: Error) => {
+	if (isStreamDestroyedError(error)) {
 		// Silently ignore — these are expected when an LSP child process
 		// exits while vscode-jsonrpc still has pending writes.
 		return;
 	}
+
 	// Prefer full cleanup (MCP / browser / OTEL / Ink) before exit — especially
 	// on Windows where process.exit(1) can leave orphaned child handles.
 	if (runFatalExitCleanup) {
-		runFatalExitCleanup(err, 1);
+		runFatalExitCleanup(error, 1);
 		return;
 	}
-	console.error('Uncaught Exception:', err);
+
+	console.error('Uncaught Exception:', error);
 	process.exit(1);
 });
 
@@ -144,6 +163,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 	if (isStreamDestroyedError(reason)) {
 		return;
 	}
+
 	// Log but don't exit — unhandled rejections are not necessarily fatal.
 	console.error('Unhandled Rejection:', reason);
 });
@@ -167,24 +187,9 @@ const isQuickCommand = args.some(
 
 // Show loading indicator only for non-quick commands
 if (!isQuickCommand) {
-	process.stdout.write('\x1b[?25l'); // Hide cursor
+	process.stdout.write('\u001B[?25l'); // Hide cursor
 	process.stdout.write('⠋ Loading...\r');
 }
-
-// Import only critical dependencies synchronously
-import React from 'react';
-import {render, Text, Box} from 'ink';
-import {setUpdateNotice} from './utils/ui/updateNotice.js';
-import Spinner from 'ink-spinner';
-import meow from 'meow';
-import {spawn} from 'child_process';
-import {runUpdateCheckAndExit} from './utils/core/updateCheck.js';
-import {runDoctorAndExit} from './utils/core/doctor.js';
-import {readFileSync} from 'fs';
-import {join} from 'path';
-import {fileURLToPath} from 'url';
-import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
-import {shutdownTelemetry} from './utils/telemetry/otel.js';
 
 if (args.includes('--snow-agent-child-worker')) {
 	const {runAgentChildProcessWorker} = await import(
@@ -214,7 +219,7 @@ async function loadDependencies() {
 	// Import utils/index.js to register all commands (side-effect import)
 	await import('./utils/index.js');
 
-	//初始化全局代理（让MCP HTTP请求走代理）
+	// 初始化全局代理（让MCP HTTP请求走代理）
 	const {initGlobalProxy} = await import('./utils/core/proxyUtils.js');
 	initGlobalProxy();
 
@@ -235,8 +240,8 @@ async function loadDependencies() {
 		import('./utils/config/configManager.js'),
 		import('./utils/core/processManager.js'),
 		import('./utils/core/devMode.js'),
-		import('child_process'),
-		import('util'),
+		import('node:child_process'),
+		import('node:util'),
 		import('./utils/execution/mcpToolsManager.js'),
 	]);
 
@@ -419,7 +424,7 @@ Options
 			},
 			sseTimeout: {
 				type: 'number',
-				default: 300000,
+				default: 300_000,
 				alias: 'sse-timeout',
 			},
 			workDir: {
@@ -488,7 +493,9 @@ if (cli.flags.update) {
 if (cli.flags.sseStop) {
 	const {stopDaemon} = await import('./utils/sse/sseDaemon.js');
 	// 支持通过PID或端口停止
-	const target = cli.input[0] ? parseInt(cli.input[0]) : cli.flags.ssePort;
+	const target = cli.input[0]
+		? Number.parseInt(cli.input[0])
+		: cli.flags.ssePort;
 	stopDaemon(target);
 	process.exit(0);
 }
@@ -504,8 +511,8 @@ if (cli.flags.sseStatus) {
 if (cli.flags.sseDaemon) {
 	const {startDaemon} = await import('./utils/sse/sseDaemon.js');
 	const port = cli.flags.ssePort || 3000;
-	const timeout = cli.flags.sseTimeout || 300000;
-	const workDir = cli.flags.workDir;
+	const timeout = cli.flags.sseTimeout || 300_000;
+	const {workDir} = cli.flags;
 	startDaemon(port, workDir, timeout);
 	process.exit(0);
 }
@@ -514,8 +521,8 @@ if (cli.flags.sseDaemon) {
 if (cli.flags.sse) {
 	const {sseManager} = await import('./utils/sse/sseManager.js');
 	const port = cli.flags.ssePort || 3000;
-	const timeout = cli.flags.sseTimeout || 300000;
-	const workDir = cli.flags.workDir;
+	const timeout = cli.flags.sseTimeout || 300_000;
+	const {workDir} = cli.flags;
 	const isDaemonMode = cli.flags.sseDaemonMode;
 
 	// 如果指定了工作目录，切换到该目录
@@ -679,7 +686,7 @@ if (cli.flags.taskExecute) {
 }
 
 // Startup component that shows loading spinner during update check
-const Startup = ({
+function Startup({
 	version,
 	skipWelcome,
 	autoResume,
@@ -692,18 +699,18 @@ const Startup = ({
 	enablePlan,
 	headlessPlanFile,
 }: {
-	version: string | undefined;
-	skipWelcome: boolean;
-	autoResume: boolean;
-	resumeSessionId?: string;
-	headlessPrompt?: string;
-	headlessSessionId?: string;
-	showTaskList?: boolean;
-	isDevMode: boolean;
-	enableYolo?: boolean;
-	enablePlan?: boolean;
-	headlessPlanFile?: string;
-}) => {
+	readonly version: string | undefined;
+	readonly skipWelcome: boolean;
+	readonly autoResume: boolean;
+	readonly resumeSessionId?: string;
+	readonly headlessPrompt?: string;
+	readonly headlessSessionId?: string;
+	readonly showTaskList?: boolean;
+	readonly isDevMode: boolean;
+	readonly enableYolo?: boolean;
+	readonly enablePlan?: boolean;
+	readonly headlessPlanFile?: string;
+}) {
 	const [appReady, setAppReady] = React.useState(false);
 	const [AppComponent, setAppComponent] = React.useState<any>(null);
 
@@ -735,12 +742,14 @@ const Startup = ({
 
 			// Start resource monitoring in development/debug mode
 			if (process.env['NODE_ENV'] === 'development' || process.env['DEBUG']) {
-				deps.resourceMonitor.startMonitoring(30000);
+				deps.resourceMonitor.startMonitoring(30_000);
 				setInterval(() => {
 					const {hasLeak, reasons} = deps.resourceMonitor.checkForLeaks();
 					if (hasLeak) {
 						console.error('Potential memory leak detected:');
-						reasons.forEach((reason: string) => console.error(`  - ${reason}`));
+						reasons.forEach((reason: string) => {
+							console.error(`  - ${reason}`);
+						});
 					}
 				}, 5 * 60 * 1000);
 			}
@@ -798,12 +807,12 @@ const Startup = ({
 			headlessPlanFile={headlessPlanFile}
 		/>
 	);
-};
+}
 
 // Disable bracketed paste mode on startup
-process.stdout.write('\x1b[?2004l');
+process.stdout.write('\u001B[?2004l');
 // Clear the early loading indicator
-process.stdout.write('\x1b[2K\r');
+process.stdout.write('\u001B[2K\r');
 
 // Track cleanup state to prevent multiple cleanup calls
 let isCleaningUp = false;
@@ -812,9 +821,9 @@ let cleanupPromise: Promise<void> | null = null;
 
 // Synchronous cleanup for 'exit' event (cannot be async)
 const cleanupSync = () => {
-	process.stdout.write('\x1b[?2004l');
-	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
-	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
+	process.stdout.write('\u001B[?2004l');
+	process.stdout.write('\u001B[?25h'); // Restore cursor visibility on exit
+	process.stdout.write('\u001B[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
 	// If async cleanup is already running/done, skip deps to avoid double-close of
 	// libuv handles (causes UV_HANDLE_CLOSING assertion failure on Windows)
 	if (!isCleaningUp) {
@@ -866,9 +875,9 @@ const cleanupAsync = async () => {
 	// pending uv_close callbacks (stdin reader, chokidar IOCP) can complete.
 	await new Promise(resolve => setTimeout(resolve, 50));
 
-	process.stdout.write('\x1b[?2004l');
-	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
-	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
+	process.stdout.write('\u001B[?2004l');
+	process.stdout.write('\u001B[?25h'); // Restore cursor visibility on exit
+	process.stdout.write('\u001B[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
 
 	// Import and cleanup command usage manager with timeout
 	const {commandUsageManager} = await import(
@@ -913,6 +922,7 @@ const cleanupAsync = async () => {
 		} catch {
 			// Ignore MCP close errors
 		}
+
 		// Then kill remaining processes
 		deps.processManager.killAll();
 		deps.resourceMonitor.stopMonitoring();
@@ -927,6 +937,7 @@ process.on('SIGINT', async () => {
 	if (!cleanupPromise) {
 		cleanupPromise = cleanupAsync();
 	}
+
 	await cleanupPromise;
 	// Don't call process.exit() synchronously — on Windows the stdin reader
 	// thread and chokidar IOCP may still be signalling their uv_async handles.
@@ -938,39 +949,40 @@ process.on('SIGTERM', async () => {
 	if (!cleanupPromise) {
 		cleanupPromise = cleanupAsync();
 	}
+
 	await cleanupPromise;
 	setTimeout(() => process.exit(0), 50);
 });
 
 // Wire fatal uncaughtException to the same graceful path as SIGINT (MCP/browser/OTEL/Ink).
 // Defined here so cleanupAsync is in scope; early crashes still use the simple exit path.
-runFatalExitCleanup = (err: unknown, code: number) => {
+runFatalExitCleanup = (error: unknown, code: number) => {
 	const message =
-		err instanceof Error
-			? err.stack || err.message
-			: typeof err === 'string'
-			? err
-			: String(err);
+		error instanceof Error
+			? error.stack || error.message
+			: typeof error === 'string'
+			? error
+			: String(error);
 	console.error('Uncaught Exception:', message);
 
 	// Reuse cleanupPromise so concurrent fatals / signals share one teardown.
 	if (!cleanupPromise) {
 		cleanupPromise = cleanupAsync().catch(() => {
-			// best-effort
+			// Best-effort
 		});
 	}
+
 	void cleanupPromise.finally(() => {
 		// Short delay so Windows libuv can finish closing handles.
 		setTimeout(() => process.exit(code), 50);
 	});
 };
+
 const isResumeMode = Boolean(cli.flags.c || cli.flags.cYolo);
 const resumeSessionId = isResumeMode ? cli.input[0] : undefined;
 
 const headlessPrompt =
-	typeof cli.flags['ask'] === 'string'
-		? (cli.flags['ask'] as string)
-		: undefined;
+	typeof cli.flags['ask'] === 'string' ? cli.flags['ask'] : undefined;
 // Headless plan opt-in: --plan-file, --plan, or --yolo-p with --ask.
 // Default headless remains planMode false unless one of these is set.
 const headlessPlanFile =

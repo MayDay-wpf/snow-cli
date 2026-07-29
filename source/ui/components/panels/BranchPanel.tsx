@@ -102,9 +102,10 @@ function checkoutBranch(branchName: string): CheckoutResult {
 /**
  * Stash current changes, checkout branch, then optionally pop stash.
  */
-function stashAndCheckout(
-	branchName: string,
-): {success: boolean; message: string} {
+function stashAndCheckout(branchName: string): {
+	success: boolean;
+	message: string;
+} {
 	try {
 		execSync('git stash push -m "auto-stash before branch switch"', {
 			stdio: 'pipe',
@@ -143,9 +144,7 @@ function stashAndCheckout(
 /**
  * Create and checkout a new branch.
  */
-function createBranch(
-	branchName: string,
-): {success: boolean; message: string} {
+function createBranch(branchName: string): {success: boolean; message: string} {
 	try {
 		execSync(`git checkout -b ${branchName}`, {
 			stdio: 'pipe',
@@ -163,9 +162,7 @@ function createBranch(
 /**
  * Delete a local branch.
  */
-function deleteBranch(
-	branchName: string,
-): {success: boolean; message: string} {
+function deleteBranch(branchName: string): {success: boolean; message: string} {
 	try {
 		execSync(`git branch -d ${branchName}`, {
 			stdio: 'pipe',
@@ -398,9 +395,7 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 		}
 
 		if (key.downArrow) {
-			setSelectedIndex(prev =>
-				Math.min(branches.length - 1, prev + 1),
-			);
+			setSelectedIndex(prev => Math.min(branches.length - 1, prev + 1));
 			return;
 		}
 
@@ -457,9 +452,7 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 							'Current directory is not a Git repository. Cannot manage branches.'}
 					</Text>
 				</Box>
-				<Text dimColor>
-					{bp.pressEscToClose || 'Press ESC to close'}
-				</Text>
+				<Text dimColor>{bp.pressEscToClose || 'Press ESC to close'}</Text>
 			</Box>
 		);
 	}
@@ -483,8 +476,7 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 				{branches.length === 0 ? (
 					<Box>
 						<Text dimColor>
-							{bp.noBranches ||
-								'No branches found. Press N to create one.'}
+							{bp.noBranches || 'No branches found. Press N to create one.'}
 						</Text>
 					</Box>
 				) : (
@@ -501,9 +493,7 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 								{index === selectedIndex ? '❯ ' : '  '}
 								{branch.isCurrent ? '● ' : '○ '}
 								{branch.name}
-								{branch.isCurrent
-									? ` (${bp.current || 'current'})`
-									: ''}
+								{branch.isCurrent ? ` (${bp.current || 'current'})` : ''}
 							</Text>
 						</Box>
 					))
@@ -522,14 +512,11 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 							value={newBranchName}
 							onChange={setNewBranchName}
 							onSubmit={handleCreate}
-							placeholder={
-								bp.newBranchPlaceholder || 'feature/my-new-branch'
-							}
+							placeholder={bp.newBranchPlaceholder || 'feature/my-new-branch'}
 						/>
 					</Box>
 					<Text dimColor>
-						{bp.createHint ||
-							'Enter to confirm, ESC to cancel'}
+						{bp.createHint || 'Enter to confirm, ESC to cancel'}
 					</Text>
 				</Box>
 			)}
@@ -544,8 +531,7 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 						).replace('{branch}', pendingStashBranch)}
 					</Text>
 					<Text dimColor>
-						{bp.stashConfirmHint ||
-							'Press Y to stash & switch, N to cancel'}
+						{bp.stashConfirmHint || 'Press Y to stash & switch, N to cancel'}
 					</Text>
 				</Box>
 			)}
@@ -554,14 +540,13 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 			{mode === 'confirmDelete' && branches[selectedIndex] && (
 				<Box marginBottom={1} flexDirection="column">
 					<Text color={theme.colors.warning}>
-						{(
-							bp.confirmDelete ||
-							'Delete branch "{branch}"?'
-						).replace('{branch}', branches[selectedIndex]!.name)}
+						{(bp.confirmDelete || 'Delete branch "{branch}"?').replace(
+							'{branch}',
+							branches[selectedIndex]!.name,
+						)}
 					</Text>
 					<Text dimColor>
-						{bp.confirmDeleteHint ||
-							'Press Y to confirm, N to cancel'}
+						{bp.confirmDeleteHint || 'Press Y to confirm, N to cancel'}
 					</Text>
 				</Box>
 			)}
@@ -574,8 +559,8 @@ export const BranchPanel: React.FC<Props> = ({onClose}) => {
 							message.type === 'success'
 								? theme.colors.success
 								: message.type === 'warning'
-									? theme.colors.warning
-									: theme.colors.error
+								? theme.colors.warning
+								: theme.colors.error
 						}
 					>
 						{message.text}

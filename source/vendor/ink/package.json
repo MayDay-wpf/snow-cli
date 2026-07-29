@@ -136,6 +136,7 @@
 		],
 		"prettier": true,
 		"rules": {
+			"unicorn/expiring-todo-comments": "off",
 			"react/no-unescaped-entities": "off",
 			"react/state-in-constructor": "off",
 			"react/jsx-indent": "off",

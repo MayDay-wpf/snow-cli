@@ -98,7 +98,11 @@ export async function showSaveDialog(
 			const defaultPath = path.join(os.homedir(), 'Downloads', defaultFilename);
 			const script = `
 				set defaultPath to POSIX file "${escapeAppleScriptString(defaultPath)}"
-				set saveFile to choose file name with prompt "${escapeAppleScriptString(title)}" default location (POSIX file "${escapeAppleScriptString(os.homedir())}/Downloads") default name "${escapeAppleScriptString(defaultFilename)}"
+				set saveFile to choose file name with prompt "${escapeAppleScriptString(
+					title,
+				)}" default location (POSIX file "${escapeAppleScriptString(
+				os.homedir(),
+			)}/Downloads") default name "${escapeAppleScriptString(defaultFilename)}"
 				return POSIX path of saveFile
 			`;
 			const {stdout} = await execAsync(`osascript -e ${shellQuote(script)}`);
@@ -115,7 +119,9 @@ export async function showSaveDialog(
 					defaultFilename,
 				);
 				const {stdout} = await execAsync(
-					`zenity --file-selection --save --title=${shellQuote(title)} --filename=${shellQuote(defaultPath)} --confirm-overwrite`,
+					`zenity --file-selection --save --title=${shellQuote(
+						title,
+					)} --filename=${shellQuote(defaultPath)} --confirm-overwrite`,
 				);
 				return stdout.trim();
 			} catch {
@@ -127,7 +133,9 @@ export async function showSaveDialog(
 						defaultFilename,
 					);
 					const {stdout} = await execAsync(
-						`kdialog --getsavefilename ${shellQuote(defaultPath)} ${shellQuote('*.*|All Files')} --title ${shellQuote(title)}`,
+						`kdialog --getsavefilename ${shellQuote(defaultPath)} ${shellQuote(
+							'*.*|All Files',
+						)} --title ${shellQuote(title)}`,
 					);
 					return stdout.trim();
 				} catch {
@@ -153,7 +161,9 @@ export async function showOpenDialog(
 	try {
 		if (platform === 'darwin') {
 			const script = `
-				set selectedFile to choose file with prompt "${escapeAppleScriptString(title)}" of type {"yaml", "yml"}
+				set selectedFile to choose file with prompt "${escapeAppleScriptString(
+					title,
+				)}" of type {"yaml", "yml"}
 				return POSIX path of selectedFile
 			`;
 			const {stdout} = await execAsync(`osascript -e ${shellQuote(script)}`);
@@ -163,14 +173,22 @@ export async function showOpenDialog(
 		} else {
 			try {
 				const {stdout} = await execAsync(
-					`zenity --file-selection --title=${shellQuote(title)} --file-filter=${shellQuote('YAML files | *.yaml *.yml')} --file-filter=${shellQuote('All files | *')}`,
+					`zenity --file-selection --title=${shellQuote(
+						title,
+					)} --file-filter=${shellQuote(
+						'YAML files | *.yaml *.yml',
+					)} --file-filter=${shellQuote('All files | *')}`,
 				);
 				return stdout.trim();
 			} catch {
 				try {
 					const downloadsPath = path.join(os.homedir(), 'Downloads');
 					const {stdout} = await execAsync(
-						`kdialog --getopenfilename ${shellQuote(downloadsPath)} ${shellQuote('*.yaml *.yml|YAML Files')} --title ${shellQuote(title)}`,
+						`kdialog --getopenfilename ${shellQuote(
+							downloadsPath,
+						)} ${shellQuote('*.yaml *.yml|YAML Files')} --title ${shellQuote(
+							title,
+						)}`,
 					);
 					return stdout.trim();
 				} catch {
@@ -194,7 +212,11 @@ export async function showConfirmDialog(
 
 	try {
 		if (platform === 'darwin') {
-			const script = `display dialog "${escapeAppleScriptString(message)}" with title "${escapeAppleScriptString(title)}" buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel" with icon caution`;
+			const script = `display dialog "${escapeAppleScriptString(
+				message,
+			)}" with title "${escapeAppleScriptString(
+				title,
+			)}" buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel" with icon caution`;
 			await execAsync(`osascript -e ${shellQuote(script)}`);
 			return true;
 		} else if (platform === 'win32') {
@@ -202,10 +224,16 @@ export async function showConfirmDialog(
 				'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;',
 				'$OutputEncoding = [System.Text.Encoding]::UTF8;',
 				'Add-Type -AssemblyName System.Windows.Forms;',
-				`$result = [System.Windows.Forms.MessageBox]::Show('${escapePowerShellString(message)}', '${escapePowerShellString(title)}', [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning);`,
+				`$result = [System.Windows.Forms.MessageBox]::Show('${escapePowerShellString(
+					message,
+				)}', '${escapePowerShellString(
+					title,
+				)}', [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning);`,
 				'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine("OK"); }',
 			].join(' ');
-			const encodedCommand = Buffer.from(psScript, 'utf16le').toString('base64');
+			const encodedCommand = Buffer.from(psScript, 'utf16le').toString(
+				'base64',
+			);
 			const {stdout} = await execFileAsync('powershell.exe', [
 				'-NoProfile',
 				'-STA',
@@ -219,7 +247,11 @@ export async function showConfirmDialog(
 
 		try {
 			await execAsync(
-				`zenity --question --title=${shellQuote(title)} --text=${shellQuote(message)} --ok-label=${shellQuote('Continue')} --cancel-label=${shellQuote('Cancel')}`,
+				`zenity --question --title=${shellQuote(title)} --text=${shellQuote(
+					message,
+				)} --ok-label=${shellQuote('Continue')} --cancel-label=${shellQuote(
+					'Cancel',
+				)}`,
 			);
 			return true;
 		} catch {

@@ -270,7 +270,7 @@
 		};
 
 		const clearAllTimers = () => {
-			for (const key of Array.from(timers.keys())) {
+			for (const key of timers.keys()) {
 				clearTimer(key);
 			}
 		};
@@ -337,8 +337,8 @@
 		let lastReportedRows = 0;
 
 		const reportSize = () => {
-			const cols = term.cols;
-			const rows = term.rows;
+			const {cols} = term;
+			const {rows} = term;
 			if (
 				cols > 0 &&
 				rows > 0 &&
@@ -548,7 +548,7 @@
 			});
 
 		const getImageFileFromDataTransfer = dataTransfer => {
-			const items = Array.from(dataTransfer?.items || []);
+			const items = [...(dataTransfer?.items || [])];
 			for (const item of items) {
 				if (
 					item.kind === 'file' &&
@@ -706,7 +706,7 @@
 		};
 
 		const registerOsc52ClipboardHandler = () => {
-			const parser = term.parser;
+			const {parser} = term;
 			if (!parser || typeof parser.registerOscHandler !== 'function') {
 				logWarn('OSC 52 clipboard passthrough is unavailable.');
 				return undefined;

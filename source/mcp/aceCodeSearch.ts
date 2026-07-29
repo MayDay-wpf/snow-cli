@@ -1294,7 +1294,9 @@ export class ACECodeSearchService {
 
 			child.once('error', err => {
 				finalize(() => {
-					reject(new Error(`Failed to start ${displayCommand}: ${err.message}`));
+					reject(
+						new Error(`Failed to start ${displayCommand}: ${err.message}`),
+					);
 				});
 			});
 

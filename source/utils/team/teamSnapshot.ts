@@ -15,7 +15,13 @@ import {getProjectId} from '../session/projectUtils.js';
 
 export type TeamSnapshotEvent =
 	| {type: 'team_created'; teamName: string}
-	| {type: 'member_spawned'; teamName: string; memberId: string; memberName: string; worktreePath: string};
+	| {
+			type: 'member_spawned';
+			teamName: string;
+			memberId: string;
+			memberName: string;
+			worktreePath: string;
+	  };
 
 interface TeamSnapshotData {
 	[key: string]: TeamSnapshotEvent[];
@@ -52,7 +58,11 @@ function readSnapshotData(): TeamSnapshotData {
 function saveSnapshotData(data: TeamSnapshotData): void {
 	ensureDir();
 	try {
-		fs.writeFileSync(getTeamSnapshotFilePath(), JSON.stringify(data, null, 2), 'utf-8');
+		fs.writeFileSync(
+			getTeamSnapshotFilePath(),
+			JSON.stringify(data, null, 2),
+			'utf-8',
+		);
 	} catch (error) {
 		console.error('Failed to save team snapshot data:', error);
 	}
@@ -88,7 +98,13 @@ export function recordMemberSpawned(
 	const data = readSnapshotData();
 	const key = `${sessionId}:${messageIndex}`;
 	if (!data[key]) data[key] = [];
-	data[key].push({type: 'member_spawned', teamName, memberId, memberName, worktreePath});
+	data[key].push({
+		type: 'member_spawned',
+		teamName,
+		memberId,
+		memberName,
+		worktreePath,
+	});
 	saveSnapshotData(data);
 }
 

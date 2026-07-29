@@ -112,7 +112,7 @@ export async function tryResumeHeadlessPlan(
 	}
 
 	// --plan / --yolo-p without path: restore only if this session already has executing plan.
-	await restorePlanGateFromDisk(cwd, sessionId);
+	await restorePlanGateFromDisk(cwd, sessionId ?? undefined);
 	if (getPlanApproved(sessionId)) {
 		recordPlanEvent({
 			event: 'approve',
@@ -179,7 +179,11 @@ async function resumeFromPlanFile(
 	}
 
 	// Ownership check BEFORE lock acquire: never silent-force live/soft-stale foreign.
-	const ownership = await classifyPlanDocOwnership(cwd, doc, sessionId);
+	const ownership = await classifyPlanDocOwnership(
+		cwd,
+		doc,
+		sessionId ?? undefined,
+	);
 	const needsForceTakeover =
 		ownership.kind === 'foreign_live' ||
 		ownership.kind === 'foreign_soft_stale';

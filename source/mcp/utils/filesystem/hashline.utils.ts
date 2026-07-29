@@ -62,7 +62,7 @@ export interface ParsedAnchor {
 export function parseAnchor(anchor: string): ParsedAnchor | null {
 	const m = anchor.match(/^(\d+):([0-9a-f]{2})$/i);
 	if (!m) return null;
-	return {lineNum: Number(m[1]),	hash: m[2]!.toLowerCase()};
+	return {lineNum: Number(m[1]), hash: m[2]!.toLowerCase()};
 }
 
 /**

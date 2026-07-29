@@ -6,20 +6,20 @@ import os from 'os';
  * File checkpoint data structure
  */
 export interface FileCheckpoint {
-	path: string;           // File absolute path
-	content: string;        // Original file content
-	timestamp: number;      // Checkpoint creation time
-	exists: boolean;        // Whether file existed before operation
+	path: string; // File absolute path
+	content: string; // Original file content
+	timestamp: number; // Checkpoint creation time
+	exists: boolean; // Whether file existed before operation
 }
 
 /**
  * Conversation checkpoint data structure
  */
 export interface ConversationCheckpoint {
-	sessionId: string;      // Session ID
-	messageCount: number;   // Number of messages before AI response
-	fileSnapshots: FileCheckpoint[];  // File snapshots list
-	timestamp: number;      // Checkpoint creation time
+	sessionId: string; // Session ID
+	messageCount: number; // Number of messages before AI response
+	fileSnapshots: FileCheckpoint[]; // File snapshots list
+	timestamp: number; // Checkpoint creation time
 }
 
 /**
@@ -39,7 +39,7 @@ class CheckpointManager {
 	 */
 	private async ensureCheckpointsDir(): Promise<void> {
 		try {
-			await fs.mkdir(this.checkpointsDir, { recursive: true });
+			await fs.mkdir(this.checkpointsDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists or other error
 		}
@@ -57,14 +57,17 @@ class CheckpointManager {
 	 * @param sessionId - Current session ID
 	 * @param messageCount - Number of messages before AI response
 	 */
-	async createCheckpoint(sessionId: string, messageCount: number): Promise<void> {
+	async createCheckpoint(
+		sessionId: string,
+		messageCount: number,
+	): Promise<void> {
 		await this.ensureCheckpointsDir();
 
 		this.activeCheckpoint = {
 			sessionId,
 			messageCount,
 			fileSnapshots: [],
-			timestamp: Date.now()
+			timestamp: Date.now(),
 		};
 
 		// Save checkpoint immediately (will be updated as files are modified)
@@ -82,7 +85,7 @@ class CheckpointManager {
 
 		// Check if this file already has a snapshot
 		const existingSnapshot = this.activeCheckpoint.fileSnapshots.find(
-			snapshot => snapshot.path === filePath
+			snapshot => snapshot.path === filePath,
 		);
 
 		if (existingSnapshot) {
@@ -96,7 +99,7 @@ class CheckpointManager {
 				path: filePath,
 				content,
 				timestamp: Date.now(),
-				exists: true
+				exists: true,
 			});
 		} catch (error) {
 			// File doesn't exist, record as non-existent
@@ -104,7 +107,7 @@ class CheckpointManager {
 				path: filePath,
 				content: '',
 				timestamp: Date.now(),
-				exists: false
+				exists: false,
 			});
 		}
 
@@ -121,14 +124,21 @@ class CheckpointManager {
 		}
 
 		await this.ensureCheckpointsDir();
-		const checkpointPath = this.getCheckpointPath(this.activeCheckpoint.sessionId);
-		await fs.writeFile(checkpointPath, JSON.stringify(this.activeCheckpoint, null, 2));
+		const checkpointPath = this.getCheckpointPath(
+			this.activeCheckpoint.sessionId,
+		);
+		await fs.writeFile(
+			checkpointPath,
+			JSON.stringify(this.activeCheckpoint, null, 2),
+		);
 	}
 
 	/**
 	 * Load checkpoint from disk
 	 */
-	async loadCheckpoint(sessionId: string): Promise<ConversationCheckpoint | null> {
+	async loadCheckpoint(
+		sessionId: string,
+	): Promise<ConversationCheckpoint | null> {
 		try {
 			const checkpointPath = this.getCheckpointPath(sessionId);
 			const data = await fs.readFile(checkpointPath, 'utf-8');

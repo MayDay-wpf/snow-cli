@@ -77,9 +77,7 @@ export function loadWorkingDirConfig(): Promise<WorkingDirConfig> {
 /**
  * Save working directory configuration to project `.snow/settings.json`.
  */
-export function saveWorkingDirConfig(
-	config: WorkingDirConfig,
-): Promise<void> {
+export function saveWorkingDirConfig(config: WorkingDirConfig): Promise<void> {
 	updateSettings('project', settings => {
 		settings.workingDirectories = config.directories;
 	});

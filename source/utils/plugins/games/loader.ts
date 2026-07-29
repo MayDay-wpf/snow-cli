@@ -87,7 +87,8 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 
 	const files = entries
 		.filter(
-			e => e.isFile() && SUPPORTED_EXTENSIONS.has(extname(e.name).toLowerCase()),
+			e =>
+				e.isFile() && SUPPORTED_EXTENSIONS.has(extname(e.name).toLowerCase()),
 		)
 		.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -121,9 +122,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
  * 合并内置游戏与外部插件。
  * 外部插件的 id 与内置游戏相同时，外部插件覆盖内置游戏。
  */
-export function mergeGamePlugins(
-	externalPlugins: GamePlugin[],
-): GamePlugin[] {
+export function mergeGamePlugins(externalPlugins: GamePlugin[]): GamePlugin[] {
 	const merged = new Map<string, GamePlugin>();
 
 	// 先放内置游戏

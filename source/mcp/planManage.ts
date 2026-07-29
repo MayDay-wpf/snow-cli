@@ -1,9 +1,9 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import {
 	type Tool,
 	type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import {
 	findActivePlan,
 	findForeignExecutingPlans,
@@ -19,6 +19,7 @@ import {
 	type PlanComplexity,
 	type PlanDoc,
 	type PlanPhase,
+	type PlanStatus,
 } from '../utils/execution/planDocument.js';
 import {
 	acquirePlanOwnerLock,
@@ -42,14 +43,24 @@ import {
 	sweepPlans,
 	type SweepPlansOptions,
 } from '../utils/execution/planArchive.js';
-import type {PlanStatus} from '../utils/execution/planDocument.js';
-import {runAcceptance} from '../utils/execution/planAcceptance.js';
+import {
+	runAcceptance,
+	runPhaseChecks,
+} from '../utils/execution/planAcceptance.js';
+import {
+	capturePlanWorkspaceBaseline,
+	changedSinceBaseline,
+	findOutOfScopeChanges,
+} from '../utils/execution/planWorkspaceBaseline.js';
+import {appendPlanEvidence} from '../utils/execution/planEvidence.js';
 import {
 	buildPlanBodyMarkdown,
 	buildPlanMarkdown,
+	parsePlanBriefArgs,
 	parsePlanPhasesArg,
 	slugifyPlanTitle,
 	stripPlanFrontmatter,
+	validatePlanStructuredArgs,
 } from '../utils/execution/planTemplate.js';
 import {getPlanDateDir} from '../utils/execution/planPaths.js';
 import {createPlanFileExclusively} from '../utils/execution/plan-persistence.js';
@@ -84,14 +95,14 @@ export const planManageTools: Tool[] = [
 		name: 'plan-manage',
 		description: `Manage plans under .snow/plan/ during Plan Mode (active plans may live in date subdirs YYYY-MM-DD/). Required field "action":
 
-- create: Create a new draft plan under .snow/plan/YYYY-MM-DD/. Required "title". Optional "slug", "complexity" (simple|medium|complex), "context", "session", structured "phases" [{title, files?, steps?, doneWhen?}], "analysis", "risks", "rollback". Prefer this over filesystem-create for plan docs.
-- write_body: Replace the plan body of the active draft/approved plan (or plan_path). Pass "body_markdown" and/or structured "phases" (+ optional title/context/analysis/risks/rollback). Does NOT change status/session/current_phase. Use this instead of filesystem-create/edit for plan content.
+- create: Create a new draft plan under .snow/plan/YYYY-MM-DD/. Required "title". Accepts a structured planning brief (problem_statement, solution, out_of_scope, resolved_decisions, test_seams, evidence, adr_candidates), structured vertical-slice phases [{title, delivers?, executionStrategy?, files?, steps?, checks?, doneWhen?}], analysis/risks/rollback. Prefer this over filesystem-create for plan docs.
+- write_body: Replace the plan body of the active draft/approved plan (or plan_path). Pass "body_markdown" and/or the same structured planning brief and phases accepted by create. Does NOT change status/session/current_phase. Use this instead of filesystem-create/edit for plan content.
 - get: Summarize the active plan for this session (path, status, phase, step progress, next step, files). Optional "plan_path" for another plan; foreign_live/foreign_soft_stale returns a read-only ownership summary (not mutable).
 - status: Compact progress line for the active plan (same plan_path rules as get).
 - list: List all active plans (all sessions) under .snow/plan date dirs + legacy top-level, with ownership=… and lock liveness per plan.
 - check_step: Mark a step done. Required "step_index" (1-based). Optional "phase_index" (defaults current).
 - uncheck_step: Unmark a step. Required "step_index". Optional "phase_index".
-- complete_phase: Run acceptance for the current phase; advance current_phase. All steps must be checked first.
+- complete_phase: Verify workspace scope, manual confirmations, phase checks, build, and diagnostics; record evidence and advance current_phase. All steps must be checked first.
 - amend: Update the plan when scope changes. Optional "phase_index", "add_files", "add_steps", required "reason".
 - complete: Final acceptance after ALL phases; archives the plan to .snow/plan/archive/YYYY-MM-DD/.
 - abandon: Abandon active plan. Required "reason". Sets status abandoned, clears gate, archives.
@@ -173,10 +184,87 @@ The plan file is the source of truth — keep it in sync with reality via these 
 					enum: ['simple', 'medium', 'complex'],
 					description: 'For action=create: plan complexity tier.',
 				},
+				acceptance_policy: {
+					type: 'string',
+					enum: ['standard', 'strict'],
+					description:
+						'For action=create/write_body: strict fails when Git, build, or diagnostics checks are unavailable.',
+				},
 				context: {
 					type: 'string',
 					description:
 						'For action=create/write_body: optional context body text.',
+				},
+				problem_statement: {
+					type: 'string',
+					description:
+						'For action=create/write_body: the user-facing problem being solved.',
+				},
+				solution: {
+					type: 'string',
+					description:
+						'For action=create/write_body: the intended outcome from the user perspective.',
+				},
+				out_of_scope: {
+					type: 'array',
+					items: {type: 'string'},
+					description:
+						'For action=create/write_body: explicit exclusions that bound the plan.',
+				},
+				resolved_decisions: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							decision: {type: 'string'},
+							choice: {type: 'string'},
+							reason: {type: 'string'},
+							alternatives: {type: 'array', items: {type: 'string'}},
+						},
+						required: ['decision', 'choice'],
+					},
+					description:
+						'For action=create/write_body: decisions confirmed during clarification.',
+				},
+				test_seams: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							seam: {type: 'string'},
+							behavior: {type: 'string'},
+							test_type: {type: 'string'},
+						},
+						required: ['seam', 'behavior'],
+					},
+					description:
+						'For action=create/write_body: public interfaces and observable behavior to test.',
+				},
+				evidence: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							claim: {type: 'string'},
+							source: {type: 'string'},
+						},
+						required: ['claim', 'source'],
+					},
+					description:
+						'For action=create/write_body: relevant facts with primary-source or code references.',
+				},
+				adr_candidates: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							decision: {type: 'string'},
+							rationale: {type: 'string'},
+						},
+						required: ['decision', 'rationale'],
+					},
+					description:
+						'For action=create/write_body: hard-to-reverse, surprising trade-offs that may deserve ADRs after approval.',
 				},
 				session: {
 					type: 'string',
@@ -189,6 +277,26 @@ The plan file is the source of truth — keep it in sync with reality via these 
 						type: 'object',
 						properties: {
 							title: {type: 'string'},
+							delivers: {type: 'string'},
+							executionStrategy: {
+								type: 'string',
+								enum: ['standard', 'tdd'],
+							},
+							checks: {
+								type: 'array',
+								items: {
+									type: 'object',
+									properties: {
+										type: {
+											type: 'string',
+											enum: ['command', 'diagnostics', 'manual'],
+										},
+										command: {type: 'string'},
+										description: {type: 'string'},
+									},
+									required: ['type'],
+								},
+							},
 							files: {type: 'array', items: {type: 'string'}},
 							steps: {type: 'array', items: {type: 'string'}},
 							doneWhen: {type: 'string'},
@@ -196,7 +304,13 @@ The plan file is the source of truth — keep it in sync with reality via these 
 						required: ['title'],
 					},
 					description:
-						'For action=create/write_body: structured phases [{title, files?, steps?, doneWhen?}]. Prefer this over freeform filesystem writes.',
+						'For action=create/write_body: structured vertical-slice phases with observable delivers and command/diagnostics/manual checks.',
+				},
+				manual_confirmations: {
+					type: 'array',
+					items: {type: 'string'},
+					description:
+						'For action=complete_phase: exact descriptions of manual checks verified by the caller.',
 				},
 				analysis: {
 					type: 'string',
@@ -243,10 +357,11 @@ function getSessionId(): string | null {
 }
 
 function formatLockSnippet(ownership: PlanOwnershipClassification): string {
-	const lock = ownership.lock;
+	const {lock} = ownership;
 	if (!lock) {
 		return 'lock=(none)';
 	}
+
 	const soft = ownership.softStale === true;
 	const hard = ownership.stale === true;
 	const staleLabel = hard ? 'hard' : soft ? 'soft' : 'fresh';
@@ -302,6 +417,7 @@ function mutationDeniedMessage(
 			`${ownership.summary} Mutations are rejected. If takeover is intentional, adopt with force=true reason=... first.`
 		);
 	}
+
 	if (
 		ownership.kind === 'mine_recoverable' ||
 		ownership.kind === 'untagged_recoverable' ||
@@ -312,6 +428,7 @@ function mutationDeniedMessage(
 			`${ownership.summary} Call plan-manage {action:"adopt"} first (no force needed for recoverable).`
 		);
 	}
+
 	return (
 		`Error: cannot ${action} — ownership=${ownership.kind}. ` +
 		`${ownership.summary}`
@@ -359,6 +476,7 @@ async function resolvePlanPathArg(
 	if (typeof args?.plan_path !== 'string' || !args.plan_path.trim()) {
 		return null;
 	}
+
 	const planPath = path.isAbsolute(args.plan_path)
 		? args.plan_path
 		: path.resolve(cwd, args.plan_path);
@@ -450,6 +568,7 @@ async function requireActivePlan(
 			),
 		};
 	}
+
 	if (options.mutation) {
 		const ownership = await classifyDocOwnership(cwd, doc, sessionId);
 		// Active ownership contention: reject foreign live/soft; recoverable needs adopt.
@@ -467,6 +586,7 @@ async function requireActivePlan(
 				),
 			};
 		}
+
 		if (doc.frontmatter.status === 'executing') {
 			const owner = await acquirePlanOwnerLock(cwd, {
 				planPath: doc.filePath,
@@ -480,6 +600,7 @@ async function requireActivePlan(
 			}
 		}
 	}
+
 	return {doc};
 }
 
@@ -494,6 +615,7 @@ async function handleCheckStep(
 	if (!phase) {
 		return textResult(`Error: phase ${phaseIndex} not found.`, true);
 	}
+
 	const stepIndex = Number(args?.step_index);
 	if (!Number.isInteger(stepIndex) || stepIndex < 1) {
 		return textResult(
@@ -501,12 +623,14 @@ async function handleCheckStep(
 			true,
 		);
 	}
+
 	if (stepIndex > phase.steps.length) {
 		return textResult(
 			`Error: step_index ${stepIndex} out of range — phase ${phase.index} has ${phase.steps.length} steps.`,
 			true,
 		);
 	}
+
 	await setStepChecked(
 		doc.filePath,
 		phase.index,
@@ -526,6 +650,7 @@ async function handleCheckStep(
 			}`,
 		);
 	}
+
 	return textResult(
 		remaining.length === 0
 			? `Step ${stepIndex} checked. All steps of phase ${updatedPhase.index} are done — call plan-manage {action:"complete_phase"} to run acceptance and advance.`
@@ -538,12 +663,16 @@ async function handleCheckStep(
 async function handleCompletePhase(
 	doc: PlanDoc,
 	cwd: string,
+	args: any,
 	abortSignal?: AbortSignal,
 ): Promise<CallToolResult> {
+	const attemptStartedMs = Date.now();
+	const attemptStartedAt = new Date(attemptStartedMs).toISOString();
 	const phase = currentPhaseOf(doc);
 	if (!phase) {
 		return textResult('Error: plan has no phases.', true);
 	}
+
 	const unchecked = phase.steps.filter(s => !s.checked);
 	if (unchecked.length > 0) {
 		return textResult(
@@ -554,31 +683,176 @@ async function handleCompletePhase(
 		);
 	}
 
-	const acceptance = await runAcceptance(
+	const projectAcceptanceSettings = getPlanAcceptanceSettings();
+	const acceptanceSettings = {
+		...projectAcceptanceSettings,
+		policy:
+			doc.frontmatter.acceptance_policy ??
+			projectAcceptanceSettings.policy ??
+			('standard' as const),
+	};
+	const manualConfirmations = Array.isArray(args?.manual_confirmations)
+		? args.manual_confirmations.filter(
+				(value: unknown): value is string => typeof value === 'string',
+		  )
+		: [];
+	const currentWorkspace = await capturePlanWorkspaceBaseline(cwd);
+	let changedFiles: string[] = [];
+	let outOfScopeFiles: string[] = [];
+	const recordEvidence = async (
+		status: 'passed' | 'failed',
+		summary: string,
+		phaseChecks: Awaited<ReturnType<typeof runPhaseChecks>>['details'] = [],
+		globalAcceptance: Awaited<ReturnType<typeof runAcceptance>>['details'] = [],
+	) => {
+		const completedAt = new Date().toISOString();
+		await appendPlanEvidence(doc.filePath, {
+			phase: phase.index,
+			status,
+			startedAt: attemptStartedAt,
+			completedAt,
+			durationMs: Date.now() - attemptStartedMs,
+			phaseChecks,
+			globalAcceptance,
+			manualConfirmations,
+			workspace: {
+				available: currentWorkspace.available,
+				changedFiles,
+				outOfScopeFiles,
+			},
+			summary,
+		});
+	};
+
+	if (
+		acceptanceSettings.policy === 'strict' &&
+		(!currentWorkspace.available || !doc.frontmatter.phase_baseline)
+	) {
+		const summary = !currentWorkspace.available
+			? `strict acceptance FAILED: Git workspace baseline unavailable (${
+					currentWorkspace.reason ?? 'unknown reason'
+			  })`
+			: 'strict acceptance FAILED: this phase has no recorded workspace baseline; adopt or re-approve the plan first';
+		await recordEvidence('failed', summary);
+		return textResult(summary, true);
+	}
+
+	let driftSummary = 'workspace drift: unavailable (not a Git worktree)';
+	if (doc.frontmatter.phase_baseline && currentWorkspace.available) {
+		changedFiles = changedSinceBaseline(
+			doc.frontmatter.phase_baseline,
+			currentWorkspace.baseline,
+		);
+		const allowedFiles = resolvePlanScopeFiles(doc);
+		outOfScopeFiles =
+			allowedFiles.length > 0
+				? findOutOfScopeChanges(changedFiles, allowedFiles)
+				: [];
+		if (outOfScopeFiles.length > 0) {
+			const summary = `Phase ${
+				phase.index
+			} changed files outside its **Files** list: ${outOfScopeFiles.join(
+				', ',
+			)}.`;
+			await recordEvidence('failed', summary);
+			return textResult(
+				`${summary} Call plan-manage {action:"amend", reason:"...", add_files:[...]} before completing the phase.`,
+				true,
+			);
+		}
+
+		driftSummary =
+			allowedFiles.length > 0
+				? `workspace drift: ${changedFiles.length} changed file(s), all in scope`
+				: 'workspace drift: observed but scope is unrestricted (no Files declared)';
+	} else if (!doc.frontmatter.phase_baseline) {
+		driftSummary = 'workspace drift: skipped (legacy phase has no baseline)';
+	}
+
+	const phaseAcceptance = await runPhaseChecks(
 		cwd,
+		phase.checks ?? [],
+		manualConfirmations,
 		abortSignal,
-		getPlanAcceptanceSettings(),
+		acceptanceSettings,
 	);
+	if (!phaseAcceptance.ok) {
+		await recordEvidence(
+			'failed',
+			phaseAcceptance.output,
+			phaseAcceptance.details,
+		);
+		return textResult(
+			`Phase ${phase.index} checks FAILED — fix or confirm the checks and call complete_phase again.\n${phaseAcceptance.output}`,
+			true,
+		);
+	}
+
+	const acceptance = await runAcceptance(cwd, abortSignal, acceptanceSettings);
 	if (!acceptance.ok) {
+		await recordEvidence(
+			'failed',
+			acceptance.output,
+			phaseAcceptance.details,
+			acceptance.details,
+		);
 		return textResult(
 			`Phase ${phase.index} acceptance FAILED — fix the issues and call complete_phase again.\n${acceptance.output}`,
 			true,
 		);
 	}
 
+	const acceptanceSummary = `${phaseAcceptance.output}; ${acceptance.output}; ${driftSummary}`;
+	await recordEvidence(
+		'passed',
+		acceptanceSummary,
+		phaseAcceptance.details,
+		acceptance.details,
+	);
+	const acceptedPhases = [
+		...new Set([...(doc.frontmatter.accepted_phases ?? []), phase.index]),
+	].sort((a, b) => a - b);
+
 	const isLast =
 		doc.phases.length === 0 ||
 		phase.index >= Math.max(...doc.phases.map(p => p.index));
 	if (isLast) {
+		await mutatePlanDocument(
+			doc.filePath,
+			({content}) => ({
+				content:
+					(content.endsWith('\n') ? content : `${content}\n`) +
+					`\n> Phase ${
+						phase.index
+					} accepted: ${acceptanceSummary} (${new Date().toISOString()})\n`,
+				frontmatter: {accepted_phases: acceptedPhases},
+			}),
+			getPlanWriteOptions(doc),
+		);
 		return textResult(
-			`Phase ${phase.index} acceptance passed (${acceptance.output}). This was the last phase — call plan-manage {action:"complete"} for final acceptance and archiving.`,
+			`Phase ${phase.index} acceptance passed (${acceptanceSummary}). This was the last phase — call plan-manage {action:"complete"} for final acceptance and archiving.`,
 		);
 	}
 
 	const nextIndex = phase.index + 1;
-	await writePlanFrontmatter(
+	const nextBaseline = await capturePlanWorkspaceBaseline(cwd);
+	await mutatePlanDocument(
 		doc.filePath,
-		{current_phase: nextIndex},
+		({content}) => ({
+			content:
+				(content.endsWith('\n') ? content : `${content}\n`) +
+				`\n> Phase ${
+					phase.index
+				} accepted: ${acceptanceSummary} (${new Date().toISOString()})\n`,
+			frontmatter: {
+				current_phase: nextIndex,
+				accepted_phases: acceptedPhases,
+				phase_started_at: new Date().toISOString(),
+				phase_baseline: nextBaseline.available
+					? nextBaseline.baseline
+					: undefined,
+			},
+		}),
 		getPlanWriteOptions(doc),
 	);
 
@@ -597,13 +871,11 @@ async function handleCompletePhase(
 		phase: nextIndex,
 	});
 	return textResult(
-		`Phase ${phase.index} accepted (${
-			acceptance.output
-		}). Now on phase ${nextIndex}: ${next?.title ?? ''}.\nSteps:\n${(
-			next?.steps ?? []
-		)
-			.map(s => `- [ ] ${s.text}`)
-			.join('\n')}`,
+		`Phase ${
+			phase.index
+		} accepted (${acceptanceSummary}). Now on phase ${nextIndex}: ${
+			next?.title ?? ''
+		}.\nSteps:\n${(next?.steps ?? []).map(s => `- [ ] ${s.text}`).join('\n')}`,
 	);
 }
 
@@ -616,11 +888,13 @@ async function handleAmend(
 	if (!reason) {
 		return textResult('Error: action=amend requires "reason".', true);
 	}
+
 	const phaseIndex = resolvePhaseIndex(doc, args);
 	const phase = doc.phases.find(p => p.index === phaseIndex);
 	if (!phase) {
 		return textResult(`Error: phase ${phaseIndex} not found.`, true);
 	}
+
 	const addFiles: string[] = Array.isArray(args?.add_files)
 		? args.add_files.filter((f: unknown) => typeof f === 'string')
 		: [];
@@ -650,11 +924,13 @@ async function handleAmend(
 					: findSectionAnchor(lines, phaseIndex, 'Steps');
 				lines.splice(insertAt, 0, ...addSteps.map(s => `  - [ ] ${s}`));
 			}
+
 			if (addFiles.length > 0) {
 				// Recompute anchors after possible steps insertion by matching Files section
 				const filesAnchor = findSectionAnchor(lines, phaseIndex, 'Files');
 				lines.splice(filesAnchor, 0, ...addFiles.map(f => `  - ${f}`));
 			}
+
 			lines.push(
 				'',
 				`> Amended: ${reason} (${new Date().toISOString().slice(0, 10)})`,
@@ -680,7 +956,7 @@ async function handleAmend(
  * section at the end of the phase when missing). Returns an insertion index.
  */
 function isPhaseHeadingLine(line: string, phaseIndex: number): boolean {
-	const match = /^#{2,3}\s+Phase\s+(\d+)\b/i.exec(line);
+	const match = /^#{2,3}\s+phase\s+(\d+)\b/i.exec(line);
 	return Boolean(match && Number(match[1]) === phaseIndex);
 }
 
@@ -692,20 +968,23 @@ function findSectionAnchor(
 	const sectionNeedle = `**${section}`;
 	let inPhase = false;
 	let phaseEnd = lines.length;
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]!;
+	for (const [i, line_] of lines.entries()) {
+		const line = line_;
 		if (isPhaseHeadingLine(line, phaseIndex)) {
 			inPhase = true;
 			continue;
 		}
+
 		if (inPhase && /^#{1,3}\s/.test(line)) {
 			phaseEnd = i;
 			break;
 		}
+
 		if (inPhase && line.includes(sectionNeedle)) {
 			return i + 1;
 		}
 	}
+
 	// Section missing: create the label at the end of the phase
 	const label = `- **${section}**:`;
 	lines.splice(phaseEnd, 0, label);
@@ -717,6 +996,21 @@ async function handleComplete(
 	cwd: string,
 	abortSignal?: AbortSignal,
 ): Promise<CallToolResult> {
+	const requiresRecordedAcceptance =
+		Boolean(doc.frontmatter.phase_baseline) ||
+		doc.phases.some(phase => (phase.checks ?? []).length > 0);
+	const unacceptedPhases = doc.phases
+		.map(phase => phase.index)
+		.filter(index => !(doc.frontmatter.accepted_phases ?? []).includes(index));
+	if (requiresRecordedAcceptance && unacceptedPhases.length > 0) {
+		return textResult(
+			`Error: phases ${unacceptedPhases.join(
+				', ',
+			)} have no recorded acceptance evidence. Call complete_phase for the current phase before complete.`,
+			true,
+		);
+	}
+
 	const unchecked = doc.phases.flatMap(p =>
 		p.steps.filter(s => !s.checked).map(s => `phase ${p.index}: ${s.text}`),
 	);
@@ -850,6 +1144,7 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 				true,
 			);
 		}
+
 		doc = executing[0] ?? null;
 	}
 
@@ -859,12 +1154,14 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 			true,
 		);
 	}
+
 	if (!['draft', 'approved', 'executing'].includes(doc.frontmatter.status)) {
 		return textResult(
 			`Error: plan ${doc.filePath} has status=${doc.frontmatter.status} and cannot be adopted.`,
 			true,
 		);
 	}
+
 	if (force && !reason) {
 		return textResult('Error: force adopt/takeover requires "reason".', true);
 	}
@@ -884,17 +1181,19 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 				true,
 			);
 		}
-		if (!ownership.canAdoptWithoutForce && ownership.kind !== 'mine_active') {
-			// mine_active is already ours (re-adopt to refresh lock/gate is fine via lock acquire).
+
+		if (
+			!ownership.canAdoptWithoutForce &&
+			ownership.kind !== 'mine_active' && // Mine_active is already ours (re-adopt to refresh lock/gate is fine via lock acquire).
 			// none / other non-recoverable kinds still need an explicit path.
-			if (ownership.kind !== 'none') {
-				return textResult(
-					`Error: cannot adopt without force — ownership=${ownership.kind}. ` +
-						`${ownership.summary} ` +
-						`If takeover is intentional, pass force=true reason=...`,
-					true,
-				);
-			}
+			ownership.kind !== 'none'
+		) {
+			return textResult(
+				`Error: cannot adopt without force — ownership=${ownership.kind}. ` +
+					`${ownership.summary} ` +
+					`If takeover is intentional, pass force=true reason=...`,
+				true,
+			);
 		}
 	}
 
@@ -933,8 +1232,9 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 	}
 
 	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
+	const baseline = await capturePlanWorkspaceBaseline(cwd);
 	const boundSession = sessionId ?? '';
-	// force is only honored after ownership gate above; hard-stale recovers without force.
+	// Force is only honored after ownership gate above; hard-stale recovers without force.
 	const lockResult = await acquirePlanOwnerLock(cwd, {
 		planPath: doc.filePath,
 		sessionId: boundSession,
@@ -953,11 +1253,14 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 						session: boundSession,
 						status: 'executing' as const,
 						current_phase: currentPhase,
+						phase_started_at: new Date().toISOString(),
+						phase_baseline: baseline.available ? baseline.baseline : undefined,
 					},
 				};
 				if (!(lockResult.tookOver && reason)) {
 					return patch;
 				}
+
 				const body = content.endsWith('\n') ? content : `${content}\n`;
 				return {
 					...patch,
@@ -999,17 +1302,31 @@ async function handleAdopt(cwd: string, args: any): Promise<CallToolResult> {
 		}; status=executing phase=${currentPhase}; gate approved; owner lock acquired.${takeoverNote}`,
 	);
 }
+
 async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
+	const structuredErrors = validatePlanStructuredArgs(args);
+	if (structuredErrors.length > 0) {
+		return textResult(
+			`Error: invalid structured plan input:\n${structuredErrors
+				.map(error => `- ${error}`)
+				.join('\n')}`,
+			true,
+		);
+	}
+
 	const title = typeof args?.title === 'string' ? args.title.trim() : '';
 	if (!title) {
 		return textResult('Error: action=create requires "title".', true);
 	}
+
 	const complexityRaw =
 		typeof args?.complexity === 'string' ? args.complexity : 'simple';
 	const complexity: PlanComplexity =
 		complexityRaw === 'medium' || complexityRaw === 'complex'
 			? complexityRaw
 			: 'simple';
+	const acceptancePolicy =
+		args?.acceptance_policy === 'strict' ? 'strict' : 'standard';
 	const session =
 		typeof args?.session === 'string' && args.session.trim()
 			? args.session.trim()
@@ -1024,6 +1341,7 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 	await fs.mkdir(dateDir, {recursive: true});
 
 	const phases = parsePlanPhasesArg(args?.phases);
+	const brief = parsePlanBriefArgs(args);
 	const analysis =
 		typeof args?.analysis === 'string' ? args.analysis : undefined;
 	const risks = typeof args?.risks === 'string' ? args.risks : undefined;
@@ -1033,11 +1351,13 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		title,
 		session,
 		complexity,
+		acceptancePolicy,
 		context,
 		...(phases.length > 0 ? {phases} : {}),
 		analysis,
 		risks,
 		rollback,
+		...brief,
 	});
 
 	let filePath = '';
@@ -1060,7 +1380,7 @@ async function handleCreate(cwd: string, args: any): Promise<CallToolResult> {
 		.join('\n');
 	return textResult(
 		`Created draft plan at ${filePath} (complexity=${complexity}).\n` +
-			`Review the plan below (and/or open the file), then ask for approval via askuser-ask_question.\n\n` +
+			`Review the plan below (and/or open the file), then ask for approval via askuser-ask_question with purpose="plan_approval".\n\n` +
 			`${previewLines}${content.split(/\r?\n/).length > 40 ? '\n…' : ''}`,
 	);
 }
@@ -1069,11 +1389,23 @@ async function handleWriteBody(
 	cwd: string,
 	args: any,
 ): Promise<CallToolResult> {
+	const structuredErrors = validatePlanStructuredArgs(args);
+	if (structuredErrors.length > 0) {
+		return textResult(
+			`Error: invalid structured plan input:\n${structuredErrors
+				.map(error => `- ${error}`)
+				.join('\n')}`,
+			true,
+		);
+	}
+
 	const bodyMarkdown =
 		typeof args?.body_markdown === 'string' ? args.body_markdown : '';
 	const phases = parsePlanPhasesArg(args?.phases);
+	const brief = parsePlanBriefArgs(args);
 	const hasStructured =
 		phases.length > 0 ||
+		Object.keys(brief).length > 0 ||
 		typeof args?.context === 'string' ||
 		typeof args?.analysis === 'string' ||
 		typeof args?.risks === 'string' ||
@@ -1081,7 +1413,7 @@ async function handleWriteBody(
 
 	if (!bodyMarkdown.trim() && !hasStructured) {
 		return textResult(
-			'Error: action=write_body requires "body_markdown" and/or structured "phases" (optional context/analysis/risks/rollback).',
+			'Error: action=write_body requires "body_markdown" and/or structured planning brief/phases.',
 			true,
 		);
 	}
@@ -1106,6 +1438,7 @@ async function handleWriteBody(
 		if ('error' in found) {
 			return found.error;
 		}
+
 		doc = found.doc;
 	}
 
@@ -1113,7 +1446,7 @@ async function handleWriteBody(
 		return textResult('Error: no plan found for write_body.', true);
 	}
 
-	const status = doc.frontmatter.status;
+	const {status} = doc.frontmatter;
 	if (!['draft', 'approved'].includes(status)) {
 		return textResult(
 			`Error: write_body only allowed for draft/approved plans (got status=${status}). For executing plans use amend/check_step instead.`,
@@ -1153,6 +1486,7 @@ async function handleWriteBody(
 			analysis: typeof args?.analysis === 'string' ? args.analysis : undefined,
 			risks: typeof args?.risks === 'string' ? args.risks : undefined,
 			rollback: typeof args?.rollback === 'string' ? args.rollback : undefined,
+			...brief,
 		});
 	}
 
@@ -1160,10 +1494,12 @@ async function handleWriteBody(
 	const frontmatterPatch: {
 		title?: string;
 		complexity?: PlanComplexity;
+		acceptance_policy?: 'standard' | 'strict';
 	} = {};
 	if (typeof args?.title === 'string' && args.title.trim()) {
 		frontmatterPatch.title = args.title.trim();
 	}
+
 	if (
 		typeof args?.complexity === 'string' &&
 		(args.complexity === 'simple' ||
@@ -1171,6 +1507,13 @@ async function handleWriteBody(
 			args.complexity === 'complex')
 	) {
 		frontmatterPatch.complexity = args.complexity;
+	}
+
+	if (
+		args?.acceptance_policy === 'standard' ||
+		args?.acceptance_policy === 'strict'
+	) {
+		frontmatterPatch.acceptance_policy = args.acceptance_policy;
 	}
 
 	await mutatePlanDocument(
@@ -1228,6 +1571,7 @@ async function handleArchiveBatch(
 			true,
 		);
 	}
+
 	if (includeExecuting && !reason) {
 		return textResult(
 			'Error: archive_batch with include_executing=true requires "reason".',
@@ -1315,6 +1659,7 @@ export async function executePlanManageTool(
 			if (docs.length === 0) {
 				return textResult('No active plans under .snow/plan/.');
 			}
+
 			const sessionId = getSessionId();
 			const lock = await readPlanOwnerLock(cwd);
 			const sorted = docs.sort((a, b) => b.mtimeMs - a.mtimeMs);
@@ -1357,14 +1702,17 @@ export async function executePlanManageTool(
 			if (viaPath && 'error' in viaPath) {
 				return viaPath.error;
 			}
+
 			let doc: PlanDoc | null = viaPath?.doc ?? null;
 			if (!doc) {
 				const found = await requireActivePlan(cwd, {mutation: false});
 				if ('error' in found) {
 					return found.error;
 				}
+
 				doc = found.doc;
 			}
+
 			const ownership = await classifyDocOwnership(cwd, doc, getSessionId());
 			// Foreign live/soft via plan_path: only read-only ownership summary.
 			if (
@@ -1374,6 +1722,7 @@ export async function executePlanManageTool(
 			) {
 				return textResult(formatReadOnlyOwnershipSummary(doc, ownership));
 			}
+
 			return textResult(
 				action === 'get' ? summarizePlan(doc) : statusLine(doc),
 			);
@@ -1389,30 +1738,45 @@ export async function executePlanManageTool(
 
 		let result: CallToolResult;
 		switch (action) {
-			case 'check_step':
+			case 'check_step': {
 				result = await handleCheckStep(found.doc, args, true);
 				break;
-			case 'uncheck_step':
+			}
+
+			case 'uncheck_step': {
 				result = await handleCheckStep(found.doc, args, false);
 				break;
-			case 'complete_phase':
-				result = await handleCompletePhase(found.doc, cwd, abortSignal);
+			}
+
+			case 'complete_phase': {
+				result = await handleCompletePhase(found.doc, cwd, args, abortSignal);
 				break;
-			case 'amend':
+			}
+
+			case 'amend': {
 				result = await handleAmend(found.doc, cwd, args);
 				break;
-			case 'complete':
+			}
+
+			case 'complete': {
 				result = await handleComplete(found.doc, cwd, abortSignal);
 				break;
-			case 'abandon':
+			}
+
+			case 'abandon': {
 				result = await handleAbandon(found.doc, cwd, args);
 				break;
-			default:
+			}
+
+			default: {
 				return textResult(`Unknown plan action: ${action}`, true);
+			}
 		}
+
 		if (!result.isError) {
 			await touchPlanOwnerHeartbeat(cwd, found.doc);
 		}
+
 		return result;
 	} catch (error) {
 		return textResult(

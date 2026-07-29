@@ -55,6 +55,7 @@ export default class Ink {
 		outputHeight: number;
 		staticOutput: string;
 	};
+
 	fullStaticOutput: string;
 	private exitPromise?: Promise<void>;
 	private restoreConsole?: () => void;
@@ -62,7 +63,7 @@ export default class Ink {
 	private cursorRegistration?: CursorRegistration;
 
 	constructor(options: Options) {
-		autoBind(this);
+		autoBind(this as unknown as Record<string, unknown>);
 
 		this.options = options;
 		this.rootNode = dom.createNode('ink-root');
@@ -154,8 +155,9 @@ export default class Ink {
 		while (current?.yogaNode) {
 			x += current.yogaNode.getComputedLeft();
 			y += current.yogaNode.getComputedTop();
-			current = current.parentNode as DOMElement | undefined;
+			current = current.parentNode;
 		}
+
 		return {x, y};
 	}
 
@@ -228,6 +230,7 @@ export default class Ink {
 			if (hasStaticOutput) {
 				writeSafely(this.options.stdout, staticOutput);
 			}
+
 			writeSafely(this.options.stdout, ansiEscapes.clearTerminal + output);
 			this.lastOutput = output;
 			return;
@@ -259,8 +262,8 @@ export default class Ink {
 				writeToStdout={this.writeToStdout}
 				writeToStderr={this.writeToStderr}
 				exitOnCtrlC={this.options.exitOnCtrlC}
-				onExit={this.unmount}
 				registerCursor={this.registerCursor}
+				onExit={this.unmount}
 			>
 				{node}
 			</App>

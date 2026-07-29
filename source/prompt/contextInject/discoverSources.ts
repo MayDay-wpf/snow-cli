@@ -1,10 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-	DiscoveredSource,
-	ResolvedContextInjectConfig,
-} from './types.js';
+import type {DiscoveredSource, ResolvedContextInjectConfig} from './types.js';
 
 function toPosix(p: string): string {
 	return p.split(path.sep).join('/');
@@ -21,7 +18,10 @@ function isFile(p: string): boolean {
 function findGitRoot(start: string): string | null {
 	let cur = path.resolve(start);
 	for (;;) {
-		if (isFile(path.join(cur, '.git')) || fs.existsSync(path.join(cur, '.git'))) {
+		if (
+			isFile(path.join(cur, '.git')) ||
+			fs.existsSync(path.join(cur, '.git'))
+		) {
 			// .git may be file (worktree) or directory
 			try {
 				const st = fs.statSync(path.join(cur, '.git'));

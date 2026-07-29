@@ -20,13 +20,13 @@ declare module 'es-toolkit/compat' {
 }
 
 declare module 'auto-bind' {
-	function autoBind<T extends object>(self: T): T;
+	function autoBind<T extends Record<string, unknown>>(self: T): T;
 	export default autoBind;
 }
 
 declare module 'signal-exit' {
 	export function onExit(
-		callback: (code: number | null, signal: string | null) => void,
+		callback: (code: number | undefined, signal: string | undefined) => void,
 		options?: {alwaysLast?: boolean},
 	): () => void;
 }
@@ -44,7 +44,7 @@ declare module 'cli-cursor' {
 }
 
 declare module 'cli-boxes' {
-	export interface BoxStyle {
+	export type BoxStyle = {
 		topLeft: string;
 		top: string;
 		topRight: string;
@@ -53,8 +53,8 @@ declare module 'cli-boxes' {
 		bottom: string;
 		bottomLeft: string;
 		left: string;
-	}
-	export interface Boxes {
+	};
+	export type Boxes = {
 		single: BoxStyle;
 		double: BoxStyle;
 		round: BoxStyle;
@@ -64,7 +64,7 @@ declare module 'cli-boxes' {
 		classic: BoxStyle;
 		arrow: BoxStyle;
 		[key: string]: BoxStyle;
-	}
+	};
 	const boxes: Boxes;
 	export default boxes;
 }
@@ -108,12 +108,12 @@ declare module 'stack-utils' {
 }
 
 declare module '@alcalzone/ansi-tokenize' {
-	export interface StyledChar {
+	export type StyledChar = {
 		type: 'char';
 		value: string;
 		fullWidth: boolean;
 		styles: any[];
-	}
+	};
 	export function tokenize(text: string): any[];
 	export function styledCharsFromTokens(tokens: any[]): StyledChar[];
 	export function styledCharsToString(chars: StyledChar[]): string;

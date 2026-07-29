@@ -5,7 +5,7 @@ type TerminalTitleStreamLike =
 			isTTY?: boolean;
 	  };
 
-const titleControlCharacters = /[\u0000-\u001F\u007F]/g; // eslint-disable-line no-control-regex
+const titleControlCharacters = /[\u0000-\u001F\u007F]/g;
 
 /** Last title written via setTerminalTitle — skip no-op updates. */
 let lastWrittenTitle: string | null = null;
@@ -44,9 +44,10 @@ export function setTerminalTitle(
 	if (!options?.force && lastWrittenTitle === safeTitle) {
 		return;
 	}
+
 	lastWrittenTitle = safeTitle;
 
-	// process.title works on Windows without injecting escape sequences into
+	// Process.title works on Windows without injecting escape sequences into
 	// the render stream. Always try it first.
 	if (safeTitle) {
 		try {
@@ -69,8 +70,8 @@ export function setTerminalTitle(
 
 	try {
 		// Empty title clears (used on unmount). Non-empty sets.
-		oscStream.write(`\x1b]0;${safeTitle}\x07`);
+		oscStream.write(`\u001B]0;${safeTitle}\u0007`);
 	} catch {
-		// stdout may already be closed.
+		// Stdout may already be closed.
 	}
 }

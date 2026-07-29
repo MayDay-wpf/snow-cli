@@ -55,10 +55,7 @@ console.log(
 if (!doc.content.includes('MCP')) throw new Error('doc content unexpected');
 
 const zh = searchSnowDocs({query: 'MCP', locale: 'zh', maxResults: 3});
-console.log(
-	'zh hits=',
-	zh.hits.map(h => h.id).join(' | '),
-);
+console.log('zh hits=', zh.hits.map(h => h.id).join(' | '));
 
 const listTool = await executeSnowDocsTool('list', {locale: 'en'});
 if (!listTool.includes('Snow CLI docs catalogue')) {
@@ -76,7 +73,13 @@ const getTool = await executeSnowDocsTool('get', {
 if (!getTool.includes('id:')) throw new Error('get tool unexpected');
 
 const bundleDocs = join(process.cwd(), 'bundle', 'docs', 'usage');
-const bundleSkills = join(process.cwd(), 'bundle', 'skills', 'snow-docs', 'SKILL.md');
+const bundleSkills = join(
+	process.cwd(),
+	'bundle',
+	'skills',
+	'snow-docs',
+	'SKILL.md',
+);
 console.log('bundle docs exists=', existsSync(bundleDocs));
 console.log('bundle skill exists=', existsSync(bundleSkills));
 if (!existsSync(bundleDocs) || !existsSync(bundleSkills)) {

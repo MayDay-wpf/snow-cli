@@ -157,7 +157,6 @@ export async function executeSubAgent(
 				};
 
 				// 5. Main loop
-				// eslint-disable-next-line no-constant-condition
 				while (true) {
 					if (abortSignal?.aborted) {
 						// Final done is emitted once from the outer finally block.

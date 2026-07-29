@@ -21,10 +21,6 @@ export default function TodoTree({todos}: TodoTreeProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 
-	if (todos.length === 0) {
-		return null;
-	}
-
 	const PAGE_SIZE = 5;
 	const totalCount = todos.length;
 	const completedCount = todos.reduce(
@@ -65,6 +61,10 @@ export default function TodoTree({todos}: TodoTreeProps) {
 
 		setPageIndex(p => (p + 1) % pageCount);
 	});
+
+	if (todos.length === 0) {
+		return null;
+	}
 
 	const visibleTodos = sortedTodos.slice(
 		pageIndex * PAGE_SIZE,

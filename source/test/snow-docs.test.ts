@@ -37,7 +37,11 @@ test('listSnowDocs returns catalogue without requiring includeOtherLocale', t =>
 	const result = listSnowDocs({locale: 'en'});
 	t.is(result.locale, 'en');
 	t.true(result.docs.length > 0);
-	t.true(result.docs.some(doc => doc.id.includes('Catalogue') || doc.id.includes('0.')));
+	t.true(
+		result.docs.some(
+			doc => doc.id.includes('Catalogue') || doc.id.includes('0.'),
+		),
+	);
 	// Absolute docsRoot is internal; caller tooling must not dump it to users.
 	t.truthy(result.docsRoot);
 });
@@ -50,7 +54,9 @@ test('searchSnowDocs ranks MCP docs and supports zh locale', t => {
 
 	const zh = searchSnowDocs({query: 'MCP', locale: 'zh', maxResults: 5});
 	t.true(zh.hits.length > 0);
-	t.true(zh.hits.some(hit => hit.id.includes('MCP') || hit.title.includes('MCP')));
+	t.true(
+		zh.hits.some(hit => hit.id.includes('MCP') || hit.title.includes('MCP')),
+	);
 });
 
 test('getSnowDoc resolves exact id and truncates long content', t => {

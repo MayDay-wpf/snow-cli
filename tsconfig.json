@@ -2,7 +2,7 @@
 	"extends": "@sindresorhus/tsconfig",
 	"compilerOptions": {
 		"outDir": "dist",
-		"lib": ["DOM", "DOM.Iterable", "ES2023"],
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
 		"paths": {
 			"ink": ["./source/vendor/ink/src/index.ts"]
 		}

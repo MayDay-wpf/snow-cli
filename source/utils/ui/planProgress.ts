@@ -61,10 +61,7 @@ function resolveLabels(override?: PlanProgressLabels): PlanProgressLabels {
 	}
 }
 
-function localizeStatus(
-	status: string,
-	labels: PlanProgressLabels,
-): string {
+function localizeStatus(status: string, labels: PlanProgressLabels): string {
 	switch (status) {
 		case 'draft':
 			return labels.planStatusDraft;
@@ -126,8 +123,7 @@ export function formatPlanProgressLabel(
 		const phaseIndex = phase?.index ?? Math.max(1, currentPhase);
 		const phasePart =
 			totalPhases > 0 ? `P${phaseIndex}/${totalPhases}` : `P${phaseIndex}`;
-		const stepPart =
-			phaseTotal > 0 ? ` · ${phaseChecked}/${phaseTotal}` : '';
+		const stepPart = phaseTotal > 0 ? ` · ${phaseChecked}/${phaseTotal}` : '';
 		return `${badge} ${phasePart}${stepPart}`;
 	}
 
@@ -150,8 +146,7 @@ export function formatPlanProgressDetail(
 	const status = doc.frontmatter.status || 'draft';
 	const totalPhases = doc.phases.length;
 	const currentPhase = Math.max(1, doc.frontmatter.current_phase || 1);
-	const phase =
-		doc.phases.find(p => p.index === currentPhase) ?? doc.phases[0];
+	const phase = doc.phases.find(p => p.index === currentPhase) ?? doc.phases[0];
 	const next = phase?.steps.find(s => !s.checked);
 	const phaseIndex = phase?.index ?? currentPhase;
 	const phasePart =
@@ -163,5 +158,8 @@ export function formatPlanProgressDetail(
 					.replace(/\{current\}/g, String(currentPhase))
 					.replace(/\{total\}/g, String(currentPhase));
 	const nextPart = next ? ` · ${labels.planNextStep}: ${next.text}` : '';
-	return `${localizeStatus(status, labels)} · ${title} · ${phasePart}${nextPart}`;
+	return `${localizeStatus(
+		status,
+		labels,
+	)} · ${title} · ${phasePart}${nextPart}`;
 }

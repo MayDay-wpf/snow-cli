@@ -2,22 +2,22 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import {GoogleGenAI} from '@google/genai';
 import {
-	CompletionConfig,
-	CompletionProvider,
+	type CompletionConfig,
+	type CompletionProvider,
 	getDefaultBaseUrl,
 } from '../completion/completionConfig';
 import {log} from './logger';
 
-export interface DiagnosticHint {
+export type DiagnosticHint = {
 	line: number; // 1-indexed
 	column: number; // 1-indexed
 	severity: 'error' | 'warning';
 	message: string;
-	source?: string; // e.g. 'ts', 'eslint'
-	code?: string; // e.g. '2304'
-}
+	source?: string; // E.g. 'ts', 'eslint'
+	code?: string; // E.g. '2304'
+};
 
-export interface NextEditAiRequest {
+export type NextEditAiRequest = {
 	edit: {
 		file: string;
 		oldText: string;
@@ -36,14 +36,14 @@ export interface NextEditAiRequest {
 		diagnostics: DiagnosticHint[];
 	}>;
 	signal: AbortSignal;
-}
+};
 
-export interface NextEditAiCandidate {
+export type NextEditAiCandidate = {
 	file: string;
 	oldText: string;
 	newText: string;
 	reason: string;
-}
+};
 
 const SYSTEM_INSTRUCTION = [
 	'You are a "Next Edit Prediction" engine inside an IDE.',
@@ -70,46 +70,43 @@ const SYSTEM_INSTRUCTION = [
 	'6. Do NOT wrap the array in any other object. Do NOT add trailing text after the array.',
 ].join('\n');
 
-function buildUserMessage(req: NextEditAiRequest): string {
+function buildUserMessage(request: NextEditAiRequest): string {
 	const parts: string[] = [];
-	parts.push('## Recent user edit');
-	parts.push(`File: ${req.edit.file}`);
-	parts.push(`Line: ${req.edit.line + 1}`);
-	parts.push('Old text:');
-	parts.push('```');
-	parts.push(req.edit.oldText);
-	parts.push('```');
-	parts.push('New text:');
-	parts.push('```');
-	parts.push(req.edit.newText);
-	parts.push('```');
-	parts.push('');
-	parts.push('## Current file (full content, line-numbered)');
-	parts.push(`[CURRENT FILE: ${req.currentFile.path}]`);
-	parts.push(`Language: ${req.currentFile.languageId}`);
-	parts.push('```');
-	parts.push(numberLines(req.currentFile.content));
-	parts.push('```');
-	parts.push('[DIAGNOSTICS]');
-	parts.push(formatDiagnostics(req.currentFile.diagnostics));
-	parts.push('');
-	if (req.workspaceFiles.length > 0) {
+	parts.push(
+		'## Recent user edit',
+		`File: ${request.edit.file}`,
+		`Line: ${request.edit.line + 1}`,
+		'Old text:',
+		'```',
+		request.edit.oldText,
+		'```',
+		'New text:',
+		'```',
+		request.edit.newText,
+		'```',
+		'',
+		'## Current file (full content, line-numbered)',
+		`[CURRENT FILE: ${request.currentFile.path}]`,
+		`Language: ${request.currentFile.languageId}`,
+		'```',
+	);
+	parts.push(numberLines(request.currentFile.content), '```', '[DIAGNOSTICS]');
+	parts.push(formatDiagnostics(request.currentFile.diagnostics), '');
+	if (request.workspaceFiles.length > 0) {
 		parts.push('## Related workspace files (line-numbered)');
-		for (const f of req.workspaceFiles) {
-			parts.push(`[WORKSPACE FILE: ${f.path}]`);
-			parts.push('```');
-			parts.push(numberLines(f.content));
-			parts.push('```');
-			parts.push('[DIAGNOSTICS]');
-			parts.push(formatDiagnostics(f.diagnostics));
-			parts.push('');
+		for (const f of request.workspaceFiles) {
+			parts.push(`[WORKSPACE FILE: ${f.path}]`, '```');
+			parts.push(numberLines(f.content), '```', '[DIAGNOSTICS]');
+			parts.push(formatDiagnostics(f.diagnostics), '');
 		}
 	} else {
-		parts.push('## Related workspace files');
-		parts.push('(none)');
+		parts.push('## Related workspace files', '(none)');
 	}
-	parts.push('');
-	parts.push('Now produce the JSON array of follow-up edits, or [] if none.');
+
+	parts.push(
+		'',
+		'Now produce the JSON array of follow-up edits, or [] if none.',
+	);
 	return parts.join('\n');
 }
 
@@ -120,9 +117,10 @@ function formatDiagnostics(diags: DiagnosticHint[] | undefined): string {
 		const tagParts: string[] = [];
 		if (d.source) tagParts.push(d.source);
 		if (d.code) tagParts.push(d.code);
-		const tag = tagParts.length ? ` (${tagParts.join(' ')})` : '';
+		const tag = tagParts.length > 0 ? ` (${tagParts.join(' ')})` : '';
 		lines.push(`  [${d.severity}] L${d.line}:${d.column}${tag} ${d.message}`);
 	}
+
 	return lines.join('\n');
 }
 
@@ -137,7 +135,7 @@ function numberLines(text: string): string {
 function stripCodeFences(text: string): string {
 	if (!text) return '';
 	let t = text.trim();
-	const fenceStart = t.match(/^```[a-zA-Z0-9_+-]*\s*\n/);
+	const fenceStart = /^```[\w+-]*\s*\n/.exec(t);
 	if (fenceStart) {
 		t = t.slice(fenceStart[0].length);
 		const fenceEnd = t.lastIndexOf('```');
@@ -145,6 +143,7 @@ function stripCodeFences(text: string): string {
 			t = t.slice(0, fenceEnd);
 		}
 	}
+
 	return t.trim();
 }
 
@@ -165,6 +164,7 @@ function extractJsonArray(text: string): string | undefined {
 			}
 		}
 	}
+
 	return undefined;
 }
 
@@ -178,20 +178,22 @@ function parseCandidates(raw: string): NextEditAiCandidate[] {
 			return undefined;
 		}
 	};
+
 	let parsed = tryParse(stripped);
 	if (parsed === undefined) {
 		const block = extractJsonArray(stripped);
 		if (block) parsed = tryParse(block);
 	}
+
 	if (!Array.isArray(parsed)) return [];
 	const out: NextEditAiCandidate[] = [];
 	for (const item of parsed) {
 		if (!item || typeof item !== 'object') continue;
-		const obj = item as Record<string, unknown>;
-		const file = obj.file;
-		const oldText = obj.oldText;
-		const newText = obj.newText;
-		const reason = obj.reason;
+		const object = item as Record<string, unknown>;
+		const file = object.file;
+		const oldText = object.oldText;
+		const newText = object.newText;
+		const reason = object.reason;
 		if (
 			typeof file !== 'string' ||
 			typeof oldText !== 'string' ||
@@ -199,6 +201,7 @@ function parseCandidates(raw: string): NextEditAiCandidate[] {
 		) {
 			continue;
 		}
+
 		if (!file.trim() || !oldText) continue;
 		out.push({
 			file: file.trim(),
@@ -207,6 +210,7 @@ function parseCandidates(raw: string): NextEditAiCandidate[] {
 			reason: typeof reason === 'string' ? reason : '',
 		});
 	}
+
 	return out;
 }
 
@@ -235,7 +239,7 @@ function nextEditMaxTokens(config: CompletionConfig): number {
 
 async function requestChat(
 	config: CompletionConfig,
-	req: NextEditAiRequest,
+	request: NextEditAiRequest,
 ): Promise<string> {
 	const client = buildOpenAIClient(config);
 	const response = await client.chat.completions.create(
@@ -245,10 +249,10 @@ async function requestChat(
 			max_tokens: nextEditMaxTokens(config),
 			messages: [
 				{role: 'system', content: SYSTEM_INSTRUCTION},
-				{role: 'user', content: buildUserMessage(req)},
+				{role: 'user', content: buildUserMessage(request)},
 			],
 		},
-		{signal: req.signal},
+		{signal: request.signal},
 	);
 	const choice = response.choices?.[0];
 	const content = choice?.message?.content ?? '';
@@ -259,7 +263,7 @@ async function requestChat(
 
 async function requestResponses(
 	config: CompletionConfig,
-	req: NextEditAiRequest,
+	request: NextEditAiRequest,
 ): Promise<string> {
 	const client = buildOpenAIClient(config);
 	const response = await client.responses.create(
@@ -274,11 +278,11 @@ async function requestResponses(
 				},
 				{
 					role: 'user',
-					content: [{type: 'input_text', text: buildUserMessage(req)}],
+					content: [{type: 'input_text', text: buildUserMessage(request)}],
 				},
 			],
 		},
-		{signal: req.signal},
+		{signal: request.signal},
 	);
 	let text = '';
 	const anyResponse = response as any;
@@ -293,12 +297,13 @@ async function requestResponses(
 			}
 		}
 	}
+
 	return text;
 }
 
 async function requestAnthropic(
 	config: CompletionConfig,
-	req: NextEditAiRequest,
+	request: NextEditAiRequest,
 ): Promise<string> {
 	const client = new Anthropic({
 		apiKey: config.apiKey || 'missing',
@@ -313,11 +318,11 @@ async function requestAnthropic(
 			messages: [
 				{
 					role: 'user',
-					content: buildUserMessage(req),
+					content: buildUserMessage(request),
 				},
 			],
 		},
-		{signal: req.signal},
+		{signal: request.signal},
 	);
 	let text = '';
 	for (const block of response.content) {
@@ -325,6 +330,7 @@ async function requestAnthropic(
 			text += (block as any).text ?? '';
 		}
 	}
+
 	const stop = (response as any).stop_reason ?? 'n/a';
 	log(`AI next-edit [anthropic] stop_reason=${stop}`);
 	return text;
@@ -332,31 +338,31 @@ async function requestAnthropic(
 
 async function requestGemini(
 	config: CompletionConfig,
-	req: NextEditAiRequest,
+	request: NextEditAiRequest,
 ): Promise<string> {
 	const httpOptions: Record<string, unknown> = {};
 	if (config.baseUrl) {
-		httpOptions['baseUrl'] = config.baseUrl;
+		httpOptions.baseUrl = config.baseUrl;
 	}
+
 	const client = new GoogleGenAI({
 		apiKey: config.apiKey || 'missing',
-		httpOptions: Object.keys(httpOptions).length
-			? (httpOptions as any)
-			: undefined,
+		httpOptions:
+			Object.keys(httpOptions).length > 0 ? (httpOptions as any) : undefined,
 	});
 	const response = await client.models.generateContent({
 		model: config.model,
 		contents: [
 			{
 				role: 'user',
-				parts: [{text: buildUserMessage(req)}],
+				parts: [{text: buildUserMessage(request)}],
 			},
 		],
 		config: {
 			systemInstruction: SYSTEM_INSTRUCTION,
 			maxOutputTokens: nextEditMaxTokens(config),
 			temperature: config.temperature,
-			abortSignal: req.signal,
+			abortSignal: request.signal,
 		} as any,
 	});
 	let text = '';
@@ -379,38 +385,49 @@ async function requestGemini(
 			}
 		}
 	}
+
 	return text;
 }
 
 export async function requestNextEditCandidates(
 	config: CompletionConfig,
-	req: NextEditAiRequest,
+	request: NextEditAiRequest,
 ): Promise<NextEditAiCandidate[]> {
 	let raw = '';
 	try {
-		switch (config.provider as CompletionProvider) {
+		switch (config.provider) {
 			case 'chat':
-			case 'fim':
-				// fim uses chat-mode here: a raw FIM completions endpoint cannot
+			case 'fim': {
+				// Fim uses chat-mode here: a raw FIM completions endpoint cannot
 				// reliably emit a structured JSON instruction following message.
-				raw = await requestChat(config, req);
+				raw = await requestChat(config, request);
 				break;
-			case 'responses':
-				raw = await requestResponses(config, req);
+			}
+
+			case 'responses': {
+				raw = await requestResponses(config, request);
 				break;
-			case 'anthropic':
-				raw = await requestAnthropic(config, req);
+			}
+
+			case 'anthropic': {
+				raw = await requestAnthropic(config, request);
 				break;
-			case 'gemini':
-				raw = await requestGemini(config, req);
+			}
+
+			case 'gemini': {
+				raw = await requestGemini(config, request);
 				break;
-			default:
+			}
+
+			default: {
 				throw new Error(`Unknown completion provider: ${config.provider}`);
+			}
 		}
-	} catch (err) {
-		log(`AI next-edit request failed: ${(err as Error)?.message ?? err}`);
+	} catch (error) {
+		log(`AI next-edit request failed: ${(error as Error)?.message ?? error}`);
 		return [];
 	}
+
 	log(
 		`AI next-edit raw_len=${raw.length}, raw_preview=${JSON.stringify(
 			raw.slice(0, 200),

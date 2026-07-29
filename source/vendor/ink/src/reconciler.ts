@@ -82,7 +82,7 @@ const diff = (before: AnyObject, after: AnyObject): AnyObject | undefined => {
 };
 
 const cleanupYogaNode = (node: DOMElement | TextNode): void => {
-	const yogaNode = node.yogaNode;
+	const {yogaNode} = node;
 	if (yogaNode) {
 		yogaNode.unsetMeasureFunc();
 		clearYogaNodeReferences(node);
@@ -260,10 +260,7 @@ export default createReconciler<
 
 		const props = diff(oldProps, newProps);
 
-		const style = diff(
-			oldProps['style'] as Styles,
-			newProps['style'] as Styles,
-		);
+		const style = diff(oldProps.style as Styles, newProps.style as Styles);
 
 		if (!props && !style) {
 			return null;

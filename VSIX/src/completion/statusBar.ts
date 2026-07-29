@@ -59,7 +59,8 @@ export class CompletionStatusBar {
 		}
 		if (!enabled) {
 			this.item.text = '$(circle-slash) Snow AI';
-			this.item.tooltip = 'Snow CLI inline completion is disabled. Click to enable.';
+			this.item.tooltip =
+				'Snow CLI inline completion is disabled. Click to enable.';
 			return;
 		}
 		if (this.loading) {

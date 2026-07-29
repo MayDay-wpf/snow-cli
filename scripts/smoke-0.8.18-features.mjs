@@ -38,18 +38,26 @@ function snowCmd(args, {expectOk = true, allowFail = false} = {}) {
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
 		throw new Error(
-			`Failed parsing snow cmd ${args.join(' ')}: ${msg}\nstdout=${proc.stdout}\nstderr=${proc.stderr}`,
+			`Failed parsing snow cmd ${args.join(' ')}: ${msg}\nstdout=${
+				proc.stdout
+			}\nstderr=${proc.stderr}`,
 		);
 	}
 
 	if (!allowFail && expectOk && payload.ok !== true) {
 		throw new Error(
-			`Command failed: snow cmd ${args.join(' ')}\n${JSON.stringify(payload, null, 2)}`,
+			`Command failed: snow cmd ${args.join(' ')}\n${JSON.stringify(
+				payload,
+				null,
+				2,
+			)}`,
 		);
 	}
 	if (!allowFail && !expectOk && payload.ok === true) {
 		throw new Error(
-			`Expected failure but succeeded: snow cmd ${args.join(' ')}\n${JSON.stringify(payload, null, 2)}`,
+			`Expected failure but succeeded: snow cmd ${args.join(
+				' ',
+			)}\n${JSON.stringify(payload, null, 2)}`,
 		);
 	}
 	return payload;
@@ -224,10 +232,9 @@ if (!skipModes) {
 			throw new Error('yolo write without --yes should fail');
 		}
 
-		const flipped = snowCmd(
-			['yolo', originalYolo ? 'off' : 'on', '--yes'],
-			{allowFail: false},
-		);
+		const flipped = snowCmd(['yolo', originalYolo ? 'off' : 'on', '--yes'], {
+			allowFail: false,
+		});
 		if (!flipped.ok) throw new Error(JSON.stringify(flipped));
 
 		// restore
@@ -250,7 +257,11 @@ check('export defaults under ~/.snow/exports when session exists', () => {
 		list[0]?.id ?? list[0]?.sessionId ?? list[0]?.uuid ?? list[0] ?? null;
 	if (!first || typeof first !== 'string') {
 		console.log('SKIP  export (no session available)');
-		results.push({name: 'export defaults under ~/.snow/exports', ok: true, skipped: true});
+		results.push({
+			name: 'export defaults under ~/.snow/exports',
+			ok: true,
+			skipped: true,
+		});
 		return;
 	}
 
@@ -270,7 +281,9 @@ check('export defaults under ~/.snow/exports when session exists', () => {
 	if (!normalized.includes('/.snow/exports/')) {
 		// Windows home may use backslashes already normalized above
 		if (!normalized.toLowerCase().includes('.snow/exports')) {
-			throw new Error(`export not under ~/.snow/exports: ${actual} (expected prefix ${expectedPrefix})`);
+			throw new Error(
+				`export not under ~/.snow/exports: ${actual} (expected prefix ${expectedPrefix})`,
+			);
 		}
 	}
 });

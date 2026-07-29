@@ -22,7 +22,9 @@ function makeToolCall(name: string, args: Record<string, unknown>): ToolCall {
 
 /** Strip OSC 8 hyperlink wrappers for assertion readability */
 function stripOsc(text: string): string {
-	return text.replace(/\x1b\]8;;[^\x07]*\x07/g, '').replace(/\x1b\]8;;\x07/g, '');
+	return text
+		.replace(/\x1b\]8;;[^\x07]*\x07/g, '')
+		.replace(/\x1b\]8;;\x07/g, '');
 }
 
 test('isFilePath recognizes absolute and relative paths, rejects URLs and sentences', t => {
@@ -44,7 +46,9 @@ test('toDisplayPath relativizes cwd-internal absolute paths without double backs
 	const abs = path.join(process.cwd(), 'source', 'foo.ts');
 	const display = stripOsc(toDisplayPath(abs, true));
 
-	t.true(display.includes('./source/foo.ts') || display.includes('source/foo.ts'));
+	t.true(
+		display.includes('./source/foo.ts') || display.includes('source/foo.ts'),
+	);
 	t.false(display.includes('\\\\'));
 	t.false(display.includes(JSON.stringify(abs)));
 });
@@ -120,7 +124,13 @@ test('formatToolCallMessage: empty path array is []', t => {
 });
 
 test('formatToolCallMessage: string path arg uses toDisplayPath', t => {
-	const abs = path.join(process.cwd(), 'source', 'utils', 'ui', 'messageFormatter.ts');
+	const abs = path.join(
+		process.cwd(),
+		'source',
+		'utils',
+		'ui',
+		'messageFormatter.ts',
+	);
 	const result = formatToolCallMessage(
 		makeToolCall('filesystem-read', {filePath: abs}),
 	);

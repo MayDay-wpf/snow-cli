@@ -1,14 +1,20 @@
 import type {MCPTool} from '../utils/execution/mcpToolsManager.js';
 
-export interface AskUserQuestionArgs {
+export type AskUserQuestionArgs = {
 	question: string;
 	options: string[];
-}
+	purpose?: AskUserQuestionPurpose;
+};
 
-export interface AskUserQuestionResult {
+export type AskUserQuestionPurpose =
+	| 'clarification'
+	| 'plan_approval'
+	| 'plan_resume';
+
+export type AskUserQuestionResult = {
 	selected: string | string[];
 	customInput?: string;
-}
+};
 
 export const mcpTools: MCPTool[] = [
 	{
@@ -33,6 +39,12 @@ export const mcpTools: MCPTool[] = [
 						description:
 							'Array of option strings for the user to choose from. Should be concise and clear. User can select one or multiple options.',
 						minItems: 2,
+					},
+					purpose: {
+						type: 'string',
+						enum: ['clarification', 'plan_approval', 'plan_resume'],
+						description:
+							'Why the question is being asked. Use clarification for requirements/design decisions, plan_approval only for the final whole-plan execution gate, and plan_resume for unfinished-plan recovery.',
 					},
 				},
 				required: ['question', 'options'],

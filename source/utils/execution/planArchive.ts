@@ -22,6 +22,7 @@ import {
 	getPlanDir,
 	listActivePlanMarkdownPaths,
 } from './planPaths.js';
+import {getPlanEvidencePath} from './planEvidence.js';
 
 async function moveFile(from: string, to: string): Promise<void> {
 	try {
@@ -30,6 +31,15 @@ async function moveFile(from: string, to: string): Promise<void> {
 		// Windows cross-device / locked-file fallback
 		await fs.copyFile(from, to);
 		await fs.unlink(from);
+	}
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+	try {
+		await fs.access(filePath);
+		return true;
+	} catch {
+		return false;
 	}
 }
 
@@ -56,15 +66,27 @@ export async function archivePlan(
 	const stem = base.slice(0, base.length - ext.length);
 	let target = path.join(archiveDir, base);
 	for (let n = 2; ; n++) {
-		try {
-			await fs.access(target);
-			target = path.join(archiveDir, `${stem}-${n}${ext}`);
-		} catch {
+		if (
+			!(await fileExists(target)) &&
+			!(await fileExists(getPlanEvidencePath(target)))
+		) {
 			break;
 		}
+
+		target = path.join(archiveDir, `${stem}-${n}${ext}`);
 	}
 
 	await moveFile(doc.filePath, target);
+	const sourceEvidence = getPlanEvidencePath(doc.filePath);
+	const targetEvidence = getPlanEvidencePath(target);
+	if (await fileExists(sourceEvidence)) {
+		try {
+			await moveFile(sourceEvidence, targetEvidence);
+		} catch (error) {
+			await moveFile(target, doc.filePath).catch(() => undefined);
+			throw error;
+		}
+	}
 
 	const sourcePath = path.resolve(doc.filePath);
 	const targetPath = path.resolve(target);

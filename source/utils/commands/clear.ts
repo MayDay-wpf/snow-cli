@@ -1,4 +1,7 @@
-import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // Clear command handler
 registerCommand('clear', {
@@ -6,9 +9,9 @@ registerCommand('clear', {
 		return {
 			success: true,
 			action: 'clear',
-			message: 'Chat context cleared'
+			message: 'Chat context cleared',
 		};
-	}
+	},
 });
 
 export default {};

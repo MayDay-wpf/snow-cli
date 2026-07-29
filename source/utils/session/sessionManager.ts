@@ -1073,7 +1073,6 @@ class SessionManager {
 		this.notifyMessagesChanged();
 		try {
 			// Sync require: keep setCurrentSession sync for callers.
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				hydrateSubAgentRunsFromSession,
 			} = require('../../hooks/conversation/core/subAgentRunStore.js');
@@ -1088,7 +1087,6 @@ class SessionManager {
 		// - clear ephemeral stream entries shown in LoadingIndicator
 		// Do NOT abort or unregister background agents from the previous session.
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				clearSubAgentLiveSlotsNotInSession,
 			} = require('../../hooks/conversation/core/subAgentLiveStore.js');
@@ -1097,7 +1095,6 @@ class SessionManager {
 			// optional
 		}
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				clearSubAgentStreamEntriesOnly,
 			} = require('../../hooks/conversation/core/subAgentMessageHandler.js');
@@ -1116,7 +1113,6 @@ class SessionManager {
 		this.clearPendingAdditionalContext();
 		this.notifyMessagesChanged();
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				clearSubAgentRuns,
 			} = require('../../hooks/conversation/core/subAgentRunStore.js');
@@ -1126,7 +1122,6 @@ class SessionManager {
 		}
 		// Clear live/stream UI state; keep running agents in tracker (no abort).
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				clearAllSubAgentLiveSlots,
 			} = require('../../hooks/conversation/core/subAgentLiveStore.js');
@@ -1135,7 +1130,6 @@ class SessionManager {
 			// optional
 		}
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const {
 				clearSubAgentStreamEntriesOnly,
 			} = require('../../hooks/conversation/core/subAgentMessageHandler.js');
@@ -1148,7 +1142,6 @@ class SessionManager {
 		if (previousId) {
 			try {
 				// Sync require to avoid making clearCurrentSession async.
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
 				const {resetPlanGate} = require('../execution/planModeGate.js');
 				resetPlanGate(previousId);
 			} catch {

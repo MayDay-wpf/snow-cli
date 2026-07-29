@@ -15,7 +15,9 @@ function getDiagnosticFingerprint(diagnostics: Diagnostic[]): string {
 	return diagnostics
 		.map(
 			diagnostic =>
-				`${diagnostic.severity}|${diagnostic.source || ''}|${diagnostic.code || ''}|${diagnostic.line}|${diagnostic.character}|${diagnostic.message}`,
+				`${diagnostic.severity}|${diagnostic.source || ''}|${
+					diagnostic.code || ''
+				}|${diagnostic.line}|${diagnostic.character}|${diagnostic.message}`,
 		)
 		.sort()
 		.join('\n');
@@ -25,7 +27,9 @@ function getDiagnosticFingerprint(diagnostics: Diagnostic[]): string {
  * Poll IDE diagnostics until they become stable after file edits.
  * This reduces the chance of returning stale diagnostics right after save.
  */
-export async function getFreshDiagnostics(filePath: string): Promise<Diagnostic[]> {
+export async function getFreshDiagnostics(
+	filePath: string,
+): Promise<Diagnostic[]> {
 	const initialDelayMs = 300;
 	const pollDelayMs = 350;
 	const maxAttempts = 5;

@@ -436,8 +436,7 @@ export default function SkillsListPanel({onClose}: Props) {
 			<Box flexDirection="column">
 				<Text color={theme.colors.menuInfo} bold>
 					{t.skillsListPanel.title}
-					{skills.length > 0 &&
-						` (${selectedIndex + 1}/${skills.length})`}
+					{skills.length > 0 && ` (${selectedIndex + 1}/${skills.length})`}
 				</Text>
 
 				{hiddenAboveCount > 0 && (

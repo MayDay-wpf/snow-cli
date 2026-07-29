@@ -1,8 +1,12 @@
-import anyTest, {type TestFn} from 'ava';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {runAcceptance} from '../utils/execution/planAcceptance.js';
+import anyTest, {type TestFn} from 'ava';
+import {
+	runAcceptance,
+	runPhaseChecks,
+	validatePlanCheckCommand,
+} from '../utils/execution/planAcceptance.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -63,4 +67,75 @@ test('runAcceptance uses fallbackCommands when no build script', async t => {
 	});
 	t.true(result.ok);
 	t.true(result.output.includes('build: passed'));
+});
+
+test('runPhaseChecks requires exact manual confirmations', async t => {
+	const dir = await makeDir();
+	const checks = [
+		{type: 'manual' as const, description: 'verify the rendered screen'},
+	];
+	const missing = await runPhaseChecks(dir, checks);
+	t.false(missing.ok);
+	t.true(missing.output.includes('verify the rendered screen'));
+
+	const confirmed = await runPhaseChecks(dir, checks, [
+		'verify the rendered screen',
+	]);
+	t.true(confirmed.ok);
+	t.true(confirmed.output.includes('manual checks confirmed: 1'));
+});
+
+test('plan check command policy blocks shell composition and dangerous commands', t => {
+	t.is(validatePlanCheckCommand('npm test'), null);
+	t.truthy(validatePlanCheckCommand('npm test && rm -rf dist'));
+	t.truthy(validatePlanCheckCommand('npm test > result.txt'));
+	t.truthy(validatePlanCheckCommand('npm test $(node hidden-check.js)'));
+	t.truthy(validatePlanCheckCommand('npm test `node hidden-check.js`'));
+	t.truthy(validatePlanCheckCommand('bash -c "npm test"'));
+	t.truthy(validatePlanCheckCommand('powershell -Command "npm test"'));
+	t.truthy(validatePlanCheckCommand('git push origin main'));
+	t.truthy(
+		validatePlanCheckCommand('pytest', {
+			allowedCommandPrefixes: ['npm', 'pnpm'],
+		}),
+	);
+	t.is(
+		validatePlanCheckCommand('npm run test', {
+			allowedCommandPrefixes: ['npm'],
+		}),
+		null,
+	);
+});
+
+test('runPhaseChecks enforces command policy before execution', async t => {
+	const dir = await makeDir();
+	const result = await runPhaseChecks(dir, [
+		{type: 'command', command: 'npm test > hidden.txt'},
+	]);
+	t.false(result.ok);
+	t.true(result.output.includes('command policy FAILED'));
+	await t.throwsAsync(async () => fs.access(path.join(dir, 'hidden.txt')));
+});
+
+test('strict acceptance fails when an enabled build check is unavailable', async t => {
+	const dir = await makeDir();
+	const result = await runAcceptance(dir, undefined, {
+		policy: 'strict',
+		runDiagnostics: false,
+	});
+	t.false(result.ok);
+	t.true(result.output.includes('strict acceptance FAILED'));
+	t.true(result.details.some(detail => detail.status === 'skipped'));
+});
+
+test('acceptance commands execute inside the requested project directory', async t => {
+	const dir = await makeDir();
+	const result = await runAcceptance(dir, undefined, {
+		commands: [
+			`node -e "require('fs').writeFileSync('acceptance-cwd.txt','ok')"`,
+		],
+		runDiagnostics: false,
+	});
+	t.true(result.ok);
+	t.is(await fs.readFile(path.join(dir, 'acceptance-cwd.txt'), 'utf8'), 'ok');
 });

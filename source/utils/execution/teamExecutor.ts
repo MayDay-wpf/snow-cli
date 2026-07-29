@@ -384,7 +384,6 @@ ${role ? `Your role: ${role}` : ''}
 			return {resultContent: textContent, editDiffData, images};
 		};
 
-		// eslint-disable-next-line no-constant-condition
 		while (true) {
 			if (abortSignal?.aborted) {
 				return {

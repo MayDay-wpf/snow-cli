@@ -101,7 +101,9 @@ function getFallbackEditor(
 ): vscode.TextEditor | undefined {
 	if (lastValidContext.activeFile) {
 		const cachedEditor = visibleEditors.find(
-			editor => normalizePath(editor.document.uri.fsPath) === lastValidContext.activeFile,
+			editor =>
+				normalizePath(editor.document.uri.fsPath) ===
+				lastValidContext.activeFile,
 		);
 		if (cachedEditor) {
 			return cachedEditor;

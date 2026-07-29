@@ -73,7 +73,9 @@ class ResourceMonitor {
 		// Log debug info periodically (every 5 minutes)
 		if (this.stats.length % 10 === 0) {
 			logger.info(
-				`Resource stats: Heap ${heapUsedMB.toFixed(2)} MB, Encoders: ${this.activeEncoders}, MCP: ${this.activeMCPConnections}`,
+				`Resource stats: Heap ${heapUsedMB.toFixed(2)} MB, Encoders: ${
+					this.activeEncoders
+				}, MCP: ${this.activeMCPConnections}`,
 			);
 		}
 	}
@@ -185,9 +187,7 @@ class ResourceMonitor {
 			logger.info('Forcing garbage collection');
 			global.gc();
 		} else {
-			logger.warn(
-				'GC not available - run with --expose-gc flag for manual GC',
-			);
+			logger.warn('GC not available - run with --expose-gc flag for manual GC');
 		}
 	}
 }

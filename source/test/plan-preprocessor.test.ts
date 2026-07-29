@@ -21,14 +21,20 @@ status: executing
 current_phase: 1
 created: '2026-07-25T00:00:00.000Z'
 session: sess-1
+acceptance_policy: strict
 ---
 # Demo plan
 
 ### Phase 1: First
+- **Delivers**: one observable vertical slice
+- **Execution strategy**: tdd
 - **Files**: src/a.ts
 - **Steps**:
   - [x] done step
   - [ ] pending step
+- **Checks**:
+  - command: npm test
+  - manual: verify visible output
 - **Done when**: build passes
 
 ### Phase 2: Second
@@ -57,12 +63,19 @@ test('formatPlanContext renders phase progress and instructions', async t => {
 	);
 	const text = formatPlanContext(doc);
 	t.true(text.includes('## Active Plan'));
+	t.true(text.includes('Acceptance policy: strict'));
+	t.true(text.includes('.md.evidence.json'));
 	t.true(text.includes('Phase 1/2: First'));
+	t.true(text.includes('**Delivers**: one observable vertical slice'));
+	t.true(text.includes('**Execution strategy**: tdd'));
 	t.true(text.includes('**Files** (current phase write allowlist)'));
 	t.true(text.includes('- src/a.ts'));
 	t.true(text.includes('[x] done step'));
 	t.true(text.includes('[ ] pending step'));
 	t.true(text.includes('**Next step**: pending step'));
+	t.true(text.includes('**Checks**:'));
+	t.true(text.includes('- command: npm test'));
+	t.true(text.includes('- manual: verify visible output'));
 	t.true(text.includes('**Done when**: build passes'));
 	t.true(text.includes('plan-manage'));
 });
@@ -169,7 +182,11 @@ test('buildResumePlanNotice requires force for foreign_soft_stale', async t => {
 	t.truthy(notice);
 	t.truthy(notice?.includes('ownership=foreign_soft_stale'));
 	t.truthy(notice?.includes('Foreign soft-stale owner present'));
-	t.truthy(notice?.includes('never** auto-adopted') || notice?.includes('never auto-adopted') || notice?.includes('Soft-stale is **never**'));
+	t.truthy(
+		notice?.includes('never** auto-adopted') ||
+			notice?.includes('never auto-adopted') ||
+			notice?.includes('Soft-stale is **never**'),
+	);
 	t.truthy(notice?.includes('force:true'));
 
 	await fs.unlink(lockPath).catch(() => {});

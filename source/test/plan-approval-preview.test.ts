@@ -19,6 +19,7 @@ function makeDoc(partial?: Partial<PlanDoc>): PlanDoc {
 			session: 'sess-1',
 			title: 'Add auth',
 			complexity: 'medium',
+			acceptance_policy: 'strict',
 		},
 		title: 'Add auth',
 		affectedFiles: ['src/auth.ts', 'src/middleware/auth.ts (new)'],
@@ -32,6 +33,11 @@ function makeDoc(partial?: Partial<PlanDoc>): PlanDoc {
 					{text: 'Wire into app', checked: false, line: 11},
 				],
 				doneWhen: ['build passes'],
+				checks: [
+					{type: 'command', command: 'npm test'},
+					{type: 'diagnostics'},
+					{type: 'manual', description: 'verify login flow'},
+				],
 			},
 			{
 				index: 2,
@@ -67,11 +73,21 @@ test('formatPlanApprovalPreview shows title, path, phases and steps', t => {
 	t.true(text.includes('📋 Plan Document'));
 	t.true(text.includes('Title: Add auth'));
 	t.true(text.includes('Status: draft · Complexity: medium · Phases: 2'));
+	t.true(text.includes('Acceptance policy: strict'));
+	t.true(
+		text.includes(
+			'Evidence: E:/code/demo/.snow/plan/2026-07-26/add-auth.md.evidence.json',
+		),
+	);
 	t.true(text.includes('add-auth.md') || text.includes('Path:'));
 	t.true(text.includes('### Phase 1: Middleware'));
 	t.true(text.includes('[ ] Create middleware'));
 	t.true(text.includes('### Phase 2: Login endpoints'));
 	t.true(text.includes('Done when: build passes'));
+	t.true(text.includes('Checks:'));
+	t.true(text.includes('command: npm test'));
+	t.true(text.includes('diagnostics'));
+	t.true(text.includes('manual: verify login flow'));
 	t.true(text.includes('auth.ts'));
 });
 

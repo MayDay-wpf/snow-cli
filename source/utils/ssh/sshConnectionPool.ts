@@ -89,7 +89,9 @@ class SSHConnectionPool {
 					// Drop the broken entry so the next attempt creates a fresh client.
 					this.entries.delete(key);
 					throw new Error(
-						`SSH connection failed (${key}): ${result.error || 'unknown error'}`,
+						`SSH connection failed (${key}): ${
+							result.error || 'unknown error'
+						}`,
 					);
 				}
 				e.connected = true;
@@ -160,7 +162,10 @@ class SSHConnectionPool {
 			try {
 				entry.client.disconnect();
 			} catch (err) {
-				logger.warn('SSH pool: error while closing client during shutdown', err);
+				logger.warn(
+					'SSH pool: error while closing client during shutdown',
+					err,
+				);
 			}
 			entry.connected = false;
 		}

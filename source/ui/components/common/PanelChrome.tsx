@@ -35,7 +35,10 @@ export function PanelChrome({
 	const {t} = useI18n();
 	const tp = (t as any).panelChrome || {};
 	const resolvedLoading =
-		loadingLabel || tp.loading || t.workingDirectoryPanel?.loading || 'Loading…';
+		loadingLabel ||
+		tp.loading ||
+		t.workingDirectoryPanel?.loading ||
+		'Loading…';
 	const escHint = hint || tp.escHint || t.chatScreen?.pressEscToClose;
 
 	if (loading) {
