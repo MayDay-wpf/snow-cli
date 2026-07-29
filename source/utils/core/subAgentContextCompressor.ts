@@ -182,6 +182,30 @@ function getAdaptiveKeepRounds(percentage: number): number {
 }
 
 /**
+ * Compression may only run at a stable tool-call boundary. A trailing
+ * assistant tool call without its result is still active, not orphaned.
+ */
+export function hasUnresolvedToolCalls(messages: ChatMessage[]): boolean {
+	const unresolvedIds = new Set<string>();
+
+	for (const message of messages) {
+		if (message.role === 'assistant' && message.tool_calls) {
+			for (const toolCall of message.tool_calls) {
+				if (!toolCall.id) return true;
+				unresolvedIds.add(toolCall.id);
+			}
+			continue;
+		}
+
+		if (message.role === 'tool' && message.tool_call_id) {
+			unresolvedIds.delete(message.tool_call_id);
+		}
+	}
+
+	return unresolvedIds.size > 0;
+}
+
+/**
  * Find the start index of the "recent rounds" to preserve.
  * Counts backwards from the end, counting N complete tool-call rounds
  * (assistant with tool_calls + corresponding tool results = 1 round).
@@ -660,7 +684,7 @@ export async function compressSubAgentContext(
 ): Promise<SubAgentCompressionResult> {
 	const percentage = getContextPercentage(totalTokens, maxContextTokens);
 
-	if (percentage < COMPRESS_THRESHOLD) {
+	if (percentage < COMPRESS_THRESHOLD || hasUnresolvedToolCalls(messages)) {
 		return {
 			compressed: false,
 			messages,
