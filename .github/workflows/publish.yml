@@ -125,15 +125,7 @@ jobs:
 
             ### What's New
 
-            #### Features
-            - Native file I/O acceleration: file read/write operations now use the Rust native accelerator with automatic encoding detection (chardetng), running on the libuv thread pool for non-blocking performance; falls back to Node.js implementation automatically when native is unavailable
-            - Sliding-window fuzzy matcher with variable window size: for large code blocks (>=10 lines), tries multiple window sizes at each candidate position to improve boundary alignment and prevent duplicate boundary lines after replacement
-            - Todo ID normalization: `normalizeTodoId` method supports processing todoId in multiple formats (string / string[] / JSON)
-
-            #### Improvements
-            - Refactored snow-native crate: split monolithic `lib.rs` into modular files (`fuzzy_match`, `io`, `similarity`, `task`, `text_edit`, `types`)
-            - Raised fuzzy matching similarity threshold from 0.75 to 0.85 for better edit precision
-            - Filesystem batch creation: `overwrite` is now a required field for batch file creation config objects
+            Patch: Open proxy host settings
 
             ### Installation
             ```bash
