@@ -1,0 +1,9 @@
+# Statically link the C runtime on Windows so the resulting .node binary
+# does NOT depend on vcruntime140.dll / the Visual C++ Redistributable.
+# Without this, users on machines without the VC++ runtime get a silent
+# DLL-load failure and the native accelerator becomes unavailable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

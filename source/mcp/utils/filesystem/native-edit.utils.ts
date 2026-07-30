@@ -104,7 +104,9 @@ export async function writeFileWithNative(
 	content: string,
 ): Promise<boolean> {
 	try {
-		await getNativeEditAccelerator()?.writeFile(path, content);
+		const accel = getNativeEditAccelerator();
+		if (!accel) return false;
+		await accel.writeFile(path, content);
 		return true;
 	} catch {
 		return false;
