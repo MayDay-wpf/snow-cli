@@ -157,7 +157,6 @@ export async function executeSubAgent(
 				};
 
 				// 5. Main loop
-				// eslint-disable-next-line no-constant-condition
 				while (true) {
 					if (abortSignal?.aborted) {
 						// Final done is emitted once from the outer finally block.
@@ -171,11 +170,16 @@ export async function executeSubAgent(
 					// Wait if the main flow (or another participant) is compressing.
 					await compressionCoordinator.waitUntilFree(ctx.instanceId);
 
+					const {config, model} = await resolveConfig(agent);
+
+					// Compress only history completed by the previous iteration. At this
+					// boundary every tool call already has its corresponding result.
+					await handleContextCompression(ctx, config, model);
+
 					// Inject pending user / inter-agent messages
 					injectPendingMessages(ctx);
 
-					// Resolve config + create API stream
-					const {config, model} = await resolveConfig(agent);
+					// Create API stream
 					const stream = createApiStream(
 						config,
 						model,
@@ -202,9 +206,13 @@ export async function executeSubAgent(
 						};
 					}
 
-					// Context compression
-					const compressed = await handleContextCompression(ctx, config, model);
-					if (compressed && toolCalls.length === 0) {
+					// A text-only response is also a stable boundary. Compress it now so
+					// the agent can continue instead of ending under context pressure.
+					const compressed =
+						toolCalls.length === 0
+							? await handleContextCompression(ctx, config, model)
+							: false;
+					if (compressed) {
 						// Remove premature exit response, inject continuation
 						while (
 							ctx.messages.length > 0 &&
@@ -280,7 +288,11 @@ export async function executeSubAgent(
 		// must not write the completed summary or clear the live slot.
 		if (ctx) {
 			try {
-				emitSubAgentMessage(ctx, {type: 'done', final: true});
+				emitSubAgentMessage(ctx, {
+					type: 'done',
+					final: true,
+					usage: ctx.totalUsage,
+				});
 			} catch {
 				/* noop */
 			}

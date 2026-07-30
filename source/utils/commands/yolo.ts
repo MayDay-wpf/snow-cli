@@ -1,4 +1,7 @@
-import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // YOLO command handler - toggles unattended mode
 registerCommand('yolo', {
@@ -6,9 +9,9 @@ registerCommand('yolo', {
 		return {
 			success: true,
 			action: 'toggleYolo',
-			message: 'Toggling YOLO mode'
+			message: 'Toggling YOLO mode',
 		};
-	}
+	},
 });
 
 export default {};

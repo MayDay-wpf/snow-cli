@@ -1085,7 +1085,6 @@ const FileList = memo(
 					clearTimeout(timer);
 					controller.abort();
 				};
-				// eslint-disable-next-line react-hooks/exhaustive-deps
 			}, [
 				normalizedQuery,
 				searchMode,

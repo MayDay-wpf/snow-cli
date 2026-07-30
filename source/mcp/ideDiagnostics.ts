@@ -1,4 +1,7 @@
-import {vscodeConnection, type Diagnostic} from '../utils/ui/vscodeConnection.js';
+import {
+	vscodeConnection,
+	type Diagnostic,
+} from '../utils/ui/vscodeConnection.js';
 
 /**
  * IDE Diagnostics MCP Service

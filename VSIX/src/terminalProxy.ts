@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 
 export type TerminalProxyEnv = Record<string, string>;
 
-function asOptionalNonEmptyString(value: string | undefined): string | undefined {
+function asOptionalNonEmptyString(
+	value: string | undefined,
+): string | undefined {
 	const normalized = value?.trim();
 	return normalized ? normalized : undefined;
 }
@@ -32,7 +34,9 @@ function getConfiguredSnowTerminalProxyUrl(): string | undefined {
 }
 
 function getVsCodeHttpProxyUrl(): string | undefined {
-	const vscodeProxy = vscode.workspace.getConfiguration('http').get<string>('proxy', '');
+	const vscodeProxy = vscode.workspace
+		.getConfiguration('http')
+		.get<string>('proxy', '');
 	return asOptionalNonEmptyString(vscodeProxy);
 }
 

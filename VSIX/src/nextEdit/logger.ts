@@ -12,7 +12,9 @@ export function getLogger(): vscode.OutputChannel {
 function ts(): string {
 	const d = new Date();
 	const pad = (n: number, w = 2) => n.toString().padStart(w, '0');
-	return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+	return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(
+		d.getSeconds(),
+	)}.${pad(d.getMilliseconds(), 3)}`;
 }
 
 export function log(message: string, ...args: unknown[]): void {

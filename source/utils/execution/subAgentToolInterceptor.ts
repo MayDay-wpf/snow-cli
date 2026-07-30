@@ -427,7 +427,6 @@ export async function interceptSpawnSubAgent(
 					);
 				try {
 					// Sync require: this callback is not async.
-					// eslint-disable-next-line @typescript-eslint/no-require-imports
 					const {startSubAgentRun} =
 						require('../../hooks/conversation/core/subAgentRunStore.js') as typeof import('../../hooks/conversation/core/subAgentRunStore.js');
 					startSubAgentRun({

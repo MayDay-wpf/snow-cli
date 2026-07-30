@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useStdout } from 'ink';
+import {useEffect} from 'react';
+import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 
 /**
@@ -17,9 +17,9 @@ import ansiEscapes from 'ansi-escapes';
  * ```
  */
 export function useCursorHide(): void {
-    const { stdout } = useStdout();
+	const {stdout} = useStdout();
 
-    useEffect(() => {
-        stdout.write(ansiEscapes.cursorHide);
-    }, [stdout]);
+	useEffect(() => {
+		stdout.write(ansiEscapes.cursorHide);
+	}, [stdout]);
 }

@@ -58,7 +58,9 @@ async function spawnNotepad(filePath: string): Promise<void> {
  * - 为避免 Ink 在编辑期间接收键盘输入，会临时 pause stdin；编辑器退出后恢复并重置 raw mode。
  * - Notepad 可能保存为 UTF-8/UTF-16 等编码；读取时复用 readFileWithEncoding 兼容处理。
  */
-export async function editTextWithNotepad(initialText: string): Promise<string> {
+export async function editTextWithNotepad(
+	initialText: string,
+): Promise<string> {
 	if (process.platform !== 'win32') {
 		return initialText;
 	}

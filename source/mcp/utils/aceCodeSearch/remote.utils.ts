@@ -435,9 +435,7 @@ export function parseCtagsJsonOutput(
 		let filePath = entry.path.replace(/\\/g, '/');
 		if (filePath.startsWith('./')) filePath = filePath.slice(2);
 		const language =
-			entry.language?.toLowerCase() ||
-			detectLanguage(filePath) ||
-			'plaintext';
+			entry.language?.toLowerCase() || detectLanguage(filePath) || 'plaintext';
 		symbols.push({
 			name: entry.name,
 			type: ctagsKindToSymbolType(entry.kind),

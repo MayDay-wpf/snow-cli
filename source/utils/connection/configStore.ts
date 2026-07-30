@@ -1,7 +1,4 @@
-import {
-	readSettings,
-	updateSettings,
-} from '../config/unifiedSettings.js';
+import {readSettings, updateSettings} from '../config/unifiedSettings.js';
 import type {ConnectionConfig} from './types.js';
 
 /**
@@ -27,11 +24,7 @@ export class ConfigStore {
 		try {
 			const settings = readSettings('project');
 			const conn = settings.connection;
-			if (
-				conn &&
-				typeof conn === 'object' &&
-				typeof conn.apiUrl === 'string'
-			) {
+			if (conn && typeof conn === 'object' && typeof conn.apiUrl === 'string') {
 				return conn;
 			}
 			return null;

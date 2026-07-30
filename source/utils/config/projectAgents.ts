@@ -1,9 +1,4 @@
-import {
-	existsSync,
-	readdirSync,
-	readFileSync,
-	statSync,
-} from 'fs';
+import {existsSync, readdirSync, readFileSync, statSync} from 'fs';
 import {basename, extname, join} from 'path';
 import {homedir} from 'os';
 import matter from 'gray-matter';

@@ -76,8 +76,7 @@ export class DuckDuckGoEngine implements SearchEngine {
 
 				const snippetElement = row.querySelector('td.result-snippet');
 				if (snippetElement && currentResult.title) {
-					currentResult.snippet =
-						snippetElement.textContent?.trim() || '';
+					currentResult.snippet = snippetElement.textContent?.trim() || '';
 					continue;
 				}
 
@@ -88,11 +87,7 @@ export class DuckDuckGoEngine implements SearchEngine {
 				}
 			}
 
-			if (
-				currentResult.title &&
-				currentResult.url &&
-				resultCount < maxLimit
-			) {
+			if (currentResult.title && currentResult.url && resultCount < maxLimit) {
 				searchResults.push(currentResult);
 			}
 

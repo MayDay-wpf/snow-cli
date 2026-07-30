@@ -6,6 +6,8 @@ import TextInput from 'ink-text-input';
 import {
 	getProxyConfig,
 	updateProxyConfig,
+	DEFAULT_PROXY_HOST,
+	sanitizeProxyHost,
 	type ProxyConfig,
 	type SearchEngineId,
 } from '../../utils/config/proxyConfig.js';
@@ -34,11 +36,12 @@ export default function ProxyConfigScreen({
 	const {theme} = useTheme();
 	const [enabled, setEnabled] = useState(false);
 	const [port, setPort] = useState('7890');
+	const [host, setHost] = useState(DEFAULT_PROXY_HOST);
 	const [browserPath, setBrowserPath] = useState('');
 	const [searchEngine, setSearchEngine] =
 		useState<SearchEngineId>('duckduckgo');
 	const [currentField, setCurrentField] = useState<
-		'enabled' | 'searchEngine' | 'port' | 'browserPath'
+		'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
 	>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
@@ -54,6 +57,7 @@ export default function ProxyConfigScreen({
 		const config = getProxyConfig();
 		setEnabled(config.enabled);
 		setPort(config.port.toString());
+		setHost(config.host || DEFAULT_PROXY_HOST);
 		setBrowserPath(config.browserPath || '');
 		setSearchEngine(config.searchEngine || 'duckduckgo');
 
@@ -74,6 +78,12 @@ export default function ProxyConfigScreen({
 			validationErrors.push(t.proxyConfig.portValidationError);
 		}
 
+		const trimmedHost = host.trim();
+		if (!trimmedHost || /\s/.test(trimmedHost)) {
+			// Reject empty hosts and hosts containing whitespace
+			validationErrors.push(t.proxyConfig.hostValidationError);
+		}
+
 		return validationErrors;
 	};
 
@@ -83,6 +93,7 @@ export default function ProxyConfigScreen({
 			const config: ProxyConfig = {
 				enabled,
 				port: parseInt(port, 10),
+				host: sanitizeProxyHost(host),
 				browserPath: browserPath.trim() || undefined,
 				searchEngine,
 			};
@@ -120,14 +131,16 @@ export default function ProxyConfigScreen({
 				}
 			}
 		} else if (!isEditing && key.upArrow) {
-			const fields: Array<'enabled' | 'searchEngine' | 'port' | 'browserPath'> =
-				['enabled', 'searchEngine', 'port', 'browserPath'];
+			const fields: Array<
+				'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
+			> = ['enabled', 'searchEngine', 'port', 'host', 'browserPath'];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex > 0 ? currentIndex - 1 : fields.length - 1;
 			setCurrentField(fields[newIndex]!);
 		} else if (!isEditing && key.downArrow) {
-			const fields: Array<'enabled' | 'searchEngine' | 'port' | 'browserPath'> =
-				['enabled', 'searchEngine', 'port', 'browserPath'];
+			const fields: Array<
+				'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
+			> = ['enabled', 'searchEngine', 'port', 'host', 'browserPath'];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex < fields.length - 1 ? currentIndex + 1 : 0;
 			setCurrentField(fields[newIndex]!);
@@ -242,6 +255,37 @@ export default function ProxyConfigScreen({
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuSecondary}>
 									{port || t.proxyConfig.notSet}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				</Box>
+
+				<Box marginBottom={1}>
+					<Box flexDirection="column">
+						<Text
+							color={
+								currentField === 'host'
+									? theme.colors.menuSelected
+									: theme.colors.menuNormal
+							}
+						>
+							{currentField === 'host' ? '❯ ' : '  '}
+							{t.proxyConfig.proxyHost}
+						</Text>
+						{currentField === 'host' && isEditing && (
+							<Box marginLeft={3}>
+								<TextInput
+									value={host}
+									onChange={setHost}
+									placeholder={t.proxyConfig.hostPlaceholder}
+								/>
+							</Box>
+						)}
+						{(!isEditing || currentField !== 'host') && (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{host || t.proxyConfig.notSet}
 								</Text>
 							</Box>
 						)}

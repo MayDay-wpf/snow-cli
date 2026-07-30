@@ -1,1 +1,7 @@
 dist
+bundle
+out
+.snow
+crates/*/target
+node_modules
+source/vendor/ink

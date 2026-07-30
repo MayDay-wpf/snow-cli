@@ -6,6 +6,7 @@
  */
 
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import type {TokenUsage} from '../../../utils/execution/subAgentTypes.js';
 
 /** Feature flag: when false, keep legacy toolPending message flooding. */
 export const SUBAGENT_LIVE_SLOTS_ENABLED = true;
@@ -40,7 +41,10 @@ export type SubAgentLiveSlot = {
 	agentId: string;
 	agentName: string;
 	status: SubAgentLiveStatus;
+	/** Locally estimated streamed output tokens (reasoning/content/tool-call deltas). */
 	tokenCount: number;
+	/** Cumulative provider usage, frozen when the agent reaches a terminal state. */
+	finalUsage?: TokenUsage;
 	startedAt: number;
 	/** Frozen wall-clock duration once the agent is terminal (completed/error). */
 	durationMs?: number;
@@ -157,6 +161,7 @@ function toPublicSlot(slot: LiveSlotInternal): SubAgentLiveSlot {
 		agentName: slot.agentName,
 		status: slot.status,
 		tokenCount: slot.tokenCount,
+		finalUsage: slot.finalUsage ? {...slot.finalUsage} : undefined,
 		startedAt: slot.startedAt,
 		durationMs: slot.durationMs,
 		isReasoning: slot.isReasoning,
@@ -523,7 +528,7 @@ export function liveOnAgentStatus(input: LiveAgentStatusInput): void {
  */
 export function liveOnAgentDone(
 	agentId: string,
-	options?: {error?: boolean},
+	options?: {error?: boolean; usage?: TokenUsage},
 ): void {
 	const slot = _slots.get(agentId);
 	if (!slot) {
@@ -537,6 +542,9 @@ export function liveOnAgentDone(
 		slot.durationMs = Math.max(0, now - slot.startedAt);
 	}
 	slot.status = options?.error ? 'error' : 'completed';
+	if (options?.usage) {
+		slot.finalUsage = {...options.usage};
+	}
 	slot.isReasoning = false;
 	slot.focus = undefined;
 	slot.preview = undefined;

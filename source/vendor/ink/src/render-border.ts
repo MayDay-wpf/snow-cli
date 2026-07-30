@@ -54,7 +54,7 @@ const renderBorder = (
 						(showRightBorder ? box.topRight : ''),
 					topBorderColor,
 					'foreground',
-				)
+			  )
 			: undefined;
 
 		if (showTopBorder && dimTopBorderColor) {
@@ -94,7 +94,7 @@ const renderBorder = (
 						(showRightBorder ? box.bottomRight : ''),
 					bottomBorderColor,
 					'foreground',
-				)
+			  )
 			: undefined;
 
 		if (showBottomBorder && dimBottomBorderColor) {

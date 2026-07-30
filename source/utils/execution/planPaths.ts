@@ -19,6 +19,7 @@ import {
 	invalidateActivePlanPathsCache,
 	setCachedActivePlanPaths,
 } from './planCache.js';
+import {measurePlanOperation} from './plan-metrics.js';
 
 /** Re-export so callers can drop the short-lived active path list. */
 export {invalidateActivePlanPathsCache};
@@ -62,50 +63,57 @@ async function readPlanDirMtimeMs(planDir: string): Promise<number> {
 export async function listActivePlanMarkdownPaths(
 	cwd: string,
 ): Promise<string[]> {
-	const planDir = getPlanDir(cwd);
-	const planDirMtimeMs = await readPlanDirMtimeMs(planDir);
-	const cached = getCachedActivePlanPaths(cwd);
-	if (cached && cached.planDirMtimeMs === planDirMtimeMs) {
-		return [...cached.paths];
-	}
+	return measurePlanOperation(
+		{operation: 'discover', detail: 'active_paths'},
+		async timing => {
+			const planDir = getPlanDir(cwd);
+			const planDirMtimeMs = await readPlanDirMtimeMs(planDir);
+			const cached = getCachedActivePlanPaths(cwd);
+			if (cached && cached.planDirMtimeMs === planDirMtimeMs) {
+				timing.cache = 'hit';
+				return [...cached.paths];
+			}
+			timing.cache = 'miss';
 
-	let entries: Dirent[];
-	try {
-		entries = await fs.readdir(planDir, {withFileTypes: true});
-	} catch {
-		const empty: string[] = [];
-		setCachedActivePlanPaths(cwd, empty, 2000, -1);
-		return empty;
-	}
-
-	const results: string[] = [];
-	for (const entry of entries) {
-		if (entry.name.toLowerCase() === 'archive') {
-			continue;
-		}
-
-		if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
-			results.push(path.join(planDir, entry.name));
-			continue;
-		}
-
-		if (entry.isDirectory() && isPlanDateFolderName(entry.name)) {
-			const dateDir = path.join(planDir, entry.name);
+			let entries: Dirent[];
 			try {
-				const nested = await fs.readdir(dateDir, {withFileTypes: true});
-				for (const child of nested) {
-					if (child.isFile() && child.name.toLowerCase().endsWith('.md')) {
-						results.push(path.join(dateDir, child.name));
+				entries = await fs.readdir(planDir, {withFileTypes: true});
+			} catch {
+				const empty: string[] = [];
+				setCachedActivePlanPaths(cwd, empty, 2000, -1);
+				return empty;
+			}
+
+			const results: string[] = [];
+			for (const entry of entries) {
+				if (entry.name.toLowerCase() === 'archive') {
+					continue;
+				}
+
+				if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+					results.push(path.join(planDir, entry.name));
+					continue;
+				}
+
+				if (entry.isDirectory() && isPlanDateFolderName(entry.name)) {
+					const dateDir = path.join(planDir, entry.name);
+					try {
+						const nested = await fs.readdir(dateDir, {withFileTypes: true});
+						for (const child of nested) {
+							if (child.isFile() && child.name.toLowerCase().endsWith('.md')) {
+								results.push(path.join(dateDir, child.name));
+							}
+						}
+					} catch {
+						// Unreadable date dir: skip
 					}
 				}
-			} catch {
-				// Unreadable date dir: skip
 			}
-		}
-	}
 
-	setCachedActivePlanPaths(cwd, results, 2000, planDirMtimeMs);
-	return results;
+			setCachedActivePlanPaths(cwd, results, 2000, planDirMtimeMs);
+			return results;
+		},
+	);
 }
 
 function isPathInside(parent: string, child: string): boolean {

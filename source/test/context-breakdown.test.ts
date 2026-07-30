@@ -58,7 +58,8 @@ test('buildContextBreakdown returns categories free/autocompact and skills bucke
 
 	// free usable + used should not exceed window
 	t.true(
-		breakdown.totalEstimatedTokens + breakdown.freeTokens +
+		breakdown.totalEstimatedTokens +
+			breakdown.freeTokens +
 			breakdown.autocompactBufferTokens >=
 			breakdown.maxContextTokens - 1 ||
 			breakdown.totalEstimatedTokens + breakdown.freeTokens <=

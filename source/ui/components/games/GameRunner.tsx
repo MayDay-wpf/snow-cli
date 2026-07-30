@@ -6,7 +6,10 @@ import type {
 	GameInitContext,
 	GameRenderSegment,
 } from '../../../utils/plugins/games/index.js';
-import {safeText, DEFAULT_TICK_INTERVAL_MS} from '../../../utils/plugins/games/index.js';
+import {
+	safeText,
+	DEFAULT_TICK_INTERVAL_MS,
+} from '../../../utils/plugins/games/index.js';
 
 /**
  * 将插件 render() 返回的一行归一化为渲染段落数组。

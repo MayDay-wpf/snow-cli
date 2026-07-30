@@ -27,7 +27,7 @@ const isStreamWriteError = (error: unknown): boolean => {
 		return false;
 	}
 
-	const code = (error as NodeJS.ErrnoException).code;
+	const {code} = error as NodeJS.ErrnoException;
 	return (
 		code === 'ERR_STREAM_DESTROYED' ||
 		code === 'ERR_STREAM_WRITE_AFTER_END' ||

@@ -170,22 +170,22 @@ export const CustomCommandConfigPanel: React.FC<Props> = ({
 		commandType === 'execute'
 			? t.customCommand.typeExecute
 			: commandType === 'prompt'
-				? t.customCommand.typePrompt
-				: t.customCommand.typePanel;
+			? t.customCommand.typePrompt
+			: t.customCommand.typePanel;
 
 	const commandLabel =
 		commandType === 'execute'
 			? t.customCommand.commandLabelExecute
 			: commandType === 'prompt'
-				? t.customCommand.commandLabelPrompt
-				: t.customCommand.commandLabelPanel;
+			? t.customCommand.commandLabelPrompt
+			: t.customCommand.commandLabelPanel;
 
 	const commandPlaceholder =
 		commandType === 'execute'
 			? t.customCommand.commandPlaceholderExecute
 			: commandType === 'prompt'
-				? t.customCommand.commandPlaceholderPrompt
-				: t.customCommand.commandPlaceholderPanel;
+			? t.customCommand.commandPlaceholderPrompt
+			: t.customCommand.commandPlaceholderPanel;
 
 	return (
 		<Box

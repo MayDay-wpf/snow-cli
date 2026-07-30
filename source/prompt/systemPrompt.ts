@@ -2,6 +2,7 @@
  * System prompt configuration for Snow AI CLI
  */
 
+import os from 'node:os';
 import {
 	getSystemPromptWithRole as getSystemPromptWithRoleHelper,
 	getSystemEnvironmentInfo as getSystemEnvironmentInfoHelper,
@@ -12,7 +13,9 @@ import {
 	getToolDiscoverySection as getToolDiscoverySectionHelper,
 	getOverrideRoleContent,
 } from './shared/promptHelpers.js';
-import os from 'os';
+import {getPlanModeSystemPrompt} from './planModeSystemPrompt.js';
+import {getTeamModeSystemPrompt} from './teamModeSystemPrompt.js';
+import {getVulnerabilityHuntingModeSystemPrompt} from './vulnerabilityHuntingModeSystemPrompt.js';
 
 /**
  * Get platform-specific command requirements based on detected OS and shell
@@ -58,7 +61,7 @@ function getPlatformCommandsSection(): string {
 - For complex tasks: Prefer Node.js scripts or npm packages`;
 	}
 
-	// macOS/Linux (bash/zsh/sh/fish)
+	// MacOS/Linux (bash/zsh/sh/fish)
 	if (platformType === 'darwin' || platformType === 'linux') {
 		return `## Platform-Specific Command Requirements
 
@@ -308,8 +311,9 @@ function getWorkflowSection(hasCodebase: boolean): string {
 6. Verify with build
 
 **Key principle:** codebase-search first, ACE tools for precision only`;
-	} else {
-		return `**Your workflow:**
+	}
+
+	return `**Your workflow:**
 1. Read the primary file(s) mentioned - USE BATCH READ if multiple files
 2. Use \\\`ace-search\\\` (action=semantic_search / find_definition / find_references) to find related code
 3. Check dependencies/imports that directly impact the change
@@ -327,8 +331,8 @@ When dealing with multiple independent files, batch operations can improve effic
 - Multiple reads: \\\`filesystem-read(filePath=["a.ts", "b.ts"])\\\`
 - Multiple edits: \\\`filesystem-edit(filePath=[{path:"a.ts",operations:[...]}, {path:"b.ts",operations:[...]}])\\\`
 - Use your judgment — batch when files are independent, sequence when there are dependencies`;
-	}
 }
+
 /**
  * Generate code search section based on available tools
  */
@@ -350,11 +354,11 @@ function getCodeSearchSection(hasCodebase: boolean): string {
 - \`ace-search\` - Unified ACE code search; pick \`action\`: find_definition (exact symbol), find_references (impact analysis), text_search (literal/regex), semantic_search (fuzzy), file_outline
 
 **Golden rule:** Try codebase-search first, use ACE tools only for precise symbol lookup`;
-	} else {
-		// When codebase tool is NOT available, only show ACE
-		return `**Code Search Strategy:**
-- \`ace-search\` - Unified ACE code search. Required \`action\`: semantic_search (fuzzy symbol search), find_definition (go to definition), find_references (usages), file_outline, text_search (literal/regex)`;
 	}
+
+	// When codebase tool is NOT available, only show ACE
+	return `**Code Search Strategy:**
+- \`ace-search\` - Unified ACE code search. Required \`action\`: semantic_search (fuzzy symbol search), find_definition (go to definition), find_references (usages), file_outline, text_search (literal/regex)`;
 }
 
 const TOOL_DISCOVERY_SECTIONS = {
@@ -474,21 +478,17 @@ export function getSystemPromptForMode(
 ): string {
 	// Team mode takes highest precedence
 	if (teamMode) {
-		const {getTeamModeSystemPrompt} = require('./teamModeSystemPrompt.js');
 		return getTeamModeSystemPrompt(toolSearchDisabled);
 	}
+
 	// Vulnerability Hunting mode takes precedence over Plan mode
 	if (vulnerabilityHuntingMode) {
-		// Import dynamically to avoid circular dependency
-		const {
-			getVulnerabilityHuntingModeSystemPrompt,
-		} = require('./vulnerabilityHuntingModeSystemPrompt.js');
 		return getVulnerabilityHuntingModeSystemPrompt(toolSearchDisabled);
 	}
+
 	if (planMode) {
-		// Import dynamically to avoid circular dependency
-		const {getPlanModeSystemPrompt} = require('./planModeSystemPrompt.js');
 		return getPlanModeSystemPrompt(toolSearchDisabled);
 	}
+
 	return getSystemPrompt(toolSearchDisabled);
 }

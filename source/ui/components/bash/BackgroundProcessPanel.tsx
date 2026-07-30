@@ -37,132 +37,144 @@ function formatDuration(start: Date, end?: Date): string {
 	return `${minutes}m ${remainingSeconds}s`;
 }
 
-export const BackgroundProcessPanel = React.memo(function BackgroundProcessPanel({
-	processes,
-	selectedIndex,
-	terminalWidth,
-}: BackgroundProcessPanelProps) {
-	const {t} = useI18n();
-	const {theme} = useTheme();
+export const BackgroundProcessPanel = React.memo(
+	function BackgroundProcessPanel({
+		processes,
+		selectedIndex,
+		terminalWidth,
+	}: BackgroundProcessPanelProps) {
+		const {t} = useI18n();
+		const {theme} = useTheme();
 
-	// Only show running processes first, then completed/failed
-	const sortedProcesses = useMemo(() => {
-		return [...processes].sort((a, b) => {
-			if (a.status === 'running' && b.status !== 'running') return -1;
-			if (a.status !== 'running' && b.status === 'running') return 1;
-			return b.startedAt.getTime() - a.startedAt.getTime();
-		});
-	}, [processes]);
+		// Only show running processes first, then completed/failed
+		const sortedProcesses = useMemo(() => {
+			return [...processes].sort((a, b) => {
+				if (a.status === 'running' && b.status !== 'running') return -1;
+				if (a.status !== 'running' && b.status === 'running') return 1;
+				return b.startedAt.getTime() - a.startedAt.getTime();
+			});
+		}, [processes]);
 
-	// Calculate max command width
-	const maxCommandWidth = Math.max(30, terminalWidth - 35);
+		// Calculate max command width
+		const maxCommandWidth = Math.max(30, terminalWidth - 35);
 
-	// Max visible items in scrollable list
-	const maxVisibleItems = 5;
-	const totalItems = sortedProcesses.length;
+		// Max visible items in scrollable list
+		const maxVisibleItems = 5;
+		const totalItems = sortedProcesses.length;
 
-	// Calculate scroll offset based on selected index
-	let scrollOffset = 0;
-	if (totalItems > maxVisibleItems) {
-		scrollOffset = Math.max(
-			0,
-			Math.min(selectedIndex - 2, totalItems - maxVisibleItems),
+		// Calculate scroll offset based on selected index
+		let scrollOffset = 0;
+		if (totalItems > maxVisibleItems) {
+			scrollOffset = Math.max(
+				0,
+				Math.min(selectedIndex - 2, totalItems - maxVisibleItems),
+			);
+		}
+
+		const visibleProcesses = useMemo(() => {
+			return sortedProcesses.slice(
+				scrollOffset,
+				scrollOffset + maxVisibleItems,
+			);
+		}, [sortedProcesses, scrollOffset, maxVisibleItems]);
+
+		const getStatusText = useCallback(
+			(process: BackgroundProcess) => {
+				if (process.status === 'running') {
+					return t.backgroundProcesses.statusRunning;
+				}
+				if (process.status === 'completed') {
+					return t.backgroundProcesses.statusCompleted;
+				}
+				return t.backgroundProcesses.statusFailed;
+			},
+			[t],
 		);
-	}
 
-	const visibleProcesses = useMemo(() => {
-		return sortedProcesses.slice(scrollOffset, scrollOffset + maxVisibleItems);
-	}, [sortedProcesses, scrollOffset, maxVisibleItems]);
+		const getStatusColor = useCallback(
+			(status: string) => {
+				if (status === 'running') return theme.colors.menuInfo;
+				if (status === 'completed') return theme.colors.success;
+				return theme.colors.error;
+			},
+			[theme],
+		);
 
-	const getStatusText = useCallback((process: BackgroundProcess) => {
-		if (process.status === 'running') {
-			return t.backgroundProcesses.statusRunning;
-		}
-		if (process.status === 'completed') {
-			return t.backgroundProcesses.statusCompleted;
-		}
-		return t.backgroundProcesses.statusFailed;
-	}, [t]);
-
-	const getStatusColor = useCallback((status: string) => {
-		if (status === 'running') return theme.colors.menuInfo;
-		if (status === 'completed') return theme.colors.success;
-		return theme.colors.error;
-	}, [theme]);
-
-	return (
-		<Box
-			flexDirection="column"
-			borderStyle="round"
-			borderColor={theme.colors.menuInfo}
-			paddingX={0}
-			paddingY={0}
-			width={terminalWidth}
-		>
-			<Box paddingTop={1} paddingX={1}>
-				<Text bold color={theme.colors.menuInfo}>
-					{t.backgroundProcesses.title} ({sortedProcesses.length})
-				</Text>
-			</Box>
-
-			{sortedProcesses.length === 0 ? (
-				<Box paddingX={1} paddingY={1}>
-					<Text dimColor>{t.backgroundProcesses.emptyHint}</Text>
+		return (
+			<Box
+				flexDirection="column"
+				borderStyle="round"
+				borderColor={theme.colors.menuInfo}
+				paddingX={0}
+				paddingY={0}
+				width={terminalWidth}
+			>
+				<Box paddingTop={1} paddingX={1}>
+					<Text bold color={theme.colors.menuInfo}>
+						{t.backgroundProcesses.title} ({sortedProcesses.length})
+					</Text>
 				</Box>
-			) : (
-				<>
-					{visibleProcesses.map((process, visibleIndex) => {
-						const actualIndex = scrollOffset + visibleIndex;
-						const isSelected = actualIndex === selectedIndex;
 
-						return (
-							<Box key={process.id} flexDirection="column" paddingY={0}>
-								<Box paddingX={1}>
-									<Text
-										color={isSelected ? theme.colors.warning : undefined}
-										bold={isSelected}
-									>
-										{isSelected ? '> ' : '  '}
-									</Text>
-									<Text dimColor={!isSelected}>
-										{truncateCommand(process.command, maxCommandWidth)}
-									</Text>
+				{sortedProcesses.length === 0 ? (
+					<Box paddingX={1} paddingY={1}>
+						<Text dimColor>{t.backgroundProcesses.emptyHint}</Text>
+					</Box>
+				) : (
+					<>
+						{visibleProcesses.map((process, visibleIndex) => {
+							const actualIndex = scrollOffset + visibleIndex;
+							const isSelected = actualIndex === selectedIndex;
+
+							return (
+								<Box key={process.id} flexDirection="column" paddingY={0}>
+									<Box paddingX={1}>
+										<Text
+											color={isSelected ? theme.colors.warning : undefined}
+											bold={isSelected}
+										>
+											{isSelected ? '> ' : '  '}
+										</Text>
+										<Text dimColor={!isSelected}>
+											{truncateCommand(process.command, maxCommandWidth)}
+										</Text>
+									</Box>
+									<Box paddingX={1}>
+										<Text dimColor>
+											{'    '}PID: {process.pid} |{' '}
+											{t.backgroundProcesses.status}:{' '}
+										</Text>
+										<Text color={getStatusColor(process.status)}>
+											{getStatusText(process)}
+										</Text>
+										<Text dimColor>
+											{' '}
+											| {t.backgroundProcesses.duration}:{' '}
+											{formatDuration(process.startedAt, process.completedAt)}
+										</Text>
+									</Box>
 								</Box>
-								<Box paddingX={1}>
-									<Text dimColor>
-										{'    '}PID: {process.pid} | {t.backgroundProcesses.status}:{' '}
-									</Text>
-									<Text color={getStatusColor(process.status)}>
-										{getStatusText(process)}
-									</Text>
-									<Text dimColor>
-										{' '}
-										| {t.backgroundProcesses.duration}:{' '}
-										{formatDuration(process.startedAt, process.completedAt)}
-									</Text>
-								</Box>
+							);
+						})}
+
+						{totalItems > maxVisibleItems && (
+							<Box paddingX={1} paddingBottom={1}>
+								<Text dimColor>
+									{t.backgroundProcesses.navigateHint} | Showing{' '}
+									{scrollOffset + 1}-
+									{Math.min(scrollOffset + maxVisibleItems, totalItems)} of{' '}
+									{totalItems}
+								</Text>
 							</Box>
-						);
-					})}
+						)}
+					</>
+				)}
 
-					{totalItems > maxVisibleItems && (
-						<Box paddingX={1} paddingBottom={1}>
-							<Text dimColor>
-								{t.backgroundProcesses.navigateHint} | Showing{' '}
-								{scrollOffset + 1}-
-								{Math.min(scrollOffset + maxVisibleItems, totalItems)} of{' '}
-								{totalItems}
-							</Text>
-						</Box>
-					)}
-				</>
-			)}
-
-			{totalItems <= maxVisibleItems && (
-				<Box paddingX={1} paddingY={1}>
-					<Text dimColor>{t.backgroundProcesses.navigateHint}</Text>
-				</Box>
-			)}
-		</Box>
-	);
-});
+				{totalItems <= maxVisibleItems && (
+					<Box paddingX={1} paddingY={1}>
+						<Text dimColor>{t.backgroundProcesses.navigateHint}</Text>
+					</Box>
+				)}
+			</Box>
+		);
+	},
+);

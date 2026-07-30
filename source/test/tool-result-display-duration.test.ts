@@ -51,10 +51,7 @@ test('buildToolResultMessages uses per-tool startedAt/completedAt for parallel t
 	];
 
 	// Even if pending UI stamps a shared batch start for all tools, result.startedAt wins.
-	const pendingStartTimes = new Map<
-		string,
-		number
-	>([
+	const pendingStartTimes = new Map<string, number>([
 		['t1', batchStart],
 		['t2', batchStart],
 		['t3', batchStart],
@@ -75,7 +72,11 @@ test('buildToolResultMessages uses per-tool startedAt/completedAt for parallel t
 	// Group wall-clock = last end - earliest start = 8s, not serial sum 12s.
 	for (const message of messages) {
 		t.is(message.parallelGroupElapsedMs, 8_000);
-		t.true(message.content.includes('(3s)') || message.content.includes('(8s)') || message.content.includes('(1s)'));
+		t.true(
+			message.content.includes('(3s)') ||
+				message.content.includes('(8s)') ||
+				message.content.includes('(1s)'),
+		);
 	}
 	t.true(messages[0]!.content.includes('(3s)'));
 	t.true(messages[1]!.content.includes('(8s)'));
@@ -100,10 +101,7 @@ test('buildToolResultMessages prefers result.startedAt over shared pending batch
 		}),
 	];
 	// Pending UI still has a shared batch start for both.
-	const pendingStartTimes = new Map<
-		string,
-		number
-	>([
+	const pendingStartTimes = new Map<string, number>([
 		['a', batchStart],
 		['b', batchStart],
 	]);

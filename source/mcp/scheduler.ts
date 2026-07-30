@@ -44,7 +44,7 @@ export const mcpTools: MCPTool[] = [
 						type: 'number',
 						description:
 							'Wait duration in seconds. Minimum 1 second, no upper limit. If user specifies a specific time (e.g., "3 PM", "15:30"), use terminal-execute to get current timestamp first, then calculate seconds from now to the target time.',
-						minimum: 1
+						minimum: 1,
 					},
 					description: {
 						type: 'string',

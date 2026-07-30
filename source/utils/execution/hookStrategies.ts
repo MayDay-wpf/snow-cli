@@ -22,9 +22,7 @@ function attachAdditionalContext(
 ): InterpretedHookResult {
 	const extracted = extractAdditionalContext(hookResult);
 	if (extracted.truncated) {
-		logger.warn(
-			'Hook additionalContext exceeded max length and was truncated',
-		);
+		logger.warn('Hook additionalContext exceeded max length and was truncated');
 	}
 	return {
 		...base,

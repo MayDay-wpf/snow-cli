@@ -235,7 +235,10 @@ class CodebaseSearchService {
 							`Reranking complete: ${formattedResults.length} → ${finalResults.length} results`,
 						);
 					} catch (rerankError) {
-						logger.error('Reranking failed, falling back to raw results:', rerankError);
+						logger.error(
+							'Reranking failed, falling back to raw results:',
+							rerankError,
+						);
 						finalResults = formattedResults;
 						reviewFailed = true;
 						removedCount = 0;
@@ -343,7 +346,9 @@ class CodebaseSearchService {
 
 				// If review/reranking failed, return immediately (no point retrying)
 				if (reviewFailed) {
-					logger.info('Review/reranking failed, returning all results without retry');
+					logger.info(
+						'Review/reranking failed, returning all results without retry',
+					);
 
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
@@ -468,7 +473,11 @@ class CodebaseSearchService {
 
 			throw error;
 		} finally {
-			try { db.close(); } catch { /* ignore close errors */ }
+			try {
+				db.close();
+			} catch {
+				/* ignore close errors */
+			}
 		}
 	}
 }

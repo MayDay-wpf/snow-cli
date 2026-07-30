@@ -184,7 +184,11 @@ function shallowEqual<T extends Record<string, unknown>>(
 	if (aKeys.length !== bKeys.length) return false;
 
 	for (const key of aKeys) {
-		if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) return false;
+		if (
+			(a as Record<string, unknown>)[key] !==
+			(b as Record<string, unknown>)[key]
+		)
+			return false;
 	}
 
 	return true;
@@ -263,11 +267,9 @@ export const setTextNodeValue = (node: TextNode, text: string): void => {
  * so we must null-out JS references to prevent accessing freed WASM memory.
  * (Ported from Claude Code's Ink fork)
  */
-export const clearYogaNodeReferences = (
-	node: DOMElement | TextNode,
-): void => {
+export const clearYogaNodeReferences = (node: DOMElement | TextNode): void => {
 	if ('childNodes' in node) {
-		for (const child of (node as DOMElement).childNodes) {
+		for (const child of node.childNodes) {
 			clearYogaNodeReferences(child);
 		}
 	}

@@ -8,6 +8,11 @@ import {
 	sweepPlans,
 } from '../utils/execution/planArchive.js';
 import {parsePlanDocument} from '../utils/execution/planDocument.js';
+import {
+	appendPlanEvidence,
+	getPlanEvidencePath,
+	readPlanEvidence,
+} from '../utils/execution/planEvidence.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -58,6 +63,28 @@ test('archivePlan moves file to dated folder and marks archived', async t => {
 	await t.throwsAsync(() => fs.access(filePath));
 	const archived = await parsePlanDocument(target);
 	t.is(archived.frontmatter.status, 'archived');
+});
+
+test('archivePlan moves JSON acceptance evidence with the plan', async t => {
+	const dir = await makePlanDir();
+	const filePath = await writePlan(dir, 'evidence.md', 'completed');
+	await appendPlanEvidence(filePath, {
+		phase: 1,
+		status: 'passed',
+		startedAt: '2026-07-29T00:00:00.000Z',
+		completedAt: '2026-07-29T00:00:01.000Z',
+		durationMs: 1000,
+		phaseChecks: [],
+		globalAcceptance: [],
+		manualConfirmations: [],
+		workspace: {available: true, changedFiles: [], outOfScopeFiles: []},
+		summary: 'passed',
+	});
+
+	const target = await archivePlan(await parsePlanDocument(filePath), dir);
+	await t.throwsAsync(async () => fs.access(getPlanEvidencePath(filePath)));
+	await fs.access(getPlanEvidencePath(target));
+	t.is((await readPlanEvidence(target)).entries.length, 1);
 });
 
 test('archivePlan can mark abandoned final status', async t => {

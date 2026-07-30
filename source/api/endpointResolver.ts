@@ -72,7 +72,10 @@ function normalizeGeminiModelName(modelName: string): string {
 	return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
 }
 
-function isFullEndpointForKind(baseUrl: string, kind: ApiEndpointKind): boolean {
+function isFullEndpointForKind(
+	baseUrl: string,
+	kind: ApiEndpointKind,
+): boolean {
 	const pathname = getNormalizedPathname(baseUrl);
 
 	if (!pathname) {
@@ -124,7 +127,9 @@ function getKnownEndpointSuffix(pathname: string): string | undefined {
 		return ENDPOINT_SUFFIXES.models;
 	}
 
-	const geminiEndpointMatch = pathname.match(/\/models\/[^/]+:streamGenerateContent$/);
+	const geminiEndpointMatch = pathname.match(
+		/\/models\/[^/]+:streamGenerateContent$/,
+	);
 	return geminiEndpointMatch?.[0];
 }
 

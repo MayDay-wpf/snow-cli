@@ -207,7 +207,9 @@ function readGitRemote(projectRoot: string): string | undefined {
 
 	try {
 		const content = fs.readFileSync(gitConfigPath, 'utf-8');
-		const originSection = /\[remote "origin"\]([\s\S]*?)(?=\n\[|$)/.exec(content);
+		const originSection = /\[remote "origin"\]([\s\S]*?)(?=\n\[|$)/.exec(
+			content,
+		);
 		const originUrl = originSection?.[1]
 			? /^\s*url\s*=\s*(.+)$/im.exec(originSection[1])?.[1]
 			: undefined;
@@ -358,7 +360,9 @@ function rememberProjectIdentity(identity: ProjectIdentity): void {
  * 同时自动发现旧版本基于绝对路径生成的项目目录别名。这样用户已经移动工作目录后，
  * 新版本仍能直接读取旧历史与会话，无需手动迁移。
  */
-export function resolveProjectIdentity(projectPath = getProjectPath()): ProjectIdentity {
+export function resolveProjectIdentity(
+	projectPath = getProjectPath(),
+): ProjectIdentity {
 	const resolvedProjectPath = path.resolve(projectPath);
 	const projectRoot = findProjectRoot(resolvedProjectPath);
 	const packageJson = readPackageJson(projectRoot);

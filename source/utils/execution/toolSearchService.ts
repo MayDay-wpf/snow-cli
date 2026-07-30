@@ -49,9 +49,7 @@ class ToolSearchService {
 						this.externalServices.push({
 							serviceName: svc.serviceName,
 							toolNames: enabledTools.map(t => t.name),
-							toolDescriptions: enabledTools.map(
-								t => t.description || t.name,
-							),
+							toolDescriptions: enabledTools.map(t => t.description || t.name),
 						});
 					}
 				}
@@ -148,7 +146,11 @@ class ToolSearchService {
 			(r, i) => `${i + 1}. **${r.toolName}** - ${r.description}`,
 		);
 
-		const textResult = `Found ${results.length} tool(s) matching "${query}" (now available for use):\n\n${lines.join('\n\n')}\n\nThese tools are now loaded and ready to call directly.`;
+		const textResult = `Found ${
+			results.length
+		} tool(s) matching "${query}" (now available for use):\n\n${lines.join(
+			'\n\n',
+		)}\n\nThese tools are now loaded and ready to call directly.`;
 		const matchedToolNames = results.map(r => r.toolName);
 
 		return {textResult, matchedToolNames};
@@ -264,12 +266,14 @@ class ToolSearchService {
 						return short;
 					})
 					.join('; ');
-				const extra = svc.toolNames.length > 3 ? ` +${svc.toolNames.length - 3} more` : '';
+				const extra =
+					svc.toolNames.length > 3 ? ` +${svc.toolNames.length - 3} more` : '';
 				return `"${svc.serviceName}" (${toolBrief}${extra})`;
 			});
 			description +=
-				` Additionally, the following third-party MCP services are loaded and searchable: ${externalSummaries.join(', ')}. ` +
-				`Search by their service name to discover their tools.`;
+				` Additionally, the following third-party MCP services are loaded and searchable: ${externalSummaries.join(
+					', ',
+				)}. ` + `Search by their service name to discover their tools.`;
 		}
 
 		let queryDescription =
@@ -277,7 +281,9 @@ class ToolSearchService {
 			'Examples: "filesystem", "code search", "edit file", "terminal execute", "todo", "websearch", "snow-docs"';
 
 		if (this.externalServices.length > 0) {
-			const extNames = this.externalServices.map(s => `"${s.serviceName}"`).join(', ');
+			const extNames = this.externalServices
+				.map(s => `"${s.serviceName}"`)
+				.join(', ');
 			queryDescription += `. Third-party services: ${extNames}`;
 		}
 

@@ -384,7 +384,6 @@ ${role ? `Your role: ${role}` : ''}
 			return {resultContent: textContent, editDiffData, images};
 		};
 
-		// eslint-disable-next-line no-constant-condition
 		while (true) {
 			if (abortSignal?.aborted) {
 				return {
@@ -426,6 +425,124 @@ ${role ? `Your role: ${role}` : ''}
 			const config = getSnowConfig();
 			const model = config.advancedModel || 'gpt-5';
 			const currentSession = sessionManager.getCurrentSession();
+
+			// Compress only history completed by the previous iteration. Running
+			// here keeps assistant tool calls and their outputs atomic.
+			if (
+				latestTotalTokens > 0 &&
+				config.maxContextTokens &&
+				shouldCompressSubAgentContext(
+					latestTotalTokens,
+					config.maxContextTokens,
+				)
+			) {
+				const ctxPercentage = getContextPercentage(
+					latestTotalTokens,
+					config.maxContextTokens,
+				);
+
+				if (onMessage) {
+					onMessage({
+						type: 'sub_agent_message',
+						agentId: `teammate-${memberId}`,
+						agentName: memberName,
+						message: {
+							type: 'context_compressing',
+							percentage: Math.round(ctxPercentage),
+						},
+					});
+				}
+
+				await compressionCoordinator.acquireLock(instanceId);
+				try {
+					const COMPRESS_MAX_RETRIES = 3;
+					const COMPRESS_RETRY_BASE_DELAY = 1000;
+					let compressionResult;
+
+					for (
+						let retryAttempt = 0;
+						retryAttempt <= COMPRESS_MAX_RETRIES;
+						retryAttempt++
+					) {
+						try {
+							compressionResult = await compressSubAgentContext(
+								messages,
+								latestTotalTokens,
+								config.maxContextTokens,
+								{
+									model,
+									requestMethod: config.requestMethod,
+									maxTokens: config.maxTokens,
+								},
+							);
+							break;
+						} catch (retryError) {
+							if (retryAttempt < COMPRESS_MAX_RETRIES) {
+								const retryDelay =
+									COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
+								if (onMessage) {
+									onMessage({
+										type: 'sub_agent_message',
+										agentId: `teammate-${memberId}`,
+										agentName: memberName,
+										message: {
+											type: 'context_compress_retrying',
+											attempt: retryAttempt + 1,
+											maxRetries: COMPRESS_MAX_RETRIES,
+											error:
+												retryError instanceof Error
+													? retryError.message
+													: String(retryError),
+										},
+									});
+								}
+								console.warn(
+									`[Teammate:${memberName}] Compression failed, retrying (${
+										retryAttempt + 1
+									}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
+									retryError,
+								);
+								await new Promise(resolve => setTimeout(resolve, retryDelay));
+								continue;
+							}
+							throw retryError;
+						}
+					}
+
+					if (compressionResult?.compressed) {
+						messages.length = 0;
+						messages.push(...compressionResult.messages);
+						if (compressionResult.afterTokensEstimate) {
+							latestTotalTokens = compressionResult.afterTokensEstimate;
+						}
+
+						if (onMessage) {
+							onMessage({
+								type: 'sub_agent_message',
+								agentId: `teammate-${memberId}`,
+								agentName: memberName,
+								message: {
+									type: 'context_compressed',
+									beforeTokens: compressionResult.beforeTokens,
+									afterTokensEstimate: compressionResult.afterTokensEstimate,
+								},
+							});
+						}
+
+						console.log(
+							`[Teammate:${memberName}] Context compressed: ` +
+								`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+						);
+					}
+				} catch (compressError) {
+					console.error(
+						`[Teammate:${memberName}] Context compression failed after retries:`,
+						compressError,
+					);
+				} finally {
+					compressionCoordinator.releaseLock(instanceId);
+				}
+			}
 
 			const stream =
 				config.requestMethod === 'anthropic'
@@ -570,141 +687,6 @@ ${role ? `Your role: ${role}` : ''}
 				if (toolCalls.length > 0) assistantMessage.tool_calls = toolCalls;
 				messages.push(assistantMessage);
 				finalResponse = currentContent;
-			}
-
-			// Context compression — acquire the coordinator lock so the main flow
-			// and other participants wait while this teammate's context is rebuilt.
-			let justCompressed = false;
-			if (latestTotalTokens > 0 && config.maxContextTokens) {
-				if (
-					shouldCompressSubAgentContext(
-						latestTotalTokens,
-						config.maxContextTokens,
-					)
-				) {
-					const ctxPercentage = getContextPercentage(
-						latestTotalTokens,
-						config.maxContextTokens,
-					);
-
-					if (onMessage) {
-						onMessage({
-							type: 'sub_agent_message',
-							agentId: `teammate-${memberId}`,
-							agentName: memberName,
-							message: {
-								type: 'context_compressing',
-								percentage: Math.round(ctxPercentage),
-							},
-						});
-					}
-
-					await compressionCoordinator.acquireLock(instanceId);
-					try {
-						const COMPRESS_MAX_RETRIES = 3;
-						const COMPRESS_RETRY_BASE_DELAY = 1000;
-						let compressionResult;
-
-						for (
-							let retryAttempt = 0;
-							retryAttempt <= COMPRESS_MAX_RETRIES;
-							retryAttempt++
-						) {
-							try {
-								compressionResult = await compressSubAgentContext(
-									messages,
-									latestTotalTokens,
-									config.maxContextTokens,
-									{
-										model,
-										requestMethod: config.requestMethod,
-										maxTokens: config.maxTokens,
-									},
-								);
-								break;
-							} catch (retryError) {
-								if (retryAttempt < COMPRESS_MAX_RETRIES) {
-									const retryDelay =
-										COMPRESS_RETRY_BASE_DELAY * Math.pow(2, retryAttempt);
-									if (onMessage) {
-										onMessage({
-											type: 'sub_agent_message',
-											agentId: `teammate-${memberId}`,
-											agentName: memberName,
-											message: {
-												type: 'context_compress_retrying',
-												attempt: retryAttempt + 1,
-												maxRetries: COMPRESS_MAX_RETRIES,
-												error:
-													retryError instanceof Error
-														? retryError.message
-														: String(retryError),
-											},
-										});
-									}
-									console.warn(
-										`[Teammate:${memberName}] Compression failed, retrying (${
-											retryAttempt + 1
-										}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
-										retryError,
-									);
-									await new Promise(resolve => setTimeout(resolve, retryDelay));
-									continue;
-								}
-								throw retryError;
-							}
-						}
-
-						if (compressionResult?.compressed) {
-							messages.length = 0;
-							messages.push(...compressionResult.messages);
-							justCompressed = true;
-							if (compressionResult.afterTokensEstimate) {
-								latestTotalTokens = compressionResult.afterTokensEstimate;
-							}
-
-							if (onMessage) {
-								onMessage({
-									type: 'sub_agent_message',
-									agentId: `teammate-${memberId}`,
-									agentName: memberName,
-									message: {
-										type: 'context_compressed',
-										beforeTokens: compressionResult.beforeTokens,
-										afterTokensEstimate: compressionResult.afterTokensEstimate,
-									},
-								});
-							}
-
-							console.log(
-								`[Teammate:${memberName}] Context compressed: ` +
-									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
-							);
-						}
-					} catch (compressError) {
-						console.error(
-							`[Teammate:${memberName}] Context compression failed after retries:`,
-							compressError,
-						);
-					} finally {
-						compressionCoordinator.releaseLock(instanceId);
-					}
-				}
-			}
-
-			if (justCompressed && toolCalls.length === 0) {
-				while (
-					messages.length > 0 &&
-					messages[messages.length - 1]?.role === 'assistant'
-				) {
-					messages.pop();
-				}
-				messages.push({
-					role: 'user',
-					content:
-						'[System] Context has been auto-compressed. Your task is NOT finished. Continue working.',
-				});
-				continue;
 			}
 
 			// No tool calls = AI forgot to call wait_for_messages. Prompt it to do so.

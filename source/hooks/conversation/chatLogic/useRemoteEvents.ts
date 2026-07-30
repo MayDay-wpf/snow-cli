@@ -321,7 +321,7 @@ export function useRemoteEvents(
 
 					const compressionResult = await performAutoCompression(
 						currentSession?.id,
-						(status) => {
+						status => {
 							props.onCompressionStatus?.(status);
 						},
 					);

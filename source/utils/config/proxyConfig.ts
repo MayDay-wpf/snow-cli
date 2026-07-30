@@ -15,6 +15,7 @@ export type SearchEngineId = string;
 export interface ProxyConfig {
 	enabled: boolean;
 	port: number;
+	host?: string; // Proxy host (IP or hostname), defaults to DEFAULT_PROXY_HOST
 	browserPath?: string; // Custom browser executable path
 	browserDebugPort?: number; // Remote debugging port for WSL mode (default: 9222)
 	/**
@@ -24,12 +25,29 @@ export interface ProxyConfig {
 	searchEngine?: SearchEngineId;
 }
 
+/** Default proxy host used when the user does not provide one. */
+export const DEFAULT_PROXY_HOST = '127.0.0.1';
+
 const DEFAULT_PROXY_CONFIG: ProxyConfig = {
 	enabled: false,
 	port: 7890,
+	host: DEFAULT_PROXY_HOST,
 	browserDebugPort: 9222,
 	searchEngine: 'duckduckgo',
 };
+
+/**
+ * Sanitizes a proxy host string: strips protocol prefixes, trims whitespace,
+ * and falls back to {@link DEFAULT_PROXY_HOST} when the result is empty.
+ * Use this wherever a proxy URL is constructed from user-supplied config.
+ */
+export function sanitizeProxyHost(host: string | undefined): string {
+	if (!host) {
+		return DEFAULT_PROXY_HOST;
+	}
+
+	return host.trim().replace(/^https?:\/\//i, '') || DEFAULT_PROXY_HOST;
+}
 
 const CONFIG_DIR = join(homedir(), '.snow');
 const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');

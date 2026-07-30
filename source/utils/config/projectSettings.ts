@@ -11,6 +11,9 @@ export interface PlanAcceptanceSettings {
 	commands?: string[];
 	runBuild?: boolean;
 	runDiagnostics?: boolean;
+	policy?: 'standard' | 'strict';
+	allowedCommandPrefixes?: string[];
+	commandTimeoutMs?: number;
 	/** Preferred package manager when no lockfile is present. */
 	preferPackageManager?: PlanAcceptancePackageManager;
 	/** Fallback commands when no build script / explicit commands are set. */
@@ -242,6 +245,17 @@ export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
 				(c): c is string => typeof c === 'string' && c.trim().length > 0,
 		  )
 		: undefined;
+	const allowedCommandPrefixes = Array.isArray(value.allowedCommandPrefixes)
+		? value.allowedCommandPrefixes.filter(
+				(prefix): prefix is string =>
+					typeof prefix === 'string' && prefix.trim().length > 0,
+		  )
+		: undefined;
+	const commandTimeoutMs =
+		typeof value.commandTimeoutMs === 'number' &&
+		Number.isFinite(value.commandTimeoutMs)
+			? Math.min(900_000, Math.max(1000, Math.floor(value.commandTimeoutMs)))
+			: undefined;
 	return {
 		commands: Array.isArray(value.commands)
 			? value.commands.filter(
@@ -250,6 +264,12 @@ export function getPlanAcceptanceSettings(): PlanAcceptanceSettings {
 			: undefined,
 		runBuild: value.runBuild !== false,
 		runDiagnostics: value.runDiagnostics !== false,
+		policy: value.policy === 'strict' ? 'strict' : 'standard',
+		allowedCommandPrefixes:
+			allowedCommandPrefixes && allowedCommandPrefixes.length > 0
+				? allowedCommandPrefixes
+				: undefined,
+		commandTimeoutMs,
 		preferPackageManager,
 		fallbackCommands:
 			fallbackCommands && fallbackCommands.length > 0

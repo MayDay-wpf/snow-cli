@@ -9,18 +9,18 @@ export {
 	type ToolResultSummaryContext,
 } from '../../../utils/ui/toolResultSummary.js';
 
-interface ToolResultPreviewProps {
+type ToolResultPreviewProps = {
 	toolName: string;
 	result: string;
 	maxLines?: number;
 	isSubAgentInternal?: boolean; // Whether this is a sub-agent internal tool
-}
+};
 
 /**
  * Remove ANSI escape codes from text to prevent style leakage
  */
 function removeAnsiCodes(text: string): string {
-	return text.replace(/\x1b\[[0-9;]*m/g, '');
+	return text.replace(/\u001B\[[\d;]*m/g, '');
 }
 
 /**
@@ -91,7 +91,7 @@ function renderSubAgentPreview(data: any, _maxLines: number, theme: Theme) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ Sub-agent completed ({lines.length}{' '}
 				{lines.length === 1 ? 'line' : 'lines'} output)
 			</Text>
@@ -126,7 +126,7 @@ function renderTerminalExecutePreview(
 			<Box flexDirection="column" marginLeft={2}>
 				{data.command && (
 					<Box flexDirection="column">
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text dimColor color={theme.colors.menuSecondary}>
 							├─ command:
 						</Text>
 						<Box marginLeft={2}>
@@ -135,15 +135,15 @@ function renderTerminalExecutePreview(
 					</Box>
 				)}
 				<Text
-					color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 					dimColor
+					color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 				>
 					├─ exitCode: {data.exitCode}
 				</Text>
 
 				{hasStdout && (
 					<Box flexDirection="column">
-						<Text color={theme.colors.menuSecondary} dimColor>
+						<Text dimColor color={theme.colors.menuSecondary}>
 							├─ stdout:
 						</Text>
 						<Box marginLeft={2} flexDirection="column">
@@ -153,7 +153,7 @@ function renderTerminalExecutePreview(
 								</Text>
 							))}
 							{stdoutPreview.truncated && (
-								<Text color={theme.colors.menuSecondary} dimColor>
+								<Text dimColor color={theme.colors.menuSecondary}>
 									…
 								</Text>
 							)}
@@ -164,8 +164,8 @@ function renderTerminalExecutePreview(
 				{hasStderr && (
 					<Box flexDirection="column">
 						<Text
-							color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 							dimColor
+							color={hasError ? theme.colors.error : theme.colors.menuSecondary}
 						>
 							└─ stderr:
 						</Text>
@@ -181,7 +181,7 @@ function renderTerminalExecutePreview(
 								</Text>
 							))}
 							{stderrPreview.truncated && (
-								<Text color={theme.colors.menuSecondary} dimColor>
+								<Text dimColor color={theme.colors.menuSecondary}>
 									…
 								</Text>
 							)}
@@ -200,7 +200,7 @@ function renderTerminalExecutePreview(
 		if (!hasStdout) {
 			return (
 				<Box marginLeft={2}>
-					<Text color={theme.colors.success} dimColor>
+					<Text dimColor color={theme.colors.success}>
 						└─ ✓ Exit code: {data.exitCode}
 					</Text>
 				</Box>
@@ -210,18 +210,18 @@ function renderTerminalExecutePreview(
 		return (
 			<Box flexDirection="column" marginLeft={2}>
 				<Box flexDirection="column">
-					<Text color={theme.colors.success} dimColor>
+					<Text dimColor color={theme.colors.success}>
 						├─ command:
 					</Text>
 					<Box marginLeft={2}>
 						<Text color={theme.colors.success}>{data.command}</Text>
 					</Box>
 				</Box>
-				<Text color={theme.colors.success} dimColor>
+				<Text dimColor color={theme.colors.success}>
 					├─ exitCode: {data.exitCode} ✓
 				</Text>
 				<Box flexDirection="column">
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						├─ stdout:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
@@ -232,7 +232,7 @@ function renderTerminalExecutePreview(
 						))}
 					</Box>
 				</Box>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ executedAt: {data.executedAt}
 				</Text>
 			</Box>
@@ -244,7 +244,7 @@ function renderTerminalExecutePreview(
 		<Box flexDirection="column" marginLeft={2}>
 			{/* Command */}
 			<Box flexDirection="column">
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					├─ command:
 				</Text>
 				<Box marginLeft={2}>
@@ -253,14 +253,14 @@ function renderTerminalExecutePreview(
 			</Box>
 
 			{/* Exit code with color indication */}
-			<Text color={theme.colors.error} bold>
+			<Text bold color={theme.colors.error}>
 				├─ exitCode: {data.exitCode} FAILED
 			</Text>
 
 			{/* Stdout - show completely if present */}
 			{hasStdout && (
 				<Box flexDirection="column">
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						├─ stdout:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
@@ -276,7 +276,7 @@ function renderTerminalExecutePreview(
 			{/* Stderr - show completely with red color if present */}
 			{hasStderr && (
 				<Box flexDirection="column">
-					<Text color={theme.colors.error} dimColor>
+					<Text dimColor color={theme.colors.error}>
 						├─ stderr:
 					</Text>
 					<Box marginLeft={2} flexDirection="column">
@@ -291,7 +291,7 @@ function renderTerminalExecutePreview(
 
 			{/* Execution time if available */}
 			{data.executedAt && (
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ executedAt: {data.executedAt}
 				</Text>
 			)}
@@ -315,7 +315,7 @@ function renderReadPreview(
 	if (isSubAgentInternal) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Read {readLineCount} lines
 					{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
 				</Text>
@@ -331,7 +331,7 @@ function renderReadPreview(
 
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ Read {readLineCount} lines{rangeInfo}
 				{totalLines > readLineCount ? ` of ${totalLines} total` : ''}
 			</Text>
@@ -348,7 +348,7 @@ function renderACEPreview(
 	// 聚合后的统一工具 ace-search 通过 result shape 推断子动作
 	const isObject = data && typeof data === 'object' && !Array.isArray(data);
 
-	// text_search: 数组，元素含 content + line
+	// Text_search: 数组，元素含 content + line
 	if (
 		Array.isArray(data) &&
 		data.length > 0 &&
@@ -358,14 +358,14 @@ function renderACEPreview(
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Found {data.length} {data.length === 1 ? 'match' : 'matches'}
 				</Text>
 			</Box>
 		);
 	}
 
-	// find_references: 数组，元素含 referenceType
+	// Find_references: 数组，元素含 referenceType
 	if (
 		Array.isArray(data) &&
 		data.length > 0 &&
@@ -374,7 +374,7 @@ function renderACEPreview(
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Found {data.length}{' '}
 					{data.length === 1 ? 'reference' : 'references'}
 				</Text>
@@ -382,7 +382,7 @@ function renderACEPreview(
 		);
 	}
 
-	// file_outline: 数组（可空），元素含 name + type，但不含 referenceType / content
+	// File_outline: 数组（可空），元素含 name + type，但不含 referenceType / content
 	if (
 		Array.isArray(data) &&
 		(data.length === 0 ||
@@ -395,15 +395,16 @@ function renderACEPreview(
 		if (data.length === 0) {
 			return (
 				<Box marginLeft={2}>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						└─ No symbols in file
 					</Text>
 				</Box>
 			);
 		}
+
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Found {data.length} {data.length === 1 ? 'symbol' : 'symbols'} in
 					file
 				</Text>
@@ -411,7 +412,7 @@ function renderACEPreview(
 		);
 	}
 
-	// semantic_search: 对象，含 symbols / references + totalResults
+	// Semantic_search: 对象，含 symbols / references + totalResults
 	if (
 		isObject &&
 		('symbols' in data || 'references' in data) &&
@@ -422,19 +423,20 @@ function renderACEPreview(
 		if (totalResults === 0) {
 			return (
 				<Box marginLeft={2}>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						└─ No results found
 					</Text>
 				</Box>
 			);
 		}
+
 		return (
 			<Box flexDirection="column" marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					├─ {data.symbols?.length || 0}{' '}
 					{(data.symbols?.length || 0) === 1 ? 'symbol' : 'symbols'}
 				</Text>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ {data.references?.length || 0}{' '}
 					{(data.references?.length || 0) === 1 ? 'reference' : 'references'}
 				</Text>
@@ -442,7 +444,7 @@ function renderACEPreview(
 		);
 	}
 
-	// find_definition: 对象，含 name + filePath + line（且不是 semantic_search）
+	// Find_definition: 对象，含 name + filePath + line（且不是 semantic_search）
 	if (
 		isObject &&
 		'name' in data &&
@@ -452,7 +454,7 @@ function renderACEPreview(
 	) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Found {data.type} {data.name} at {data.filePath}:{data.line}
 				</Text>
 			</Box>
@@ -463,7 +465,7 @@ function renderACEPreview(
 	if (Array.isArray(data) && data.length === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ No matches found
 				</Text>
 			</Box>
@@ -478,7 +480,7 @@ function renderCreatePreview(data: any, theme: Theme) {
 	// Simple success message for create/write operations
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ {data.message || data}
 			</Text>
 		</Box>
@@ -489,18 +491,18 @@ function renderEditSearchPreview(data: any, theme: Theme) {
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{data.message && (
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					├─ {data.message}
 				</Text>
 			)}
 			{data.matchLocation && (
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					├─ Match: lines {data.matchLocation.startLine}-
 					{data.matchLocation.endLine}
 				</Text>
 			)}
 			{data.totalLines && (
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ Total lines: {data.totalLines}
 				</Text>
 			)}
@@ -512,7 +514,7 @@ function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 	if (!data.results || data.results.length === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ No results for "{data.query}"
 				</Text>
 			</Box>
@@ -521,7 +523,7 @@ function renderWebSearchPreview(data: any, _maxLines: number, theme: Theme) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ Found {data.totalResults || data.results.length} results for "
 				{data.query}"
 			</Text>
@@ -541,7 +543,7 @@ function renderWebFetchPreview(data: any, theme: Theme) {
 			: '';
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ Fetched {contentLength} characters from {data.title || 'page'}
 				{summaryNote}
 			</Text>
@@ -563,15 +565,15 @@ function renderGenericPreview(data: any, maxLines: number, theme: Theme) {
 	return (
 		<Box flexDirection="column" marginLeft={2}>
 			{entries.map(([key, value], idx) => {
-				const valueStr =
+				const valueString =
 					typeof value === 'string'
 						? value.slice(0, 20) + (value.length > 20 ? '...' : '')
 						: JSON.stringify(value).slice(0, 60);
 
 				return (
-					<Text key={idx} color={theme.colors.menuSecondary} dimColor>
+					<Text key={idx} dimColor color={theme.colors.menuSecondary}>
 						{idx === entries.length - 1 ? '└─ ' : '├─ '}
-						{key}: {valueStr}
+						{key}: {valueString}
 					</Text>
 				);
 			})}
@@ -602,7 +604,7 @@ function renderTodoPreview(
 		) {
 			return (
 				<Box marginLeft={2}>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						└─ {textContent}
 					</Text>
 				</Box>
@@ -612,11 +614,11 @@ function renderTodoPreview(
 		// Try to parse JSON
 		try {
 			todoData = JSON.parse(textContent);
-		} catch (e) {
+		} catch {
 			// If parsing fails, show the raw text
 			return (
 				<Box marginLeft={2}>
-					<Text color={theme.colors.menuSecondary} dimColor>
+					<Text dimColor color={theme.colors.menuSecondary}>
 						└─ {textContent}
 					</Text>
 				</Box>
@@ -628,7 +630,7 @@ function renderTodoPreview(
 	if (!todoData.todos || !Array.isArray(todoData.todos)) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ {todoData.message || 'No TODO list'}
 				</Text>
 			</Box>
@@ -644,7 +646,7 @@ function renderTodoPreview(
 
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ TODO: {pendingTodos} pending, {completedTodos} completed (total:{' '}
 				{totalTodos})
 			</Text>
@@ -658,7 +660,7 @@ function renderIdeDiagnosticsPreview(data: any, theme: Theme) {
 	if (!data.diagnostics || !Array.isArray(data.diagnostics)) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ No diagnostics data
 				</Text>
 			</Box>
@@ -669,7 +671,7 @@ function renderIdeDiagnosticsPreview(data: any, theme: Theme) {
 	if (diagnosticsCount === 0) {
 		return (
 			<Box marginLeft={2}>
-				<Text color={theme.colors.menuSecondary} dimColor>
+				<Text dimColor color={theme.colors.menuSecondary}>
 					└─ No diagnostics found
 				</Text>
 			</Box>
@@ -692,7 +694,7 @@ function renderIdeDiagnosticsPreview(data: any, theme: Theme) {
 
 	return (
 		<Box marginLeft={2}>
-			<Text color={theme.colors.menuSecondary} dimColor>
+			<Text dimColor color={theme.colors.menuSecondary}>
 				└─ Found {diagnosticsCount} diagnostic(s)
 				{errorCount > 0 && ` (${errorCount} error${errorCount > 1 ? 's' : ''})`}
 				{warningCount > 0 &&

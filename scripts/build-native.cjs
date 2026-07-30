@@ -1,5 +1,3 @@
-/* eslint-disable unicorn/prefer-module */
-
 const {execFileSync} = require('child_process');
 const {copyFileSync, existsSync, mkdirSync, statSync} = require('fs');
 const {join} = require('path');

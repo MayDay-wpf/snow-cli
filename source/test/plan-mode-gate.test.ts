@@ -481,6 +481,56 @@ test('maybeApprovePlanFromAskUser approves valid plan and persists frontmatter',
 	t.false(getPlanApproved(sessionId));
 });
 
+test('clarification purpose never unlocks plan execution', async t => {
+	const sessionId = 's-clarification';
+	const cwd = await makePlanDir(
+		VALID_PLAN.replace('session: s-approve', `session: ${sessionId}`),
+	);
+
+	t.false(
+		isPlanApprovalAnswer({
+			question: 'Should this implementation plan use the existing API?',
+			selected: 'Yes - Execute the entire plan',
+			purpose: 'clarification',
+		}),
+	);
+
+	const result = await maybeApprovePlanFromAskUser({
+		planMode: true,
+		sessionId,
+		cwd,
+		question: 'Should this implementation plan use the existing API?',
+		selected: 'Yes',
+		purpose: 'clarification',
+	});
+	t.false(result.approved);
+	t.false(getPlanApproved(sessionId));
+});
+
+test('explicit approval and resume purposes remain distinct', t => {
+	t.true(
+		isPlanApprovalAnswer({
+			question: 'Plan ready. Proceed?',
+			selected: 'Yes - Execute the entire plan',
+			purpose: 'plan_approval',
+		}),
+	);
+	t.false(
+		isPlanApprovalAnswer({
+			question: 'Resume unfinished plan?',
+			selected: 'Yes',
+			purpose: 'plan_resume',
+		}),
+	);
+	t.true(
+		isPlanApprovalAnswer({
+			question: 'Resume unfinished plan?',
+			selected: 'Continue this plan',
+			purpose: 'plan_resume',
+		}),
+	);
+});
+
 test('maybeApprovePlanFromAskUser rejects approval without a plan file', async t => {
 	const sessionId = 's-noplan';
 	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-gate-empty-'));

@@ -11,16 +11,16 @@ const config = {
 	output: {
 		path: path.resolve(__dirname, 'dist'),
 		filename: 'extension.js',
-		libraryTarget: 'commonjs2'
+		libraryTarget: 'commonjs2',
 	},
 	externals: {
 		vscode: 'commonjs vscode',
 		'node-pty': 'commonjs node-pty',
 		bufferutil: 'commonjs bufferutil',
-		'utf-8-validate': 'commonjs utf-8-validate'
+		'utf-8-validate': 'commonjs utf-8-validate',
 	},
 	resolve: {
-		extensions: ['.ts', '.js']
+		extensions: ['.ts', '.js'],
 	},
 	module: {
 		rules: [
@@ -29,16 +29,16 @@ const config = {
 				exclude: /node_modules/,
 				use: [
 					{
-						loader: 'ts-loader'
-					}
-				]
-			}
-		]
+						loader: 'ts-loader',
+					},
+				],
+			},
+		],
 	},
 	devtool: 'nosources-source-map',
 	infrastructureLogging: {
-		level: 'log'
-	}
+		level: 'log',
+	},
 };
 
 module.exports = config;

@@ -8,7 +8,12 @@ export class UserInteractionNeededError extends Error {
 	public readonly toolCallId: string;
 	public readonly multiSelect: boolean;
 
-	constructor(question: string, options: string[], toolCallId: string = '', multiSelect: boolean = false) {
+	constructor(
+		question: string,
+		options: string[],
+		toolCallId: string = '',
+		multiSelect: boolean = false,
+	) {
 		super('User interaction needed');
 		this.name = 'UserInteractionNeededError';
 		this.question = question;

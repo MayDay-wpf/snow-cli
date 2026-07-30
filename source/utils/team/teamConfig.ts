@@ -48,9 +48,7 @@ export function createTeam(
 ): TeamConfig {
 	const existing = getTeam(teamName);
 	if (existing) {
-		throw new Error(
-			`Team "${teamName}" already exists.`,
-		);
+		throw new Error(`Team "${teamName}" already exists.`);
 	}
 
 	const teamDir = getTeamDir(teamName);
@@ -99,7 +97,10 @@ export function getActiveTeam(): TeamConfig | null {
 	return null;
 }
 
-export function updateTeam(teamName: string, updates: Partial<TeamConfig>): TeamConfig | null {
+export function updateTeam(
+	teamName: string,
+	updates: Partial<TeamConfig>,
+): TeamConfig | null {
 	const team = getTeam(teamName);
 	if (!team) return null;
 
@@ -164,7 +165,10 @@ export function removeMember(teamName: string, memberId: string): boolean {
 	return true;
 }
 
-export function getMember(teamName: string, memberId: string): TeamMember | null {
+export function getMember(
+	teamName: string,
+	memberId: string,
+): TeamMember | null {
 	const team = getTeam(teamName);
 	if (!team) return null;
 	return team.members.find(m => m.id === memberId) || null;

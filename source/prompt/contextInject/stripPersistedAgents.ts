@@ -124,7 +124,7 @@ export function resolvePersistedUserContent(msg: {
 		typeof msg.content === 'string'
 			? msg.content
 			: msg.content == null
-				? ''
-				: String(msg.content);
+			? ''
+			: String(msg.content);
 	return stripPersistedAgentsContext(content);
 }

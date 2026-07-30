@@ -65,7 +65,11 @@ export class SidebarTerminalSession {
 		size: SidebarTerminalSize | undefined,
 		handlers: SidebarTerminalSessionStartHandlers,
 		getStartupCommand: StartupCommandProvider,
-	): {started: boolean; processNonce: number; startupCommand: string | undefined} {
+	): {
+		started: boolean;
+		processNonce: number;
+		startupCommand: string | undefined;
+	} {
 		const processNonce = ++this.processNonce;
 		this.lastExitCode = undefined;
 		if (typeof this.startupCommand === 'undefined') {
@@ -78,9 +82,8 @@ export class SidebarTerminalSession {
 					handlers.onData(data);
 				},
 				onExit: code => {
-					const suppressed = this.suppressedExitProcessNonces.delete(
-						processNonce,
-					);
+					const suppressed =
+						this.suppressedExitProcessNonces.delete(processNonce);
 					if (!suppressed) {
 						this.lastExitCode = code;
 					}

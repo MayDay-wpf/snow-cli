@@ -135,10 +135,8 @@ function PickerListInner<T>({
 						) : (
 							<Text color={theme.colors.menuSecondary} dimColor>
 								↑↓ to scroll
-								{hiddenAboveCount > 0 &&
-									` · ${hiddenAboveCount} more above`}
-								{hiddenBelowCount > 0 &&
-									` · ${hiddenBelowCount} more below`}
+								{hiddenAboveCount > 0 && ` · ${hiddenAboveCount} more above`}
+								{hiddenBelowCount > 0 && ` · ${hiddenBelowCount} more below`}
 							</Text>
 						)}
 					</Box>

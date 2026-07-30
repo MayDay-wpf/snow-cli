@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {getPlanDir} from './planPaths.js';
+import {measurePlanOperation} from './plan-metrics.js';
 
 export const PLAN_OWNER_LOCK_ENABLED = true;
 
@@ -264,7 +265,7 @@ export type AcquirePlanOwnerLockResult =
  * Acquire or refresh the repo owner lock for an executing plan.
  * A live foreign owner requires an explicit force takeover.
  */
-export async function acquirePlanOwnerLock(
+async function acquirePlanOwnerLockCore(
 	cwd: string,
 	input: AcquirePlanOwnerLockInput,
 ): Promise<AcquirePlanOwnerLockResult> {
@@ -346,6 +347,16 @@ export async function acquirePlanOwnerLock(
 	);
 }
 
+export async function acquirePlanOwnerLock(
+	cwd: string,
+	input: AcquirePlanOwnerLockInput,
+): Promise<AcquirePlanOwnerLockResult> {
+	return measurePlanOperation(
+		{operation: 'lock', detail: 'acquire'},
+		async () => acquirePlanOwnerLockCore(cwd, input),
+	);
+}
+
 export type ReleasePlanOwnerLockOptions = {
 	planPath?: string;
 	sessionId?: string;
@@ -353,7 +364,7 @@ export type ReleasePlanOwnerLockOptions = {
 	force?: boolean;
 };
 
-export async function releasePlanOwnerLock(
+async function releasePlanOwnerLockCore(
 	cwd: string,
 	options: ReleasePlanOwnerLockOptions = {},
 ): Promise<boolean> {
@@ -397,7 +408,17 @@ export async function releasePlanOwnerLock(
 	return false;
 }
 
-export async function verifyPlanOwnerLock(
+export async function releasePlanOwnerLock(
+	cwd: string,
+	options: ReleasePlanOwnerLockOptions = {},
+): Promise<boolean> {
+	return measurePlanOperation(
+		{operation: 'lock', detail: 'release'},
+		async () => releasePlanOwnerLockCore(cwd, options),
+	);
+}
+
+async function verifyPlanOwnerLockCore(
 	cwd: string,
 	input: {planPath: string; sessionId: string; pid?: number},
 ): Promise<{ok: true; lock: PlanOwnerLock} | {ok: false; message: string}> {
@@ -431,6 +452,15 @@ export async function verifyPlanOwnerLock(
 		message: `Plan owner lock is missing for ${expected.planPath}. Adopt or resume the plan, then retry.`,
 	};
 }
+
+export async function verifyPlanOwnerLock(
+	cwd: string,
+	input: {planPath: string; sessionId: string; pid?: number},
+): Promise<{ok: true; lock: PlanOwnerLock} | {ok: false; message: string}> {
+	return measurePlanOperation({operation: 'lock', detail: 'verify'}, async () =>
+		verifyPlanOwnerLockCore(cwd, input),
+	);
+}
 export function formatOwnerLockConflict(
 	conflict: PlanOwnerLockConflict,
 ): string {
@@ -447,7 +477,7 @@ export function formatOwnerLockConflict(
  * Refresh heartbeatAt for the same owner only.
  * Never creates a lock and never takes over a foreign lock.
  */
-export async function refreshPlanOwnerHeartbeat(
+async function refreshPlanOwnerHeartbeatCore(
 	cwd: string,
 	input: {planPath: string; sessionId: string; pid?: number},
 ): Promise<
@@ -520,4 +550,16 @@ export async function refreshPlanOwnerHeartbeat(
 		return {ok: false, reason: 'foreign'};
 	}
 	return {ok: false, reason: 'foreign'};
+}
+
+export async function refreshPlanOwnerHeartbeat(
+	cwd: string,
+	input: {planPath: string; sessionId: string; pid?: number},
+): Promise<
+	{ok: true; lock: PlanOwnerLock} | {ok: false; reason: 'missing' | 'foreign'}
+> {
+	return measurePlanOperation(
+		{operation: 'lock', detail: 'refresh'},
+		async () => refreshPlanOwnerHeartbeatCore(cwd, input),
+	);
 }

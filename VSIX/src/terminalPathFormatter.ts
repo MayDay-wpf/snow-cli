@@ -22,12 +22,13 @@ export function formatTerminalPathPayload(
 	options: TerminalPathFormatOptions = {},
 ): string {
 	const platform = options.platform ?? process.platform;
-	const family = options.shellFamily ?? (platform === 'win32' ? 'powershell' : 'posix');
+	const family =
+		options.shellFamily ?? (platform === 'win32' ? 'powershell' : 'posix');
 	const quote =
 		family === 'cmd'
 			? quoteForCmd
 			: family === 'powershell'
-				? quoteForPowerShell
-				: quoteForBash;
+			? quoteForPowerShell
+			: quoteForBash;
 	return paths.map(quote).join(' ');
 }

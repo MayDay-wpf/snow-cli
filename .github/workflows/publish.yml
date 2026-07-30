@@ -125,16 +125,7 @@ jobs:
 
             ### What's New
 
-            #### Features
-            - AI Loop pause/continue: pause the AI loop mid-processing with `/pause` and resume with `/continue`; timer and stream-delay indicators freeze during pause, ESC still interrupts
-
-            #### Fixes
-            - Fix silent failures of summaryAgent / compactAgent / visionAgent / codebaseReviewAgent / bashOutputSummaryAgent / unifiedHooksExecutor on OpenAI-compatible endpoints (LM Studio, Ollama, vLLM) caused by wrong StreamChunk format reading
-            - Simplify i18n user message sample translations and improve theme colors
-
-            #### Docs
-            - Add relay station recommendations to README
-            - Update Bloome links for consistency
+            Patch: Open proxy host settings
 
             ### Installation
             ```bash

@@ -1,4 +1,7 @@
-import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // MCP info command handler - shows MCP panel in chat
 registerCommand('mcp', {
@@ -6,9 +9,9 @@ registerCommand('mcp', {
 		return {
 			success: true,
 			action: 'showMcpPanel',
-			message: 'Showing MCP services panel'
+			message: 'Showing MCP services panel',
 		};
-	}
+	},
 });
 
 export default {};

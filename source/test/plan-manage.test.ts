@@ -1,9 +1,11 @@
-import anyTest, {type TestFn} from 'ava';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import anyTest, {type TestFn} from 'ava';
 import {executePlanManageTool} from '../mcp/planManage.js';
 import {parsePlanDocument} from '../utils/execution/planDocument.js';
+import {readPlanEvidence} from '../utils/execution/planEvidence.js';
 import {
 	acquirePlanOwnerLock,
 	getPlanOwnerLockPath,
@@ -46,13 +48,15 @@ async function makeMutablePlan(): Promise<{dir: string; planPath: string}> {
 	if (adopted.isError) {
 		throw new Error(`adopt failed: ${resultText(adopted)}`);
 	}
+
 	return {dir, planPath};
 }
 
 function resultText(result: any): string {
 	return result?.content?.[0]?.text ?? '';
 }
-function run(dir: string, args: any) {
+
+async function run(dir: string, args: any) {
 	return executePlanManageTool('manage', args, undefined, dir);
 }
 
@@ -103,6 +107,114 @@ test.serial('complete_phase refuses while steps are unchecked', async t => {
 	t.true(result.isError === true);
 	t.true(resultText(result).includes('unchecked steps'));
 });
+
+test.serial(
+	'complete_phase blocks Git changes outside the phase file list',
+	async t => {
+		const {dir, planPath} = await makePlanDir();
+		execFileSync('git', ['init'], {cwd: dir, stdio: 'ignore'});
+		await fs.mkdir(path.join(dir, 'src'), {recursive: true});
+		await fs.writeFile(path.join(dir, 'src', 'a.ts'), 'before\n', 'utf8');
+		setTestSession('sess-drift');
+		const adopted = await run(dir, {action: 'adopt', plan_path: planPath});
+		t.falsy(adopted.isError);
+		await run(dir, {action: 'check_step', step_index: 1});
+		await run(dir, {action: 'check_step', step_index: 2});
+		await fs.writeFile(path.join(dir, 'outside.ts'), 'outside\n', 'utf8');
+
+		const blocked = await run(dir, {action: 'complete_phase'});
+		t.true(blocked.isError === true);
+		t.true(resultText(blocked).includes('outside.ts'));
+		t.true(resultText(blocked).includes('amend'));
+
+		const amended = await run(dir, {
+			action: 'amend',
+			reason: 'outside file is required',
+			add_files: ['outside.ts'],
+		});
+		t.falsy(amended.isError);
+		const completed = await run(dir, {action: 'complete_phase'});
+		t.falsy(completed.isError);
+		t.true(resultText(completed).includes('all in scope'));
+		const doc = await parsePlanDocument(planPath);
+		t.deepEqual(doc.frontmatter.accepted_phases, [1]);
+		t.true(doc.raw.includes('> Phase 1 accepted:'));
+		const evidence = await readPlanEvidence(planPath);
+		t.deepEqual(
+			evidence.entries.map(entry => entry.status),
+			['failed', 'passed'],
+		);
+		t.true(evidence.entries[1]!.workspace.changedFiles.includes('outside.ts'));
+	},
+);
+
+test.serial(
+	'complete requires recorded phase acceptance in trusted mode',
+	async t => {
+		const {dir, planPath} = await makePlanDir();
+		execFileSync('git', ['init'], {cwd: dir, stdio: 'ignore'});
+		setTestSession('sess-final-evidence');
+		const adopted = await run(dir, {action: 'adopt', plan_path: planPath});
+		t.falsy(adopted.isError);
+		await run(dir, {action: 'check_step', step_index: 1});
+		await run(dir, {action: 'check_step', step_index: 2});
+
+		const result = await run(dir, {action: 'complete'});
+		t.true(result.isError === true);
+		t.true(resultText(result).includes('no recorded acceptance evidence'));
+	},
+);
+
+test.serial(
+	'complete_phase requires declared manual confirmations',
+	async t => {
+		const content = PLAN.replace(
+			'- **Done when**: build passes',
+			'- **Checks**:\n  - manual: verify the visible result\n- **Done when**: build passes',
+		);
+		const {dir, planPath} = await makePlanDir();
+		await fs.writeFile(planPath, content, 'utf8');
+		setTestSession('sess-manual');
+		const adopted = await run(dir, {action: 'adopt', plan_path: planPath});
+		t.falsy(adopted.isError);
+		await run(dir, {action: 'check_step', step_index: 1});
+		await run(dir, {action: 'check_step', step_index: 2});
+
+		const missing = await run(dir, {action: 'complete_phase'});
+		t.true(missing.isError === true);
+		t.true(resultText(missing).includes('verify the visible result'));
+
+		const confirmed = await run(dir, {
+			action: 'complete_phase',
+			manual_confirmations: ['verify the visible result'],
+		});
+		t.falsy(confirmed.isError);
+	},
+);
+
+test.serial(
+	'strict acceptance fails when Git baseline is unavailable',
+	async t => {
+		const {dir, planPath} = await makePlanDir();
+		const content = await fs.readFile(planPath, 'utf8');
+		await fs.writeFile(
+			planPath,
+			content.replace('session:', 'acceptance_policy: strict\nsession:'),
+			'utf8',
+		);
+		setTestSession('sess-strict');
+		const adopted = await run(dir, {action: 'adopt', plan_path: planPath});
+		t.falsy(adopted.isError);
+		await run(dir, {action: 'check_step', step_index: 1});
+		await run(dir, {action: 'check_step', step_index: 2});
+
+		const result = await run(dir, {action: 'complete_phase'});
+		t.true(result.isError === true);
+		t.true(resultText(result).includes('Git workspace baseline unavailable'));
+		const evidence = await readPlanEvidence(planPath);
+		t.is(evidence.entries.at(-1)?.status, 'failed');
+	},
+);
 
 test.serial('amend appends files and steps and records reason', async t => {
 	const {dir, planPath} = await makeMutablePlan();
@@ -181,13 +293,57 @@ test('create writes plan under date dir', async t => {
 	t.true(text.includes(path.join('.snow', 'plan')));
 	t.true(text.includes('add-feature-x.md'));
 
-	const match = text.match(/Created draft plan at (.+?) \(complexity=/);
+	const match = /Created draft plan at (.+?) \(complexity=/.exec(text);
 	t.truthy(match);
 	const planPath = match![1]!.trim();
 	const doc = await parsePlanDocument(planPath);
 	t.is(doc.frontmatter.status, 'draft');
 	t.is(doc.frontmatter.complexity, 'simple');
-	t.true(doc.phases.length >= 1);
+	t.true(doc.phases.length > 0);
+});
+
+test('create rejects malformed structured JSON instead of silently dropping it', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plan-invalid-'));
+	const result = await run(dir, {
+		action: 'create',
+		title: 'Invalid Plan',
+		phases: [
+			{
+				title: 'Broken',
+				executionStrategy: 'sometimes',
+				checks: [{type: 'command'}],
+			},
+		],
+	});
+	t.true(result.isError === true);
+	const text = resultText(result);
+	t.true(text.includes('phases[0].executionStrategy'));
+	t.true(text.includes('phases[0].checks[0].command'));
+});
+
+test('concurrent same-title creates use distinct exclusive paths', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-plancreate-race-'));
+	const results = await Promise.all([
+		run(dir, {action: 'create', title: 'Concurrent Plan'}),
+		run(dir, {action: 'create', title: 'Concurrent Plan'}),
+	]);
+
+	t.true(results.every(result => !result.isError));
+	const paths = results.map(result => {
+		const match = /Created draft plan at (.+?) \(complexity=/.exec(
+			resultText(result),
+		);
+		t.truthy(match);
+		return match![1]!.trim();
+	});
+	t.is(new Set(paths).size, 2);
+	t.deepEqual(paths.map(filePath => path.basename(filePath)).sort(), [
+		'concurrent-plan-2.md',
+		'concurrent-plan.md',
+	]);
+
+	const docs = await Promise.all(paths.map(parsePlanDocument));
+	t.true(docs.every(doc => doc.title === 'Concurrent Plan'));
 });
 
 test('create with phases produces files/steps and validates clean', async t => {
@@ -202,9 +358,35 @@ test('create with phases produces files/steps and validates clean', async t => {
 		title: 'Phased Feature',
 		complexity: 'medium',
 		context: 'structured phases test',
+		problem_statement: 'Users need a reliable planning contract.',
+		solution: 'Accept JSON and render a reviewable plan.',
+		out_of_scope: ['DAG execution'],
+		resolved_decisions: [
+			{
+				decision: 'Persistence',
+				choice: 'Markdown',
+				reason: 'Compatibility',
+				alternatives: ['JSON-only files'],
+			},
+		],
+		test_seams: [
+			{seam: 'plan-manage', behavior: 'round-trips metadata', test_type: 'AVA'},
+		],
+		evidence: [
+			{claim: 'Plans are parsed as Markdown', source: 'planDocument.ts'},
+		],
+		adr_candidates: [
+			{decision: 'Linear phases', rationale: 'Existing state machine contract'},
+		],
 		phases: [
 			{
 				title: 'Implement',
+				delivers: 'The structured plan is observable on disk',
+				executionStrategy: 'tdd',
+				checks: [
+					{type: 'command', command: 'npx ava source/test/plan-manage.test.ts'},
+					{type: 'diagnostics'},
+				],
 				files: [existingRel, 'src/brand-new.ts (new)'],
 				steps: ['touch existing', 'add brand-new'],
 				doneWhen: 'build passes; diagnostics clean',
@@ -214,16 +396,33 @@ test('create with phases produces files/steps and validates clean', async t => {
 	});
 	t.falsy(created.isError);
 	const text = resultText(created);
-	const match = text.match(/Created draft plan at (.+?) \(complexity=/);
+	const match = /Created draft plan at (.+?) \(complexity=/.exec(text);
 	t.truthy(match);
 	const planPath = match![1]!.trim();
 	const doc = await parsePlanDocument(planPath);
 	t.is(doc.frontmatter.status, 'draft');
-	t.true(doc.phases.length >= 1);
+	t.true(doc.phases.length > 0);
 	t.true(doc.phases[0]!.files.some(f => f.includes('existing.ts')));
 	t.true(doc.phases[0]!.files.some(f => f.includes('brand-new.ts')));
 	t.true(doc.phases[0]!.steps.some(s => s.text === 'touch existing'));
+	t.is(doc.phases[0]!.delivers, 'The structured plan is observable on disk');
+	t.is(doc.phases[0]!.executionStrategy, 'tdd');
+	t.deepEqual(doc.phases[0]!.checks, [
+		{type: 'command', command: 'npx ava source/test/plan-manage.test.ts'},
+		{type: 'diagnostics'},
+	]);
 	t.true(doc.raw.includes('Affects auth path only.'));
+	for (const heading of [
+		'## Problem Statement',
+		'## Solution',
+		'## Resolved Decisions',
+		'## Test Seams',
+		'## Evidence',
+		'## ADR Candidates',
+		'## Out of Scope',
+	]) {
+		t.true(doc.raw.includes(heading));
+	}
 
 	const {validatePlanDocument} = await import(
 		'../utils/execution/planDocument.js'
@@ -243,8 +442,8 @@ test('write_body preserves draft status', async t => {
 		title: 'Draft Body',
 		complexity: 'simple',
 	});
-	const match = resultText(created).match(
-		/Created draft plan at (.+?) \(complexity=/,
+	const match = /Created draft plan at (.+?) \(complexity=/.exec(
+		resultText(created),
 	);
 	t.truthy(match);
 	const planPath = match![1]!.trim();
@@ -271,6 +470,30 @@ test('write_body preserves draft status', async t => {
 	t.true(doc.phases[0]!.steps.some(s => s.text === 'rewrite body'));
 });
 
+test('write_body accepts a structured brief without explicit phases', async t => {
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snow-writebody-brief-'));
+	const created = await run(dir, {action: 'create', title: 'Brief Only'});
+	const match = /Created draft plan at (.+?) \(complexity=/.exec(
+		resultText(created),
+	);
+	t.truthy(match);
+	const planPath = match![1]!.trim();
+
+	const written = await run(dir, {
+		action: 'write_body',
+		plan_path: planPath,
+		problem_statement: 'The old brief is incomplete.',
+		solution: 'Replace it from structured input.',
+	});
+	t.falsy(written.isError);
+
+	const doc = await parsePlanDocument(planPath);
+	t.is(doc.frontmatter.status, 'draft');
+	t.true(doc.raw.includes('The old brief is incomplete.'));
+	t.true(doc.raw.includes('Replace it from structured input.'));
+	t.true(doc.phases.length > 0);
+});
+
 test('write_body rejects executing status', async t => {
 	const {dir, planPath} = await makePlanDir();
 	const result = await run(dir, {
@@ -289,8 +512,8 @@ test('write_body requires body_markdown or phases', async t => {
 		title: 'Needs Body',
 		complexity: 'simple',
 	});
-	const match = resultText(created).match(
-		/Created draft plan at (.+?) \(complexity=/,
+	const match = /Created draft plan at (.+?) \(complexity=/.exec(
+		resultText(created),
 	);
 	t.truthy(match);
 	const planPath = match![1]!.trim();
@@ -337,7 +560,7 @@ test.serial(
 		t.true(text.includes('ownership=foreign_live'));
 		t.true(text.includes('force=true'));
 
-		// get via plan_path returns read-only summary.
+		// Get via plan_path returns read-only summary.
 		const get = await run(dir, {action: 'get', plan_path: planPath});
 		t.falsy(get.isError);
 		const getText = resultText(get);
@@ -357,10 +580,10 @@ test.serial('abandon archives plan with abandoned status', async t => {
 	const ok = await run(dir, {action: 'abandon', reason: 'no longer needed'});
 	t.falsy(ok.isError);
 	t.true(resultText(ok).includes('abandoned'));
-	await t.throwsAsync(() => fs.access(planPath));
+	await t.throwsAsync(async () => fs.access(planPath));
 
-	const archivedPath = resultText(ok)
-		.match(/archived to (.+?)\.?$/)?.[1]
+	const archivedPath = /archived to (.+?)\.?$/
+		.exec(resultText(ok))?.[1]
 		?.trim()
 		.replace(/\.$/, '');
 	t.truthy(archivedPath);
@@ -487,7 +710,7 @@ session: ''
 	const dryText = resultText(dry);
 	t.true(dryText.includes('dry-run'));
 	t.true(dryText.includes('old-draft.md'));
-	// executing demo.md should be skipped/protected in dry-run listing only if not matched;
+	// Executing demo.md should be skipped/protected in dry-run listing only if not matched;
 	// with statuses including executing but include_executing false, executing is protected.
 	await fs.access(planPath);
 	await fs.access(draftPath);
@@ -499,8 +722,8 @@ session: ''
 	});
 	t.falsy(real.isError);
 	t.true(resultText(real).includes('archived'));
-	await t.throwsAsync(() => fs.access(draftPath));
-	// executing plan remains
+	await t.throwsAsync(async () => fs.access(draftPath));
+	// Executing plan remains
 	await fs.access(planPath);
 });
 
@@ -546,7 +769,7 @@ test.serial(
 			reason: 'current session cleanup',
 		});
 		t.falsy(scoped.isError);
-		await t.throwsAsync(() => fs.access(mine));
+		await t.throwsAsync(async () => fs.access(mine));
 		await fs.access(foreign);
 
 		const missingReason = await run(dir, {

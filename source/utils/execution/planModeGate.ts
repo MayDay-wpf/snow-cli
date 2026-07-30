@@ -13,6 +13,7 @@
 import path from 'node:path';
 import {getPlanStrictness} from '../config/projectSettings.js';
 import {recordPlanEvent} from '../telemetry/otel.js';
+import type {AskUserQuestionPurpose} from '../../mcp/askUserQuestion.js';
 import {
 	findActivePlan,
 	findForeignExecutingPlans,
@@ -33,6 +34,7 @@ import {
 	classifyPlanOwnership,
 	type PlanOwnershipClassification,
 } from './planOwnership.js';
+import {capturePlanWorkspaceBaseline} from './planWorkspaceBaseline.js';
 
 type PlanGateState = {
 	planApproved: boolean;
@@ -61,6 +63,7 @@ function getState(sessionId?: string | null): PlanGateState {
 		};
 		sessionGateState.set(key, state);
 	}
+
 	return state;
 }
 
@@ -97,12 +100,12 @@ export function onPlanModeChange(
 	enabled: boolean,
 	sessionId?: string | null,
 ): void {
-	// enabled true or false → reset approval for this session
+	// Enabled true or false → reset approval for this session
 	resetPlanGate(sessionId);
 	if (!enabled) {
 		// Leaving plan mode: archive any completed plans left behind (best-effort)
 		void import('./planArchive.js')
-			.then(m => m.sweepCompletedPlans(process.cwd()))
+			.then(async m => m.sweepCompletedPlans(process.cwd()))
 			.catch(() => {});
 	}
 }
@@ -187,16 +190,18 @@ export function setPlanScope(
 export function isWithinPlanScope(
 	filePath: string,
 	cwd: string,
-	sessionId?: string | null,
+	sessionId?: string | undefined,
 ): boolean {
 	if (isPlanDirPath(filePath, cwd) || isTrellisTasksDirPath(filePath, cwd)) {
 		return true;
 	}
+
 	const state = getState(sessionId);
 	if (state.allowedWriteFiles.size === 0) {
 		// No scope registered (e.g. plan without Files lists): don't restrict.
 		return true;
 	}
+
 	return state.allowedWriteFiles.has(
 		normalizePathForCompare(path.resolve(cwd, filePath)),
 	);
@@ -223,9 +228,11 @@ export function resolvePlanScopeFiles(plan: PlanDoc): string[] {
 	if (phase && phase.files.length > 0) {
 		return phase.files;
 	}
+
 	if (plan.affectedFiles.length > 0) {
 		return plan.affectedFiles;
 	}
+
 	return [...new Set(plan.phases.flatMap(p => p.files))];
 }
 
@@ -235,7 +242,7 @@ export function resolvePlanScopeFiles(plan: PlanDoc): string[] {
  */
 export async function validatePlanBeforeApproval(
 	cwd: string,
-	sessionId: string | null | undefined,
+	sessionId: string | undefined | undefined,
 ): Promise<{ok: true; plan: PlanDoc} | {ok: false; message: string}> {
 	let plan: PlanDoc | null = null;
 	try {
@@ -243,6 +250,7 @@ export async function validatePlanBeforeApproval(
 	} catch {
 		plan = null;
 	}
+
 	if (!plan) {
 		return {
 			ok: false,
@@ -251,16 +259,19 @@ export async function validatePlanBeforeApproval(
 				'Create the plan document first (with frontmatter and "### Phase N" sections), then ask for approval again.',
 		};
 	}
+
 	const issues = validatePlanDocument(plan, cwd);
-	if (issues.length > 0) {
+	const errors = issues.filter(issue => issue.severity !== 'warning');
+	if (errors.length > 0) {
 		return {
 			ok: false,
 			message:
 				`Plan approval rejected (${plan.filePath}): ` +
-				issues.map(i => i.message).join(' ') +
+				errors.map(i => i.message).join(' ') +
 				' Fix the plan file under .snow/plan/ and ask for approval again.',
 		};
 	}
+
 	return {ok: true, plan};
 }
 
@@ -270,11 +281,12 @@ export async function validatePlanBeforeApproval(
  */
 export async function restorePlanGateFromDisk(
 	cwd: string,
-	sessionId: string | null | undefined,
+	sessionId: string | undefined | undefined,
 ): Promise<void> {
 	if (getPlanApproved(sessionId)) {
 		return;
 	}
+
 	try {
 		const plan = await findActivePlan(cwd, sessionId);
 		if (
@@ -284,6 +296,7 @@ export async function restorePlanGateFromDisk(
 		) {
 			return;
 		}
+
 		const lockResult = await acquirePlanOwnerLock(cwd, {
 			planPath: plan.filePath,
 			sessionId: sessionId || '',
@@ -291,6 +304,7 @@ export async function restorePlanGateFromDisk(
 		if (!lockResult.ok) {
 			return;
 		}
+
 		setPlanApproved(sessionId, true);
 		setPlanScope(sessionId, {
 			planPath: plan.filePath,
@@ -320,6 +334,7 @@ export function collectFilesystemPaths(args: any): string[] {
 				paths.push(item);
 				continue;
 			}
+
 			if (item && typeof item === 'object') {
 				const p = item.path ?? item.filePath;
 				if (typeof p === 'string' && p.trim()) {
@@ -327,6 +342,7 @@ export function collectFilesystemPaths(args: any): string[] {
 				}
 			}
 		}
+
 		return paths;
 	}
 
@@ -346,16 +362,19 @@ export function describeEmptyFilesystemPaths(args: any): string {
 	if (filePath === undefined || filePath === null) {
 		return 'filePath is missing';
 	}
+
 	if (typeof filePath === 'string') {
 		return filePath.trim()
 			? 'filePath present but not collectable'
 			: 'filePath is empty string';
 	}
+
 	if (Array.isArray(filePath)) {
 		return filePath.length === 0
 			? 'filePath is empty array []'
 			: 'filePath array has no usable path entries';
 	}
+
 	return `filePath has unsupported type (${typeof filePath})`;
 }
 
@@ -397,7 +416,7 @@ export function extractShellWritePaths(command: unknown): string[] {
 
 	// Redirects: > file, >> file, 2> file, 1>>file (not comparison operators alone).
 	const redirectRe =
-		/(?:^|[\s;|&])(?:\d*)>{1,2}\s*(?:&?\d+)?\s*(['"]?)([^'"|&;>\n\r]+)\1/g;
+		/(?:^|[\s;|&])\d*>{1,2}\s*(?:&?\d+)?\s*(['"]?)([^'"|&;>\n\r]+)\1/g;
 	let match: RegExpExecArray | null;
 	while ((match = redirectRe.exec(cmd)) !== null) {
 		const candidate = (match[2] || '').trim();
@@ -408,39 +427,39 @@ export function extractShellWritePaths(command: unknown): string[] {
 
 	// Destructive / write-ish commands with path args.
 	const writeCommandPatterns: Array<{re: RegExp; pathGroup: number}> = [
-		// rm / del / Remove-Item
+		// Rm / del / Remove-Item
 		{
-			re: /(?:^|[\s;|&])(?:rm|del|erase|Remove-Item|ri)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
+			re: /(?:^|[\s;|&])(?:rm|del|erase|remove-item|ri)\b(?:\s+-[a-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
 			pathGroup: 2,
 		},
-		// mv / move / Move-Item
+		// Mv / move / Move-Item
 		{
-			re: /(?:^|[\s;|&])(?:mv|move|Move-Item|mi)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
-			pathGroup: 4, // destination
+			re: /(?:^|[\s;|&])(?:mv|move|move-item|mi)\b(?:\s+-[a-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
+			pathGroup: 4, // Destination
 		},
-		// cp / copy / Copy-Item
+		// Cp / copy / Copy-Item
 		{
-			re: /(?:^|[\s;|&])(?:cp|copy|Copy-Item|cpi)\b(?:\s+-[A-Za-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
-			pathGroup: 4, // destination
+			re: /(?:^|[\s;|&])(?:cp|copy|copy-item|cpi)\b(?:\s+-[a-z]\w*)*\s+(?:--\s+)?(['"]?)([^'"|\n\r;]+)\1\s+(['"]?)([^'"|\n\r;]+)\3/gi,
+			pathGroup: 4, // Destination
 		},
-		// sed -i file
+		// Sed -i file
 		{
-			re: /(?:^|[\s;|&])sed\b(?:\s+-[A-Za-z0-9]+)*\s+-i(?:\s*[^\s]+)?\s+(?:'[^']*'|"[^"]*"|[^\s]+)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			re: /(?:^|[\s;|&])sed\b(?:\s+-[a-z\d]+)*\s+-i(?:\s*\S+)?\s+(?:'[^']*'|"[^"]*"|\S+)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
 			pathGroup: 2,
 		},
 		// Set-Content / Out-File / Add-Content path
 		{
-			re: /(?:^|[\s;|&])(?:Set-Content|Out-File|Add-Content|sc|ac)\b(?:\s+-[A-Za-z]+\s+[^\s]+)*\s+(?:-Path\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
+			re: /(?:^|[\s;|&])(?:set-content|out-file|add-content|sc|ac)\b(?:\s+-[a-z]+\s+\S+)*\s+(?:-path\s+)?(['"]?)([^'"|\n\r;]+)\1/gi,
 			pathGroup: 2,
 		},
 		// New-Item -ItemType File -Path / -Name writing
 		{
-			re: /(?:^|[\s;|&])New-Item\b(?:(?!\|).)*?(?:-Path|-Name)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			re: /(?:^|[\s;|&])new-item\b(?:(?!\|).)*?(?:-path|-name)\s+(['"]?)([^'"|\n\r;]+)\1/gi,
 			pathGroup: 2,
 		},
-		// tee file
+		// Tee file
 		{
-			re: /(?:^|[\s;|&])tee\b(?:\s+-[A-Za-z]\w*)*\s+(['"]?)([^'"|\n\r;]+)\1/gi,
+			re: /(?:^|[\s;|&])tee\b(?:\s+-[a-z]\w*)*\s+(['"]?)([^'"|\n\r;]+)\1/gi,
 			pathGroup: 2,
 		},
 	];
@@ -470,18 +489,20 @@ function looksLikePathToken(value: string): boolean {
 	if (!value || value.startsWith('-')) {
 		return false;
 	}
+
 	// Avoid treating pure flags / numbers / pure shell tokens as paths.
 	if (/^(&?\d+|true|false|null)$/i.test(value)) {
 		return false;
 	}
+
 	return true;
 }
 
 function hasExplicitShellWriteSignal(command: string): boolean {
 	return (
-		/(?:^|[\s;|&])(?:\d*)>{1,2}\s*\S+/.test(command) ||
+		/(?:^|[\s;|&])\d*>{1,2}\s*\S+/.test(command) ||
 		/\b(?:rm|del|erase|mv|move|cp|copy|tee|sed)\b/i.test(command) ||
-		/\b(?:Remove-Item|Move-Item|Copy-Item|Set-Content|Out-File|Add-Content|New-Item)\b/i.test(
+		/\b(?:remove-item|move-item|copy-item|set-content|out-file|add-content|new-item)\b/i.test(
 			command,
 		)
 	);
@@ -496,6 +517,7 @@ export function isLikelyPureBuildOrTestCommand(command: string): boolean {
 	if (!cmd) {
 		return false;
 	}
+
 	// Reject early if explicit write signals dominate (redirects etc. checked by caller).
 	const purePatterns = [
 		/^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:build|test|lint|typecheck|check|ci|compile|tsc|ava|jest|vitest|mocha)\b/i,
@@ -504,8 +526,8 @@ export function isLikelyPureBuildOrTestCommand(command: string): boolean {
 		/^(?:dotnet|go|cargo|make|cmake|gradle|mvn)\s+(?:build|test|check|run|compile)\b/i,
 		/^(?:python|python3|py)\s+-m\s+(?:pytest|unittest)\b/i,
 		/^(?:pytest|unittest)\b/i,
-		/^(?:git)\s+(?:status|diff|log|show|branch|rev-parse)\b/i,
-		/^(?:ls|dir|cat|type|Get-Content|Get-ChildItem|echo|Write-Output|pwd|cd)\b/i,
+		/^git\s+(?:status|diff|log|show|branch|rev-parse)\b/i,
+		/^(?:ls|dir|cat|type|get-content|get-childitem|echo|write-output|pwd|cd)\b/i,
 	];
 	return purePatterns.some(re => re.test(cmd));
 }
@@ -581,6 +603,7 @@ function isAlwaysAllowTool(toolName: string): boolean {
 	if (ALWAYS_ALLOW_EXACT.has(toolName)) {
 		return true;
 	}
+
 	return ALWAYS_ALLOW_PREFIXES.some(prefix => toolName.startsWith(prefix));
 }
 
@@ -588,10 +611,12 @@ function isTerminalLikeTool(toolName: string): boolean {
 	if (toolName === 'terminal-execute' || toolName === 'bash-execute') {
 		return true;
 	}
+
 	// Avoid false positives on skill-execute / todo etc. (already allowlisted).
 	if (toolName.includes('terminal') || toolName.includes('bash')) {
 		return true;
 	}
+
 	// Generic "*-execute" shell-ish names, but not skill-execute / already allowed.
 	if (
 		toolName.endsWith('-execute') &&
@@ -600,6 +625,7 @@ function isTerminalLikeTool(toolName: string): boolean {
 	) {
 		return true;
 	}
+
 	return false;
 }
 
@@ -616,9 +642,11 @@ export function classifyPlanGateDecision(
 		if (ALLOWED_SUBAGENTS.has(toolName)) {
 			return 'allow';
 		}
+
 		if (BLOCKED_SUBAGENTS.has(toolName)) {
 			return 'block';
 		}
+
 		// Unknown custom agents: block when unapproved (safer default for writers).
 		return 'block';
 	}
@@ -638,6 +666,7 @@ export function classifyPlanGateDecision(
 			// No path → cannot verify allowed trellis roots; block.
 			return 'block';
 		}
+
 		// Unapproved: only .trellis/tasks/** for filesystem write tools.
 		// .snow/plan/** must go through plan-manage (ALWAYS_ALLOW).
 		const allAllowed = paths.every(p => isAllowedUnapprovedWritePath(p, cwd));
@@ -667,6 +696,7 @@ function flattenSelected(selected: string | string[]): string[] {
 	if (Array.isArray(selected)) {
 		return selected.filter(s => typeof s === 'string');
 	}
+
 	return typeof selected === 'string' ? [selected] : [];
 }
 
@@ -678,7 +708,12 @@ export function isPlanApprovalAnswer(input: {
 	question?: string;
 	selected: string | string[];
 	customInput?: string;
+	purpose?: AskUserQuestionPurpose;
 }): boolean {
+	if (input.purpose === 'clarification') {
+		return false;
+	}
+
 	const options = flattenSelected(input.selected).map(normalizeAnswerText);
 	if (options.length === 0) {
 		return false;
@@ -693,6 +728,16 @@ export function isPlanApprovalAnswer(input: {
 			question.includes('implementation') ||
 			question.includes('execute') ||
 			question.includes('执行'));
+	const looksLikeResumeAnswer = options.some(
+		opt =>
+			opt.includes('continue') ||
+			opt.includes('resume') ||
+			opt.includes('继续') ||
+			opt.includes('接着'),
+	);
+	if (input.purpose === 'plan_resume' && !looksLikeResumeAnswer) {
+		return false;
+	}
 
 	for (const opt of options) {
 		// Explicit reject / review / modify
@@ -782,7 +827,7 @@ export function isPlanRejectOrModifyAnswer(input: {
 
 export async function evaluatePlanGate(input: {
 	planMode: boolean;
-	sessionId?: string | null;
+	sessionId?: string | undefined;
 	toolName: string;
 	args: any;
 	cwd: string;
@@ -811,6 +856,7 @@ export async function evaluatePlanGate(input: {
 		} catch {
 			strictness = 'soft';
 		}
+
 		if (strictness === 'off') {
 			return {allow: true};
 		}
@@ -841,6 +887,7 @@ export async function evaluatePlanGate(input: {
 		if (offending.length === 0) {
 			return {allow: true};
 		}
+
 		if (strictness === 'strict') {
 			recordPlanEvent({
 				event: 'gate_block',
@@ -859,6 +906,7 @@ export async function evaluatePlanGate(input: {
 					`Call plan-manage with action "amend" to add them to the plan, then retry.`,
 			};
 		}
+
 		recordPlanEvent({
 			event: 'scope_warning',
 			sessionId: input.sessionId || undefined,
@@ -939,7 +987,7 @@ export async function evaluatePlanGate(input: {
 export async function classifyPlanDocOwnership(
 	cwd: string,
 	doc: PlanDoc,
-	sessionId?: string | null,
+	sessionId?: string | undefined,
 ): Promise<PlanOwnershipClassification> {
 	const lock = await readPlanOwnerLock(cwd);
 	return classifyPlanOwnership({
@@ -964,8 +1012,8 @@ export async function classifyPlanDocOwnership(
  */
 export async function findBlockingForeignPlans(
 	cwd: string,
-	sessionId?: string | null,
-	exceptPlanPath?: string | null,
+	sessionId?: string | undefined,
+	exceptPlanPath?: string | undefined,
 ): Promise<{
 	blocking: Array<{doc: PlanDoc; ownership: PlanOwnershipClassification}>;
 	recoverable: Array<{doc: PlanDoc; ownership: PlanOwnershipClassification}>;
@@ -985,6 +1033,7 @@ export async function findBlockingForeignPlans(
 		if (except && path.resolve(doc.filePath) === except) {
 			continue;
 		}
+
 		const ownership = await classifyPlanDocOwnership(cwd, doc, sessionId);
 		if (
 			ownership.kind === 'foreign_live' ||
@@ -1025,11 +1074,12 @@ function formatOwnershipCandidateLine(
  */
 export async function maybeApprovePlanFromAskUser(input: {
 	planMode: boolean;
-	sessionId?: string | null;
+	sessionId?: string | undefined;
 	cwd?: string;
 	question?: string;
 	selected: string | string[];
 	customInput?: string;
+	purpose?: AskUserQuestionPurpose;
 }): Promise<{approved: boolean; error?: string}> {
 	if (!input.planMode) {
 		return {approved: false};
@@ -1040,6 +1090,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 			question: input.question,
 			selected: input.selected,
 			customInput: input.customInput,
+			purpose: input.purpose,
 		})
 	) {
 		const cwd = input.cwd || process.cwd();
@@ -1052,14 +1103,14 @@ export async function maybeApprovePlanFromAskUser(input: {
 			/continue|resume|继续|接着|adopt/i.test(combined) ||
 			/continue\s*:/i.test(combined);
 
-		let validation = await validatePlanBeforeApproval(cwd, input.sessionId);
+		const validation = await validatePlanBeforeApproval(cwd, input.sessionId);
 
 		// Continue path: never silently rebind foreign ownership from askuser.
 		// Always route through plan-manage adopt so force/reason can be enforced.
 		if (!validation.ok && isContinueIntent) {
 			const pathMatch =
-				combined.match(/continue\s*:\s*([^\n|]+)/i) ||
-				combined.match(/(?:\.snow[\\/]plan[\\/][^\s|]+)/i);
+				/continue\s*:\s*([^\n|]+)/i.exec(combined) ||
+				/(?:\.snow[\\/]plan[\\/][^\s|]+)/i.exec(combined);
 			const explicitPath = pathMatch?.[1]?.trim() || pathMatch?.[0]?.trim();
 			const executing = (await findSessionPlanFiles(cwd, null))
 				.filter(d => d.frontmatter.status === 'executing')
@@ -1086,6 +1137,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 								.endsWith(path.normalize(explicitPath).toLowerCase()),
 					);
 				}
+
 				return classified.length === 1 ? classified[0] : undefined;
 			};
 
@@ -1121,6 +1173,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 							`only if intentional takeover is required.`,
 					};
 				}
+
 				if (ownership.canAdoptWithoutForce) {
 					return {
 						approved: false,
@@ -1130,6 +1183,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 							`Generic Continue cannot rebind ownership by itself.`,
 					};
 				}
+
 				return {
 					approved: false,
 					error:
@@ -1199,6 +1253,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 		}
 
 		try {
+			const baseline = await capturePlanWorkspaceBaseline(cwd);
 			await writePlanFrontmatter(
 				validation.plan.filePath,
 				{
@@ -1206,6 +1261,8 @@ export async function maybeApprovePlanFromAskUser(input: {
 					current_phase: Math.max(1, validation.plan.frontmatter.current_phase),
 					approved_at: new Date().toISOString(),
 					session: input.sessionId ?? validation.plan.frontmatter.session,
+					phase_started_at: new Date().toISOString(),
+					phase_baseline: baseline.available ? baseline.baseline : undefined,
 				},
 				getPlanWriteOptions(validation.plan),
 			);
@@ -1222,6 +1279,7 @@ export async function maybeApprovePlanFromAskUser(input: {
 				}`,
 			};
 		}
+
 		setPlanApproved(input.sessionId, true);
 		setPlanScope(input.sessionId, {
 			planPath: validation.plan.filePath,
@@ -1248,13 +1306,17 @@ export async function maybeApprovePlanFromAskUser(input: {
 			phase: Math.max(1, validation.plan.frontmatter.current_phase),
 			reason: 'askuser',
 		});
-		// cleanupHint is not an error; approval still succeeds.
+		// CleanupHint is not an error; approval still succeeds.
 		void cleanupHint;
 		return {approved: true};
 	}
 
-	if (isPlanRejectOrModifyAnswer({selected: input.selected})) {
+	if (
+		input.purpose !== 'clarification' &&
+		isPlanRejectOrModifyAnswer({selected: input.selected})
+	) {
 		setPlanApproved(input.sessionId, false);
 	}
+
 	return {approved: false};
 }

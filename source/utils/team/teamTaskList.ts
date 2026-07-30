@@ -1,4 +1,10 @@
-import {existsSync, mkdirSync, readFileSync, writeFileSync, renameSync} from 'fs';
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	writeFileSync,
+	renameSync,
+} from 'fs';
 import {join, dirname} from 'path';
 import {homedir} from 'os';
 import {randomUUID} from 'crypto';
@@ -77,7 +83,8 @@ export function createTask(
 		status: 'pending',
 		assigneeId,
 		assigneeName,
-		dependencies: dependencies && dependencies.length > 0 ? dependencies : undefined,
+		dependencies:
+			dependencies && dependencies.length > 0 ? dependencies : undefined,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -98,9 +105,7 @@ export function claimTask(
 	if (!task) return null;
 
 	if (task.status !== 'pending') {
-		throw new Error(
-			`Task "${task.title}" is already ${task.status}`,
-		);
+		throw new Error(`Task "${task.title}" is already ${task.status}`);
 	}
 
 	// Check unresolved dependencies
@@ -111,7 +116,9 @@ export function claimTask(
 		});
 		if (unresolved.length > 0) {
 			throw new Error(
-				`Task "${task.title}" has unresolved dependencies: ${unresolved.join(', ')}`,
+				`Task "${task.title}" has unresolved dependencies: ${unresolved.join(
+					', ',
+				)}`,
 			);
 		}
 	}
@@ -200,7 +207,10 @@ export function getTask(teamName: string, taskId: string): TeamTask | null {
 	return data.tasks.find(t => t.id === taskId) || null;
 }
 
-export function getTasksByAssignee(teamName: string, assigneeId: string): TeamTask[] {
+export function getTasksByAssignee(
+	teamName: string,
+	assigneeId: string,
+): TeamTask[] {
 	const data = readTaskList(teamName);
 	return data.tasks.filter(t => t.assigneeId === assigneeId);
 }

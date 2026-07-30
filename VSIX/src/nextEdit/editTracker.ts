@@ -185,7 +185,9 @@ export class EditTracker implements vscode.Disposable {
 		log(
 			`edit flushed: old=${JSON.stringify(
 				oldText.slice(0, 60),
-			)} new=${JSON.stringify(newText.slice(0, 60))} range=${startPos.line}:${startPos.character}-${endPos.line}:${endPos.character}`,
+			)} new=${JSON.stringify(newText.slice(0, 60))} range=${startPos.line}:${
+				startPos.character
+			}-${endPos.line}:${endPos.character}`,
 		);
 		for (const l of this.listeners) {
 			try {

@@ -1,4 +1,7 @@
-import { registerCommand, type CommandResult } from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 
 // Compact command handler - compress conversation history
 registerCommand('compact', {
@@ -6,9 +9,9 @@ registerCommand('compact', {
 		return {
 			success: true,
 			action: 'compact',
-			message: 'Compressing conversation history...'
+			message: 'Compressing conversation history...',
 		};
-	}
+	},
 });
 
 export default {};

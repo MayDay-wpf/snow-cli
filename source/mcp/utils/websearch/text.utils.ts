@@ -21,8 +21,6 @@ export function cleanText(text: string): string {
 		.trim();
 }
 
-
-
 /**
  * Normalize lightweight markdown-ish page text:
  * - collapse spaces within lines

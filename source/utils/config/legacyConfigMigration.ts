@@ -276,7 +276,6 @@ function migrateScope(
 		return false;
 	});
 
-
 	if (settings.goal?.defaultTokenBudgetM === undefined) {
 		settings.goal = {
 			...(settings.goal || {}),

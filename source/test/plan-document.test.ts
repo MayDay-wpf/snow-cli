@@ -41,10 +41,15 @@ session: sess-1
 - src/b.ts (new)
 
 ### Phase 1: Middleware
+- **Delivers**: authenticated requests reach protected handlers
+- **Execution strategy**: tdd
 - **Files**: src/a.ts
 - **Steps**:
   - [x] create middleware
   - [ ] wire into app
+- **Checks**:
+  - command: npx ava source/test/auth.test.ts
+  - diagnostics
 - **Done when**: build passes
 
 ### Phase 2: Endpoints
@@ -110,10 +115,16 @@ test('parsePlanDocument parses frontmatter, phases, files, steps', async t => {
 	const p1 = doc.phases[0]!;
 	t.is(p1.index, 1);
 	t.is(p1.title, 'Middleware');
+	t.is(p1.delivers, 'authenticated requests reach protected handlers');
+	t.is(p1.executionStrategy, 'tdd');
 	t.deepEqual(p1.files, ['src/a.ts']);
 	t.is(p1.steps.length, 2);
 	t.true(p1.steps[0]!.checked);
 	t.false(p1.steps[1]!.checked);
+	t.deepEqual(p1.checks, [
+		{type: 'command', command: 'npx ava source/test/auth.test.ts'},
+		{type: 'diagnostics'},
+	]);
 	t.deepEqual(p1.doneWhen, ['build passes']);
 
 	const p2 = doc.phases[1]!;
@@ -138,6 +149,8 @@ test('parsePhasesFromMarkdown supports Chinese section labels and uppercase X', 
 	const {phases} = parsePhasesFromMarkdown(
 		[
 			'### Phase 1: 中间件',
+			'- **交付**: 请求可以通过鉴权',
+			'- **执行策略**: standard',
 			'- **文件**: src/a.ts',
 			'- **步骤**:',
 			'  - [X] 完成一步',
@@ -145,6 +158,8 @@ test('parsePhasesFromMarkdown supports Chinese section labels and uppercase X', 
 		].join('\n'),
 	);
 	t.is(phases.length, 1);
+	t.is(phases[0]!.delivers, '请求可以通过鉴权');
+	t.is(phases[0]!.executionStrategy, 'standard');
 	t.deepEqual(phases[0]!.files, ['src/a.ts']);
 	t.true(phases[0]!.steps[0]!.checked);
 	t.deepEqual(phases[0]!.doneWhen, ['构建通过']);
@@ -171,6 +186,63 @@ test('parsePhasesFromMarkdown normalizes file paths with descriptions', t => {
 		'src/new.ts (new)',
 		'src/new-zh.ts (新建)',
 	]);
+});
+
+test('validatePlanDocument rejects broken phase sequencing and invalid current phase', async t => {
+	const dir = await makeTmpDir();
+	const doc = await parsePlanDocument(
+		await writeSamplePlan(
+			dir,
+			'bad-sequence.md',
+			SAMPLE_PLAN.replace('current_phase: 1', 'current_phase: 3').replace(
+				'### Phase 2: Endpoints',
+				'### Phase 4: Endpoints',
+			),
+		),
+	);
+	const codes = new Set(
+		validatePlanDocument(doc, dir).map(issue => issue.code),
+	);
+	t.true(codes.has('phase_sequence'));
+	t.true(codes.has('current_phase_invalid'));
+});
+
+test('validatePlanDocument requires a command check for TDD phases', async t => {
+	const dir = await makeTmpDir();
+	const doc = await parsePlanDocument(
+		await writeSamplePlan(
+			dir,
+			'tdd-without-command.md',
+			SAMPLE_PLAN.replace(
+				'- **Checks**:\n  - command: npx ava source/test/auth.test.ts\n  - diagnostics\n',
+				'- **Checks**:\n  - diagnostics\n',
+			),
+		),
+	);
+	t.true(
+		validatePlanDocument(doc, dir).some(
+			issue => issue.code === 'tdd_no_command_check',
+		),
+	);
+});
+
+test('validatePlanDocument rejects unsafe command checks from Markdown', async t => {
+	const dir = await makeTmpDir();
+	const doc = await parsePlanDocument(
+		await writeSamplePlan(
+			dir,
+			'unsafe-check.md',
+			SAMPLE_PLAN.replace(
+				'npx ava source/test/auth.test.ts',
+				'npm test && git push origin main',
+			),
+		),
+	);
+	t.true(
+		validatePlanDocument(doc, dir).some(
+			issue => issue.code === 'unsafe_check_command',
+		),
+	);
 });
 
 test('validatePlanDocument reports all issue codes', async t => {
@@ -286,6 +358,8 @@ test('writePlanFrontmatter merges patch and upgrades legacy files', async t => {
 	t.is(doc.frontmatter.status, 'executing');
 	t.is(doc.frontmatter.session, 's9');
 	t.true(doc.raw.includes('# Old plan'));
+	const entries = await fs.readdir(path.dirname(filePath));
+	t.false(entries.some(entry => entry.endsWith('.tmp')));
 });
 
 test('writePlanFrontmatter fills created when empty and stamps updated_at', async t => {

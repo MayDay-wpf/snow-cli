@@ -26,9 +26,7 @@ interface ThinkingData {
  */
 function cleanThinkingContent(content: string): string {
 	// Remove <think>, </think>, <thinking>, </thinking> tags (with surrounding whitespace/newlines)
-	return content
-		.replace(/\s*<\/?think(?:ing)?>\s*/gi, '')
-		.trim();
+	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
 }
 
 /**

@@ -1,4 +1,7 @@
-import {registerCommand, type CommandResult} from '../execution/commandExecutor.js';
+import {
+	registerCommand,
+	type CommandResult,
+} from '../execution/commandExecutor.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
 

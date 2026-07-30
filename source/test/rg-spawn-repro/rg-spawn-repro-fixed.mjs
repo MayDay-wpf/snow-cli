@@ -158,7 +158,9 @@ async function main() {
 		}
 
 		console.log(`\n[done] code=${code} elapsedMs=${elapsed}`);
-		console.log(`stdoutBytes=${stdoutSize} stderrBytes=${stderrSize} totalLines=${lineCount}`);
+		console.log(
+			`stdoutBytes=${stdoutSize} stderrBytes=${stderrSize} totalLines=${lineCount}`,
+		);
 		console.log(`previewCount=${previewLines.length}`);
 		if (previewLines.length > 0) {
 			console.log('--- preview ---');

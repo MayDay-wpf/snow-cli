@@ -77,8 +77,7 @@ export class BingEngine implements SearchEngine {
 			const out: Partial[] = [];
 			const items = document.querySelectorAll('#b_results > li.b_algo');
 
-			const isHttpUrl = (u: string): boolean =>
-				/^https?:\/\//i.test(u);
+			const isHttpUrl = (u: string): boolean => /^https?:\/\//i.test(u);
 
 			for (const item of items) {
 				if (out.length >= maxLimit) break;

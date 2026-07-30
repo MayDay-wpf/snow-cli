@@ -81,9 +81,7 @@ export const RoleSubagentDeletionPanel: React.FC<Props> = ({
 					return;
 				}
 				if (key.downArrow) {
-					setSelectedIndex(prev =>
-						Math.min(roleItems.length - 1, prev + 1),
-					);
+					setSelectedIndex(prev => Math.min(roleItems.length - 1, prev + 1));
 					return;
 				}
 				if (key.return && selectedItem) {
@@ -201,8 +199,7 @@ export const RoleSubagentDeletionPanel: React.FC<Props> = ({
 
 					<Box marginTop={1}>
 						<Text dimColor>
-							{rs.selectRoleHint ||
-								'↑↓: Navigate | Enter: Select | ESC: Back'}
+							{rs.selectRoleHint || '↑↓: Navigate | Enter: Select | ESC: Back'}
 						</Text>
 					</Box>
 				</Box>

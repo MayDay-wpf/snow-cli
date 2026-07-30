@@ -148,7 +148,9 @@ test('confirmed-live local owner never expires only because of age', t => {
 test('soft-stale is live pid with old heartbeat and is not hard-stale', t => {
 	const now = Date.now();
 	const soft = owner({
-		heartbeatAt: new Date(now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1).toISOString(),
+		heartbeatAt: new Date(
+			now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1,
+		).toISOString(),
 	});
 	t.deepEqual(getLockLiveness(soft, now), {
 		pidAlive: true,
@@ -170,7 +172,9 @@ test('soft-stale is live pid with old heartbeat and is not hard-stale', t => {
 	// Cross-host never soft-stales; only hard rules apply.
 	const remoteSoftAge = owner({
 		hostname: `${os.hostname()}-remote`,
-		heartbeatAt: new Date(now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1).toISOString(),
+		heartbeatAt: new Date(
+			now - PLAN_OWNER_LOCK_SOFT_STALE_MS - 1,
+		).toISOString(),
 	});
 	t.deepEqual(getLockLiveness(remoteSoftAge, now), {
 		pidAlive: 'unknown',

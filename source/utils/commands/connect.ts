@@ -2,11 +2,11 @@ import {
 	registerCommand,
 	type CommandResult,
 } from '../execution/commandExecutor.js';
-import {connectionManager, type ConnectionConfig} from '../connection/ConnectionManager.js';
+import {connectionManager} from '../connection/ConnectionManager.js';
 
 // Connect command handler - show connection panel for instance connection
 registerCommand('connect', {
-	execute: (args?: string): CommandResult => {
+	execute(args?: string): CommandResult {
 		// If args provided, try to parse as URL
 		if (args?.trim()) {
 			const url = args.trim();
@@ -27,7 +27,7 @@ registerCommand('connect', {
 
 // Disconnect command handler
 registerCommand('disconnect', {
-	execute: async (): Promise<CommandResult> => {
+	async execute(): Promise<CommandResult> {
 		const result = await connectionManager.disconnect();
 		return {
 			success: result.success,
@@ -38,15 +38,17 @@ registerCommand('disconnect', {
 
 // Connection status command
 registerCommand('connection-status', {
-	execute: (): CommandResult => {
+	execute(): CommandResult {
 		const state = connectionManager.getState();
 		let message = `Status: ${state.status}`;
 		if (state.instanceId) {
 			message += `\nInstance: ${state.instanceName || state.instanceId}`;
 		}
+
 		if (state.error) {
 			message += `\nError: ${state.error}`;
 		}
+
 		return {
 			success: true,
 			message,
@@ -54,5 +56,9 @@ registerCommand('connection-status', {
 	},
 });
 
-export {connectionManager, type ConnectionConfig};
 export default {};
+
+export {
+	type ConnectionConfig,
+	connectionManager,
+} from '../connection/ConnectionManager.js';

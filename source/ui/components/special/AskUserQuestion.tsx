@@ -71,7 +71,10 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			return;
 		}
 
-		if (optionItems.length > 0 && highlightedOptionIndex >= optionItems.length) {
+		if (
+			optionItems.length > 0 &&
+			highlightedOptionIndex >= optionItems.length
+		) {
 			setHighlightedOptionIndex(optionItems.length - 1);
 		}
 	}, [optionItems.length, highlightedOptionIndex, cursorMode]);
@@ -91,10 +94,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 		const halfWindow = Math.floor(VISIBLE_OPTION_ROWS / 2);
 		let startIndex = Math.max(0, highlightedOptionIndex - halfWindow);
-		const endIndex = Math.min(
-			total,
-			startIndex + VISIBLE_OPTION_ROWS,
-		);
+		const endIndex = Math.min(total, startIndex + VISIBLE_OPTION_ROWS);
 
 		if (endIndex - startIndex < VISIBLE_OPTION_ROWS) {
 			startIndex = Math.max(0, endIndex - VISIBLE_OPTION_ROWS);
@@ -110,13 +110,16 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	}, [optionItems, highlightedOptionIndex]);
 
 	const optionListScrollable = optionItems.length > VISIBLE_OPTION_ROWS;
-	const formatOptionLabel = useCallback((label: string, isHighlighted: boolean) => {
-		if (isHighlighted || label.length <= NON_FOCUSED_OPTION_MAX_LEN) {
-			return label;
-		}
+	const formatOptionLabel = useCallback(
+		(label: string, isHighlighted: boolean) => {
+			if (isHighlighted || label.length <= NON_FOCUSED_OPTION_MAX_LEN) {
+				return label;
+			}
 
-		return `${label.slice(0, NON_FOCUSED_OPTION_MAX_LEN - 3)}...`;
-	}, []);
+			return `${label.slice(0, NON_FOCUSED_OPTION_MAX_LEN - 3)}...`;
+		},
+		[],
+	);
 
 	const handleSubmit = useCallback(() => {
 		if (hasAnswered) return;
@@ -253,9 +256,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			}
 
 			if (key.tab) {
-				setCursorMode(prev =>
-					prev === 'custom' ? 'cancel' : 'custom',
-				);
+				setCursorMode(prev => (prev === 'custom' ? 'cancel' : 'custom'));
 				return;
 			}
 
@@ -368,47 +369,30 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 						) : null}
 						<Box flexDirection="column">
 							{optionDisplayWindow.windowItems.map((item, rowIndex) => {
-								const index =
-									optionDisplayWindow.startIndex + rowIndex;
+								const index = optionDisplayWindow.startIndex + rowIndex;
 								const isHighlighted =
-									cursorMode === 'options' &&
-									index === highlightedOptionIndex;
+									cursorMode === 'options' && index === highlightedOptionIndex;
 								const isChecked =
-									item.index >= 0 &&
-									checkedIndices.has(item.index);
+									item.index >= 0 && checkedIndices.has(item.index);
 
 								return (
 									<Box key={item.value}>
 										<Text
-											color={
-												isHighlighted
-													? theme.colors.menuInfo
-													: undefined
-											}
+											color={isHighlighted ? theme.colors.menuInfo : undefined}
 										>
 											{isHighlighted ? '▸ ' : '  '}
 										</Text>
 										<Text
-											color={
-												isChecked
-													? theme.colors.success
-													: undefined
-											}
+											color={isChecked ? theme.colors.success : undefined}
 											dimColor={!isChecked}
 										>
 											{isChecked ? '[✓] ' : '[ ] '}
 										</Text>
 										<Text
-											color={
-												isHighlighted
-													? theme.colors.menuInfo
-													: undefined
-											}
+											color={isHighlighted ? theme.colors.menuInfo : undefined}
 											dimColor={!isHighlighted}
 										>
-											{item.index >= 0
-												? `${item.index + 1}. `
-												: ''}
+											{item.index >= 0 ? `${item.index + 1}. ` : ''}
 											{formatOptionLabel(item.label, isHighlighted)}
 										</Text>
 									</Box>

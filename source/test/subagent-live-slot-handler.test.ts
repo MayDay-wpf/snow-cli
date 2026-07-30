@@ -753,3 +753,41 @@ test('done after content marks live slot completed without completed history sum
 		),
 	);
 });
+
+test('final done freezes cumulative provider usage on the live slot', t => {
+	const {handler} = makeHandler();
+	const agentId = 'inst-final-usage';
+	handler.handleMessage(
+		[],
+		asSubAgentMsg({
+			agentId,
+			message: {type: 'content', content: 'final response'},
+		}),
+	);
+
+	handler.handleMessage(
+		[],
+		asSubAgentMsg({
+			agentId,
+			message: {
+				type: 'done',
+				final: true,
+				usage: {
+					inputTokens: 1000,
+					outputTokens: 200,
+					cacheCreationInputTokens: 300,
+					cacheReadInputTokens: 400,
+				},
+			},
+		}),
+	);
+
+	const slot = getSubAgentLiveSlot(agentId);
+	t.is(slot?.status, 'completed');
+	t.deepEqual(slot?.finalUsage, {
+		inputTokens: 1000,
+		outputTokens: 200,
+		cacheCreationInputTokens: 300,
+		cacheReadInputTokens: 400,
+	});
+});

@@ -22,8 +22,8 @@ function formatStatus(enabled: boolean): string {
 		source === 'project'
 			? messages.sourceProject
 			: source === 'global'
-				? messages.sourceGlobal
-				: messages.sourceDefault;
+			? messages.sourceGlobal
+			: messages.sourceDefault;
 	const base = enabled ? messages.statusEnabled : messages.statusDisabled;
 	return `${base} (${sourceLabel})`;
 }
@@ -80,6 +80,5 @@ function executeAgentsInject(args?: string): CommandResult {
 registerCommand('agents-inject', {
 	execute: executeAgentsInject,
 });
-
 
 export default {};

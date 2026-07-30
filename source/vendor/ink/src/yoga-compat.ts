@@ -4,7 +4,6 @@
  * regular JS GC applies.
  */
 import YogaEngine, {
-	type Node,
 	Align,
 	Direction,
 	Display,
@@ -17,8 +16,6 @@ import YogaEngine, {
 	PositionType,
 	Wrap,
 } from './yoga-ts/index.js';
-
-export type {Node as Node};
 
 const Yoga = {
 	Node: YogaEngine.Node,
@@ -76,3 +73,5 @@ const Yoga = {
 };
 
 export default Yoga;
+
+export {type Node} from './yoga-ts/index.js';

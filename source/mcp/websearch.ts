@@ -3,7 +3,10 @@ import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {extname, join} from 'node:path';
 import {spawn, type ChildProcess} from 'node:child_process';
-import {getProxyConfig} from '../utils/config/proxyConfig.js';
+import {
+	getProxyConfig,
+	sanitizeProxyHost,
+} from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {logger} from '../utils/core/logger.js';
 // Type definitions
@@ -246,7 +249,8 @@ export class WebSearchService {
 
 		// Only add proxy if enabled
 		if (proxyConfig.enabled) {
-			launchArgs.unshift(`--proxy-server=http://127.0.0.1:${proxyConfig.port}`);
+			const host = sanitizeProxyHost(proxyConfig.host);
+			launchArgs.unshift(`--proxy-server=http://${host}:${proxyConfig.port}`);
 		}
 
 		// On Windows, puppeteer.launch() is unreliable with Edge/Chrome: the
@@ -717,8 +721,7 @@ export class WebSearchService {
 					value.replace(/\s+/g, ' ').trim();
 
 				// Keep edge spaces for text nodes so adjacent inline nodes do not glue together.
-				const normalizeTextNode = (value: string) =>
-					value.replace(/\s+/g, ' ');
+				const normalizeTextNode = (value: string) => value.replace(/\s+/g, ' ');
 
 				const isHidden = (el: Element) => {
 					const style = window.getComputedStyle(el);
@@ -800,7 +803,10 @@ export class WebSearchService {
 								.find(c => c.startsWith('language-'))
 								?.replace('language-', '') || '';
 						const fence = '```';
-						return `${fence}${lang}\n${codeText.replace(/\n$/, '')}\n${fence}\n\n`;
+						return `${fence}${lang}\n${codeText.replace(
+							/\n$/,
+							'',
+						)}\n${fence}\n\n`;
 					}
 
 					if (tag === 'code') {
@@ -820,7 +826,11 @@ export class WebSearchService {
 								.join(''),
 						);
 						if (!label) return '';
-						if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
+						if (
+							!href ||
+							href.startsWith('#') ||
+							href.startsWith('javascript:')
+						) {
 							return label;
 						}
 						return `[${label}](${href})`;
@@ -839,8 +849,7 @@ export class WebSearchService {
 								.replace(/\n{3,}/g, '\n\n');
 							if (!body) return;
 							const indent = '  '.repeat(Math.min(listDepth, 2));
-							const bullet =
-								tag === 'ol' ? `${index + 1}.` : '-';
+							const bullet = tag === 'ol' ? `${index + 1}.` : '-';
 							const [first, ...rest] = body.split('\n');
 							lines.push(`${indent}${bullet} ${first}`);
 							for (const line of rest) {
@@ -911,7 +920,9 @@ export class WebSearchService {
 			});
 
 			// Normalize markdown-ish text while preserving structure.
-			let cleanedContent = normalizeLightweightMarkdown(pageData.textContent || '');
+			let cleanedContent = normalizeLightweightMarkdown(
+				pageData.textContent || '',
+			);
 
 			// Limit content length near paragraph boundaries when possible.
 			if (cleanedContent.length > maxLength) {

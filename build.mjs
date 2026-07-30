@@ -1,13 +1,7 @@
+import {copyFileSync, cpSync, existsSync, mkdirSync, rmSync} from 'node:fs';
+import {builtinModules} from 'node:module';
+import {join, resolve} from 'node:path';
 import * as esbuild from 'esbuild';
-import {
-	copyFileSync,
-	cpSync,
-	existsSync,
-	mkdirSync,
-	rmSync,
-} from 'fs';
-import {builtinModules} from 'module';
-import {join, resolve} from 'path';
 
 // Plugin to stub out optional dependencies
 const stubPlugin = {
@@ -201,7 +195,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 		// They are dynamically required at runtime and must be in package.json dependencies
 	],
 	alias: {
-		'ink': resolve('source/vendor/ink/src/index.ts'),
+		ink: resolve('source/vendor/ink/src/index.ts'),
 	},
 	plugins: [stubPlugin],
 	minify: false,
@@ -211,10 +205,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 });
 
 // Copy WASM files
-copyFileSync(
-	'node_modules/sql.js/dist/sql-wasm.wasm',
-	'bundle/sql-wasm.wasm',
-);
+copyFileSync('node_modules/sql.js/dist/sql-wasm.wasm', 'bundle/sql-wasm.wasm');
 copyFileSync(
 	'node_modules/tiktoken/tiktoken_bg.wasm',
 	'bundle/tiktoken_bg.wasm',
@@ -236,15 +227,23 @@ function copyDir(src, dest) {
 		console.warn(`⚠ Skip missing asset: ${src}`);
 		return false;
 	}
+
 	if (existsSync(dest)) {
 		rmSync(dest, {recursive: true, force: true});
 	}
+
 	cpSync(src, dest, {recursive: true});
 	return true;
 }
 
-const docsCopied = copyDir(join('docs', 'usage'), join('bundle', 'docs', 'usage'));
-const skillsCopied = copyDir(join('source', 'skills'), join('bundle', 'skills'));
+const docsCopied = copyDir(
+	join('docs', 'usage'),
+	join('bundle', 'docs', 'usage'),
+);
+const skillsCopied = copyDir(
+	join('source', 'skills'),
+	join('bundle', 'skills'),
+);
 if (docsCopied) console.log('✓ Bundled docs/usage');
 if (skillsCopied) console.log('✓ Bundled skills');
 

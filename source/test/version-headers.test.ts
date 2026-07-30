@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import anyTest, {type TestFn} from 'ava';
 
 import {
@@ -11,6 +12,10 @@ const test = anyTest as unknown as TestFn;
 
 test('getDefaultUserAgent uses snow-cli/<version> (cli) format', t => {
 	const version = getPackageVersion();
+	const packageVersion = (
+		JSON.parse(readFileSync('package.json', 'utf8')) as {version: string}
+	).version;
+	t.is(version, packageVersion);
 	t.is(getDefaultUserAgent(), `snow-cli/${version} (cli)`);
 });
 

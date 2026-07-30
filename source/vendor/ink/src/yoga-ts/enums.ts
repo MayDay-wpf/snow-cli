@@ -47,8 +47,8 @@ export const Errata = {
 	StretchFlexBasis: 1,
 	AbsolutePositionWithoutInsetsExcludesPadding: 2,
 	AbsolutePercentAgainstInnerSize: 4,
-	All: 2147483647,
-	Classic: 2147483646,
+	All: 2_147_483_647,
+	Classic: 2_147_483_646,
 } as const;
 export type Errata = (typeof Errata)[keyof typeof Errata];
 

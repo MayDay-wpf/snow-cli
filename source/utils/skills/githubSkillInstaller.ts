@@ -334,7 +334,6 @@ async function downloadAndExtract(
 	// but may not be present at runtime).
 	if (!extracted) {
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			// @ts-ignore - tar is an optional dependency that may not have type declarations
 			const tar = await import(/* @vite-ignore */ 'tar');
 			await tar.x({

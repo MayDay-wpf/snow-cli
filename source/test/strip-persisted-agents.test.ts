@@ -9,8 +9,7 @@ import {
 const test = anyTest as unknown as TestFn;
 
 test('strip simple heading + body + user text', t => {
-	const dirty =
-		'## Project Context (AGENTS.md)\n\ninjected\n\nreal user text';
+	const dirty = '## Project Context (AGENTS.md)\n\ninjected\n\nreal user text';
 	t.is(stripPersistedAgentsContext(dirty), 'real user text');
 });
 

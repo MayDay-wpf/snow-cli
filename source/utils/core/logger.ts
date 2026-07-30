@@ -64,7 +64,7 @@ export class Logger {
 		const basename = path.basename(filePath, ext);
 		const dirname = path.dirname(filePath);
 		const rotatedPath = path.join(dirname, `${basename}-${timestamp}${ext}`);
-		
+
 		fs.renameSync(filePath, rotatedPath);
 	}
 

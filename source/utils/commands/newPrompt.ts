@@ -4,7 +4,10 @@ import {
 } from '../execution/commandExecutor.js';
 import {getSnowConfig} from '../config/apiConfig.js';
 import {getSubAgents} from '../config/subAgentConfig.js';
-import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
+import {
+	createStreamingChatCompletion,
+	type ChatMessage,
+} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
@@ -83,8 +86,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 				frameworks.push('NestJS');
 			if (depNames.includes('electron')) frameworks.push('Electron');
 			if (depNames.includes('ink')) frameworks.push('Ink (CLI)');
-			if (depNames.includes('react-native'))
-				frameworks.push('React Native');
+			if (depNames.includes('react-native')) frameworks.push('React Native');
 			if (depNames.includes('expo')) frameworks.push('Expo');
 			if (depNames.includes('astro')) frameworks.push('Astro');
 			if (depNames.includes('remix') || depNames.includes('@remix-run/node'))
@@ -101,8 +103,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 
 			if (has('pnpm-lock.yaml')) buildTools.push('pnpm');
 			else if (has('yarn.lock')) buildTools.push('yarn');
-			else if (has('bun.lockb') || has('bun.lock'))
-				buildTools.push('Bun');
+			else if (has('bun.lockb') || has('bun.lock')) buildTools.push('Bun');
 			else if (has('package-lock.json')) buildTools.push('npm');
 
 			if (depNames.length) deps.push(`Node deps: ${depNames.join(', ')}`);
@@ -164,9 +165,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 	}
 	if (has('manage.py') && !frameworks.includes('Django'))
 		frameworks.push('Django');
-	if (
-		(has('Pipfile') && !buildTools.includes('Pipenv'))
-	)
+	if (has('Pipfile') && !buildTools.includes('Pipenv'))
 		buildTools.push('Pipenv');
 	if (has('uv.lock')) buildTools.push('uv');
 
@@ -196,8 +195,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 					.map(l => l.match(/^(\w[\w-]*)\s*=/)?.[1])
 					.filter(Boolean)
 					.slice(0, 30);
-				if (rustDeps.length)
-					deps.push(`Rust deps: ${rustDeps.join(', ')}`);
+				if (rustDeps.length) deps.push(`Rust deps: ${rustDeps.join(', ')}`);
 			}
 		}
 	}
@@ -215,9 +213,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 			if (/echo.*labstack/i.test(content)) frameworks.push('Echo');
 			if (/gorilla\/mux/i.test(content)) frameworks.push('Gorilla Mux');
 
-			const requireBlock = content.match(
-				/require\s*\(([\s\S]*?)\)/,
-			);
+			const requireBlock = content.match(/require\s*\(([\s\S]*?)\)/);
 			if (requireBlock?.[1]) {
 				const goDeps = requireBlock[1]
 					.split('\n')
@@ -235,13 +231,11 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 			languages.push('Kotlin');
 		else languages.push('Java');
 		if (has('pom.xml')) buildTools.push('Maven');
-		if (hasAny('build.gradle', 'build.gradle.kts'))
-			buildTools.push('Gradle');
+		if (hasAny('build.gradle', 'build.gradle.kts')) buildTools.push('Gradle');
 		const pomContent =
 			has('pom.xml') && readFileSafe(path.join(cwd, 'pom.xml'));
 		if (pomContent) {
-			if (/spring-boot/i.test(pomContent))
-				frameworks.push('Spring Boot');
+			if (/spring-boot/i.test(pomContent)) frameworks.push('Spring Boot');
 			if (/quarkus/i.test(pomContent)) frameworks.push('Quarkus');
 		}
 		const gradleFile = has('build.gradle.kts')
@@ -250,8 +244,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 		const gradleContent =
 			has(gradleFile) && readFileSafe(path.join(cwd, gradleFile));
 		if (gradleContent) {
-			if (/spring-boot/i.test(gradleContent))
-				frameworks.push('Spring Boot');
+			if (/spring-boot/i.test(gradleContent)) frameworks.push('Spring Boot');
 			if (/android/i.test(gradleContent)) frameworks.push('Android');
 			if (/ktor/i.test(gradleContent)) frameworks.push('Ktor');
 		}
@@ -263,9 +256,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 	if (csprojFiles.length || slnFiles.length) {
 		languages.push('C#/.NET');
 		if (csprojFiles.length) {
-			const content = readFileSafe(
-				path.join(cwd, csprojFiles[0]!),
-			);
+			const content = readFileSafe(path.join(cwd, csprojFiles[0]!));
 			if (content) {
 				if (/Blazor|Microsoft\.AspNetCore/i.test(content))
 					frameworks.push('ASP.NET');
@@ -299,12 +290,9 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 				projectMeta.push(`Name: ${pkg.name}`);
 			if (pkg.description) projectMeta.push(`Description: ${pkg.description}`);
 			const phpDeps = pkg.require ? Object.keys(pkg.require) : [];
-			if (phpDeps.some(d => /laravel/i.test(d)))
-				frameworks.push('Laravel');
-			if (phpDeps.some(d => /symfony/i.test(d)))
-				frameworks.push('Symfony');
-			if (phpDeps.length)
-				deps.push(`PHP deps: ${phpDeps.join(', ')}`);
+			if (phpDeps.some(d => /laravel/i.test(d))) frameworks.push('Laravel');
+			if (phpDeps.some(d => /symfony/i.test(d))) frameworks.push('Symfony');
+			if (phpDeps.length) deps.push(`PHP deps: ${phpDeps.join(', ')}`);
 		} catch {
 			// ignore
 		}
@@ -314,8 +302,7 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 	if (has('Package.swift')) {
 		languages.push('Swift');
 		buildTools.push('Swift Package Manager');
-		if (hasAny('*.xcodeproj', '*.xcworkspace'))
-			buildTools.push('Xcode');
+		if (hasAny('*.xcodeproj', '*.xcworkspace')) buildTools.push('Xcode');
 		const content = readFileSafe(path.join(cwd, 'Package.swift'));
 		if (content) {
 			if (/Vapor/i.test(content)) frameworks.push('Vapor');
@@ -396,20 +383,38 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 				}
 			}
 			const extToLang: Record<string, string> = {
-				'.ts': 'TypeScript', '.tsx': 'TypeScript',
-				'.js': 'JavaScript', '.jsx': 'JavaScript',
-				'.py': 'Python', '.rs': 'Rust', '.go': 'Go',
-				'.java': 'Java', '.kt': 'Kotlin', '.kts': 'Kotlin',
-				'.cs': 'C#', '.fs': 'F#',
-				'.rb': 'Ruby', '.php': 'PHP',
-				'.swift': 'Swift', '.m': 'Objective-C',
-				'.dart': 'Dart', '.zig': 'Zig',
-				'.c': 'C', '.cpp': 'C++', '.cc': 'C++', '.h': 'C/C++',
-				'.ex': 'Elixir', '.exs': 'Elixir',
-				'.scala': 'Scala', '.clj': 'Clojure',
-				'.lua': 'Lua', '.r': 'R',
-				'.jl': 'Julia', '.hs': 'Haskell',
-				'.vue': 'Vue', '.svelte': 'Svelte',
+				'.ts': 'TypeScript',
+				'.tsx': 'TypeScript',
+				'.js': 'JavaScript',
+				'.jsx': 'JavaScript',
+				'.py': 'Python',
+				'.rs': 'Rust',
+				'.go': 'Go',
+				'.java': 'Java',
+				'.kt': 'Kotlin',
+				'.kts': 'Kotlin',
+				'.cs': 'C#',
+				'.fs': 'F#',
+				'.rb': 'Ruby',
+				'.php': 'PHP',
+				'.swift': 'Swift',
+				'.m': 'Objective-C',
+				'.dart': 'Dart',
+				'.zig': 'Zig',
+				'.c': 'C',
+				'.cpp': 'C++',
+				'.cc': 'C++',
+				'.h': 'C/C++',
+				'.ex': 'Elixir',
+				'.exs': 'Elixir',
+				'.scala': 'Scala',
+				'.clj': 'Clojure',
+				'.lua': 'Lua',
+				'.r': 'R',
+				'.jl': 'Julia',
+				'.hs': 'Haskell',
+				'.vue': 'Vue',
+				'.svelte': 'Svelte',
 			};
 			const detected = new Set<string>();
 			for (const [ext] of [...exts.entries()].sort((a, b) => b[1] - a[1])) {
@@ -477,9 +482,7 @@ function gatherProjectContext(): string {
 					content.length > 1500
 						? content.slice(0, 1500) + '\n...(truncated)'
 						: content;
-				sections.push(
-					`[Project Documentation - AGENTS.md]\n${truncated}`,
-				);
+				sections.push(`[Project Documentation - AGENTS.md]\n${truncated}`);
 			}
 		}
 	} catch {
@@ -490,9 +493,20 @@ function gatherProjectContext(): string {
 	try {
 		const entries = fs.readdirSync(cwd, {withFileTypes: true});
 		const ignore = new Set([
-			'node_modules', '.git', '.DS_Store', 'dist', 'build',
-			'.next', '.nuxt', 'coverage', '__pycache__', '.venv',
-			'venv', 'target', '.idea', '.vscode',
+			'node_modules',
+			'.git',
+			'.DS_Store',
+			'dist',
+			'build',
+			'.next',
+			'.nuxt',
+			'coverage',
+			'__pycache__',
+			'.venv',
+			'venv',
+			'target',
+			'.idea',
+			'.vscode',
 		]);
 		const items = entries
 			.filter(e => !ignore.has(e.name))
@@ -544,7 +558,11 @@ ${projectContext}
 5. Keep the prompt focused and avoid unnecessary verbosity
 6. Reference specific file paths, function names, dependencies, or patterns from the project context when relevant
 7. The generated prompt should be ready to use directly - no meta-commentary
-${agentDescriptions ? `\nNote: The AI assistant also supports the following sub-agents. If you think delegating part of the task to a sub-agent would be beneficial, you may optionally mention it (prefix with agent_), but only when it clearly adds value:\n${agentDescriptions}\n` : ''}
+${
+	agentDescriptions
+		? `\nNote: The AI assistant also supports the following sub-agents. If you think delegating part of the task to a sub-agent would be beneficial, you may optionally mention it (prefix with agent_), but only when it clearly adds value:\n${agentDescriptions}\n`
+		: ''
+}
 Output ONLY the generated prompt text, nothing else.`;
 
 	const messages: ChatMessage[] = [

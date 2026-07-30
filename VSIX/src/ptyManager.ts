@@ -22,7 +22,10 @@ export type ResolvedShell = {
 };
 
 export function detectShellFamily(shellPath: string): ShellFamily {
-	const name = path.basename(shellPath).toLowerCase().replace(/\.exe$/, '');
+	const name = path
+		.basename(shellPath)
+		.toLowerCase()
+		.replace(/\.exe$/, '');
 	if (name === 'cmd') {
 		return 'cmd';
 	}
@@ -74,7 +77,10 @@ function stripWrappingQuotes(value: string): string {
 
 function expandShellPath(rawPath: string): string {
 	return stripWrappingQuotes(rawPath)
-		.replace(/\$\{env:([^}]+)\}/gi, (_match, name: string) => getEnvValue(name) ?? '')
+		.replace(
+			/\$\{env:([^}]+)\}/gi,
+			(_match, name: string) => getEnvValue(name) ?? '',
+		)
 		.replace(/%([^%]+)%/g, (_match, name: string) => getEnvValue(name) ?? '');
 }
 
@@ -97,7 +103,11 @@ function hasPathSeparator(value: string): boolean {
 }
 
 function resolveExecutableFromPath(executable: string): string | undefined {
-	if (!executable || isAbsoluteShellPath(executable) || hasPathSeparator(executable)) {
+	if (
+		!executable ||
+		isAbsoluteShellPath(executable) ||
+		hasPathSeparator(executable)
+	) {
 		return undefined;
 	}
 
@@ -108,11 +118,12 @@ function resolveExecutableFromPath(executable: string): string | undefined {
 
 	const isWindows = os.platform() === 'win32';
 	const hasExtension = path.extname(executable) !== '';
-	const extensions = isWindows && !hasExtension
-		? (getEnvValue('PATHEXT') || '.COM;.EXE;.BAT;.CMD')
-			.split(';')
-			.filter(Boolean)
-		: [''];
+	const extensions =
+		isWindows && !hasExtension
+			? (getEnvValue('PATHEXT') || '.COM;.EXE;.BAT;.CMD')
+					.split(';')
+					.filter(Boolean)
+			: [''];
 	for (const directory of pathValue.split(path.delimiter)) {
 		if (!directory) {
 			continue;
@@ -171,9 +182,11 @@ export function resolveProfileShellPath(
 }
 
 function detectPowerShellPath(): string {
-	return resolveExecutableFromPath('pwsh.exe') ??
+	return (
+		resolveExecutableFromPath('pwsh.exe') ??
 		resolveExecutableFromPath('powershell.exe') ??
-		'powershell.exe';
+		'powershell.exe'
+	);
 }
 
 function windowsFallback(): ResolvedShell {
@@ -188,9 +201,15 @@ function posixFallback(): ResolvedShell {
 
 function resolveAutoFromVSCode(): ResolvedShell | undefined {
 	const platform = os.platform();
-	const platformKey = platform === 'win32' ? 'windows' : platform === 'darwin' ? 'osx' : 'linux';
-	const integratedConfig = vscode.workspace.getConfiguration('terminal.integrated');
-	const defaultProfileName = integratedConfig.get<string>(`defaultProfile.${platformKey}`, '');
+	const platformKey =
+		platform === 'win32' ? 'windows' : platform === 'darwin' ? 'osx' : 'linux';
+	const integratedConfig = vscode.workspace.getConfiguration(
+		'terminal.integrated',
+	);
+	const defaultProfileName = integratedConfig.get<string>(
+		`defaultProfile.${platformKey}`,
+		'',
+	);
 	if (!defaultProfileName) {
 		return undefined;
 	}
@@ -262,7 +281,8 @@ export class PtyManager {
 		}
 
 		this.events = events;
-		const shell = this.resolvedShell?.path ?? (process.env.SHELL || '/bin/bash');
+		const shell =
+			this.resolvedShell?.path ?? (process.env.SHELL || '/bin/bash');
 		const shellArgs = this.resolvedShell?.args ?? ['-l'];
 		const proxyEnv = getSnowTerminalProxyEnv();
 		const spawnEnv = {
@@ -362,7 +382,10 @@ export class PtyManager {
 		return this.ptyProcess !== undefined;
 	}
 
-	private normalizeDimension(value: number | undefined, fallback: number): number {
+	private normalizeDimension(
+		value: number | undefined,
+		fallback: number,
+	): number {
 		if (typeof value !== 'number' || !Number.isFinite(value)) {
 			return fallback;
 		}

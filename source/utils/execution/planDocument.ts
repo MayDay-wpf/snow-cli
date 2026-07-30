@@ -17,6 +17,9 @@ import {
 } from './planCache.js';
 import {planEvents} from './planEvents.js';
 import {listActivePlanMarkdownPaths} from './planPaths.js';
+import {replacePlanFileAtomically} from './plan-persistence.js';
+import {measurePlanOperation} from './plan-metrics.js';
+import {validatePlanCheckCommand} from './planCommandPolicy.js';
 
 export type PlanStatus =
 	| 'draft'
@@ -27,8 +30,13 @@ export type PlanStatus =
 	| 'abandoned';
 
 export type PlanComplexity = 'simple' | 'medium' | 'complex';
+export type PlanExecutionStrategy = 'standard' | 'tdd';
+export type PlanPhaseCheck =
+	| {type: 'command'; command: string}
+	| {type: 'diagnostics'}
+	| {type: 'manual'; description: string};
 
-export interface PlanFrontmatter {
+export type PlanFrontmatter = {
 	status: PlanStatus;
 	/** 1-based; 0 = not started */
 	current_phase: number;
@@ -37,46 +45,60 @@ export interface PlanFrontmatter {
 	approved_at?: string;
 	title?: string;
 	complexity?: PlanComplexity;
+	acceptance_policy?: 'standard' | 'strict';
 	updated_at?: string;
-}
+	phase_started_at?: string;
+	phase_baseline?: Record<string, string>;
+	accepted_phases?: number[];
+};
 
-export interface PlanStep {
+export type PlanStep = {
 	text: string;
 	checked: boolean;
 	/** 0-based line index within the content (after frontmatter), for write-back */
 	line: number;
-}
+};
 
-export interface PlanPhase {
+export type PlanPhase = {
 	index: number;
 	title: string;
+	delivers?: string;
+	executionStrategy?: PlanExecutionStrategy;
+	checks?: PlanPhaseCheck[];
 	files: string[];
 	steps: PlanStep[];
 	doneWhen: string[];
-}
+};
 
-export interface PlanDoc {
+export type PlanDoc = {
 	filePath: string;
 	frontmatter: PlanFrontmatter;
 	title: string;
 	affectedFiles: string[];
 	phases: PlanPhase[];
 	raw: string;
-	/** true when the file had no frontmatter (old format) */
+	/** True when the file had no frontmatter (old format) */
 	legacy: boolean;
 	eol: '\n' | '\r\n';
 	mtimeMs: number;
-}
+};
 
-export interface PlanValidationIssue {
+export type PlanValidationIssue = {
 	code:
 		| 'no_phases'
+		| 'phase_sequence'
+		| 'current_phase_invalid'
 		| 'phase_no_steps'
 		| 'phase_no_done_when'
+		| 'phase_no_delivers'
+		| 'tdd_no_command_check'
+		| 'unsafe_check_command'
+		| 'complex_phase_no_checks'
 		| 'missing_file'
 		| 'complex_missing_sections';
 	message: string;
-}
+	severity?: 'error' | 'warning';
+};
 
 const PLAN_STATUSES: PlanStatus[] = [
 	'draft',
@@ -111,39 +133,104 @@ export function normalizeFrontmatter(data: any): PlanFrontmatter {
 	if (typeof source.approved_at === 'string' && source.approved_at.trim()) {
 		frontmatter.approved_at = source.approved_at;
 	}
+
 	if (typeof source.title === 'string' && source.title.trim()) {
 		frontmatter.title = source.title.trim();
 	}
+
 	if (
 		typeof source.complexity === 'string' &&
 		PLAN_COMPLEXITIES.includes(source.complexity as PlanComplexity)
 	) {
 		frontmatter.complexity = source.complexity as PlanComplexity;
 	}
+
+	if (
+		source.acceptance_policy === 'standard' ||
+		source.acceptance_policy === 'strict'
+	) {
+		frontmatter.acceptance_policy = source.acceptance_policy;
+	}
+
 	if (typeof source.updated_at === 'string' && source.updated_at.trim()) {
 		frontmatter.updated_at = source.updated_at;
 	}
+
+	if (
+		typeof source.phase_started_at === 'string' &&
+		source.phase_started_at.trim()
+	) {
+		frontmatter.phase_started_at = source.phase_started_at;
+	}
+
+	if (
+		source.phase_baseline &&
+		typeof source.phase_baseline === 'object' &&
+		!Array.isArray(source.phase_baseline)
+	) {
+		frontmatter.phase_baseline = Object.fromEntries(
+			Object.entries(source.phase_baseline).filter(
+				(entry): entry is [string, string] => typeof entry[1] === 'string',
+			),
+		);
+	}
+
+	if (Array.isArray(source.accepted_phases)) {
+		frontmatter.accepted_phases = source.accepted_phases
+			.map(Number)
+			.filter((value: number) => Number.isInteger(value) && value > 0);
+	}
+
 	return frontmatter;
 }
 
-const PHASE_HEADING_RE = /^#{2,3}\s+Phase\s+(\d+)\s*[:：]?\s*(.*)$/i;
+const PHASE_HEADING_RE = /^#{2,3}\s+phase\s+(\d+)\s*[:：]?\s*(.*)$/i;
 const SECTION_RE =
-	/^(?:[-*]\s+)?\*\*(Files|Steps|Done when|文件|步骤|完成标准)\**\s*[:：]?\s*\**\s*[:：]?\s*(.*)$/i;
-const CHECKBOX_RE = /^\s*-\s*\[( |x|X)\]\s+(.*)$/;
+	/^(?:[-*]\s+)?\*{2}(delivers|execution strategy|files|steps|checks|done when|交付|执行策略|文件|步骤|检查|完成标准)(?:\**\s*[:：]?\s*){2}(.*)$/i;
+const CHECKBOX_RE = /^\s*-\s*\[([ Xx])]\s+(.*)$/;
 const LIST_ITEM_RE = /^\s*-\s+(.*)$/;
-const AFFECTED_FILES_RE = /^##\s+Affected files/i;
+const AFFECTED_FILES_RE = /^##\s+affected files/i;
 
-type PhaseSection = 'files' | 'steps' | 'doneWhen' | null;
+type PhaseSection =
+	| 'delivers'
+	| 'executionStrategy'
+	| 'files'
+	| 'steps'
+	| 'checks'
+	| 'doneWhen'
+	| null;
 
 function sectionKey(label: string): PhaseSection {
 	const lower = label.toLowerCase();
+	if (lower === 'delivers' || label === '交付') return 'delivers';
+	if (lower === 'execution strategy' || label === '执行策略') {
+		return 'executionStrategy';
+	}
+
 	if (lower === 'files' || label === '文件') return 'files';
 	if (lower === 'steps' || label === '步骤') return 'steps';
+	if (lower === 'checks' || label === '检查') return 'checks';
 	if (lower === 'done when' || label === '完成标准') return 'doneWhen';
 	return null;
 }
 
 const createMarkerPattern = /\((new|新建|create[ds]?)\)/i;
+
+function parsePhaseCheck(text: string): PlanPhaseCheck | null {
+	const trimmed = text.trim();
+	if (/^diagnostics$/i.test(trimmed)) return {type: 'diagnostics'};
+	const command = /^command\s*[:：]\s*(.+)$/i.exec(trimmed);
+	if (command?.[1]?.trim()) {
+		return {type: 'command', command: command[1].trim()};
+	}
+
+	const manual = /^manual\s*[:：]\s*(.+)$/i.exec(trimmed);
+	if (manual?.[1]?.trim()) {
+		return {type: 'manual', description: manual[1].trim()};
+	}
+
+	return null;
+}
 
 /**
  * Normalize a plan file-list item into a path candidate.
@@ -203,8 +290,8 @@ export function parsePhasesFromMarkdown(content: string): {
 	let currentSection: PhaseSection = null;
 	let inAffectedFiles = false;
 
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]!;
+	for (const [i, line_] of lines.entries()) {
+		const line = line_;
 
 		if (!title) {
 			const titleMatch = /^#\s+(.*)$/.exec(line);
@@ -221,6 +308,7 @@ export function parsePhasesFromMarkdown(content: string): {
 				title: phaseMatch[2]!.trim(),
 				files: [],
 				steps: [],
+				checks: [],
 				doneWhen: [],
 			};
 			phases.push(currentPhase);
@@ -249,6 +337,7 @@ export function parsePhasesFromMarkdown(content: string): {
 				const p = cleanListPath(item[1]!);
 				if (p) affectedFiles.push(p);
 			}
+
 			continue;
 		}
 
@@ -268,7 +357,18 @@ export function parsePhasesFromMarkdown(content: string): {
 				}
 			} else if (inline && currentSection === 'doneWhen') {
 				currentPhase.doneWhen.push(inline);
+			} else if (inline && currentSection === 'delivers') {
+				currentPhase.delivers = inline;
+			} else if (inline && currentSection === 'executionStrategy') {
+				const strategy = inline.toLowerCase();
+				if (strategy === 'standard' || strategy === 'tdd') {
+					currentPhase.executionStrategy = strategy;
+				}
+			} else if (inline && currentSection === 'checks') {
+				const check = parsePhaseCheck(inline);
+				if (check) (currentPhase.checks ??= []).push(check);
 			}
+
 			continue;
 		}
 
@@ -290,17 +390,34 @@ export function parsePhasesFromMarkdown(content: string): {
 		if (item) {
 			const text = cleanListPath(item[1]!);
 			if (!text) continue;
-			if (currentSection === 'files') {
-				currentPhase.files.push(text);
-			} else if (currentSection === 'steps') {
-				// Tolerant: non-checkbox list item counts as unchecked step
-				currentPhase.steps.push({
-					text: item[1]!.trim(),
-					checked: false,
-					line: i,
-				});
-			} else {
-				currentPhase.doneWhen.push(item[1]!.trim());
+			switch (currentSection) {
+				case 'files': {
+					currentPhase.files.push(text);
+
+					break;
+				}
+
+				case 'steps': {
+					// Tolerant: non-checkbox list item counts as unchecked step
+					currentPhase.steps.push({
+						text: item[1]!.trim(),
+						checked: false,
+						line: i,
+					});
+
+					break;
+				}
+
+				case 'checks': {
+					const check = parsePhaseCheck(item[1]!);
+					if (check) (currentPhase.checks ??= []).push(check);
+
+					break;
+				}
+
+				default: {
+					currentPhase.doneWhen.push(item[1]!.trim());
+				}
 			}
 		}
 	}
@@ -309,40 +426,49 @@ export function parsePhasesFromMarkdown(content: string): {
 }
 
 export async function parsePlanDocument(filePath: string): Promise<PlanDoc> {
-	const absPath = path.resolve(filePath);
-	const cached = await getCachedPlanDoc(absPath);
-	if (cached) {
-		return cached;
-	}
+	return measurePlanOperation(
+		{operation: 'parse', detail: 'document'},
+		async timing => {
+			const absPath = path.resolve(filePath);
+			const cached = await getCachedPlanDoc(absPath);
+			if (cached) {
+				timing.cache = 'hit';
+				return cached;
+			}
 
-	const [rawBuffer, stat] = await Promise.all([
-		fs.readFile(absPath, 'utf8'),
-		fs.stat(absPath),
-	]);
-	const raw = rawBuffer.replace(/^\uFEFF/, '');
-	const parsed = matter(raw);
-	const legacy = !parsed.data || Object.keys(parsed.data).length === 0;
-	const frontmatter = normalizeFrontmatter(parsed.data);
-	if (!frontmatter.created) {
-		frontmatter.created = stat.mtime.toISOString();
-	}
-	const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
-	const {title, affectedFiles, phases} = parsePhasesFromMarkdown(
-		parsed.content,
+			timing.cache = 'miss';
+
+			const [rawBuffer, stat] = await Promise.all([
+				fs.readFile(absPath, 'utf8'),
+				fs.stat(absPath),
+			]);
+			const raw = rawBuffer.replace(/^\uFEFF/, '');
+			const parsed = matter(raw);
+			const legacy = !parsed.data || Object.keys(parsed.data).length === 0;
+			const frontmatter = normalizeFrontmatter(parsed.data);
+			if (!frontmatter.created) {
+				frontmatter.created = stat.mtime.toISOString();
+			}
+
+			const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
+			const {title, affectedFiles, phases} = parsePhasesFromMarkdown(
+				parsed.content,
+			);
+			const doc: PlanDoc = {
+				filePath: absPath,
+				frontmatter,
+				title,
+				affectedFiles,
+				phases,
+				raw: parsed.content,
+				legacy,
+				eol,
+				mtimeMs: stat.mtimeMs,
+			};
+			setCachedPlanDoc(doc, stat.size);
+			return doc;
+		},
 	);
-	const doc: PlanDoc = {
-		filePath: absPath,
-		frontmatter,
-		title,
-		affectedFiles,
-		phases,
-		raw: parsed.content,
-		legacy,
-		eol,
-		mtimeMs: stat.mtimeMs,
-	};
-	setCachedPlanDoc(doc, stat.size);
-	return doc;
 }
 
 export type WritePlanFrontmatterOptions = {
@@ -379,6 +505,7 @@ function assertPlanRevision(
 			`Plan file changed on disk (updated_at mismatch) at ${absPath}. Reload the plan and retry.`,
 		);
 	}
+
 	if (
 		options?.expectedMtimeMs !== undefined &&
 		mtimeMs !== options.expectedMtimeMs
@@ -416,15 +543,22 @@ export async function mutatePlanDocument(
 	const eol: '\n' | '\r\n' = raw.includes('\r\n') ? '\r\n' : '\n';
 	const change =
 		mutate({content: parsed.content, frontmatter: current, eol}) ?? {};
-	const merged = {...current, ...(change.frontmatter ?? {})};
+	const merged = {...current, ...change.frontmatter};
+	for (const key of Object.keys(merged) as Array<keyof PlanFrontmatter>) {
+		if (merged[key] === undefined) {
+			Reflect.deleteProperty(merged, key);
+		}
+	}
+
 	const now = new Date().toISOString();
 	if (!merged.created) {
 		merged.created = now;
 	}
+
 	merged.updated_at = now;
 
 	const output = matter.stringify(change.content ?? parsed.content, merged);
-	await fs.writeFile(absPath, output, 'utf8');
+	await replacePlanFileAtomically(absPath, output);
 	invalidatePlanCache(absPath);
 	invalidateActivePlanPathsCacheForPlanPath(absPath);
 	planEvents.emitPlanEvent({type: 'plan-changed', planPath: absPath});
@@ -453,6 +587,7 @@ export async function setStepChecked(
 			if (!phase) {
 				throw new Error(`Phase ${phaseIndex} not found in ${filePath}`);
 			}
+
 			const step = phase.steps[stepIndex - 1];
 			if (!step) {
 				throw new Error(
@@ -465,8 +600,9 @@ export async function setStepChecked(
 			if (target === undefined) {
 				throw new Error(`Step line ${step.line} out of range in ${filePath}`);
 			}
+
 			const mark = checked ? 'x' : ' ';
-			const replaced = target.replace(/-\s*\[( |x|X)\]/, `- [${mark}]`);
+			const replaced = target.replace(/-\s*\[([ Xx])]/, `- [${mark}]`);
 			const finalLine =
 				replaced === target && !CHECKBOX_RE.test(target)
 					? target.replace(/^(\s*)-\s+/, `$1- [${mark}] `)
@@ -493,6 +629,26 @@ export function validatePlanDocument(
 		return issues;
 	}
 
+	for (let index = 0; index < doc.phases.length; index++) {
+		if (doc.phases[index]!.index !== index + 1) {
+			issues.push({
+				code: 'phase_sequence',
+				message: 'Phase numbers must be unique and contiguous starting at 1.',
+			});
+			break;
+		}
+	}
+
+	if (
+		doc.frontmatter.current_phase > 0 &&
+		!doc.phases.some(phase => phase.index === doc.frontmatter.current_phase)
+	) {
+		issues.push({
+			code: 'current_phase_invalid',
+			message: `current_phase=${doc.frontmatter.current_phase} does not reference an existing phase.`,
+		});
+	}
+
 	for (const phase of doc.phases) {
 		if (phase.steps.length === 0) {
 			issues.push({
@@ -500,10 +656,55 @@ export function validatePlanDocument(
 				message: `Phase ${phase.index} ("${phase.title}") has no **Steps** checklist (use "- [ ] step").`,
 			});
 		}
+
 		if (phase.doneWhen.length === 0) {
 			issues.push({
 				code: 'phase_no_done_when',
 				message: `Phase ${phase.index} ("${phase.title}") has no **Done when** criteria.`,
+			});
+		}
+
+		if (
+			(doc.frontmatter.complexity === 'medium' ||
+				doc.frontmatter.complexity === 'complex') &&
+			!phase.delivers
+		) {
+			issues.push({
+				code: 'phase_no_delivers',
+				message: `Phase ${phase.index} ("${phase.title}") should state an observable **Delivers** outcome.`,
+				severity: 'warning',
+			});
+		}
+
+		if (
+			phase.executionStrategy === 'tdd' &&
+			!(phase.checks ?? []).some(check => check.type === 'command')
+		) {
+			issues.push({
+				code: 'tdd_no_command_check',
+				message: `Phase ${phase.index} uses TDD but has no command check that runs its tests.`,
+			});
+		}
+
+		for (const check of phase.checks ?? []) {
+			if (check.type !== 'command') continue;
+			const policyError = validatePlanCheckCommand(check.command);
+			if (policyError) {
+				issues.push({
+					code: 'unsafe_check_command',
+					message: `Phase ${phase.index} has an unsafe command check "${check.command}": ${policyError}.`,
+				});
+			}
+		}
+
+		if (
+			doc.frontmatter.complexity === 'complex' &&
+			(phase.checks ?? []).length === 0
+		) {
+			issues.push({
+				code: 'complex_phase_no_checks',
+				message: `Phase ${phase.index} should define structured **Checks**.`,
+				severity: 'warning',
 			});
 		}
 	}
@@ -534,7 +735,7 @@ export function validatePlanDocument(
 
 	if (doc.frontmatter.complexity === 'complex') {
 		const body = doc.raw || '';
-		if (!/Risks/i.test(body) && !/Rollback/i.test(body)) {
+		if (!/risks/i.test(body) && !/rollback/i.test(body)) {
 			issues.push({
 				code: 'complex_missing_sections',
 				message:
@@ -566,10 +767,12 @@ export async function findSessionPlanFiles(
 	if (!sessionId) {
 		return docs;
 	}
+
 	const matched = docs.filter(d => d.frontmatter.session === sessionId);
 	if (matched.length > 0) {
 		return matched;
 	}
+
 	// Legacy fallback: only untagged (no session) plans may be adopted;
 	// plans owned by other sessions go through the resume-notice flow instead.
 	const untagged = docs.filter(d => !d.frontmatter.session);
@@ -577,6 +780,7 @@ export async function findSessionPlanFiles(
 		const latest = [...untagged].sort((a, b) => b.mtimeMs - a.mtimeMs)[0]!;
 		return [latest];
 	}
+
 	return [];
 }
 
@@ -600,6 +804,7 @@ export async function findActivePlan(
 	if (active.length === 0) {
 		return null;
 	}
+
 	active.sort(
 		(a, b) =>
 			STATUS_PRIORITY[a.frontmatter.status] -
@@ -610,7 +815,7 @@ export async function findActivePlan(
 
 export type ListUnfinishedPlansOptions = {
 	/** When set, plans owned by other sessions are still returned (for resume UI). */
-	sessionId?: string | null;
+	sessionId?: string | undefined;
 	/** Include draft/approved plans that already have checked steps. Default true. */
 	includeDraftsWithProgress?: boolean;
 };
@@ -627,16 +832,19 @@ export async function listUnfinishedPlans(
 	const includeDrafts = options.includeDraftsWithProgress !== false;
 	const all = await findSessionPlanFiles(cwd, null);
 	const matched = all.filter(doc => {
-		const status = doc.frontmatter.status;
+		const {status} = doc.frontmatter;
 		if (status === 'executing') {
 			return true;
 		}
+
 		if (!includeDrafts) {
 			return false;
 		}
+
 		if (status !== 'draft' && status !== 'approved') {
 			return false;
 		}
+
 		const checked = doc.phases.some(p => p.steps.some(s => s.checked));
 		return checked;
 	});
@@ -660,6 +868,7 @@ export async function findForeignExecutingPlans(
 			if (!sessionId) {
 				return true;
 			}
+
 			const owner = d.frontmatter.session || '';
 			// Untagged executing counts as foreign when we have a concrete session.
 			return owner !== sessionId;

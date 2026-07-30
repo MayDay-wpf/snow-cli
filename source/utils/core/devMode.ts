@@ -1,7 +1,7 @@
-import { createHash, randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import {createHash, randomUUID} from 'crypto';
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
+import {homedir} from 'os';
+import {join} from 'path';
 
 const SNOW_DIR = join(homedir(), '.snow');
 const DEV_USER_ID_FILE = join(SNOW_DIR, 'dev-user-id');
@@ -11,7 +11,7 @@ const DEV_USER_ID_FILE = join(SNOW_DIR, 'dev-user-id');
  */
 function ensureSnowDir(): void {
 	if (!existsSync(SNOW_DIR)) {
-		mkdirSync(SNOW_DIR, { recursive: true });
+		mkdirSync(SNOW_DIR, {recursive: true});
 	}
 }
 

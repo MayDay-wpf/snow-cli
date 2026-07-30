@@ -55,7 +55,9 @@ export async function executeGoalTool(
 
 	if (status !== 'achieved' && status !== 'unmet') {
 		throw new Error(
-			`goal-update_goal requires status="achieved" or status="unmet". Got: ${JSON.stringify(status)}`,
+			`goal-update_goal requires status="achieved" or status="unmet". Got: ${JSON.stringify(
+				status,
+			)}`,
 		);
 	}
 

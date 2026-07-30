@@ -94,7 +94,6 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	speedometer: '[on|off|status]',
 };
 
-
 // 指令参数可选值列表：用于 Tab 弹出参数选择面板
 // key 为指令名（不含斜杠），value 为可选参数值数组
 export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {

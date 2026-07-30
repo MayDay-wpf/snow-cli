@@ -1,8 +1,6 @@
-import {executeMCPTool} from './mcpToolsManager.js';
 import {maskToolResultContentIfNeeded} from '../../api/privacyMask.js';
 import {subAgentService} from '../../mcp/subagent.js';
 import {teamService} from '../../mcp/team.js';
-import {runningSubAgentTracker} from './runningSubAgentTracker.js';
 import {
 	endToolSpan,
 	recordToolContent,
@@ -10,12 +8,15 @@ import {
 	withActiveTelemetrySpan,
 } from '../telemetry/otel.js';
 
-import type {SubAgentMessage} from './subAgentExecutor.js';
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 import type {ImageContent} from '../../api/types.js';
+import type {AskUserQuestionPurpose} from '../../mcp/askUserQuestion.js';
+import {getPlanMode} from '../config/projectSettings.js';
 import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
-import {getPlanMode} from '../config/projectSettings.js';
+import type {SubAgentMessage} from './subAgentExecutor.js';
+import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+import {executeMCPTool} from './mcpToolsManager.js';
 import {evaluatePlanGate, maybeApprovePlanFromAskUser} from './planModeGate.js';
 import {
 	parseToolArgumentsDetailed,
@@ -29,16 +30,27 @@ export {
 	type ToolArgsParseResult,
 } from './toolArgsParse.js';
 
-export interface ToolCall {
+function getAskUserPurpose(
+	args: Record<string, any>,
+): AskUserQuestionPurpose | undefined {
+	const purpose = args['purpose'];
+	return purpose === 'clarification' ||
+		purpose === 'plan_approval' ||
+		purpose === 'plan_resume'
+		? purpose
+		: undefined;
+}
+
+export type ToolCall = {
 	id: string;
 	type: 'function';
 	function: {
 		name: string;
 		arguments: string;
 	};
-}
+};
 
-export interface ToolResult {
+export type ToolResult = {
 	tool_call_id: string;
 	role: 'tool';
 	content: string;
@@ -62,33 +74,29 @@ export interface ToolResult {
 	// inherit the slowest tool's end time. Consumed by buildToolResultMessages
 	// to compute accurate per-tool durationMs.
 	completedAt?: number;
-}
+};
 
 export type SubAgentMessageCallback = (message: SubAgentMessage) => void;
 
-export interface ToolConfirmationCallback {
-	(
-		toolCall: ToolCall,
-		batchToolNames?: string,
-		allTools?: ToolCall[],
-	): Promise<ConfirmationResult>;
-}
+export type ToolConfirmationCallback = (
+	toolCall: ToolCall,
+	batchToolNames?: string,
+	allTools?: ToolCall[],
+) => Promise<ConfirmationResult>;
 
-export interface ToolApprovalChecker {
-	(toolName: string): boolean;
-}
+export type ToolApprovalChecker = (toolName: string) => boolean;
 
-export interface AddToAlwaysApprovedCallback {
-	(toolName: string): void;
-}
+export type AddToAlwaysApprovedCallback = (toolName: string) => void;
 
-export interface UserInteractionCallback {
-	(question: string, options: string[], multiSelect?: boolean): Promise<{
-		selected: string | string[];
-		customInput?: string;
-		cancelled?: boolean;
-	}>;
-}
+export type UserInteractionCallback = (
+	question: string,
+	options: string[],
+	multiSelect?: boolean,
+) => Promise<{
+	selected: string | string[];
+	customInput?: string;
+	cancelled?: boolean;
+}>;
 
 /**
  * 将 askuser-ask_question 的选择结果格式化为 AI 可读的文本。
@@ -148,7 +156,7 @@ function extractHookProvidedAnswer(
 				!Array.isArray(parsed) &&
 				parsed.selected !== undefined
 			) {
-				const selected = parsed.selected;
+				const {selected} = parsed;
 				if (
 					typeof selected === 'string' ||
 					(Array.isArray(selected) &&
@@ -216,9 +224,9 @@ export async function executeToolCall(
 			abortSignal = abortController.signal;
 
 			escKeyListener = (data: Buffer) => {
-				const str = data.toString();
+				const string_ = data.toString();
 				// ESC key: \x1b
-				if (str === '\x1b' && abortController && !abortSignal?.aborted) {
+				if (string_ === '\u001B' && abortController && !abortSignal?.aborted) {
 					console.log('\n[ESC] Interrupting command execution...');
 					abortController.abort();
 				}
@@ -247,7 +255,8 @@ export async function executeToolCall(
 				};
 				return result;
 			}
-			const args = parsedArgs.args;
+
+			const {args} = parsedArgs;
 			recordToolContent(
 				telemetry.span,
 				'tool.input',
@@ -333,6 +342,7 @@ export async function executeToolCall(
 								: undefined,
 						selected: hookAnswer.selected,
 						customInput: hookAnswer.customInput,
+						purpose: getAskUserPurpose(args),
 					});
 
 					result = {
@@ -354,8 +364,8 @@ export async function executeToolCall(
 
 			// Check if this is a team tool
 			if (toolCall.function.name.startsWith('team-')) {
-				const teamToolName = toolCall.function.name.substring('team-'.length);
-				const teamArgs = args as Record<string, any>;
+				const teamToolName = toolCall.function.name.slice('team-'.length);
+				const teamArgs = args;
 
 				try {
 					const teamResult = await teamService.execute({
@@ -373,17 +383,19 @@ export async function executeToolCall(
 											arguments: JSON.stringify(toolArgs),
 										},
 									};
-									return await requestToolConfirmation(fakeToolCall);
+									return requestToolConfirmation(fakeToolCall);
 							  }
 							: undefined,
 						isToolAutoApproved,
 						yoloMode,
 						addToAlwaysApproved: addToAlwaysApproved
-							? (name: string) => addToAlwaysApproved(name)
+							? (name: string) => {
+									addToAlwaysApproved(name);
+							  }
 							: undefined,
 						requestUserQuestion: onUserInteractionNeeded
-							? async (q: string, opts: string[], multi?: boolean) => {
-									const r = await onUserInteractionNeeded(q, opts, multi);
+							? async (q: string, options: string[], multi?: boolean) => {
+									const r = await onUserInteractionNeeded(q, options, multi);
 									return {selected: r.selected, customInput: r.customInput};
 							  }
 							: undefined,
@@ -404,7 +416,7 @@ export async function executeToolCall(
 			}
 			// Check if this is a sub-agent tool
 			else if (toolCall.function.name.startsWith('subagent-')) {
-				const agentId = toolCall.function.name.substring('subagent-'.length);
+				const agentId = toolCall.function.name.slice('subagent-'.length);
 				const subAgentPrompt = (args['prompt'] as string) || '';
 
 				// Look up agent name from config for tracking
@@ -456,7 +468,7 @@ export async function executeToolCall(
 						startedAt: new Date(),
 					});
 				} catch {
-					// optional history
+					// Optional history
 				}
 
 				// Create a tool confirmation adapter for sub-agent
@@ -471,7 +483,7 @@ export async function executeToolCall(
 									arguments: JSON.stringify(toolArgs),
 								},
 							};
-							return await requestToolConfirmation(fakeToolCall);
+							return requestToolConfirmation(fakeToolCall);
 					  }
 					: undefined;
 
@@ -489,10 +501,7 @@ export async function executeToolCall(
 									const args = safeParseToolArguments(
 										toolCall.function.arguments,
 									);
-									return await subAgentToolConfirmation(
-										toolCall.function.name,
-										args,
-									);
+									return subAgentToolConfirmation(toolCall.function.name, args);
 							  }
 							: undefined,
 						isToolAutoApproved,
@@ -509,8 +518,10 @@ export async function executeToolCall(
 						subAgentResult = await Promise.race([
 							subAgentPromise,
 							new Promise<never>((_, reject) => {
-								const onAbort = () =>
+								const onAbort = () => {
 									reject(new Error('Sub-agent execution aborted'));
+								};
+
 								if (activeAbortSignal.aborted) {
 									onAbort();
 								} else {
@@ -534,7 +545,7 @@ export async function executeToolCall(
 						subAgentResult.injectedUserMessages.length > 0
 					) {
 						const injectedSummary = subAgentResult.injectedUserMessages
-							.map((msg: string, i: number) => `  ${i + 1}. ${msg}`)
+							.map((message: string, i: number) => `  ${i + 1}. ${message}`)
 							.join('\n');
 						subAgentContent = JSON.stringify({
 							...subAgentResult,
@@ -573,12 +584,13 @@ export async function executeToolCall(
 										: undefined;
 								if (raw) {
 									finalSummary = raw
-										.replace(/\x1b\[[0-9;]*m/g, '')
+										.replace(/\u001B\[[\d;]*m/g, '')
 										.replace(/[\r\n]+/g, ' ')
 										.trim()
 										.slice(0, 240);
 								}
-								const usage = parsed.usage;
+
+								const {usage} = parsed;
 								if (usage && typeof usage === 'object') {
 									const inTok =
 										typeof usage.inputTokens === 'number'
@@ -594,13 +606,14 @@ export async function executeToolCall(
 						} catch {
 							// ignore parse failures
 						}
+
 						completeSubAgentRun(toolCall.id, {
 							error,
 							finalSummary,
 							tokenCount,
 						});
 					} catch {
-						// optional history
+						// Optional history
 					}
 				}
 			} else {
@@ -710,7 +723,7 @@ export async function executeToolCall(
 						return result;
 					}
 
-					//返回用户的响应作为工具结果
+					// 返回用户的响应作为工具结果
 					const answerText = formatAskUserAnswer(
 						response.selected,
 						response.customInput,
@@ -734,6 +747,7 @@ export async function executeToolCall(
 									: undefined,
 							selected: response.selected,
 							customInput: response.customInput,
+							purpose: getAskUserPurpose(parsedArgs),
 						});
 						gateApprovalError = gateApproval.error;
 					} catch {
@@ -828,6 +842,7 @@ export async function executeToolCall(
 					telemetryAttributes,
 				);
 			}
+
 			endToolSpan(
 				telemetry.span,
 				telemetry.startTime,
@@ -840,14 +855,12 @@ export async function executeToolCall(
 		}
 
 		// Cleanup ESC key listener
-		if (escKeyListener) {
-			if (process.stdin.isTTY && process.stdin.setRawMode) {
-				process.stdin.setRawMode(false);
-				process.stdin.off('data', escKeyListener);
-			}
+		if (escKeyListener && process.stdin.isTTY && process.stdin.setRawMode) {
+			process.stdin.setRawMode(false);
+			process.stdin.off('data', escKeyListener);
 		}
 
-		return result!;
+		return result;
 	});
 }
 
@@ -893,7 +906,7 @@ function getToolResourceType(toolName: string): string {
 function getResourceIdentifier(toolCall: ToolCall): string {
 	const toolName = toolCall.function.name;
 
-	// todo-manage / todo-ultra: only get can run in parallel with other work; mutating actions share todo-state
+	// Todo-manage / todo-ultra: only get can run in parallel with other work; mutating actions share todo-state
 	if (toolName === 'todo-manage' || toolName === 'todo-ultra') {
 		try {
 			const args = safeParseToolArguments(toolCall.function.arguments);
@@ -901,12 +914,13 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `independent:${toolCall.id}`;
 			}
 		} catch {
-			// fall through to serialized todo-state
+			// Fall through to serialized todo-state
 		}
+
 		return 'todo-state';
 	}
 
-	// notebook-manage: read actions can be parallelized, mutating actions share notebook-state
+	// Notebook-manage: read actions can be parallelized, mutating actions share notebook-state
 	if (toolName === 'notebook-manage') {
 		try {
 			const args = safeParseToolArguments(toolCall.function.arguments);
@@ -914,8 +928,9 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `independent:${toolCall.id}`;
 			}
 		} catch {
-			// fall through to serialized notebook-state
+			// Fall through to serialized notebook-state
 		}
+
 		return 'notebook-state';
 	}
 
@@ -940,10 +955,12 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 		try {
 			const args = JSON.parse(toolCall.function.arguments);
 			// Support both single file and array of files
-			const filePath = args.filePath;
+			const {filePath} = args;
 			if (typeof filePath === 'string') {
 				return `filesystem:${filePath}`;
-			} else if (Array.isArray(filePath)) {
+			}
+
+			if (Array.isArray(filePath)) {
 				// For batch operations, treat as independent (already handling multiple files)
 				return `filesystem-batch:${toolCall.id}`;
 			}
@@ -986,7 +1003,7 @@ export async function executeToolCalls(
 
 	// Execute each resource group sequentially, but execute different groups in parallel
 	const results = await Promise.all(
-		Array.from(resourceGroups.values()).map(async group => {
+		[...resourceGroups.values()].map(async group => {
 			// Within the same resource group, execute sequentially
 			const groupResults: ToolResult[] = [];
 			for (const toolCall of group) {
@@ -1035,6 +1052,7 @@ export async function executeToolCalls(
 					break;
 				}
 			}
+
 			return groupResults;
 		}),
 	);
@@ -1048,6 +1066,7 @@ export async function executeToolCalls(
 		if (!result) {
 			throw new Error(`Result not found for tool call ${tc.id}`);
 		}
+
 		return result;
 	});
 }

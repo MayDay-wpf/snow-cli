@@ -274,10 +274,6 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 
 	useInput(handleInput, {isActive: isFocused});
 
-	if (windowSize === 0) {
-		return null;
-	}
-
 	const renderRow = useCallback(
 		(row: RenderItemProps<T>) => {
 			if (renderItem) {
@@ -288,6 +284,10 @@ export default function ScrollableSelectInput<T extends SelectItem>({
 		},
 		[renderItem],
 	);
+
+	if (windowSize === 0) {
+		return null;
+	}
 
 	return (
 		<Box flexDirection="column">

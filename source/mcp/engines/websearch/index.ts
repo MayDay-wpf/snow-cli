@@ -126,7 +126,6 @@ async function loadExternalEngines(): Promise<void> {
 	try {
 		entries = readdirSync(SEARCH_ENGINES_DIR, {withFileTypes: true});
 	} catch (error) {
-		// eslint-disable-next-line no-console
 		console.warn('[websearch] failed to read plugin dir', error);
 		return;
 	}
@@ -146,7 +145,6 @@ async function loadExternalEngines(): Promise<void> {
 			const mod = (await import(moduleUrl)) as SearchEngineModule;
 			const engines = collectFromModule(mod);
 			if (engines.length === 0) {
-				// eslint-disable-next-line no-console
 				console.warn(
 					`[websearch] plugin "${file.name}" did not export a valid SearchEngine`,
 				);
@@ -163,7 +161,6 @@ async function loadExternalEngines(): Promise<void> {
 				ENGINES.set(engine.id, engine);
 			}
 		} catch (error) {
-			// eslint-disable-next-line no-console
 			console.warn(
 				`[websearch] failed to load search engine plugin "${file.name}":`,
 				error,
