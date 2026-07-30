@@ -79,7 +79,8 @@ jobs:
 
             ### What's New
 
-            - Supports code completion and Tab&Tab AI cross-file suggestions
+            - Fix toolbar icon overflow on Windows caused by oversized base icon (648x648 -> 16x16 with @2x HiDPI variants)
+            - Extend IDE compatibility to 262.* (WebStorm 2025.2 / IntelliJ 2025.2)
 
             ### Usage
 

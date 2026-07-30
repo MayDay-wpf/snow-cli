@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.snow"
-version = "0.4.22"
+version = "0.4.23"
 
 repositories {
     mavenCentral()
@@ -32,7 +32,7 @@ tasks {
 
     patchPluginXml {
         sinceBuild.set("241")
-        untilBuild.set("261.*")
+        untilBuild.set("262.*")
     }
 
     signPlugin {
