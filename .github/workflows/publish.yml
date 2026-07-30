@@ -125,7 +125,8 @@ jobs:
 
             ### What's New
 
-            Patch: Open proxy host settings
+            - Avoid rollback breakdown
+            - Add static CRT link configuration
 
             ### Installation
             ```bash
