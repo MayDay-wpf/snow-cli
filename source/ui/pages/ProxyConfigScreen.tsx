@@ -15,6 +15,10 @@ import {
 	listSearchEngines,
 	listSearchEnginesAsync,
 } from '../../mcp/engines/websearch/index.js';
+import {
+	detectBrowserCandidates,
+	type DetectedBrowser,
+} from '../../mcp/utils/websearch/browser.utils.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
@@ -45,6 +49,17 @@ export default function ProxyConfigScreen({
 	>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
+	// Browsers auto-detected on this machine (Chrome/Edge/...). Offered as
+	// selectable options when editing the browserPath field.
+	const [detectedBrowsers] = useState<DetectedBrowser[]>(() =>
+		detectBrowserCandidates(),
+	);
+	// browserPath editing uses a two-stage interaction: first pick one of the
+	// detected browsers (or 'auto-detect' to clear), then fall back to manual
+	// typing for custom paths.
+	const [browserEditMode, setBrowserEditMode] = useState<'select' | 'manual'>(
+		'select',
+	);
 
 	// Available search engines (built-ins plus user plugins under
 	// ~/.snow/plugin/search_engines/). Start with built-ins synchronously then
@@ -122,12 +137,16 @@ export default function ProxyConfigScreen({
 				setIsEditing(false);
 			} else {
 				// Enter edit mode for the current field (toggle for the
-				// boolean checkbox, list selection for searchEngine, text
-				// input for the rest).
+				// boolean checkbox, list selection for searchEngine and
+				// browserPath, text input for the rest).
 				if (currentField === 'enabled') {
 					setEnabled(!enabled);
 				} else {
 					setIsEditing(true);
+					if (currentField === 'browserPath') {
+						// Always start from the detected-browser picker.
+						setBrowserEditMode('select');
+					}
 				}
 			}
 		} else if (!isEditing && key.upArrow) {
@@ -305,18 +324,76 @@ export default function ProxyConfigScreen({
 							{t.proxyConfig.browserPath}
 						</Text>
 						{currentField === 'browserPath' && isEditing && (
-							<Box marginLeft={3}>
-								<TextInput
-									value={browserPath}
-									onChange={setBrowserPath}
-									placeholder={t.proxyConfig.browserPathPlaceholder}
-								/>
+							<Box marginLeft={3} flexDirection="column">
+								{browserEditMode === 'select' && detectedBrowsers.length > 0 ? (
+									<ScrollableSelectInput
+										items={[
+											...(browserPath
+												? [
+														{
+															label: t.proxyConfig.autoDetect,
+															value: '',
+															key: 'auto-detect',
+														},
+												  ]
+												: []),
+											...detectedBrowsers.map(b => ({
+												label: `${b.name} — ${b.path}`,
+												value: b.path,
+												key: `detected:${b.path}`,
+											})),
+											{
+												label: t.proxyConfig.manualInputOption,
+												value: '__manual__',
+												key: 'manual-input',
+											},
+										]}
+										initialIndex={
+											browserPath
+												? Math.max(
+														0,
+														detectedBrowsers.findIndex(
+															b => b.path === browserPath,
+														),
+												  ) + 1
+												: 0
+										}
+										limit={6}
+										isFocused={true}
+										onSelect={item => {
+											if (item.value === '__manual__') {
+												// Switch to manual typing.
+												// Re-assert isEditing=true: the
+												// screen-level Enter handler also
+												// fires on this keystroke and would
+												// otherwise exit edit mode.
+												setBrowserEditMode('manual');
+												setIsEditing(true);
+											} else {
+												setBrowserPath(item.value);
+												setIsEditing(false);
+											}
+										}}
+									/>
+								) : (
+									<TextInput
+										value={browserPath}
+										onChange={setBrowserPath}
+										placeholder={t.proxyConfig.browserPathPlaceholder}
+									/>
+								)}
 							</Box>
 						)}
 						{(!isEditing || currentField !== 'browserPath') && (
 							<Box marginLeft={3}>
 								<Text color={theme.colors.menuSecondary}>
-									{browserPath || t.proxyConfig.autoDetect}
+									{browserPath
+										? browserPath
+										: detectedBrowsers.length > 0
+										? `${t.proxyConfig.autoDetect} → ${
+												detectedBrowsers[0]!.name
+										  } (${detectedBrowsers[0]!.path})`
+										: t.proxyConfig.autoDetect}
 								</Text>
 							</Box>
 						)}

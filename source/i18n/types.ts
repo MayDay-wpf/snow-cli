@@ -179,6 +179,7 @@ export type TranslationKeys = {
 		portValidationError: string;
 		portPlaceholder: string;
 		browserPathPlaceholder: string;
+		manualInputOption: string;
 		windowsExample: string;
 		macosExample: string;
 		linuxExample: string;

@@ -177,12 +177,13 @@ export const zhTW: TranslationKeys = {
 		navigationHint:
 			'使用 ↑↓ 在欄位間導航,按 Enter 編輯/切換,按 Ctrl+S 或 Esc 儲存並返回',
 		browserExamplesTitle: '瀏覽器路徑範例:',
-		browserExamplesFooter: '留空以自動偵測系統瀏覽器 (Edge/Chrome)',
-		portValidationError: '埠必須是 1 到 65535 之間的數字',
+		browserExamplesFooter: '留空以自動偵測系統瀏覽器 (Chrome/Edge)',
+		portValidationError: '端口必須是 1 到 65535 之間的數字',
 		portPlaceholder: '7890',
 		browserPathPlaceholder: '留空以自動偵測',
+		manualInputOption: '手動輸入...',
 		windowsExample:
-			'• Windows: C:\\Program Files(x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+			'• Windows: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',

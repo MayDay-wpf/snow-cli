@@ -177,12 +177,13 @@ export const zh: TranslationKeys = {
 		navigationHint:
 			'使用 ↑↓ 在字段间导航,按 Enter 编辑/切换,按 Ctrl+S 或 Esc 保存并返回',
 		browserExamplesTitle: '浏览器路径示例:',
-		browserExamplesFooter: '留空以自动检测系统浏览器 (Edge/Chrome)',
+		browserExamplesFooter: '留空以自动检测系统浏览器 (Chrome/Edge)',
 		portValidationError: '端口必须是 1 到 65535 之间的数字',
 		portPlaceholder: '7890',
 		browserPathPlaceholder: '留空以自动检测',
+		manualInputOption: '手动输入...',
 		windowsExample:
-			'• Windows: C:\\Program Files(x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+			'• Windows: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',
