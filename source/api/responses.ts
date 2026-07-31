@@ -547,6 +547,9 @@ async function* parseSSEStream(
 							(event?.type === 'response.output_text.delta' && event?.delta) ||
 							(event?.type === 'response.reasoning_summary_text.delta' &&
 								event?.delta) ||
+							// DeepSeek 兼容 Responses API 的思考流事件
+							(event?.type === 'response.reasoning_text.delta' &&
+								event?.delta) ||
 							(event?.type === 'response.function_call_arguments.delta' &&
 								event?.delta) ||
 							(event?.type === 'response.output_item.added' &&
@@ -856,8 +859,12 @@ export async function* createStreamingResponse(
 					} else if (eventType === 'response.content_part.added') {
 						// 内容部分添加 - 忽略
 						continue;
-					} else if (eventType === 'response.reasoning_summary_text.delta') {
-						// 推理摘要增量更新（仅用于 token 计数，不包含在响应内容中）
+					} else if (
+						eventType === 'response.reasoning_summary_text.delta' ||
+						// DeepSeek 兼容 Responses API 的思考流事件
+						eventType === 'response.reasoning_text.delta'
+					) {
+						// 推理摘要/思考流增量更新（仅用于 token 计数，不包含在响应内容中）
 						const delta = chunk.delta;
 						if (delta) {
 							yield {

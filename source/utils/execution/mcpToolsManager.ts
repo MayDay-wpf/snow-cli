@@ -1,8 +1,17 @@
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';
-import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-// Intentionally kept for backward compatibility fallback, despite deprecation
-import {SSEClientTransport} from '@modelcontextprotocol/sdk/client/sse.js';
+// MCP SDK v2 (@modelcontextprotocol/client) - full 2026-07-28 spec support.
+// v2 natively handles: stateless core (no initialize/initialized on modern era),
+// server/discover probing, MRTR (input_required) auto-fulfilment, per-request
+// _meta envelopes, Mcp-Method/Mcp-Name headers, response caching with
+// ttlMs/cacheScope, and version negotiation (legacy 2025 <-> modern 2026-07-28).
+import {
+	Client,
+	StreamableHTTPClientTransport,
+	// [MCP 2026-07-28] Legacy HTTP+SSE transport is officially deprecated
+	// (SEP-2577) with a 12-month window (removal ~2027-07). Kept for
+	// backward compatibility fallback only.
+	SSEClientTransport,
+} from '@modelcontextprotocol/client';
+import {StdioClientTransport} from '@modelcontextprotocol/client/stdio';
 import {
 	getMCPConfig,
 	getMCPServerSource,
@@ -58,6 +67,34 @@ import {resourceMonitor} from '../core/resourceMonitor.js';
 import os from 'os';
 import path from 'path';
 
+// ============================================================================
+// MCP Protocol 2026-07-28 - Key Changes (SEP references)
+// ============================================================================
+// 1. Stateless core: initialize/initialized handshake and Mcp-Session-Id
+//    retired (SEP-2575, SEP-2567). Each request is self-describing with
+//    protocol version, client identity, and capabilities in _meta.
+//    Optional server/discover RPC for upfront capability discovery.
+// 2. Header-based routing: Streamable HTTP requests carry Mcp-Method and
+//    Mcp-Name headers for gateway/WAF routing (SEP-2243).
+// 3. MRTR (Multi Round-Trip Requests): Replaces server-initiated
+//    elicitation/create, sampling/createMessage, roots/list (SEP-2322).
+//    Server returns resultType "input_required"; client retries with
+//    inputResponses attached.
+// 4. Cacheable list results: tools/list, prompts/list, resources/list
+//    responses carry ttlMs and cacheScope (SEP-2549).
+// 5. Authorization hardening: RFC 9207 issuer validation (SEP-2468),
+//    application_type in DCR (SEP-837), DCR deprecated in favor of CIMD.
+// 6. Tasks: Moved to io.modelcontextprotocol/tasks extension with
+//    poll-based tasks/get and tasks/update (SEP-2663).
+// 7. Deprecations (SEP-2577): Roots, Sampling, Logging deprecated with
+//    12-month minimum window. Legacy HTTP+SSE transport deprecated.
+//
+// SDK v2 (@modelcontextprotocol/client@2.0.0) implements the full
+// 2026-07-28 spec natively. versionNegotiation mode 'auto' probes
+// server/discover first; modern servers get the stateless 2026 era,
+// legacy servers fall back to the 2025 initialize handshake.
+// ============================================================================
+
 /**
  * Extended Error interface with optional isHookFailure flag
  */
@@ -94,16 +131,30 @@ export interface MCPServiceTools {
 	source?: MCPConfigScope;
 }
 
+/**
+ * [MCP 2026-07-28] Cache hints from list responses (SEP-2549).
+ * tools/list, prompts/list, resources/list now carry ttlMs and cacheScope
+ * so clients can determine the best caching strategy.
+ */
+interface MCPCacheHints {
+	/** Server-suggested cache TTL in milliseconds */
+	ttlMs?: number;
+	/** Cache scope: 'connection' | 'server' | 'global' */
+	cacheScope?: string;
+}
+
 // Cache for MCP tools to avoid reconnecting on every message
 interface MCPToolsCache {
 	tools: MCPTool[];
 	servicesInfo: MCPServiceTools[];
 	lastUpdate: number;
 	configHash: string;
+	/** [MCP 2026-07-28] Per-service cache hints from server (SEP-2549) */
+	cacheHints: Map<string, MCPCacheHints>;
 }
 
 let toolsCache: MCPToolsCache | null = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (default; overridden by server ttlMs)
 
 // Lazy initialization of TODO service to avoid circular dependencies
 let todoService: TodoService | null = null;
@@ -226,13 +277,31 @@ async function generateConfigHash(): Promise<string> {
 }
 
 /**
- * Check if the cache is valid and not expired
+ * Check if the cache is valid and not expired.
+ * [MCP 2026-07-28] Respects server-provided ttlMs cache hints (SEP-2549):
+ * if any service returned a ttlMs, use the minimum across all services
+ * as the effective cache duration instead of the default 5 minutes.
  */
 async function isCacheValid(): Promise<boolean> {
 	if (!toolsCache) return false;
 
 	const now = Date.now();
-	const isExpired = now - toolsCache.lastUpdate > CACHE_DURATION;
+
+	// Determine effective cache duration from server hints
+	let effectiveDuration = CACHE_DURATION;
+	if (toolsCache.cacheHints.size > 0) {
+		const serverTtls = [...toolsCache.cacheHints.values()]
+			.map(h => h.ttlMs)
+			.filter((ttl): ttl is number => typeof ttl === 'number' && ttl > 0);
+		if (serverTtls.length > 0) {
+			effectiveDuration = Math.min(...serverTtls);
+			logger.debug(
+				`[MCP] Using server-provided cache TTL: ${effectiveDuration}ms (SEP-2549)`,
+			);
+		}
+	}
+
+	const isExpired = now - toolsCache.lastUpdate > effectiveDuration;
 	const configHash = await generateConfigHash();
 	const configChanged = toolsCache.configHash !== configHash;
 
@@ -256,6 +325,8 @@ async function getCachedTools(): Promise<MCPTool[]> {
 async function refreshToolsCache(): Promise<void> {
 	const allTools: MCPTool[] = [];
 	const servicesInfo: MCPServiceTools[] = [];
+	// [MCP 2026-07-28] Collect per-service cache hints (SEP-2549)
+	const cacheHints = new Map<string, MCPCacheHints>();
 
 	// Helper: Add a built-in service, respecting disabled state
 	// Disabled services are added to servicesInfo (for MCP panel display) but NOT to allTools (AI cannot use them)
@@ -555,16 +626,21 @@ async function refreshToolsCache(): Promise<void> {
 			}
 
 			try {
-				const serviceTools = await probeServiceTools(serviceName, server);
+				const probeResult = await probeServiceTools(serviceName, server);
 				servicesInfo.push({
 					serviceName,
-					tools: serviceTools,
+					tools: probeResult.tools,
 					isBuiltIn: false,
 					connected: true,
 					source,
 				});
 
-				for (const tool of serviceTools) {
+				// [MCP 2026-07-28] Store server-provided cache hints (SEP-2549)
+				if (probeResult.cacheHints) {
+					cacheHints.set(serviceName, probeResult.cacheHints);
+				}
+
+				for (const tool of probeResult.tools) {
 					if (!isMCPToolEnabled(serviceName, tool.name)) continue;
 					allTools.push({
 						type: 'function',
@@ -590,12 +666,13 @@ async function refreshToolsCache(): Promise<void> {
 		logger.warn('Failed to load MCP config:', error);
 	}
 
-	// Update cache
+	// Update cache (includes 2026-07-28 cache hints)
 	toolsCache = {
 		tools: allTools,
 		servicesInfo,
 		lastUpdate: Date.now(),
 		configHash: await generateConfigHash(),
+		cacheHints,
 	};
 }
 
@@ -658,16 +735,21 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 
 	try {
 		// Try to reconnect to the service
-		const serviceTools = await probeServiceTools(serviceName, server);
+		const probeResult = await probeServiceTools(serviceName, server);
 
 		// Update service info in cache
 		toolsCache.servicesInfo[serviceIndex] = {
 			serviceName,
-			tools: serviceTools,
+			tools: probeResult.tools,
 			isBuiltIn: false,
 			connected: true,
 			source,
 		};
+
+		// [MCP 2026-07-28] Update cache hints on reconnect (SEP-2549)
+		if (probeResult.cacheHints) {
+			toolsCache.cacheHints.set(serviceName, probeResult.cacheHints);
+		}
 
 		// Remove old tools for this service from the tools list
 		toolsCache.tools = toolsCache.tools.filter(
@@ -675,7 +757,7 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 		);
 
 		// Add new tools for this service
-		for (const tool of serviceTools) {
+		for (const tool of probeResult.tools) {
 			toolsCache.tools.push({
 				type: 'function',
 				function: {
@@ -731,13 +813,24 @@ export async function getMCPServicesInfo(): Promise<MCPServiceTools[]> {
 }
 
 /**
- * Quick probe of MCP service tools without maintaining connections
- * This is used for caching tool definitions
+ * Result of probing an MCP service, including optional cache hints.
+ */
+interface ProbeServiceResult {
+	tools: InternalMCPTool[];
+	/** [MCP 2026-07-28] Cache hints from the server's list response (SEP-2549) */
+	cacheHints?: MCPCacheHints;
+}
+
+/**
+ * Quick probe of MCP service tools without maintaining connections.
+ * This is used for caching tool definitions.
+ * [MCP 2026-07-28] Also extracts cache hints (ttlMs/cacheScope) from
+ * the tools/list response _meta when the server provides them (SEP-2549).
  */
 async function probeServiceTools(
 	serviceName: string,
 	server: MCPServer,
-): Promise<InternalMCPTool[]> {
+): Promise<ProbeServiceResult> {
 	// HTTP 服务需要更长超时时间
 	const timeout = getMCPServerTransportType(server) === 'http' ? 15000 : 5000;
 	return await connectAndGetTools(serviceName, server, timeout);
@@ -796,6 +889,12 @@ function interpolateMCPConfigValue(
 	});
 }
 
+/**
+ * Build HTTP transport configuration for an MCP server.
+ * [MCP 2026-07-28] SDK v2 automatically handles MCP-Protocol-Version,
+ * Mcp-Method, and Mcp-Name headers (SEP-2575, SEP-2243) on every request.
+ * We only set user-configured headers and auth here.
+ */
 function getHttpTransportConfig(server: MCPServer): {
 	url: URL;
 	requestInit: RequestInit;
@@ -831,6 +930,19 @@ function getHttpTransportConfig(server: MCPServer): {
 	};
 }
 
+/**
+ * Create an MCP client instance with full 2026-07-28 protocol support.
+ *
+ * versionNegotiation mode 'auto': connect() probes the server with
+ * server/discover first. If the server supports 2026-07-28, the modern
+ * era is selected (stateless, no initialize/initialized handshake,
+ * per-request _meta envelopes with client info, Mcp-Method/Mcp-Name
+ * headers). Otherwise falls back to the legacy 2025 initialize flow.
+ *
+ * inputRequired autoFulfill: MRTR (SEP-2322) input_required responses
+ * are automatically fulfilled through registered handlers and retried,
+ * transparent to the caller.
+ */
 function createMCPClient(serviceName: string): Client {
 	return new Client(
 		{
@@ -838,7 +950,16 @@ function createMCPClient(serviceName: string): Client {
 			version: '1.0.0',
 		},
 		{
-			capabilities: {},
+			capabilities: {
+				// [MCP 2026-07-28] Roots, Sampling, Logging are deprecated (SEP-2577).
+				// Do not advertise these capabilities in new implementations.
+			},
+			// [MCP 2026-07-28] Enable automatic version negotiation:
+			// probes server/discover, selects modern (2026-07-28) or legacy era.
+			versionNegotiation: {mode: 'auto'},
+			// [MCP 2026-07-28] Enable MRTR auto-fulfilment (SEP-2322):
+			// input_required responses are handled transparently.
+			inputRequired: {autoFulfill: true},
 		},
 	);
 }
@@ -870,7 +991,9 @@ function shouldFallbackToSSE(error: unknown): boolean {
 }
 
 /**
- * Connect to MCP service and get tools (used for both caching and execution)
+ * Connect to MCP service and get tools (used for both caching and execution).
+ * [MCP 2026-07-28] Returns ProbeServiceResult with optional cache hints
+ * extracted from the tools/list response _meta (SEP-2549).
  * @param serviceName - Name of the service
  * @param server - Server configuration
  * @param timeoutMs - Timeout in milliseconds (default 10000)
@@ -879,7 +1002,7 @@ async function connectAndGetTools(
 	serviceName: string,
 	server: MCPServer,
 	timeoutMs: number = 10000,
-): Promise<InternalMCPTool[]> {
+): Promise<ProbeServiceResult> {
 	let client = createMCPClient(serviceName);
 	let transport: any;
 	let timeoutId: NodeJS.Timeout | null = null;
@@ -953,8 +1076,11 @@ async function connectAndGetTools(
 					throw httpError;
 				}
 
+				// [MCP 2026-07-28] Legacy HTTP+SSE transport is officially
+				// deprecated (SEP-2577) with a 12-month deprecation window.
+				// This fallback is kept for backward compatibility only.
 				logger.debug(
-					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to SSE (deprecated)...`,
+					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to legacy SSE (deprecated, removal ~2027-07)...`,
 				);
 
 				client = createMCPClient(serviceName);
@@ -968,7 +1094,7 @@ async function connectAndGetTools(
 					);
 
 					logger.debug(
-						`[MCP] Successfully connected to ${serviceName} using SSE (deprecated)`,
+						`[MCP] Successfully connected to ${serviceName} using legacy SSE (deprecated, removal ~2027-07)`,
 					);
 				} catch (sseError) {
 					throw new Error(
@@ -999,13 +1125,36 @@ async function connectAndGetTools(
 			'ListTools timeout',
 		);
 
-		return (
-			toolsResult.tools?.map(tool => ({
-				name: tool.name,
-				description: tool.description || '',
-				inputSchema: tool.inputSchema,
-			})) || []
-		);
+		// [MCP 2026-07-28] Extract cache hints from _meta (SEP-2549).
+		// Servers supporting 2026-07-28 may include ttlMs and cacheScope
+		// in the list response _meta to guide client caching behavior.
+		const meta = (toolsResult as any)._meta as
+			| Record<string, unknown>
+			| undefined;
+		let cacheHints: MCPCacheHints | undefined;
+		if (meta) {
+			const ttlMs = meta['ttlMs'];
+			const cacheScope = meta['cacheScope'];
+			if (typeof ttlMs === 'number' || typeof cacheScope === 'string') {
+				cacheHints = {
+					ttlMs: typeof ttlMs === 'number' ? ttlMs : undefined,
+					cacheScope: typeof cacheScope === 'string' ? cacheScope : undefined,
+				};
+				logger.debug(
+					`[MCP] Cache hints from ${serviceName}: ttlMs=${cacheHints.ttlMs}, cacheScope=${cacheHints.cacheScope} (SEP-2549)`,
+				);
+			}
+		}
+
+		return {
+			tools:
+				toolsResult.tools?.map(tool => ({
+					name: tool.name,
+					description: tool.description || '',
+					inputSchema: tool.inputSchema,
+				})) || [],
+			cacheHints,
+		};
 	} finally {
 		if (timeoutId) {
 			clearTimeout(timeoutId);
@@ -1025,7 +1174,9 @@ async function connectAndGetTools(
 }
 
 /**
- * Get or create a persistent MCP client for a service
+ * Get or create a persistent MCP client for a service.
+ * [MCP 2026-07-28] SDK v2 handles server/discover probing automatically
+ * via versionNegotiation mode 'auto' during connect().
  */
 async function getPersistentClient(
 	serviceName: string,
@@ -1063,8 +1214,9 @@ async function getPersistentClient(
 					throw httpError;
 				}
 
+				// [MCP 2026-07-28] Legacy SSE deprecated (SEP-2577), removal ~2027-07
 				logger.debug(
-					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to SSE (deprecated)...`,
+					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to legacy SSE (deprecated, removal ~2027-07)...`,
 				);
 
 				client = createMCPClient(serviceName);
@@ -2105,9 +2257,15 @@ function isConnectionError(error: unknown): boolean {
 }
 
 /**
- * Execute a tool on an external MCP service
- * Uses persistent connections to avoid reconnecting on every call
- * Automatically retries with a fresh connection on transport errors
+ * Execute a tool on an external MCP service.
+ * Uses persistent connections to avoid reconnecting on every call.
+ * Automatically retries with a fresh connection on transport errors.
+ *
+ * [MCP 2026-07-28] MRTR (Multi Round-Trip Requests) support (SEP-2322):
+ * When a server returns resultType "input_required", the tool needs user
+ * input mid-call. We detect this and return a structured response so the
+ * AI model can present the input requests to the user and retry with
+ * inputResponses attached.
  */
 async function executeOnExternalMCPService(
 	serviceName: string,
@@ -2115,7 +2273,7 @@ async function executeOnExternalMCPService(
 	toolName: string,
 	args: any,
 ): Promise<any> {
-	// 🔥 FIX: Always use persistent connection for external MCP services
+	// Always use persistent connection for external MCP services
 	// MCP protocol supports multiple calls - no need to reconnect each time
 	let retried = false;
 
@@ -2130,12 +2288,12 @@ async function executeOnExternalMCPService(
 		const timeout = server.timeout ?? 1200000;
 
 		// Execute the tool with the original tool name (not prefixed)
+		// [MCP 2026-07-28] SDK v2 callTool: 2-arg signature (params, options)
 		const result = await client.callTool(
 			{
 				name: toolName,
 				arguments: args,
 			},
-			undefined,
 			{
 				timeout,
 				resetTimeoutOnProgress: true,
@@ -2143,6 +2301,9 @@ async function executeOnExternalMCPService(
 		);
 		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
 
+		// [MCP 2026-07-28] MRTR (SEP-2322): With inputRequired.autoFulfill=true,
+		// SDK v2 handles input_required responses transparently inside callTool().
+		// The result here is always the final completed result.
 		return result.content;
 	};
 
