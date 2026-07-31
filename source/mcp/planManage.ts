@@ -1,9 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {
-	type Tool,
-	type CallToolResult,
-} from '@modelcontextprotocol/sdk/types.js';
+import {type Tool, type CallToolResult} from '@modelcontextprotocol/client';
 import {
 	findActivePlan,
 	findForeignExecutingPlans,
