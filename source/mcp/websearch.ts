@@ -2,7 +2,7 @@ import puppeteer, {type Browser, type Page} from 'puppeteer-core';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {extname, join} from 'node:path';
-import {spawn, type ChildProcess} from 'node:child_process';
+import {spawn, spawnSync, type ChildProcess} from 'node:child_process';
 import {
 	getProxyConfig,
 	sanitizeProxyHost,
@@ -33,6 +33,13 @@ import {
 
 /** AI summary max wait before falling back to cleaned page content. */
 const WEB_FETCH_AI_SUMMARY_TIMEOUT_MS = 60_000;
+
+/**
+ * Budget for the CDP Browser.close round-trip before we force-kill the
+ * browser process tree. Kept short so session-end / shutdown cleanup can
+ * never hang (or be cut off by a process.exit) while a browser is open.
+ */
+const BROWSER_CLOSE_TIMEOUT_MS = 3000;
 
 /**
  * Web Search Service using a pluggable search engine (DuckDuckGo / Bing / ...)
@@ -164,7 +171,7 @@ export class WebSearchService {
 				throw new Error(
 					'No Windows browser found in WSL environment. Please install Chrome or Edge on Windows, ' +
 						'or configure browser path in ~/.snow/proxy-config.json (browserPath). ' +
-						'Expected paths: /mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe',
+						'Expected paths: /mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
 				);
 			}
 
@@ -387,20 +394,73 @@ export class WebSearchService {
 	 * Called as a fallback when browser.close() fails or the process
 	 * was never connected.
 	 *
+	 * On Windows the spawned `chrome.exe` may act as a launcher: it spawns
+	 * the real browser process tree and exits quickly (Code: 0), so
+	 * `browserProcess.kill()` targets an already-dead process and orphans
+	 * the actual browser. We therefore tree-kill via `taskkill /T /F` and,
+	 * if the tracked PID is gone, sweep any process still holding our
+	 * profile directory as a last resort.
+	 *
 	 * @internal
 	 */
 	private killBrowserProcess(): void {
-		if (!this.browserProcess) {
+		const browserProcess = this.browserProcess;
+		// Clear the reference first so re-entrant calls are no-ops.
+		this.browserProcess = null;
+		if (!browserProcess || !browserProcess.pid) {
 			return;
 		}
-		try {
-			if (!this.browserProcess.killed) {
-				this.browserProcess.kill();
+
+		if (process.platform !== 'win32') {
+			try {
+				if (!browserProcess.killed) {
+					browserProcess.kill('SIGKILL');
+				}
+			} catch {
+				// Ignore — process may have already exited
 			}
-		} catch {
-			// Ignore — process may have already exited
+			return;
 		}
-		this.browserProcess = null;
+
+		try {
+			const taskkill = spawnSync(
+				'taskkill',
+				['/PID', String(browserProcess.pid), '/T', '/F'],
+				{stdio: 'ignore', windowsHide: true, timeout: 5000},
+			);
+			if (taskkill.status === 0 || taskkill.error) {
+				return;
+			}
+			// status !== 0 → the tracked PID is already gone. Fall through to
+			// the profile-dir sweep to catch the real browser process.
+		} catch {
+			return;
+		}
+
+		// Last resort: kill every Chrome process still using our per-process
+		// profile directory (the real browser holds it locked). userDataDir
+		// is a plain path with no single quotes, safe to embed in the script.
+		if (!this.userDataDir) {
+			return;
+		}
+		const sweepScript = [
+			`Get-CimInstance Win32_Process -Filter "Name='chrome.exe'"`,
+			`Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${this.userDataDir}') }`,
+			'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }',
+		].join(' | ');
+		try {
+			spawnSync(
+				'powershell',
+				['-NoProfile', '-NonInteractive', '-Command', sweepScript],
+				{
+					stdio: 'ignore',
+					windowsHide: true,
+					timeout: 5000,
+				},
+			);
+		} catch {
+			// Ignore — best-effort sweep
+		}
 	}
 
 	/**
@@ -433,16 +493,25 @@ export class WebSearchService {
 			// We spawned this browser process (either via puppeteer.launch()
 			// on Linux/macOS, or via manual spawn + connect on Windows).
 			// Call browser.close() which sends a CDP Browser.close command to
-			// terminate the browser gracefully.
+			// terminate the browser gracefully. Bound the round-trip: when the
+			// Node process is about to exit (session end / SIGINT), an
+			// unbounded close that hangs would leave the browser orphaned, so
+			// fall back to killing the process tree once the budget elapses.
 			try {
 				if (browser.connected) {
-					await browser.close();
+					await Promise.race([
+						browser.close(),
+						new Promise<void>(resolve =>
+							setTimeout(resolve, BROWSER_CLOSE_TIMEOUT_MS),
+						),
+					]);
 				}
 			} catch {
 				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
 			}
 			// If browser.close() didn't fully terminate the process (e.g.,
-			// CDP connection was already lost), kill it as a fallback.
+			// CDP connection was already lost or the timeout elapsed), kill
+			// it as a fallback.
 			this.killBrowserProcess();
 		} else {
 			// Remote session obtained via puppeteer.connect() (WSL connecting
@@ -460,6 +529,7 @@ export class WebSearchService {
 		if (this.browser === browser) {
 			this.browser = null;
 		}
+		this.browserIsLocallyLaunched = false;
 	}
 
 	private async closePage(page: Page | null): Promise<void> {
