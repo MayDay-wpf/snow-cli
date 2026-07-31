@@ -107,3 +107,24 @@ impl Task for WriteFileTask {
     Ok(())
   }
 }
+
+// ── phantom-window sweep ──────────────────────────────────────────────────
+// Windows-only: destroys orphaned Chromium/Edge windows (owner process
+// exited) that linger as blank Alt+Tab entries. Returns the number of
+// windows actually destroyed.
+
+pub struct SweepPhantomWindowsTask;
+
+impl Task for SweepPhantomWindowsTask {
+  type Output = u32;
+  type JsValue = u32;
+
+  /// Runs on a libuv thread — EnumWindows + a short sleep are safe here.
+  fn compute(&mut self) -> Result<Self::Output> {
+    Ok(crate::phantom::sweep_orphan_chromium_windows_sync())
+  }
+
+  fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+    Ok(output)
+  }
+}
