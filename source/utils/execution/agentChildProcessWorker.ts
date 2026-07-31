@@ -404,6 +404,17 @@ export async function runAgentChildProcessWorker(): Promise<void> {
 						stack: error instanceof Error ? error.stack : undefined,
 					});
 				} finally {
+					// Session end: this worker's sub-agent / teammate run is
+					// over and the parent will process.exit(0) this process
+					// right after we resolve. Close any Puppeteer browser this
+					// worker launched for the websearch tools, otherwise the
+					// headless Chrome would be orphaned on the system.
+					try {
+						const {webSearchService} = await import('../../mcp/websearch.js');
+						await webSearchService.closeBrowser();
+					} catch {
+						// websearch module not loaded or already closed
+					}
 					setImmediate(resolve);
 				}
 			})();

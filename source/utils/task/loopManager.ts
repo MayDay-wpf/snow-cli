@@ -464,7 +464,23 @@ class LoopManager {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
 			} catch {}
 
-			process.exit(0);
+			// Close any Puppeteer browser before exiting — a direct
+			// process.exit() would otherwise orphan headless Chrome
+			// launched by the websearch tools.
+			void (async () => {
+				try {
+					const {cleanupGlobalResources} = await import(
+						'../core/globalCleanup.js'
+					);
+					await Promise.race([
+						cleanupGlobalResources(),
+						new Promise<void>(resolve => setTimeout(resolve, 5000)),
+					]);
+				} catch {
+					// Ignore cleanup errors on the shutdown path
+				}
+				process.exit(0);
+			})();
 		});
 
 		process.on('SIGINT', () => {
@@ -473,7 +489,23 @@ class LoopManager {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
 			} catch {}
 
-			process.exit(0);
+			// Close any Puppeteer browser before exiting — a direct
+			// process.exit() would otherwise orphan headless Chrome
+			// launched by the websearch tools.
+			void (async () => {
+				try {
+					const {cleanupGlobalResources} = await import(
+						'../core/globalCleanup.js'
+					);
+					await Promise.race([
+						cleanupGlobalResources(),
+						new Promise<void>(resolve => setTimeout(resolve, 5000)),
+					]);
+				} catch {
+					// Ignore cleanup errors on the shutdown path
+				}
+				process.exit(0);
+			})();
 		});
 
 		await new Promise(() => {});
