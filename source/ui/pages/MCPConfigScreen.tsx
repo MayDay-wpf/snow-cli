@@ -87,6 +87,16 @@ function getSystemEditor(): string | null {
  * For the in-IDE editor flow we keep using a sidecar draft file so the user can
  * still edit only the MCP portion — the parsed result is written back through
  * `updateMCPConfig` (see openEditorForScope below), which targets settings.json.
+ *
+ * [MCP 2026-07-28] Protocol notes for MCP server configuration:
+ * - HTTP servers now receive MCP-Protocol-Version: 2026-07-28 header (SEP-2575)
+ * - Legacy HTTP+SSE transport is officially deprecated (SEP-2577), removal ~2027-07.
+ *   New server configs should use "type": "http" (Streamable HTTP) instead of SSE.
+ * - Roots, Sampling, and Logging capabilities are deprecated (SEP-2577) with a
+ *   12-month minimum window. New implementations should not adopt them.
+ * - server/discover RPC is available for optional upfront capability discovery.
+ * - List responses (tools/list etc.) may carry ttlMs/cacheScope cache hints (SEP-2549).
+ * - MRTR (Multi Round-Trip Requests) replaces server-initiated elicitation (SEP-2322).
  */
 function getConfigFilePath(scope: MCPConfigScope): string {
 	if (scope === 'project') {

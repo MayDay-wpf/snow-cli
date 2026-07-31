@@ -1,4 +1,4 @@
-import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
+import {Tool, type CallToolResult} from '@modelcontextprotocol/client';
 import {
 	addNotebook,
 	addNotebooks,
@@ -49,13 +49,11 @@ EXAMPLES:
 				action: {
 					type: 'string',
 					enum: ['query', 'list', 'add', 'update', 'delete'],
-					description:
-						'Which operation to run on the notebook.',
+					description: 'Which operation to run on the notebook.',
 				},
 				filePath: {
 					type: 'string',
-					description:
-						'For action=add/list: file path (relative or absolute).',
+					description: 'For action=add/list: file path (relative or absolute).',
 				},
 				filePathPattern: {
 					type: 'string',
@@ -65,8 +63,7 @@ EXAMPLES:
 				},
 				topN: {
 					type: 'number',
-					description:
-						'For action=query: max results (default: 10, max: 50).',
+					description: 'For action=query: max results (default: 10, max: 50).',
 					default: 10,
 					minimum: 1,
 					maximum: 50,
@@ -132,7 +129,10 @@ export async function executeNotebookTool(
 				? ''
 				: undefined);
 
-		if (!action || !['query', 'list', 'add', 'update', 'delete'].includes(action)) {
+		if (
+			!action ||
+			!['query', 'list', 'add', 'update', 'delete'].includes(action)
+		) {
 			return {
 				content: [
 					{
@@ -197,7 +197,9 @@ export async function executeNotebookTool(
 								text: JSON.stringify(
 									{
 										success: true,
-										message: `${entries.length} notebook entries added for: ${entries[0]?.filePath ?? filePath}`,
+										message: `${entries.length} notebook entries added for: ${
+											entries[0]?.filePath ?? filePath
+										}`,
 										entries: entries.map(e => ({
 											id: e.id,
 											filePath: e.filePath,
@@ -393,15 +395,16 @@ export async function executeNotebookTool(
 					.map(id => findNotebookById(id))
 					.filter((e): e is NonNullable<typeof e> => e !== null);
 
-				const result = ids.length === 1
-					? (() => {
-						const deleted = deleteNotebook(ids[0]!);
-						return {
-							deleted: deleted ? [ids[0]!] : [],
-							notFound: deleted ? [] : [ids[0]!],
-						};
-					})()
-					: deleteNotebooks(ids);
+				const result =
+					ids.length === 1
+						? (() => {
+								const deleted = deleteNotebook(ids[0]!);
+								return {
+									deleted: deleted ? [ids[0]!] : [],
+									notFound: deleted ? [] : [ids[0]!],
+								};
+						  })()
+						: deleteNotebooks(ids);
 
 				// 记录删除到快照追踪
 				try {
@@ -429,7 +432,9 @@ export async function executeNotebookTool(
 								text: JSON.stringify(
 									{
 										success: false,
-										message: `Notebook entries not found: ${result.notFound.join(', ')}`,
+										message: `Notebook entries not found: ${result.notFound.join(
+											', ',
+										)}`,
 									},
 									null,
 									2,

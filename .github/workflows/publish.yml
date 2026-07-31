@@ -125,8 +125,8 @@ jobs:
 
             ### What's New
 
-            - Avoid rollback breakdown
-            - Add static CRT link configuration
+            - Added the MCP protocol 20260728 update
+            - Added compatibility for `response.reasoning_text.delta` in DeepSeek responses requests
 
             ### Installation
             ```bash
