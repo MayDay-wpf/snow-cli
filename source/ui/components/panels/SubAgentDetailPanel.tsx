@@ -6,6 +6,7 @@ import React, {
 	useSyncExternalStore,
 } from 'react';
 import {Box, Text} from 'ink';
+import stringWidth from 'string-width';
 import type {PickerAgent} from '../../../hooks/picker/useRunningAgentsPicker.js';
 import {
 	subscribeSubAgentLive,
@@ -20,6 +21,11 @@ import {
 	formatElapsedTime,
 	MIN_TOOL_DURATION_DISPLAY_MS,
 } from '../../../utils/core/textUtils.js';
+import {
+	clampSubAgentLine,
+	getSubAgentPanelLayout,
+	getTimelineWindow,
+} from '../../../utils/ui/subAgentTimeline.js';
 
 type DetailFocus = 'timeline' | 'input';
 
@@ -47,13 +53,7 @@ function toSingleLine(text: string): string {
 		.trim();
 }
 
-/** Clamp a single-line string to maxCols characters, appending `...` when needed. */
-function clampLine(text: string, maxCols: number): string {
-	if (maxCols <= 0) return '';
-	if (text.length <= maxCols) return text;
-	if (maxCols <= 3) return text.slice(0, maxCols);
-	return `${text.slice(0, maxCols - 3)}...`;
-}
+const clampLine = clampSubAgentLine;
 
 function formatTokens(count: number): string {
 	if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
@@ -214,7 +214,7 @@ const SubAgentDetailPanel = memo(
 		focus,
 		inputValue,
 		timelineOffset,
-		maxHeight = 12,
+		maxHeight = 5,
 		sendFeedback,
 		terminalWidth = 80,
 	}: Props) => {
@@ -244,10 +244,8 @@ const SubAgentDetailPanel = memo(
 			return null;
 		}
 
-		// Parent ChatInput already has paddingX; keep a modest min width.
-		const panelWidth = Math.max(40, (terminalWidth ?? 80) - 2);
-		// Reserve ~6 cols for `  └─ ` / `  │  ` tree prefixes inside padding.
-		const maxLineCols = Math.max(24, panelWidth - 8);
+		// Parent ChatInput owns one column of horizontal padding on each side.
+		const {panelWidth, maxLineCols} = getSubAgentPanelLayout(terminalWidth);
 
 		const isHistory = !!agent.isHistory;
 		const isTeammate = agent.sourceType === 'teammate';
@@ -283,15 +281,28 @@ const SubAgentDetailPanel = memo(
 			: '';
 
 		const timeline = buildTimelineLines(slot, agent, maxLineCols);
-		const visibleCount = Math.max(4, maxHeight);
-		const maxOffset = Math.max(0, timeline.length - visibleCount);
-		const offset = Math.min(Math.max(0, timelineOffset), maxOffset);
-		const visibleLines = timeline.slice(offset, offset + visibleCount);
-		const moreAbove = offset;
-		const moreBelow = Math.max(0, timeline.length - (offset + visibleCount));
+		const {visibleLines, offset, moreAbove, moreBelow} = getTimelineWindow(
+			timeline,
+			timelineOffset,
+			maxHeight,
+		);
 
 		const inputFocused = focus === 'input';
 		const timelineFocused = focus === 'timeline';
+		const timelineRows = visibleLines.map((line, index) => {
+			const isFirst = index === 0;
+			const isLast = index === visibleLines.length - 1;
+			const leading = [
+				isFirst && timelineFocused ? '❯' : '',
+				isFirst && moreAbove > 0 ? `↑${moreAbove}` : '',
+			]
+				.filter(Boolean)
+				.join(' ');
+			const trailing = isLast && moreBelow > 0 ? ` ↓${moreBelow}` : '';
+			const reserved = stringWidth(leading) + stringWidth(trailing);
+			const content = clampLine(line, Math.max(1, maxLineCols - reserved - 2));
+			return `${leading ? `${leading} ` : ''}${content}${trailing}`;
+		});
 		// Reserve `> ` prefix + optional cursor block for input display.
 		const inputDisplay = clampLine(
 			toSingleLine(inputValue),
@@ -299,14 +310,7 @@ const SubAgentDetailPanel = memo(
 		);
 
 		return (
-			<Box
-				flexDirection="column"
-				borderStyle="round"
-				borderColor={theme.colors.menuInfo}
-				paddingX={1}
-				marginTop={1}
-				width={panelWidth}
-			>
+			<Box flexDirection="column" width={panelWidth}>
 				{/* Header */}
 				<Box>
 					<Text color={theme.colors.menuSelected} bold wrap="truncate">
@@ -342,36 +346,20 @@ const SubAgentDetailPanel = memo(
 				</Box>
 
 				{/* Timeline */}
-				<Box marginTop={1} flexDirection="column">
-					<Text
-						color={
-							timelineFocused
-								? theme.colors.menuSelected
-								: theme.colors.menuSecondary
-						}
-						bold={timelineFocused}
-						wrap="truncate"
-					>
-						{timelineFocused ? '❯ ' : '  '}
-						{t.subAgentDetailPanel.timelineTitle}
-					</Text>
-					{moreAbove > 0 ? (
-						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
-							{'  ↑ '}
-							{t.subAgentDetailPanel.moreAbove.replace(
-								'{count}',
-								String(moreAbove),
-							)}
-						</Text>
-					) : null}
-					{visibleLines.map((line, idx) => {
-						const isLast = idx === visibleLines.length - 1;
+				<Box flexDirection="column">
+					{timelineRows.map((line, idx) => {
+						const isLast = idx === timelineRows.length - 1;
 						const prefix = isLast ? '└─ ' : '│  ';
 						return (
 							<Box key={`${offset + idx}-${line.slice(0, 24)}`}>
 								<Text
-									color={theme.colors.menuSecondary}
-									dimColor
+									color={
+										timelineFocused && idx === 0
+											? theme.colors.menuSelected
+											: theme.colors.menuSecondary
+									}
+									bold={timelineFocused && idx === 0}
+									dimColor={!(timelineFocused && idx === 0)}
 									wrap="truncate"
 								>
 									{'  '}
@@ -381,20 +369,11 @@ const SubAgentDetailPanel = memo(
 							</Box>
 						);
 					})}
-					{moreBelow > 0 ? (
-						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
-							{'  ↓ '}
-							{t.subAgentDetailPanel.moreBelow.replace(
-								'{count}',
-								String(moreBelow),
-							)}
-						</Text>
-					) : null}
 				</Box>
 
 				{/* Input (hidden for history-only view) */}
 				{!isHistory ? (
-					<Box marginTop={1} flexDirection="column">
+					<Box flexDirection="column">
 						<Text
 							color={
 								inputFocused
@@ -429,7 +408,7 @@ const SubAgentDetailPanel = memo(
 						) : null}
 					</Box>
 				) : (
-					<Box marginTop={1}>
+					<Box>
 						<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 							{t.subAgentDetailPanel.historyReadOnly ||
 								'History view · read only'}
@@ -438,7 +417,7 @@ const SubAgentDetailPanel = memo(
 				)}
 
 				{/* Hints */}
-				<Box marginTop={1}>
+				<Box>
 					<Text color={theme.colors.menuSecondary} dimColor wrap="truncate">
 						{!isHistory && t.subAgentDetailPanel.hintRunning
 							? t.subAgentDetailPanel.hintRunning

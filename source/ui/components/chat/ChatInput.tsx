@@ -336,10 +336,11 @@ export default function ChatInput({
 	// Recalculate viewport dimensions to ensure proper resizing
 	const uiOverhead = 8;
 	const effectiveReservedColumns = Math.max(0, reservedColumns);
-	const inputTerminalWidth = Math.max(
-		40,
+	const physicalAvailableWidth = Math.max(
+		1,
 		terminalWidth - effectiveReservedColumns,
 	);
+	const inputTerminalWidth = Math.max(40, physicalAvailableWidth);
 	const viewportWidth = Math.max(40, inputTerminalWidth - uiOverhead);
 	const viewport: Viewport = useMemo(
 		() => ({
@@ -827,14 +828,6 @@ export default function ChatInput({
 		}, 10);
 		return () => clearTimeout(timer);
 	}, [showFilePicker, forceUpdate]);
-
-	// Same artifact prevention when the sub-agent detail panel mounts/unmounts
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			forceUpdate();
-		}, 10);
-		return () => clearTimeout(timer);
-	}, [showSubAgentDetail, forceUpdate]);
 
 	// Handle terminal width changes with debounce (like gemini-cli)
 	useEffect(() => {
@@ -1411,9 +1404,9 @@ export default function ChatInput({
 								focus={detailFocus}
 								inputValue={detailInputValue}
 								timelineOffset={detailTimelineOffset}
-								maxHeight={8}
+								maxHeight={5}
 								sendFeedback={detailSendFeedback}
-								terminalWidth={inputTerminalWidth}
+								terminalWidth={physicalAvailableWidth}
 							/>
 						</Suspense>
 					</Box>

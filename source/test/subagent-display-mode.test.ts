@@ -10,6 +10,7 @@ import {
 	liveOnToolEnd,
 	_flushSubAgentLiveNotifyForTests,
 } from '../hooks/conversation/core/subAgentLiveStore.js';
+import {getTimelineWindow} from '../utils/ui/subAgentTimeline.js';
 
 const test = anyTest as unknown as TestFn;
 
@@ -34,6 +35,32 @@ test('themeConfig subAgentDisplayMode persists modes', t => {
 		setSubAgentDisplayMode(mode);
 		t.is(getSubAgentDisplayMode(), mode);
 	}
+});
+
+test('detail timeline window is capped at five rows and reports scroll counts', t => {
+	const timeline = Array.from({length: 9}, (_, index) => `tool-${index + 1}`);
+	const first = getTimelineWindow(timeline, 0, 8);
+	t.deepEqual(first.visibleLines, timeline.slice(0, 5));
+	t.is(first.moreAbove, 0);
+	t.is(first.moreBelow, 4);
+
+	const middle = getTimelineWindow(timeline, 2, 5);
+	t.deepEqual(middle.visibleLines, timeline.slice(2, 7));
+	t.is(middle.moreAbove, 2);
+	t.is(middle.moreBelow, 2);
+
+	const end = getTimelineWindow(timeline, 99, 5);
+	t.deepEqual(end.visibleLines, timeline.slice(4));
+	t.is(end.offset, 4);
+	t.is(end.moreAbove, 4);
+	t.is(end.moreBelow, 0);
+});
+
+test('detail timeline keeps a four-row minimum for compact callers', t => {
+	const timeline = ['one', 'two', 'three', 'four', 'five'];
+	const window = getTimelineWindow(timeline, 0, 1);
+	t.deepEqual(window.visibleLines, timeline.slice(0, 4));
+	t.is(window.moreBelow, 1);
 });
 
 test('live store keeps recent history lines when multi tools run', t => {
