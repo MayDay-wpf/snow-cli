@@ -483,7 +483,7 @@ export const mcpTools = [
 	{
 		name: 'codebase-search',
 		description:
-			'**Important:When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.*** Semantic search across the codebase using LLM embeddings. * Finds code snippets based on semantic meaning, supports both keywords and natural language queries. * Returns full code content with similarity scores and file locations. * NOTE: Only available when codebase indexing is enabled and the index has been built. * If the index is not available, the tool will return an error message with instructions.',
+			'**Important: When you need to search for code, this is the highest priority tool. You need to use this Codebase tool first.*** Semantic search across the codebase using LLM embeddings. * Finds code snippets based on semantic meaning, supports both keywords and natural language queries. * Returns full code content with similarity scores and file locations. * NOTE: Only available when codebase indexing is enabled and the index has been built. * If the index is not available, the tool will return an error message with instructions.',
 		inputSchema: {
 			type: 'object',
 			properties: {

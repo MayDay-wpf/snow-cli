@@ -9,7 +9,7 @@ export interface TodoItem {
 	fullLine: string;
 }
 
-const IGNORE_PATTERNS = [
+const IGNORED_PATH_SEGMENTS = new Set([
 	'node_modules',
 	'.git',
 	'dist',
@@ -20,12 +20,12 @@ const IGNORE_PATTERNS = [
 	'.output',
 	'out',
 	'.DS_Store',
-	'*.log',
-	'*.lock',
 	'yarn.lock',
 	'package-lock.json',
 	'pnpm-lock.yaml',
-];
+]);
+
+const IGNORED_FILE_SUFFIXES = ['.log', '.lock'];
 
 // Common task markers - support various formats
 // Only include markers that clearly indicate actionable tasks
@@ -48,20 +48,17 @@ const TODO_PATTERNS = [
 	// TODO with brackets/parentheses (common format for task assignment)
 	/\/\/\s*TODO\s*[\(\[\{]\s*(.+?)\s*[\)\]\}]/i,
 	/#\s*TODO\s*[\(\[\{]\s*(.+?)\s*[\)\]\}]/i,
-
-	// Multi-line block comment TODO (catches TODO on its own line)
-	/\/\*[\s\S]*?\bTODO:?\s*(.+?)[\s\S]*?\*\//i,
 ];
 
 function shouldIgnore(filePath: string): boolean {
-	const relativePath = filePath;
-	return IGNORE_PATTERNS.some(pattern => {
-		if (pattern.includes('*')) {
-			const regex = new RegExp(pattern.replace(/\*/g, '.*'));
-			return regex.test(relativePath);
-		}
-		return relativePath.includes(pattern);
-	});
+	// Match complete path components so names such as `builder` and `.github`
+	// are not accidentally treated as the ignored `build` and `.git` folders.
+	const segments = filePath.split(path.sep);
+	const basename = segments.at(-1) ?? '';
+	return (
+		segments.some(segment => IGNORED_PATH_SEGMENTS.has(segment)) ||
+		IGNORED_FILE_SUFFIXES.some(suffix => basename.endsWith(suffix))
+	);
 }
 
 function scanFileForTodos(filePath: string, rootDir: string): TodoItem[] {
