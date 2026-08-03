@@ -1,6 +1,6 @@
 import {execSync} from 'child_process';
 import {existsSync} from 'fs';
-import {join, resolve, relative, isAbsolute} from 'path';
+import {join, resolve, relative, isAbsolute, sep} from 'path';
 import {mkdirSync, rmSync} from 'fs';
 
 const WORKTREE_BASE = join(process.cwd(), '.snow', 'worktrees');
@@ -474,18 +474,24 @@ export function enforceWorktreePath(
 
 	const mainRoot = resolve(process.cwd());
 	const resolvedWorktree = resolve(worktreePath);
+	const isWithin = (root: string, candidate: string): boolean => {
+		const relativePath = relative(root, candidate);
+		return (
+			relativePath === '' ||
+			(relativePath !== '..' &&
+				!relativePath.startsWith(`..${sep}`) &&
+				!isAbsolute(relativePath))
+		);
+	};
 
 	if (isAbsolute(filePath)) {
 		const resolved = resolve(filePath);
 
-		if (
-			resolved === resolvedWorktree ||
-			resolved.startsWith(resolvedWorktree + '/')
-		) {
+		if (isWithin(resolvedWorktree, resolved)) {
 			return resolved;
 		}
 
-		if (resolved === mainRoot || resolved.startsWith(mainRoot + '/')) {
+		if (isWithin(mainRoot, resolved)) {
 			const rel = relative(mainRoot, resolved);
 			return resolve(resolvedWorktree, rel);
 		}
@@ -493,7 +499,8 @@ export function enforceWorktreePath(
 		return null;
 	}
 
-	return resolve(resolvedWorktree, filePath);
+	const resolved = resolve(resolvedWorktree, filePath);
+	return isWithin(resolvedWorktree, resolved) ? resolved : null;
 }
 
 /**
