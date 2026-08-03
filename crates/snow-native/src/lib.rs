@@ -5,6 +5,7 @@
 
 mod fuzzy_match;
 mod io;
+mod phantom;
 mod similarity;
 mod task;
 mod text_edit;
@@ -14,7 +15,8 @@ use napi::bindgen_prelude::AsyncTask;
 use napi_derive::napi;
 
 use crate::task::{
-  ApplyTextEditsTask, ReadFileTask, ScanFuzzyMatchesTask, WriteFileTask,
+	ApplyTextEditsTask, ReadFileTask, ScanFuzzyMatchesTask, SweepPhantomWindowsTask,
+	WriteFileTask,
 };
 use crate::types::NativeTextEdit;
 
@@ -63,4 +65,17 @@ pub fn read_file(path: String) -> AsyncTask<ReadFileTask> {
 #[napi]
 pub fn write_file(path: String, content: String) -> AsyncTask<WriteFileTask> {
   AsyncTask::new(WriteFileTask { path, content })
+}
+
+// ── phantom-window sweep ──────────────────────────────────────────────────
+
+/// Destroy orphaned Chromium/Edge top-level windows whose owning process has
+/// already exited (the source of blank "phantom" Alt+Tab entries after
+/// Edge/Chrome closes). Windows of running browsers are never touched.
+///
+/// Returns the number of windows actually destroyed. On non-Windows this is
+/// a no-op returning 0.
+#[napi]
+pub fn sweep_phantom_windows() -> AsyncTask<SweepPhantomWindowsTask> {
+  AsyncTask::new(SweepPhantomWindowsTask)
 }

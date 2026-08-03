@@ -145,7 +145,23 @@ export async function executeTask(
 	process.on('uncaughtException', error => {
 		log(`Uncaught Exception: ${error.message}`);
 		log(`Stack: ${error.stack}`);
-		process.exit(1);
+		// Run cleanup before exit: an immediate process.exit(1) here would
+		// race cli.tsx's graceful cleanup and orphan a Puppeteer browser
+		// launched by the websearch tools.
+		void (async () => {
+			try {
+				const {cleanupGlobalResources} = await import(
+					'../core/globalCleanup.js'
+				);
+				await Promise.race([
+					cleanupGlobalResources(),
+					new Promise<void>(resolve => setTimeout(resolve, 5000)),
+				]);
+			} catch {
+				// Ignore cleanup errors on the crash path
+			}
+			process.exit(1);
+		})();
 	});
 
 	try {

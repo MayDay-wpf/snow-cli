@@ -1,6 +1,6 @@
 [package]
 name = "snow-native"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 
@@ -12,3 +12,12 @@ napi = { version = "3", features = ["napi9"] }
 napi-derive = "3"
 encoding_rs = "0.8"
 chardetng = "0.1"
+
+# Windows-only: Win32 API for sweeping orphaned Chromium/Edge windows
+# (phantom Alt+Tab entries after Edge/Chrome closes).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+	"Win32_Foundation",
+	"Win32_UI_WindowsAndMessaging",
+	"Win32_System_Threading",
+] }

@@ -14,6 +14,7 @@ export type {CursorPosition} from './cursor-helpers.js';
 export type LogUpdate = {
 	clear: () => void;
 	done: () => void;
+	sync: (str: string) => void;
 	setCursorPosition: (position: CursorPosition | undefined) => void;
 	isCursorDirty: () => boolean;
 	(str: string): void;
@@ -140,8 +141,22 @@ const create = (stream: Writable, {showCursor = false} = {}): LogUpdate => {
 		}
 	};
 
+	// Keep diff and cursor state aligned when Ink renders a frame directly.
+	render.sync = (str: string) => {
+		const output = str + '\n';
+		previousOutput = output;
+		// A direct write leaves the cursor on the empty line after the frame.
+		previousLineCount = output.split('\n').length;
+		previousCursorPosition = undefined;
+		cursorWasShown = false;
+	};
+
 	render.setCursorPosition = (position: CursorPosition | undefined) => {
-		cursorPosition = position;
+		if (!cursorPositionChanged(position, cursorPosition)) {
+			return;
+		}
+
+		cursorPosition = position ? {...position} : undefined;
 		cursorDirty = true;
 	};
 

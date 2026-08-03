@@ -33,11 +33,13 @@ export function isWSL(): boolean {
  * @returns Windows browser path accessible from WSL, or null
  */
 export function findWindowsBrowserInWSL(): string | null {
+	// Prefer Chrome over Edge: Chrome is the most common install and avoids
+	// Edge's known "phantom window" Alt+Tab residue after headless runs.
 	const windowsPaths = [
-		'/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe',
-		'/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 		'/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
 		'/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+		'/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe',
+		'/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 	];
 
 	for (const path of windowsPaths) {
@@ -290,51 +292,88 @@ export function isExecutableForPlatform(filePath: string): boolean {
 }
 
 /**
- * Detect system Chrome/Edge browser executable path
- * @returns Browser executable path or null if not found
+ * A browser executable detected on the system.
  */
-export function findBrowserExecutable(): string | null {
+export interface DetectedBrowser {
+	/** Human-readable browser name (Chrome / Edge / Chromium / ...). */
+	name: string;
+	/** Absolute path to the executable (already verified to exist). */
+	path: string;
+}
+
+/**
+ * Detect all installed Chrome/Edge-family browser executables, best first.
+ *
+ * Priority (per platform):
+ *  - win32 : Chrome (Program Files → Program Files (x86) → LOCALAPPDATA),
+ *            then Edge (Program Files → Program Files (x86)).
+ *  - darwin: Google Chrome → Chromium → Microsoft Edge.
+ *  - linux : `google-chrome` → `chromium` → `chromium-browser` → `microsoft-edge`
+ *            via PATH lookup.
+ *  - WSL   : additionally probes the Windows browsers on the mounted C: drive
+ *            (Chrome first, then Edge), matching findWindowsBrowserInWSL().
+ *
+ * Results are deduplicated and filtered to paths that actually exist. The
+ * first entry is what {@link findBrowserExecutable} returns.
+ *
+ * @returns Array of detected browsers (empty if none found)
+ */
+export function detectBrowserCandidates(): DetectedBrowser[] {
 	const os = platform();
-	const paths: string[] = [];
+	const candidates: DetectedBrowser[] = [];
 
 	if (os === 'win32') {
-		// Windows: Prioritize Edge (built-in), then Chrome
 		// NOTE: Each path separator must be a single backslash in the runtime
 		// string, which means `\\` (two backslashes) in the source literal.
 		// Using `\\\\` (four) would produce double-backslash paths like
 		// `C:\\Program Files\\...` that puppeteer-core fails to launch
 		// (Issue: browser launch failure on Windows).
-		const edgePaths = [
-			'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-		];
 		const chromePaths = [
 			'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 			'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
 			(process.env['LOCALAPPDATA'] ?? '') +
 				'\\Google\\Chrome\\Application\\chrome.exe',
 		];
-		paths.push(...edgePaths, ...chromePaths);
+		const edgePaths = [
+			'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+		];
+		// Chrome first: most common install, and avoids Edge's known
+		// "phantom window" Alt+Tab residue after headless runs.
+		for (const path of chromePaths) {
+			candidates.push({name: 'Chrome', path});
+		}
+		for (const path of edgePaths) {
+			candidates.push({name: 'Edge', path});
+		}
 	} else if (os === 'darwin') {
-		// macOS
-		paths.push(
-			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-			'/Applications/Chromium.app/Contents/MacOS/Chromium',
-			'/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+		candidates.push(
+			{
+				name: 'Chrome',
+				path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+			},
+			{
+				name: 'Chromium',
+				path: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+			},
+			{
+				name: 'Edge',
+				path: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+			},
 		);
 	} else {
-		// Linux (including WSL - but for WSL we prefer Windows browser)
-		const binPaths = [
-			'google-chrome',
-			'chromium',
-			'chromium-browser',
-			'microsoft-edge',
+		// Linux (including WSL - but for WSL we also probe Windows browsers below)
+		const binPaths: Array<[string, string]> = [
+			['google-chrome', 'Chrome'],
+			['chromium', 'Chromium'],
+			['chromium-browser', 'Chromium'],
+			['microsoft-edge', 'Edge'],
 		];
-		for (const bin of binPaths) {
+		for (const [bin, name] of binPaths) {
 			try {
 				const path = execSync(`which ${bin}`, {encoding: 'utf8'}).trim();
 				if (path) {
-					return path;
+					candidates.push({name, path});
 				}
 			} catch {
 				// Continue to next binary
@@ -342,12 +381,49 @@ export function findBrowserExecutable(): string | null {
 		}
 	}
 
-	// Check if any path exists
-	for (const path of paths) {
-		if (path && existsSync(path)) {
-			return path;
+	// WSL: also surface the Windows browsers (Chrome first, then Edge) so the
+	// TUI can offer them as selectable options.
+	if (isWSL()) {
+		candidates.push(
+			{
+				name: 'Chrome',
+				path: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+			},
+			{
+				name: 'Chrome',
+				path: '/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+			},
+			{
+				name: 'Edge',
+				path: '/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe',
+			},
+			{
+				name: 'Edge',
+				path: '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+			},
+		);
+	}
+
+	// Deduplicate and keep only paths that actually exist.
+	const seen = new Set<string>();
+	const result: DetectedBrowser[] = [];
+	for (const candidate of candidates) {
+		if (!candidate.path || seen.has(candidate.path)) {
+			continue;
+		}
+		seen.add(candidate.path);
+		if (existsSync(candidate.path)) {
+			result.push(candidate);
 		}
 	}
 
-	return null;
+	return result;
+}
+
+/**
+ * Detect system Chrome/Edge browser executable path
+ * @returns Browser executable path or null if not found
+ */
+export function findBrowserExecutable(): string | null {
+	return detectBrowserCandidates()[0]?.path ?? null;
 }

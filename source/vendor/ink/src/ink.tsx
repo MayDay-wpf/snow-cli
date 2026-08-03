@@ -41,10 +41,40 @@ export function clearInkStaticOutput(stdout: NodeJS.WriteStream): void {
 	}
 }
 
+export type RenderAction = 'skip' | 'log' | 'clear';
+
+export const getRenderAction = ({
+	isFullscreen,
+	wasFullscreen,
+	hasStaticOutput,
+	outputChanged,
+	cursorDirty,
+	dimensionsChanged = false,
+}: {
+	isFullscreen: boolean;
+	wasFullscreen: boolean;
+	hasStaticOutput: boolean;
+	outputChanged: boolean;
+	cursorDirty: boolean;
+	dimensionsChanged?: boolean;
+}): RenderAction => {
+	if (dimensionsChanged || hasStaticOutput || isFullscreen !== wasFullscreen) {
+		return 'clear';
+	}
+
+	if (isFullscreen) {
+		return outputChanged || cursorDirty ? 'log' : 'skip';
+	}
+
+	return outputChanged || cursorDirty ? 'log' : 'skip';
+};
+
+type CancelableLogUpdate = LogUpdate & {cancel: () => void};
+
 export default class Ink {
 	private readonly options: Options;
 	private readonly log: LogUpdate;
-	private readonly throttledLog: LogUpdate;
+	private readonly throttledLog: LogUpdate | CancelableLogUpdate;
 	// Ignore last render after unmounting a tree to prevent empty output before exit
 	private isUnmounted: boolean;
 	lastOutput: string;
@@ -61,11 +91,16 @@ export default class Ink {
 	private restoreConsole?: () => void;
 	private readonly unsubscribeResize?: () => void;
 	private cursorRegistration?: CursorRegistration;
+	private lastOutputWasFullscreen = false;
+	private lastTerminalRows?: number;
+	private lastTerminalColumns?: number;
 
 	constructor(options: Options) {
 		autoBind(this as unknown as Record<string, unknown>);
 
 		this.options = options;
+		this.lastTerminalRows = options.stdout.rows;
+		this.lastTerminalColumns = options.stdout.columns;
 		this.rootNode = dom.createNode('ink-root');
 		this.renderFrame = createRenderer(this.rootNode);
 		this.rootNode.onComputeLayout = this.calculateLayout;
@@ -84,7 +119,7 @@ export default class Ink {
 			: (throttle(this.log, undefined, {
 					leading: true,
 					trailing: true,
-			  }) as unknown as LogUpdate);
+			  }) as unknown as CancelableLogUpdate);
 
 		// Ignore last render after unmounting a tree to prevent empty output before exit
 		this.isUnmounted = false;
@@ -143,10 +178,15 @@ export default class Ink {
 	resolveExitPromise: () => void = () => {};
 	rejectExitPromise: (reason?: Error) => void = () => {};
 	unsubscribeExit: () => void = () => {};
-
 	registerCursor = (registration: CursorRegistration | undefined): void => {
 		this.cursorRegistration = registration;
 	};
+
+	private cancelThrottledLog(): void {
+		if ('cancel' in this.throttledLog) {
+			this.throttledLog.cancel();
+		}
+	}
 
 	private getAbsolutePosition(node: DOMElement): {x: number; y: number} {
 		let x = 0;
@@ -222,35 +262,55 @@ export default class Ink {
 		// Static content is written directly to the terminal's scrollback buffer.
 		// We intentionally do NOT accumulate it in fullStaticOutput because that
 		// string grows without bound and is the #1 source of memory leaks in
-		// long-running sessions.  The only code path that previously consumed
-		// fullStaticOutput (outputHeight >= rows) now simply clears + re-renders
-		// the dynamic portion only — the static text is already in scrollback.
+		// long-running sessions.
+		const terminalRows = this.options.stdout.rows;
+		const terminalColumns = this.options.stdout.columns;
+		const dimensionsChanged =
+			terminalRows !== this.lastTerminalRows ||
+			terminalColumns !== this.lastTerminalColumns;
+		const isFullscreen =
+			typeof terminalRows === 'number' && outputHeight >= terminalRows;
+		const action = getRenderAction({
+			isFullscreen,
+			wasFullscreen: this.lastOutputWasFullscreen,
+			hasStaticOutput: Boolean(hasStaticOutput),
+			outputChanged: output !== this.lastOutput,
+			cursorDirty: this.log.isCursorDirty(),
+			dimensionsChanged,
+		});
 
-		if (outputHeight >= this.options.stdout.rows) {
-			if (hasStaticOutput) {
-				writeSafely(this.options.stdout, staticOutput);
-			}
-
-			writeSafely(this.options.stdout, ansiEscapes.clearTerminal + output);
-			this.lastOutput = output;
-			return;
+		if (action === 'clear' || hasStaticOutput) {
+			this.cancelThrottledLog();
 		}
 
 		if (hasStaticOutput) {
+			// Commit Static only after removing the old dynamic block, then let
+			// log-update rebuild the dynamic block without clearing scrollback.
 			this.log.clear();
 			writeSafely(this.options.stdout, staticOutput);
 			this.log(output);
-		}
-
-		if (!hasStaticOutput) {
-			if (output !== this.lastOutput) {
-				this.throttledLog(output);
-			} else if (this.log.isCursorDirty()) {
+		} else if (action === 'clear') {
+			writeSafely(
+				this.options.stdout,
+				ansiEscapes.eraseScreen + ansiEscapes.cursorTo(0, 0) + output + '\n',
+			);
+			this.log.sync(output);
+			if (this.log.isCursorDirty()) {
 				this.log(output);
+			}
+		} else if (action === 'log') {
+			if (isFullscreen || hasStaticOutput || this.log.isCursorDirty()) {
+				this.cancelThrottledLog();
+				this.log(output);
+			} else {
+				this.throttledLog(output);
 			}
 		}
 
 		this.lastOutput = output;
+		this.lastOutputWasFullscreen = isFullscreen;
+		this.lastTerminalRows = terminalRows;
+		this.lastTerminalColumns = terminalColumns;
 	};
 
 	render(node: ReactNode): void {
@@ -290,6 +350,7 @@ export default class Ink {
 			return;
 		}
 
+		this.cancelThrottledLog();
 		this.log.clear();
 		writeSafely(this.options.stdout, data);
 		this.log(this.lastOutput);
@@ -311,6 +372,7 @@ export default class Ink {
 			return;
 		}
 
+		this.cancelThrottledLog();
 		this.log.clear();
 		writeSafely(this.options.stderr, data);
 		this.log(this.lastOutput);
@@ -339,6 +401,7 @@ export default class Ink {
 		if (isInCi) {
 			writeSafely(this.options.stdout, this.lastOutput + '\n');
 		} else if (!this.options.debug) {
+			this.cancelThrottledLog();
 			this.log.done();
 		}
 
@@ -367,6 +430,7 @@ export default class Ink {
 
 	clear(): void {
 		if (!isInCi && !this.options.debug) {
+			this.cancelThrottledLog();
 			this.log.clear();
 		}
 	}

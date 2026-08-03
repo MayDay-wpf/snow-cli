@@ -168,6 +168,28 @@ process.on('unhandledRejection', (reason: unknown) => {
 	console.error('Unhandled Rejection:', reason);
 });
 
+/**
+ * Exit after running the global resource cleanup (browser / MCP / OTEL / Ink).
+ * Direct process.exit() calls below (agent child worker, task executor, loop
+ * daemon) bypass the async SIGINT cleanup path and would otherwise orphan a
+ * Puppeteer browser launched by the websearch tools. The wait is bounded so
+ * an unresponsive cleanup can never hang shutdown.
+ */
+async function exitWithCleanup(code: number): Promise<void> {
+	try {
+		const {cleanupGlobalResources} = await import(
+			'./utils/core/globalCleanup.js'
+		);
+		await Promise.race([
+			cleanupGlobalResources(),
+			new Promise<void>(resolve => setTimeout(resolve, 5000)),
+		]);
+	} catch {
+		// Ignore cleanup errors during exit
+	}
+	process.exit(code);
+}
+
 // Check if this is a quick command that doesn't need loading indicator
 const args = process.argv.slice(2);
 const isQuickCommand = args.some(
@@ -182,7 +204,8 @@ const isQuickCommand = args.some(
 		arg === '--sse' ||
 		arg === '--sse-daemon' ||
 		arg === '--loop-daemon-execute' ||
-		arg === '--snow-agent-child-worker',
+		arg === '--snow-agent-child-worker' ||
+		arg === '--sweep-phantom-windows',
 );
 
 // Show loading indicator only for non-quick commands
@@ -196,7 +219,8 @@ if (args.includes('--snow-agent-child-worker')) {
 		'./utils/execution/agentChildProcessWorker.js'
 	);
 	await runAgentChildProcessWorker();
-	process.exit(0);
+	// Session ended — close any Puppeteer browser before exiting.
+	await exitWithCleanup(0);
 }
 
 // Migrate legacy split .snow/*.json files into the unified settings.json before
@@ -417,6 +441,11 @@ Options
 				default: false,
 				alias: 'sse-status',
 			},
+			sweepPhantomWindows: {
+				type: 'boolean',
+				default: false,
+				alias: 'sweep-phantom-windows',
+			},
 			ssePort: {
 				type: 'number',
 				default: 3000,
@@ -504,6 +533,22 @@ if (cli.flags.sseStop) {
 if (cli.flags.sseStatus) {
 	const {daemonStatus} = await import('./utils/sse/sseDaemon.js');
 	daemonStatus();
+	process.exit(0);
+}
+
+// Handle phantom-window sweep: destroy orphaned Chromium/Edge windows whose
+// owning process has exited — the source of blank Alt+Tab "ghost" entries
+// after Edge/Chrome closes. Windows of running browsers are never touched.
+if (cli.flags.sweepPhantomWindows) {
+	const {sweepPhantomWindows} = await import(
+		'./utils/core/phantomWindowCleanup.js'
+	);
+	const count = await sweepPhantomWindows();
+	console.log(
+		count > 0
+			? `Swept ${count} orphaned Chromium/Edge window(s). If Alt+Tab ghost entries remain, restart Explorer (Task Manager → Windows Explorer → Restart).`
+			: 'No orphaned Chromium/Edge windows found.',
+	);
 	process.exit(0);
 }
 
@@ -661,7 +706,8 @@ if (cli.flags.loopDaemonExecute) {
 	}
 
 	await loopManager.runDaemonLoop(state);
-	process.exit(0);
+	// Session ended — close any Puppeteer browser before exiting.
+	await exitWithCleanup(0);
 }
 
 // Handle task execution (internal use by background process)
@@ -682,7 +728,8 @@ if (cli.flags.taskExecute) {
 		)}...`,
 	);
 	await executeTask(taskId, prompt);
-	process.exit(0);
+	// Task session ended — close any Puppeteer browser before exiting.
+	await exitWithCleanup(0);
 }
 
 // Startup component that shows loading spinner during update check
@@ -903,9 +950,12 @@ const cleanupAsync = async () => {
 		const {cleanupGlobalResources} = await import(
 			'./utils/core/globalCleanup.js'
 		);
+		// 5s budget: must exceed the bounded browser-close wait inside
+		// cleanupGlobalResources, otherwise process.exit() could race the
+		// CDP Browser.close and orphan the Puppeteer browser.
 		await Promise.race([
 			cleanupGlobalResources(),
-			new Promise(resolve => setTimeout(resolve, 2000)),
+			new Promise(resolve => setTimeout(resolve, 5000)),
 		]);
 	} catch {
 		// Ignore cleanup errors during exit

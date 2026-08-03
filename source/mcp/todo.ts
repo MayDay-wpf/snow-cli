@@ -1,4 +1,4 @@
-import {Tool, type CallToolResult} from '@modelcontextprotocol/sdk/types.js';
+import {Tool, type CallToolResult} from '@modelcontextprotocol/client';
 import fs from 'fs/promises';
 import path from 'path';
 // Type definitions

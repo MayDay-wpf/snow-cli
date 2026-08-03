@@ -187,12 +187,13 @@ export const en: TranslationKeys = {
 			'Use ↑↓ to navigate between fields, press Enter to edit/toggle, and press Ctrl+S or Esc to save and return',
 		browserExamplesTitle: 'Browser Path Examples:',
 		browserExamplesFooter:
-			'Leave empty to auto-detect system browser (Edge/Chrome)',
+			'Leave empty to auto-detect system browser (Chrome/Edge)',
 		portValidationError: 'Port must be a number between 1 and 65535',
 		portPlaceholder: '7890',
 		browserPathPlaceholder: 'Leave empty for auto-detect',
+		manualInputOption: 'Manual input...',
 		windowsExample:
-			'• Windows: C:\\Program Files(x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+			'• Windows: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',

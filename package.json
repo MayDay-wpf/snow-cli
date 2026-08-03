@@ -1,6 +1,6 @@
 {
 	"name": "snow-ai",
-	"version": "0.8.22",
+	"version": "0.8.24",
 	"description": "Agentic coding in your terminal",
 	"license": "MIT",
 	"bin": {
@@ -52,6 +52,8 @@
 	],
 	"dependencies": {
 		"@microsoft/signalr": "^10.0.0",
+		"@modelcontextprotocol/client": "^2.0.0",
+		"@modelcontextprotocol/node": "^2.0.0",
 		"@vscode/ripgrep": "^1.18.0",
 		"abort-controller": "^3.0.0",
 		"eventsource": "^2.0.2",
@@ -63,11 +65,10 @@
 	},
 	"devDependencies": {
 		"@agentclientprotocol/sdk": "^0.14.1",
-		"@blindfold/sdk": "^1.0.2",
 		"@alcalzone/ansi-tokenize": "^0.3.0",
+		"@blindfold/sdk": "^1.0.2",
 		"@grpc/grpc-js": "^1.14.4",
 		"@inkjs/ui": "^2.0.0",
-		"@modelcontextprotocol/sdk": "^1.17.3",
 		"@opentelemetry/api": "^1.9.1",
 		"@opentelemetry/exporter-logs-otlp-grpc": "^0.218.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.218.0",
