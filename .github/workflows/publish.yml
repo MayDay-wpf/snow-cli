@@ -125,8 +125,7 @@ jobs:
 
             ### What's New
 
-            - Added the MCP protocol 20260728 update
-            - Added compatibility for `response.reasoning_text.delta` in DeepSeek responses requests
+            - Fixed worktree path validation and enhanced TODO scanner robustness
 
             ### Installation
             ```bash
