@@ -127,6 +127,20 @@ class SessionManager {
 		return path.join(this.sessionsDir, this.currentProjectId);
 	}
 
+	/**
+	 * 获取当前项目子代理会话存储目录。
+	 * 路径结构: ~/.snow/sessions/项目名/YYYYMMDD/subagent/
+	 * 与主会话文件同一目录树，按项目与日期归档，便于查找与统一清理。
+	 */
+	getSubAgentSessionsDir(date?: Date): string {
+		const sessionDate = date || new Date();
+		return path.join(
+			this.getProjectSessionsDir(),
+			formatDateCompact(sessionDate),
+			'subagent',
+		);
+	}
+
 	private async ensureSessionsDir(date?: Date): Promise<void> {
 		try {
 			// 确保基础目录存在
@@ -1332,6 +1346,18 @@ class SessionManager {
 					`Failed to delete TODO list for session ${sessionId}:`,
 					error,
 				);
+			}
+			// 联动删除该会话持久化的子代理会话记录（内存 + 磁盘）
+			try {
+				const {subAgentSessionStore} = await import(
+					'../execution/subAgentSessionStore.js'
+				);
+				await subAgentSessionStore.deleteForSession(sessionId);
+			} catch (error) {
+				logger.warn('Failed to delete sub-agent sessions:', {
+					sessionId,
+					error: error instanceof Error ? error.message : String(error),
+				});
 			}
 		}
 

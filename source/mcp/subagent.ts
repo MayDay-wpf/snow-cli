@@ -167,8 +167,10 @@ export class SubAgentService {
 	 * agent_session_query: list sub-agent sessions executed in the current
 	 * conversation so the main flow can pick one to re-activate.
 	 */
-	private querySessions(): any {
+	private async querySessions(): Promise<any> {
 		const sessionId = getCurrentSessionId();
+		// CLI 重启后内存为空，先从磁盘加载该会话的子代理记录
+		await subAgentSessionStore.ensureLoaded(sessionId);
 		const records = subAgentSessionStore.list(sessionId);
 		return {
 			success: true,
@@ -214,6 +216,8 @@ export class SubAgentService {
 		}
 
 		const sessionId = getCurrentSessionId();
+		// CLI 重启后内存为空，先从磁盘加载该会话的子代理记录
+		await subAgentSessionStore.ensureLoaded(sessionId);
 		let record = targetInstanceId
 			? subAgentSessionStore.get(targetInstanceId)
 			: undefined;

@@ -7,7 +7,11 @@
  * 典型场景：子代理第一次执行结果不理想，主流程通过 agent_session_continue
  * 发送修改意见，子代理带着原有上下文继续工作（而不是从零开始重跑）。
  */
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 import type {ChatMessage} from '../../api/chat.js';
+import {logger} from '../core/logger.js';
 
 export type SubAgentSessionStatus =
 	| 'running'
@@ -38,13 +42,74 @@ export interface SubAgentSessionRecord {
 
 const MAX_PER_SESSION = 20;
 const MAX_TOTAL = 200;
+/** 旧版存储根目录（兼容读取历史数据）：~/.snow/subagents/ */
+const LEGACY_STORAGE_ROOT = path.join(os.homedir(), '.snow', 'subagents');
 
 class SubAgentSessionStore {
 	private records: Map<string, SubAgentSessionRecord> = new Map();
+	/** 已从磁盘加载过的会话 ID（避免重复读盘） */
+	private loadedSessionIds = new Set<string>();
+	/** 每会话串行写盘队列，避免并发 writeFile 覆盖 */
+	private persistQueues = new Map<string, Promise<void>>();
 
 	save(record: SubAgentSessionRecord): void {
 		this.records.set(record.key, record);
 		this.enforceLimits(record.sessionId);
+		if (record.sessionId) {
+			this.loadedSessionIds.add(record.sessionId);
+			this.persist(record.sessionId).catch(error => {
+				logger.error('Failed to persist sub-agent sessions:', {
+					sessionId: record.sessionId,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		}
+	}
+
+	/**
+	 * 确保某会话的记录已从磁盘加载到内存（懒加载 + 缓存）。
+	 * CLI 重启后内存为空，查询/续接子代理会话前必须先调用本方法。
+	 */
+	async ensureLoaded(sessionId?: string): Promise<void> {
+		if (!sessionId || this.loadedSessionIds.has(sessionId)) return;
+		this.loadedSessionIds.add(sessionId);
+		const filePath = await this.findSessionFile(sessionId);
+		if (!filePath) return;
+		try {
+			const data = await fs.readFile(filePath, 'utf-8');
+			const rawRecords: unknown[] = JSON.parse(data);
+			for (const raw of rawRecords) {
+				if (!raw || typeof raw !== 'object') continue;
+				const record = raw as Partial<SubAgentSessionRecord>;
+				if (typeof record.key !== 'string') continue;
+				this.records.set(record.key, this.normalize(record));
+			}
+		} catch {
+			// 文件损坏：视为无记录，忽略
+		}
+	}
+
+	/** 删除某会话的所有子代理记录（内存 + 磁盘），主会话删除时联动调用 */
+	async deleteForSession(sessionId: string): Promise<void> {
+		for (const [key, record] of this.records) {
+			if (record.sessionId === sessionId) this.records.delete(key);
+		}
+		this.loadedSessionIds.delete(sessionId);
+		// 删除新路径文件（含历史日期目录中的）
+		const filePath = await this.findSessionFile(sessionId);
+		if (filePath) {
+			try {
+				await fs.unlink(filePath);
+			} catch {
+				// 文件不存在则忽略
+			}
+		}
+		// 删除旧版路径文件（兼容历史版本写盘的数据）
+		try {
+			await fs.unlink(this.getLegacySessionFilePath(sessionId));
+		} catch {
+			// 文件不存在则忽略
+		}
 	}
 
 	get(key: string): SubAgentSessionRecord | undefined {
@@ -62,10 +127,7 @@ class SubAgentSessionStore {
 		for (const record of this.records.values()) {
 			if (record.agentId !== agentId) continue;
 			if (sessionId && record.sessionId !== sessionId) continue;
-			if (
-				!latest ||
-				record.updatedAt.getTime() > latest.updatedAt.getTime()
-			) {
+			if (!latest || record.updatedAt.getTime() > latest.updatedAt.getTime()) {
 				latest = record;
 			}
 		}
@@ -86,6 +148,115 @@ class SubAgentSessionStore {
 
 	clear(): void {
 		this.records.clear();
+		this.loadedSessionIds.clear();
+	}
+
+	/** 旧版存储路径（兼容历史版本写盘的数据） */
+	private getLegacySessionFilePath(sessionId: string): string {
+		return path.join(LEGACY_STORAGE_ROOT, `${sessionId}.json`);
+	}
+
+	/**
+	 * 获取当前项目当天子代理存储目录。
+	 * 新路径结构: ~/.snow/sessions/<项目ID>/<YYYYMMDD>/subagent/
+	 * 与主会话文件同一目录树，按项目与日期归档。
+	 */
+	private async getStorageDir(): Promise<string | undefined> {
+		try {
+			const {sessionManager} = await import('../session/sessionManager.js');
+			return sessionManager.getSubAgentSessionsDir();
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * 查找会话文件：优先当天目录，其次遍历该项目历史日期目录（跨天恢复），
+	 * 最后兜底旧版路径 ~/.snow/subagents/。
+	 */
+	private async findSessionFile(
+		sessionId: string,
+	): Promise<string | undefined> {
+		// 1. 当天目录
+		const dir = await this.getStorageDir();
+		if (dir) {
+			const todayPath = path.join(dir, `${sessionId}.json`);
+			if (await this.exists(todayPath)) return todayPath;
+		}
+		// 2. 历史日期目录（跨天重启后恢复）
+		if (dir) {
+			const projectDir = path.dirname(path.dirname(dir)); // .../<项目ID>
+			try {
+				const entries = await fs.readdir(projectDir);
+				for (const entry of entries) {
+					// 日期目录格式与 formatDateCompact 一致（YYYYMMDD）
+					if (!/^\d{8}$/.test(entry)) continue;
+					const candidate = path.join(
+						projectDir,
+						entry,
+						'subagent',
+						`${sessionId}.json`,
+					);
+					if (await this.exists(candidate)) return candidate;
+				}
+			} catch {
+				// 项目目录不存在
+			}
+		}
+		// 3. 旧版路径（兼容历史版本写盘的数据）
+		const legacyPath = this.getLegacySessionFilePath(sessionId);
+		if (await this.exists(legacyPath)) return legacyPath;
+		return undefined;
+	}
+
+	private async exists(filePath: string): Promise<boolean> {
+		try {
+			await fs.access(filePath);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** 串行化同一会话的写盘，防止并发 writeFile 互相覆盖 */
+	private persist(sessionId: string): Promise<void> {
+		const previous = this.persistQueues.get(sessionId) ?? Promise.resolve();
+		const next = previous
+			.catch(() => undefined)
+			.then(async () => {
+				const sessionRecords = Array.from(this.records.values()).filter(
+					r => r.sessionId === sessionId,
+				);
+				const dir = await this.getStorageDir();
+				if (!dir) return;
+				await fs.mkdir(dir, {recursive: true});
+				await fs.writeFile(
+					path.join(dir, `${sessionId}.json`),
+					JSON.stringify(sessionRecords, null, 2),
+				);
+			});
+		this.persistQueues.set(sessionId, next);
+		return next;
+	}
+
+	/** 反序列化：把磁盘上的 ISO 时间字符串还原为 Date，并补齐缺失字段 */
+	private normalize(
+		raw: Partial<SubAgentSessionRecord>,
+	): SubAgentSessionRecord {
+		return {
+			key: raw.key!,
+			sessionId: raw.sessionId,
+			agentId: raw.agentId ?? '',
+			agentName: raw.agentName ?? raw.agentId ?? '',
+			prompt: raw.prompt ?? '',
+			status: raw.status ?? 'completed',
+			messages: Array.isArray(raw.messages) ? raw.messages : [],
+			lastResult: raw.lastResult,
+			lastError: raw.lastError,
+			resumeCount: typeof raw.resumeCount === 'number' ? raw.resumeCount : 0,
+			startedAt: new Date(raw.startedAt ?? Date.now()),
+			updatedAt: new Date(raw.updatedAt ?? Date.now()),
+		};
 	}
 
 	private clone(record: SubAgentSessionRecord): SubAgentSessionRecord {
@@ -100,9 +271,7 @@ class SubAgentSessionStore {
 		if (currentSessionId) {
 			const sessionRecords = Array.from(this.records.values())
 				.filter(r => r.sessionId === currentSessionId)
-				.sort(
-					(a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-				);
+				.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 			while (sessionRecords.length > MAX_PER_SESSION) {
 				const oldest = sessionRecords.pop();
 				if (oldest) this.records.delete(oldest.key);
