@@ -26,6 +26,14 @@ export interface SubAgentResult {
 	injectedUserMessages?: string[];
 	/** Internal stop/summarize instructions injected by the executor */
 	terminationInstructions?: string[];
+	/**
+	 * Full conversation history of this execution.
+	 * Returned by the executor (including from the child process via IPC) so the
+	 * main flow can persist it and later RE-ACTIVATE the same sub-agent within
+	 * the session while inheriting its context (see subAgentSessionStore).
+	 * MUST NOT be serialized back into the model-visible tool result.
+	 */
+	conversationHistory?: ChatMessage[];
 }
 
 export interface ToolConfirmationCallback {

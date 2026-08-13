@@ -35,6 +35,7 @@ import type {
 	ToolApprovalChecker,
 	AddToAlwaysApprovedCallback,
 	UserQuestionCallback,
+	ChatMessage,
 } from './subAgentTypes.js';
 
 // Re-export all public types for backward compatibility
@@ -64,6 +65,14 @@ export async function executeSubAgent(
 	instanceId?: string,
 	spawnDepth: number = 0,
 	parentContext?: Context,
+	/**
+	 * Resume context: full conversation history of a previous run of the same
+	 * logical sub-agent session (loaded from subAgentSessionStore).
+	 * When provided, the sub-agent RE-ACTIVATES with its previous context
+	 * instead of starting a fresh conversation; `prompt` is appended as a new
+	 * user message (e.g. feedback/revision from the main flow).
+	 */
+	resumeMessages?: ChatMessage[],
 ): Promise<SubAgentResult> {
 	let ctx: SubAgentExecutionContext | undefined;
 	try {
@@ -126,13 +135,25 @@ export async function executeSubAgent(
 					console.warn('beforeSubAgentStart hook failed:', error);
 				}
 
-				// 3. Build initial messages
-				const messages = await buildInitialMessages(
-					agent,
-					effectivePrompt,
-					instanceId,
-					spawnDepth,
-				);
+				// 3. Build initial messages.
+				// If resuming a previous session, inherit its full conversation
+				// history and append the new feedback as a user message, instead
+				// of building a fresh context.
+				let messages: ChatMessage[];
+				if (resumeMessages && resumeMessages.length > 0) {
+					messages = [...resumeMessages];
+					messages.push({
+						role: 'user',
+						content: `[User feedback from main session]\n${effectivePrompt}`,
+					});
+				} else {
+					messages = await buildInitialMessages(
+						agent,
+						effectivePrompt,
+						instanceId,
+						spawnDepth,
+					);
+				}
 
 				// 4. Build execution context
 				ctx = {
@@ -165,6 +186,7 @@ export async function executeSubAgent(
 							success: false,
 							result: ctx.finalResponse,
 							error: 'Sub-agent execution aborted',
+							conversationHistory: ctx.messages,
 						};
 					}
 
@@ -199,6 +221,7 @@ export async function executeSubAgent(
 							success: false,
 							result: ctx.finalResponse,
 							error: errorMessage,
+							conversationHistory: ctx.messages,
 						};
 					}
 
@@ -265,6 +288,7 @@ export async function executeSubAgent(
 						ctx.collectedTerminationInstructions.length > 0
 							? ctx.collectedTerminationInstructions
 							: undefined,
+					conversationHistory: ctx.messages,
 				};
 			},
 		);

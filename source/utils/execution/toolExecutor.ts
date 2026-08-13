@@ -438,6 +438,9 @@ export async function executeToolCall(
 					const subAgentPromise = subAgentService.execute({
 						agentId,
 						prompt: subAgentPrompt,
+						// 透传原始工具参数（agent_session_query / agent_session_continue
+						// 等内置会话管理工具需要 args.message / args.instance_id / args.agent_id）
+						args,
 						instanceId: toolCall.id,
 						onMessage: onSubAgentMessage,
 						abortSignal,

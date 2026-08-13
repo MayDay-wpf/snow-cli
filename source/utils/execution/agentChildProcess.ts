@@ -4,6 +4,7 @@ import {basename, dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {getConversationContext} from '../codebase/conversationContext.js';
+import type {ChatMessage} from '../../api/chat.js';
 import {buildSessionIdentityEnv} from './sessionIdentityEnv.js';
 
 import {
@@ -78,6 +79,12 @@ interface SubAgentChildPayload extends BaseChildPayload {
 	prompt: string;
 	instanceId?: string;
 	spawnDepth: number;
+	/**
+	 * Resume context: full conversation history of a previous run of the same
+	 * logical sub-agent session. When present, the child worker RE-ACTIVATES
+	 * the sub-agent with its previous context instead of starting fresh.
+	 */
+	resumeMessages?: ChatMessage[];
 }
 
 interface TeammateChildPayload extends BaseChildPayload {
@@ -474,6 +481,7 @@ export async function executeSubAgentInChildProcess(
 	requestUserQuestion?: UserQuestionCallback,
 	instanceId?: string,
 	spawnDepth: number = 0,
+	resumeMessages?: ChatMessage[],
 ): Promise<SubAgentResult> {
 	return await runAgentChildProcess<SubAgentResult>({
 		payload: buildChildPayloadWithConversationContext({
@@ -483,6 +491,7 @@ export async function executeSubAgentInChildProcess(
 			instanceId,
 			spawnDepth,
 			yoloMode,
+			resumeMessages,
 		}),
 		onMessage,
 		abortSignal,

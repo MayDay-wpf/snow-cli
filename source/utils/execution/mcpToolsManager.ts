@@ -2093,10 +2093,12 @@ export async function executeMCPTool(
 			result = await executeSessionCommandTool(actualToolName, args);
 		} else if (serviceName === 'subagent') {
 			// Handle sub-agent tools
-			// actualToolName is the agent ID
+			// actualToolName is the agent ID (or a built-in session
+			// management tool like agent_session_query / agent_session_continue)
 			result = await subAgentService.execute({
 				agentId: actualToolName,
-				prompt: args.prompt,
+				prompt: args?.prompt,
+				args,
 				abortSignal,
 			});
 		} else if (serviceName === 'team') {

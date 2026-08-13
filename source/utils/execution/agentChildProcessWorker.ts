@@ -219,6 +219,8 @@ async function runSubAgentPayload(
 				await requestParent('userQuestion', {question, options, multiSelect}),
 			payload.instanceId,
 			payload.spawnDepth,
+			undefined,
+			payload.resumeMessages,
 		);
 	} finally {
 		if (payload.instanceId) {
