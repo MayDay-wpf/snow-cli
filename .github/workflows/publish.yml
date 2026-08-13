@@ -125,7 +125,7 @@ jobs:
 
             ### What's New
 
-            - Fixed worktree path validation and enhanced TODO scanner robustness
+            - Added sub-agent activation function, which can continue to send messages to the ended sub-agent
 
             ### Installation
             ```bash
