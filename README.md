@@ -223,6 +223,10 @@ After running snow, `.snow/` directory is created in your home folder:
 └── ...                     # Other config files
 ```
 
+## Friendly links
+
+* [Linux DO](https://linux.do)
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=MayDay-wpf/snow-cli&type=Date)](https://star-history.com/#MayDay-wpf/snow-cli&Date)

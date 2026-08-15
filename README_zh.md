@@ -223,6 +223,10 @@ VSIX/                       # VSCode 扩展源码
 └── ...                     # 其他配置文件
 ```
 
+## 友情链接
+
+* [Linux DO](https://linux.do)
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=MayDay-wpf/snow-cli&type=Date)](https://star-history.com/#MayDay-wpf/snow-cli&Date)
