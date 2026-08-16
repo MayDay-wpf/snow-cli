@@ -12,6 +12,7 @@ export function submitHandler(ctx: HandlerContext): boolean {
 		updateCommandPanelState,
 		updateFilePickerState,
 		updateAgentPickerState,
+		updateSkillsPickerState,
 		updateRunningAgentsPickerState,
 		currentHistoryIndex,
 		resetHistoryNavigation,
@@ -56,6 +57,7 @@ export function submitHandler(ctx: HandlerContext): boolean {
 			updateCommandPanelState(text, newCursorPos);
 			updateFilePickerState(text, newCursorPos);
 			updateAgentPickerState(text, newCursorPos);
+			updateSkillsPickerState(text, newCursorPos);
 			updateRunningAgentsPickerState(text, newCursorPos);
 			return true;
 		}

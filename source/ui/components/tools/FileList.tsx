@@ -11,7 +11,9 @@ import React, {
 import {Box, Text} from 'ink';
 import fs from 'fs';
 import path from 'path';
+import ignore, {type Ignore} from 'ignore';
 import stringWidth from 'string-width';
+import {scanDirectoryTreeWithNative} from '../../../mcp/utils/filesystem/native-edit.utils.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -592,18 +594,58 @@ const FileList = memo(
 						sourceDir: dirPath,
 					});
 
-					// Read .gitignore patterns for this directory (only ignore source)
+					// Read .gitignore once: the native scanner consumes the raw
+					// content, the JS fallback parses it into an ignore filter.
 					const gitignorePath = path.join(dirPath, '.gitignore');
-					let gitignorePatterns: string[] = [];
+					let gitignoreContent: string | null = null;
 					try {
-						const content = await fs.promises.readFile(gitignorePath, 'utf-8');
-						gitignorePatterns = content
-							.split('\n')
-							.map(line => line.trim())
-							.filter(line => line && !line.startsWith('#'))
-							.map(line => line.replace(/\/$/, ''));
+						gitignoreContent = await fs.promises.readFile(
+							gitignorePath,
+							'utf-8',
+						);
 					} catch {
 						// No .gitignore or read error
+					}
+
+					// Native fast path: the whole BFS walk (readdir + metadata +
+					// dotfile/gitignore/size filters) runs in a single Rust call on
+					// a libuv thread, avoiding one fs.stat round-trip per file.
+					// Falls back to the JS walk below when the accelerator is
+					// missing or fails.
+					const nativeScan = await scanDirectoryTreeWithNative(
+						dirPath,
+						searchDepth,
+						gitignoreContent,
+					);
+					if (nativeScan) {
+						for (const item of nativeScan.entries) {
+							let relativePath = item.relativePath.replace(/\\/g, '/');
+							if (
+								!relativePath.startsWith('.') &&
+								!path.isAbsolute(relativePath)
+							) {
+								relativePath = './' + relativePath;
+							}
+
+							collected.push({
+								name: path.basename(relativePath),
+								path: relativePath,
+								isDirectory: item.isDirectory,
+								sourceDir: dirPath,
+							});
+						}
+
+						if (nativeScan.depthLimitHit) {
+							depthLimitHit = true;
+						}
+
+						continue;
+					}
+
+					// JS fallback: full gitignore semantics via the ignore lib.
+					const gitignoreFilter: Ignore = ignore();
+					if (gitignoreContent) {
+						gitignoreFilter.add(gitignoreContent);
 					}
 
 					// BFS so the first results come from shallow, broadly useful directories.
@@ -623,14 +665,28 @@ const FileList = memo(
 						}
 
 						for (const entry of entries) {
-							if (
-								(entry.name.startsWith('.') && entry.name !== '.snow') ||
-								gitignorePatterns.includes(entry.name)
-							) {
+							if (entry.name.startsWith('.') && entry.name !== '.snow') {
 								continue;
 							}
 
 							const fullPath = path.join(current, entry.name);
+							// Match against the path relative to the working-dir root so
+							// rules like `/native/target/` and `*.tsbuildinfo` apply.
+							// Directories use a trailing slash so directory-only patterns
+							// (e.g. `dist/`) match; an ignored directory is skipped here
+							// and never enqueued, so its contents are excluded too.
+							const ignoreRelativePath = path
+								.relative(dirPath, fullPath)
+								.replace(/\\/g, '/');
+							if (
+								gitignoreFilter.ignores(
+									entry.isDirectory()
+										? `${ignoreRelativePath}/`
+										: ignoreRelativePath,
+								)
+							) {
+								continue;
+							}
 
 							// Skip files larger than 10MB to keep memory usage bounded
 							try {

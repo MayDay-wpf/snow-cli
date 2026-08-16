@@ -7,10 +7,14 @@ interface MatchCandidate {
 	endLine: number;
 	similarity: number;
 	preview: string;
+	/** Inline substring match: 0-based UTF-16 column range within startLine. */
+	startColumn?: number;
+	endColumn?: number;
 }
 import {
 	calculateNormalizedSimilarityAsync,
 	calculateSimilarity,
+	findBestInlineSubstring,
 	normalizeForDisplay,
 	normalizeWhitespace,
 } from './similarity.utils.js';
@@ -51,7 +55,11 @@ export async function findClosestMatches(
 		return nativeMatches
 			.filter(candidate => candidate.similarity > threshold)
 			.map(candidate => ({
-				...candidate,
+				startLine: candidate.startLine,
+				endLine: candidate.endLine,
+				similarity: candidate.similarity,
+				startColumn: candidate.startColumn ?? undefined,
+				endColumn: candidate.endColumn ?? undefined,
 				preview: fileLines
 					.slice(candidate.startLine - 1, candidate.endLine)
 					.map(
@@ -97,8 +105,36 @@ export async function findClosestMatches(
 			threshold,
 		);
 
-		// Only consider candidates with >50% similarity
-		if (similarity > threshold) {
+		// Single-line search: also try inline (within-line substring) matching
+		// so the failure diagnostics point at the exact column even when the
+		// whole-line similarity fails the length-ratio check.
+		const inlineMatch =
+			searchLines.length === 1
+				? await findBestInlineSubstring(
+						fileLines[i] ?? '',
+						searchContent,
+						normalizedSearchContent,
+						threshold,
+				  )
+				: null;
+
+		// Only consider candidates with >50% similarity; prefer the inline
+		// substring match when it scores higher than the whole-line match.
+		if (inlineMatch && inlineMatch.similarity >= similarity) {
+			candidates.push({
+				startLine: i + 1,
+				endLine: i + 1,
+				similarity: inlineMatch.similarity,
+				startColumn: inlineMatch.start,
+				endColumn: inlineMatch.end,
+				preview: `${i + 1}→${normalizeForDisplay(fileLines[i] ?? '')}`,
+			});
+
+			// Early exit if we found a nearly perfect match
+			if (inlineMatch.similarity >= 0.95) {
+				break;
+			}
+		} else if (similarity > threshold) {
 			candidates.push({
 				startLine: i + 1,
 				endLine: i + searchLines.length,
@@ -112,11 +148,11 @@ export async function findClosestMatches(
 			if (similarity >= 0.95) {
 				break;
 			}
+		}
 
-			// Limit candidates to avoid excessive computation
-			if (candidates.length >= maxCandidates) {
-				break;
-			}
+		// Limit candidates to avoid excessive computation
+		if (candidates.length >= maxCandidates) {
+			break;
 		}
 	}
 

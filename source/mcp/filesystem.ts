@@ -1023,7 +1023,7 @@ export const mcpTools = [
 											"Whether to create parent directories if they don't exist",
 									},
 								},
-								required: ['path', 'content','overwrite'],
+								required: ['path', 'content', 'overwrite'],
 							},
 							description: 'Array of file configs for batch creation',
 						},
@@ -1057,7 +1057,8 @@ export const mcpTools = [
 			'**REMOTE SSH**: Supports ssh:// paths like other filesystem tools. ' +
 			'**INPUT**: `searchContent` must be raw source text — strip `lineNum:hash→` prefixes if you pasted from `filesystem-read`. ' +
 			'**BATCH**: `filePath` may be a string, string[] with top-level search/replace, or {path, searchContent, replaceContent, occurrence?}[]. ' +
-			'Uses fuzzy similarity matching (fixed threshold 0.75).',
+			'**INLINE SUBSTRING SUPPORT**: For single-line searches, partial-line text (e.g. a Chinese comment fragment) is matched inside the line and only that span is replaced — the rest of the line is preserved. Whole-line and multi-line blocks are matched as before. ' +
+			'Uses fuzzy similarity matching (fixed threshold 0.85).',
 		inputSchema: {
 			type: 'object',
 			properties: {

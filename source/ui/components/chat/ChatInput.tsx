@@ -459,6 +459,10 @@ export default function ChatInput({
 		backspace: backspaceSkillsField,
 		confirmSelection: confirmSkillsSelection,
 		closeSkillsPicker,
+		dollarSymbolPosition,
+		inlineQuery: skillsInlineQuery,
+		updateSkillsPickerState,
+		handleSkillSelect,
 	} = useSkillsPicker(buffer, triggerUpdate);
 
 	const {
@@ -602,6 +606,9 @@ export default function ChatInput({
 		backspaceSkillsField,
 		confirmSkillsSelection,
 		closeSkillsPicker,
+		updateSkillsPickerState,
+		handleSkillSelect,
+		dollarSymbolPosition,
 		showGitLinePicker,
 		setShowGitLinePicker,
 		openGitLinePicker,
@@ -1263,19 +1270,18 @@ export default function ChatInput({
 						</Suspense>
 						<Suspense fallback={null}>
 							<SkillsPickerPanel
-								skills={skills.map(s => ({
-									id: s.id,
-									name: s.name,
-									description: s.description,
-									location: s.location,
-								}))}
+								skills={skills}
 								selectedIndex={skillsSelectedIndex}
 								visible={showSkillsPicker}
 								maxHeight={5}
 								isLoading={skillsIsLoading}
-								searchQuery={skillsSearchQuery}
+								searchQuery={
+									dollarSymbolPosition !== -1
+										? skillsInlineQuery
+										: skillsSearchQuery
+								}
 								appendText={skillsAppendText}
-								focus={skillsFocus}
+								focus={dollarSymbolPosition !== -1 ? 'search' : skillsFocus}
 							/>
 						</Suspense>
 						<Suspense fallback={null}>

@@ -221,3 +221,159 @@ export async function calculateSimilarityAsync(
 export function normalizeForDisplay(line: string): string {
 	return line.replace(/\t/g, ' ').replace(/  +/g, ' ').replace(/\r/g, '');
 }
+
+export type InlineSubstringMatch = {
+	/** 0-based UTF-16 start column in the raw line (inclusive). */
+	start: number;
+	/** 0-based UTF-16 end column in the raw line (exclusive). */
+	end: number;
+	similarity: number;
+};
+
+/**
+ * Normalize a single line (collapse whitespace, trim) while recording the
+ * mapping from each normalized UTF-16 code unit back to the raw line index.
+ * Mirrors `normalize_line_with_map` in the Rust native accelerator.
+ */
+export function normalizeLineWithMapping(line: string): {
+	normalized: string;
+	map: number[];
+} {
+	const chars: string[] = [];
+	const map: number[] = [];
+	let previousWasWhitespace = true;
+
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i]!;
+		const isWhitespace = /\s/.test(ch) || ch === '\uFEFF';
+		if (isWhitespace) {
+			if (!previousWasWhitespace) {
+				chars.push(' ');
+				map.push(i);
+			}
+		} else {
+			chars.push(ch);
+			map.push(i);
+		}
+		previousWasWhitespace = isWhitespace;
+	}
+
+	// Trim trailing whitespace (leading whitespace is already collapsed away).
+	while (chars.length > 0 && chars[chars.length - 1] === ' ') {
+		chars.pop();
+		map.pop();
+	}
+
+	return {normalized: chars.join(''), map};
+}
+
+/**
+ * Find the best inline (within-line) substring match of a single-line search
+ * inside `line`. Handles the common case where the AI only provides part of a
+ * line (e.g. a Chinese comment fragment) instead of the whole line — the
+ * whole-line similarity would otherwise fail the length-ratio check.
+ *
+ * Match order (mirrors the Rust native `find_inline_match`):
+ * 1. Exact substring on the raw line (fast path, similarity 1).
+ * 2. Exact substring on the whitespace-normalized line.
+ * 3. Fuzzy scan with window length `searchLen ± 2`, anchored at occurrences of
+ *    the first non-whitespace search unit to bound the cost.
+ */
+export async function findBestInlineSubstring(
+	line: string,
+	searchRaw: string,
+	normalizedSearch: string,
+	threshold: number,
+): Promise<InlineSubstringMatch | null> {
+	if (normalizedSearch.length === 0) {
+		return null;
+	}
+
+	// 1. Exact match on the raw line (most common path).
+	const rawIndex = line.indexOf(searchRaw);
+	if (rawIndex !== -1) {
+		return {
+			start: rawIndex,
+			end: rawIndex + searchRaw.length,
+			similarity: 1,
+		};
+	}
+
+	// 2. Normalize the line and keep the code-unit index mapping.
+	const {normalized} = normalizeLineWithMapping(line);
+	if (normalizedSearch.length > normalized.length) {
+		return null;
+	}
+
+	// 2a. Exact match on the normalized line.
+	const normIndex = normalized.indexOf(normalizedSearch);
+	if (normIndex !== -1) {
+		return {
+			start: normIndex,
+			end: normIndex + normalizedSearch.length,
+			similarity: 1,
+		};
+	}
+
+	// 2b. Fuzzy match: scan windows of length searchLen ± 2 anchored at
+	// occurrences of the first non-whitespace search unit.
+	const searchLen = normalizedSearch.length;
+	const windowMin = Math.max(1, searchLen - 2);
+	const windowMax = Math.min(normalized.length, searchLen + 2);
+	if (windowMin > windowMax) {
+		return null;
+	}
+
+	let anchor = ' ';
+	for (let i = 0; i < normalizedSearch.length; i++) {
+		const ch = normalizedSearch[i]!;
+		if (ch !== ' ' && !/\s/.test(ch)) {
+			anchor = ch;
+			break;
+		}
+	}
+	if (anchor === ' ') {
+		anchor = normalizedSearch[0]!;
+	}
+
+	const anchorPositions: number[] = [];
+	for (let i = 0; i < normalized.length; i++) {
+		if (normalized[i] === anchor) {
+			anchorPositions.push(i);
+		}
+	}
+
+	// Cap the number of anchor candidates to bound worst-case cost.
+	const maxAnchors = 200;
+	const lastValidStart = normalized.length - windowMin;
+	let best: InlineSubstringMatch | null = null;
+	for (const anchorPos of anchorPositions.slice(0, maxAnchors)) {
+		const startLow = Math.max(0, anchorPos - 2);
+		const startHigh = Math.min(anchorPos + 2, lastValidStart);
+		if (startLow > startHigh) {
+			continue;
+		}
+		for (let start = startLow; start <= startHigh; start++) {
+			for (let winLen = windowMin; winLen <= windowMax; winLen++) {
+				const end = start + winLen;
+				if (end > normalized.length) {
+					continue;
+				}
+				const candidate = normalized.slice(start, end);
+				const sim = await calculateNormalizedSimilarityAsync(
+					normalizedSearch,
+					candidate,
+					threshold,
+				);
+				if (!best || sim > best.similarity) {
+					best = {start, end, similarity: sim};
+				}
+			}
+		}
+	}
+
+	if (best && best.similarity >= threshold) {
+		return best;
+	}
+	return null;
+}

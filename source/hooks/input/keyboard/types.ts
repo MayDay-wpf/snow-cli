@@ -2,6 +2,7 @@ import type {Key} from 'ink';
 import type React from 'react';
 import {TextBuffer} from '../../../utils/ui/textBuffer.js';
 import type {SubAgent} from '../../../utils/config/subAgentConfig.js';
+import type {Skill} from '../../../mcp/skills.js';
 import type {CommandArgOption} from '../../ui/useCommandPanel.js';
 
 export type KeyboardInputOptions = {
@@ -122,12 +123,7 @@ export type KeyboardInputOptions = {
 	setShowSkillsPicker: (show: boolean) => void;
 	skillsSelectedIndex: number;
 	setSkillsSelectedIndex: (index: number | ((prev: number) => number)) => void;
-	skills: Array<{
-		id: string;
-		name: string;
-		description: string;
-		location: string;
-	}>;
+	skills: Skill[];
 	skillsIsLoading: boolean;
 	skillsSearchQuery: string;
 	skillsAppendText: string;
@@ -137,6 +133,10 @@ export type KeyboardInputOptions = {
 	backspaceSkillsField: () => void;
 	confirmSkillsSelection: () => void;
 	closeSkillsPicker: () => void;
+	// $ 内联触发 skills picker（参考子代理 # 触发原理）
+	updateSkillsPickerState: (text: string, cursorPos: number) => void;
+	handleSkillSelect: (skill: Skill) => void;
+	dollarSymbolPosition: number;
 	// GitLine picker
 	showGitLinePicker: boolean;
 	setShowGitLinePicker: (show: boolean) => void;

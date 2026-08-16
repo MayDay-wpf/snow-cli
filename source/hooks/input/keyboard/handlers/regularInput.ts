@@ -9,6 +9,7 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 		updateCommandPanelState,
 		updateFilePickerState,
 		updateAgentPickerState,
+		updateSkillsPickerState,
 		updateRunningAgentsPickerState,
 		pasteShortcutTimeoutMs = 800,
 		pasteFlushDebounceMs = 250,
@@ -54,6 +55,7 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 			updateCommandPanelState(text);
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateSkillsPickerState(text, cursorPos);
 			updateRunningAgentsPickerState(text, cursorPos);
 			return true;
 		}
@@ -72,6 +74,7 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 			updateCommandPanelState(text);
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateSkillsPickerState(text, cursorPos);
 			updateRunningAgentsPickerState(text, cursorPos);
 			return true;
 		}
@@ -109,6 +112,7 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 			updateCommandPanelState(text);
 			updateFilePickerState(text, cursorPos);
 			updateAgentPickerState(text, cursorPos);
+			updateSkillsPickerState(text, cursorPos);
 			updateRunningAgentsPickerState(text, cursorPos);
 			triggerUpdate();
 		}
@@ -162,6 +166,7 @@ export function regularInputHandler(ctx: HandlerContext): boolean {
 				updateCommandPanelState(text);
 				updateFilePickerState(text, cursorPos);
 				updateAgentPickerState(text, cursorPos);
+				updateSkillsPickerState(text, cursorPos);
 				updateRunningAgentsPickerState(text, cursorPos);
 				triggerUpdate();
 			}

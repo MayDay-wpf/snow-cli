@@ -12,3 +12,4 @@ napi = { version = "3", features = ["napi9"] }
 napi-derive = "3"
 encoding_rs = "0.8"
 chardetng = "0.1"
+ignore = "0.4"

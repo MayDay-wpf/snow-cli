@@ -3,6 +3,7 @@
 //! All `#[napi]` exports return `AsyncTask<T>` so that heavy work runs on the
 //! libuv thread-pool, never blocking the Node.js main thread.
 
+mod dir_scan;
 mod fuzzy_match;
 mod io;
 mod similarity;
@@ -14,7 +15,8 @@ use napi::bindgen_prelude::AsyncTask;
 use napi_derive::napi;
 
 use crate::task::{
-  ApplyTextEditsTask, ReadFileTask, ScanFuzzyMatchesTask, WriteFileTask,
+  ApplyTextEditsTask, ReadFileTask, ScanDirectoryTreeTask, ScanFuzzyMatchesTask,
+  WriteFileTask,
 };
 use crate::types::NativeTextEdit;
 
@@ -63,4 +65,23 @@ pub fn read_file(path: String) -> AsyncTask<ReadFileTask> {
 #[napi]
 pub fn write_file(path: String, content: String) -> AsyncTask<WriteFileTask> {
   AsyncTask::new(WriteFileTask { path, content })
+}
+
+// ── directory tree scan ───────────────────────────────────────────────────
+
+/// Walk a directory tree (BFS) applying dotfile / .gitignore / size filters,
+/// mirroring the file-list walk in FileList.tsx. Returns every accepted entry
+/// in a single call — no per-file stat round-trips.
+/// Runs on a libuv thread — never blocks the Node main thread.
+#[napi]
+pub fn scan_directory_tree(
+  root: String,
+  max_depth: u32,
+  gitignore_content: Option<String>,
+) -> AsyncTask<ScanDirectoryTreeTask> {
+  AsyncTask::new(ScanDirectoryTreeTask {
+    root,
+    max_depth,
+    gitignore_content,
+  })
 }

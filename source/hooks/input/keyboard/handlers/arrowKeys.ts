@@ -8,6 +8,7 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 		disableKeyboardNavigation,
 		updateFilePickerState,
 		updateAgentPickerState,
+		updateSkillsPickerState,
 		updateRunningAgentsPickerState,
 		currentHistoryIndex,
 		navigateHistoryUp,
@@ -24,6 +25,7 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 		const cursorPos = buffer.getCursorPosition();
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
+		updateSkillsPickerState(text, cursorPos);
 		updateRunningAgentsPickerState(text, cursorPos);
 		// No need to call triggerUpdate() - buffer.moveLeft() already triggers update via scheduleUpdate()
 		return true;
@@ -37,6 +39,7 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 		const cursorPos = buffer.getCursorPosition();
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
+		updateSkillsPickerState(text, cursorPos);
 		updateRunningAgentsPickerState(text, cursorPos);
 		// No need to call triggerUpdate() - buffer.moveRight() already triggers update via scheduleUpdate()
 		return true;
@@ -66,6 +69,10 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 					buffer.getFullText(),
 					buffer.getCursorPosition(),
 				);
+				updateSkillsPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
 				updateRunningAgentsPickerState(
 					buffer.getFullText(),
 					buffer.getCursorPosition(),
@@ -78,6 +85,7 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 		buffer.moveUp();
 		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateSkillsPickerState(buffer.getFullText(), buffer.getCursorPosition());
 		updateRunningAgentsPickerState(
 			buffer.getFullText(),
 			buffer.getCursorPosition(),
@@ -111,6 +119,10 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 					buffer.getFullText(),
 					buffer.getCursorPosition(),
 				);
+				updateSkillsPickerState(
+					buffer.getFullText(),
+					buffer.getCursorPosition(),
+				);
 				updateRunningAgentsPickerState(
 					buffer.getFullText(),
 					buffer.getCursorPosition(),
@@ -123,6 +135,7 @@ export function arrowKeysHandler(ctx: HandlerContext): boolean {
 		buffer.moveDown();
 		updateFilePickerState(buffer.getFullText(), buffer.getCursorPosition());
 		updateAgentPickerState(buffer.getFullText(), buffer.getCursorPosition());
+		updateSkillsPickerState(buffer.getFullText(), buffer.getCursorPosition());
 		updateRunningAgentsPickerState(
 			buffer.getFullText(),
 			buffer.getCursorPosition(),

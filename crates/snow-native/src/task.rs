@@ -8,10 +8,13 @@
 
 use napi::bindgen_prelude::{Env, Result, Task};
 
+use crate::dir_scan::{scan_directory_tree_sync, DirScanOptions};
 use crate::fuzzy_match::scan_fuzzy_matches_sync;
 use crate::io::{read_file_sync, write_file_sync};
 use crate::text_edit::apply_text_edits_sync;
-use crate::types::{NativeMatch, NativeTextEdit};
+use crate::types::{
+  NativeDirectoryEntry, NativeDirectoryScanResult, NativeMatch, NativeTextEdit,
+};
 
 // ── fuzzy match ───────────────────────────────────────────────────────────
 
@@ -105,5 +108,44 @@ impl Task for WriteFileTask {
 
   fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
     Ok(())
+  }
+}
+
+// ── directory tree scan ───────────────────────────────────────────────────
+
+pub struct ScanDirectoryTreeTask {
+  pub root: String,
+  pub max_depth: u32,
+  pub gitignore_content: Option<String>,
+}
+
+impl Task for ScanDirectoryTreeTask {
+  type Output = NativeDirectoryScanResult;
+  type JsValue = NativeDirectoryScanResult;
+
+  /// Runs on a libuv thread — blocking `std::fs` reads are safe here.
+  fn compute(&mut self) -> Result<Self::Output> {
+    let result = scan_directory_tree_sync(DirScanOptions {
+      root: std::mem::take(&mut self.root),
+      max_depth: self.max_depth,
+      gitignore_content: self.gitignore_content.take(),
+    })?;
+
+    Ok(NativeDirectoryScanResult {
+      entries: result
+        .entries
+        .into_iter()
+        .map(|(relative_path, is_directory, size)| NativeDirectoryEntry {
+          relative_path,
+          is_directory,
+          size,
+        })
+        .collect(),
+      depth_limit_hit: result.depth_limit_hit,
+    })
+  }
+
+  fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+    Ok(output)
   }
 }

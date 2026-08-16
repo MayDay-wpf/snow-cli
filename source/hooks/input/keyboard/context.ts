@@ -16,6 +16,7 @@ export function createHelpers(
 	const {
 		updateFilePickerState,
 		updateAgentPickerState,
+		updateSkillsPickerState,
 		updateRunningAgentsPickerState,
 		updateCommandPanelState,
 		forceUpdate,
@@ -28,6 +29,7 @@ export function createHelpers(
 
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
+		updateSkillsPickerState(text, cursorPos);
 		updateRunningAgentsPickerState(text, cursorPos);
 		updateCommandPanelState(text, cursorPos);
 

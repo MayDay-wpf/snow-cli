@@ -15,6 +15,7 @@ import {
 import {
 	calculateSimilarity,
 	calculateNormalizedSimilarityAsync,
+	findBestInlineSubstring,
 	normalizeForDisplay,
 	normalizeWhitespace,
 } from '../../utils/filesystem/similarity.utils.js';
@@ -104,16 +105,27 @@ async function fuzzyMatchSlidingWindow(
 	usePreFilter: boolean,
 	preFilterThreshold: number,
 	searchFirstLine: string,
-): Promise<Array<{startLine: number; endLine: number; similarity: number}>> {
+): Promise<
+	Array<{
+		startLine: number;
+		endLine: number;
+		similarity: number;
+		startColumn?: number;
+		endColumn?: number;
+	}>
+> {
 	const result: Array<{
 		startLine: number;
 		endLine: number;
 		similarity: number;
+		startColumn?: number;
+		endColumn?: number;
 	}> = [];
 	const windowDelta =
 		searchLines.length >= 10
 			? Math.min(15, Math.max(3, Math.floor(searchLines.length / 5)))
 			: 0;
+	const isSingleLine = searchLines.length === 1;
 
 	for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
 		if (i > 0 && i % 100 === 0) {
@@ -142,6 +154,32 @@ async function fuzzyMatchSlidingWindow(
 						threshold,
 				  );
 
+		// Single-line search: also try inline (within-line substring) matching.
+		// Handles the common case where the AI only provides part of a line
+		// (e.g. a Chinese comment fragment) instead of the whole line — the
+		// whole-line similarity would otherwise fail the length-ratio check.
+		const inlineMatch = isSingleLine
+			? await findBestInlineSubstring(
+					contentLines[i] ?? '',
+					searchRaw,
+					normalizedSearchForSimilarity,
+					threshold,
+			  )
+			: null;
+
+		// Exact inline hit (1.0): prefer it over any whole-line fuzzy score so
+		// we never replace the whole line with a partial substring.
+		if (inlineMatch && inlineMatch.similarity >= 1) {
+			result.push({
+				startLine: i + 1,
+				endLine: i + 1,
+				similarity: 1,
+				startColumn: inlineMatch.start,
+				endColumn: inlineMatch.end,
+			});
+			break;
+		}
+
 		// High-confidence match: accept immediately without trying other sizes
 		if (exactSimilarity >= 0.9) {
 			result.push({
@@ -153,6 +191,24 @@ async function fuzzyMatchSlidingWindow(
 				break;
 			}
 			continue;
+		}
+
+		// Single line: pick the better of inline vs whole-line fuzzy score.
+		if (isSingleLine) {
+			const inlineScore = inlineMatch?.similarity ?? 0;
+			if (inlineScore >= threshold && inlineScore >= exactSimilarity) {
+				result.push({
+					startLine: i + 1,
+					endLine: i + 1,
+					similarity: inlineScore,
+					startColumn: inlineMatch?.start,
+					endColumn: inlineMatch?.end,
+				});
+				if (inlineScore >= 0.95 || result.length >= maxMatches) {
+					break;
+				}
+				continue;
+			}
 		}
 
 		// Variable window for large blocks: try nearby window sizes for better
@@ -274,6 +330,8 @@ export async function executeEditBySearchSingle(
 			startLine: number;
 			endLine: number;
 			similarity: number;
+			startColumn?: number;
+			endColumn?: number;
 		}> = [];
 		const threshold = 0.85;
 		const searchFirstLine = searchLines[0]?.replace(/\s+/g, ' ').trim() || '';
@@ -290,7 +348,15 @@ export async function executeEditBySearchSingle(
 		);
 
 		if (nativeMatches) {
-			matches.push(...nativeMatches);
+			for (const match of nativeMatches) {
+				matches.push({
+					startLine: match.startLine,
+					endLine: match.endLine,
+					similarity: match.similarity,
+					startColumn: match.startColumn ?? undefined,
+					endColumn: match.endColumn ?? undefined,
+				});
+			}
 		} else {
 			const normalizedSearchForSimilarity =
 				normalizeWhitespace(normalizedSearch);
@@ -327,7 +393,15 @@ export async function executeEditBySearchSingle(
 					preFilterThreshold,
 				);
 				if (correctedNativeMatches) {
-					matches.push(...correctedNativeMatches);
+					for (const match of correctedNativeMatches) {
+						matches.push({
+							startLine: match.startLine,
+							endLine: match.endLine,
+							similarity: match.similarity,
+							startColumn: match.startColumn ?? undefined,
+							endColumn: match.endColumn ?? undefined,
+						});
+					}
 				} else {
 					const normalizedCorrectedSearch = normalizeWhitespace(
 						unescapeFix.correctedString,
@@ -376,9 +450,14 @@ export async function executeEditBySearchSingle(
 				if (closestMatches.length > 0) {
 					errorMessage += `💡 Found ${closestMatches.length} similar location(s):\n\n`;
 					closestMatches.forEach((candidate, idx) => {
-						errorMessage += `${idx + 1}. Lines ${candidate.startLine}-${
-							candidate.endLine
-						} (${(candidate.similarity * 100).toFixed(0)}% match):\n`;
+						const location =
+							candidate.startColumn !== undefined &&
+							candidate.endColumn !== undefined
+								? `Line ${candidate.startLine} (inline columns ${candidate.startColumn}-${candidate.endColumn})`
+								: `Lines ${candidate.startLine}-${candidate.endLine}`;
+						errorMessage += `${idx + 1}. ${location} (${(
+							candidate.similarity * 100
+						).toFixed(0)}% match):\n`;
 						errorMessage += `${candidate.preview}\n\n`;
 					});
 
@@ -414,7 +493,12 @@ export async function executeEditBySearchSingle(
 			}
 		}
 
-		let selectedMatch: {startLine: number; endLine: number};
+		let selectedMatch: {
+			startLine: number;
+			endLine: number;
+			startColumn?: number;
+			endColumn?: number;
+		};
 		if (occurrence === -1) {
 			if (matches.length === 1) {
 				selectedMatch = matches[0]!;
@@ -433,7 +517,7 @@ export async function executeEditBySearchSingle(
 			selectedMatch = matches[occurrence - 1]!;
 		}
 
-		const {startLine, endLine} = selectedMatch;
+		const {startLine, endLine, startColumn, endColumn} = selectedMatch;
 		const normalizedReplace = replaceContent
 			.replace(/\r\n/g, '\n')
 			.replace(/\r/g, '\n');
@@ -441,19 +525,42 @@ export async function executeEditBySearchSingle(
 		const afterLines = lines.slice(endLine);
 		let replaceLines = normalizedReplace.split('\n');
 
-		if (replaceLines.length > 0) {
-			const originalFirstLine = lines[startLine - 1];
-			const originalIndent = originalFirstLine?.match(/^(\s*)/)?.[1] || '';
-			const replaceFirstLine = replaceLines[0];
-			const replaceIndent = replaceFirstLine?.match(/^(\s*)/)?.[1] || '';
-			if (originalIndent !== replaceIndent && replaceFirstLine) {
-				replaceLines[0] = originalIndent + replaceFirstLine.trim();
+		// Inline substring edit: only replace the [startColumn, endColumn) span
+		// of the single matched line, preserving the rest of the line. This is
+		// the core fix for editing part of a line (e.g. a Chinese comment
+		// fragment) without destroying the surrounding content.
+		const isInlineEdit =
+			startColumn !== undefined &&
+			endColumn !== undefined &&
+			startLine === endLine &&
+			replaceLines.length === 1;
+
+		let modifiedLines: string[];
+		let replacedContent: string;
+		if (isInlineEdit) {
+			const targetLine = lines[startLine - 1] ?? '';
+			replacedContent = targetLine.slice(startColumn, endColumn);
+			const newLine =
+				targetLine.slice(0, startColumn) +
+				replaceLines[0]! +
+				targetLine.slice(endColumn);
+			modifiedLines = [...beforeLines, newLine, ...afterLines];
+		} else {
+			if (replaceLines.length > 0) {
+				const originalFirstLine = lines[startLine - 1];
+				const originalIndent = originalFirstLine?.match(/^(\s*)/)?.[1] || '';
+				const replaceFirstLine = replaceLines[0];
+				const replaceIndent = replaceFirstLine?.match(/^(\s*)/)?.[1] || '';
+				if (originalIndent !== replaceIndent && replaceFirstLine) {
+					replaceLines[0] = originalIndent + replaceFirstLine.trim();
+				}
 			}
+
+			replacedContent = lines.slice(startLine - 1, endLine).join('\n');
+			modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
 		}
 
-		const modifiedLines = [...beforeLines, ...replaceLines, ...afterLines];
 		const modifiedContent = modifiedLines.join('\n');
-		const replacedContent = lines.slice(startLine - 1, endLine).join('\n');
 		const lineDifference = replaceLines.length - (endLine - startLine + 1);
 		const smartBoundaries = findSmartContextBoundaries(
 			lines,
@@ -536,8 +643,9 @@ export async function executeEditBySearchSingle(
 		const result = {
 			message:
 				`✅ File edited successfully using search-replace (safer boundary detection): ${filePath}\n` +
-				`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})\n` +
-				`   Result: ${replaceLines.length} new lines` +
+				`   Matched: lines ${startLine}-${endLine} (occurrence ${occurrence}/${matches.length})` +
+				(isInlineEdit ? `, inline columns ${startColumn}-${endColumn}` : '') +
+				`\n   Result: ${replaceLines.length} new lines` +
 				(smartBoundaries.extended
 					? `\n   📍 Context auto-extended to show complete code block (lines ${contextStart}-${diffContextEnd})`
 					: ''),

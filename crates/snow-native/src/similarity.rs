@@ -59,6 +59,12 @@ pub(crate) fn levenshtein_distance(left: &[u16], right: &[u16], max_distance: us
 pub(crate) fn similarity(normalized_left: &str, normalized_right: &str, threshold: f64) -> f64 {
   let left: Vec<u16> = normalized_left.encode_utf16().collect();
   let right: Vec<u16> = normalized_right.encode_utf16().collect();
+  similarity_units(&left, &right, threshold)
+}
+
+/// Similarity over pre-encoded UTF-16 code-unit slices (matches JS string
+/// comparison semantics, including surrogate pairs).
+pub(crate) fn similarity_units(left: &[u16], right: &[u16], threshold: f64) -> f64 {
   if left.is_empty() {
     return if right.is_empty() { 1.0 } else { 0.0 };
   }
@@ -73,6 +79,60 @@ pub(crate) fn similarity(normalized_left: &str, normalized_right: &str, threshol
   }
 
   let max_distance = (max_length as f64 * (1.0 - threshold)).ceil() as usize;
-  let distance = levenshtein_distance(&left, &right, max_distance);
+  let distance = levenshtein_distance(left, right, max_distance);
   1.0 - distance as f64 / max_length as f64
+}
+
+/// Normalize a single line (collapse whitespace, trim) and record the mapping
+/// from each normalized UTF-16 code unit back to the original line's byte
+/// offset.  Useful for inline substring matching where the column range must
+/// be translated back to the raw line for slicing.
+pub(crate) fn normalize_line_with_map(line: &str) -> (Vec<u16>, Vec<usize>) {
+  let mut units: Vec<u16> = Vec::with_capacity(line.len());
+  let mut map: Vec<usize> = Vec::with_capacity(line.len());
+  let mut previous_was_whitespace = true;
+
+  let mut buffer = [0u16; 2];
+  for (byte_index, character) in line.char_indices() {
+    let is_whitespace = character.is_whitespace() || character == '\u{feff}';
+    if is_whitespace {
+      if !previous_was_whitespace {
+        units.push(' ' as u16);
+        map.push(byte_index);
+      }
+    } else {
+      for unit in character.encode_utf16(&mut buffer) {
+        units.push(*unit);
+        map.push(byte_index);
+      }
+    }
+    previous_was_whitespace = is_whitespace;
+  }
+
+  // Trim trailing whitespace (leading whitespace is already collapsed away).
+  while units.last() == Some(&(' ' as u16)) {
+    units.pop();
+    map.pop();
+  }
+
+  (units, map)
+}
+
+/// Find the first occurrence of `needle` inside `haystack` (both UTF-16 code
+/// units).  Returns the starting index or `None`.
+pub(crate) fn find_subslice(haystack: &[u16], needle: &[u16]) -> Option<usize> {
+  if needle.is_empty() {
+    return Some(0);
+  }
+  if needle.len() > haystack.len() {
+    return None;
+  }
+  haystack.windows(needle.len()).position(|window| window == needle)
+}
+
+/// Convert a byte offset into the UTF-16 code-unit column of the same string.
+pub(crate) fn byte_offset_to_utf16_column(s: &str, byte_offset: usize) -> u32 {
+  s.get(..byte_offset)
+    .map(|prefix| prefix.encode_utf16().count() as u32)
+    .unwrap_or_else(|| s.encode_utf16().count() as u32)
 }

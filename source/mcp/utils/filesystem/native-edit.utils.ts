@@ -6,6 +6,9 @@ export type NativeMatch = {
 	startLine: number;
 	endLine: number;
 	similarity: number;
+	/** Inline substring match: 0-based UTF-16 column range within startLine (end exclusive). Absent for whole-line/multi-line matches. */
+	startColumn?: number | null;
+	endColumn?: number | null;
 };
 
 export type NativeTextEdit = {
@@ -13,6 +16,20 @@ export type NativeTextEdit = {
 	startLine: number;
 	endLine: number;
 	content?: string;
+};
+
+export type NativeDirectoryEntry = {
+	/** Path relative to the scanned root, forward slashes, no `./` prefix. */
+	relativePath: string;
+	isDirectory: boolean;
+	/** File size in bytes (0 for directories). */
+	size: number;
+};
+
+export type NativeDirectoryScanResult = {
+	entries: NativeDirectoryEntry[];
+	/** True when a directory was skipped because it exceeded `maxDepth`. */
+	depthLimitHit: boolean;
 };
 
 type NativeEditAccelerator = {
@@ -27,6 +44,11 @@ type NativeEditAccelerator = {
 	applyTextEdits: (content: string, edits: NativeTextEdit[]) => Promise<string>;
 	readFile: (path: string) => Promise<string>;
 	writeFile: (path: string, content: string) => Promise<void>;
+	scanDirectoryTree: (
+		root: string,
+		maxDepth: number,
+		gitignoreContent?: string | null,
+	) => Promise<NativeDirectoryScanResult>;
 };
 
 let accelerator: NativeEditAccelerator | null | undefined;
@@ -110,5 +132,21 @@ export async function writeFileWithNative(
 		return true;
 	} catch {
 		return false;
+	}
+}
+
+export async function scanDirectoryTreeWithNative(
+	root: string,
+	maxDepth: number,
+	gitignoreContent?: string | null,
+): Promise<NativeDirectoryScanResult | undefined> {
+	try {
+		return await getNativeEditAccelerator()?.scanDirectoryTree(
+			root,
+			maxDepth,
+			gitignoreContent,
+		);
+	} catch {
+		return undefined;
 	}
 }

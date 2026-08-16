@@ -6,6 +6,7 @@ export function newlineHandler(ctx: HandlerContext): boolean {
 		updateCommandPanelState,
 		updateFilePickerState,
 		updateAgentPickerState,
+		updateSkillsPickerState,
 		updateRunningAgentsPickerState,
 	} = options;
 
@@ -19,6 +20,7 @@ export function newlineHandler(ctx: HandlerContext): boolean {
 		updateCommandPanelState(text);
 		updateFilePickerState(text, cursorPos);
 		updateAgentPickerState(text, cursorPos);
+		updateSkillsPickerState(text, cursorPos);
 		updateRunningAgentsPickerState(text, cursorPos);
 		return true;
 	}
