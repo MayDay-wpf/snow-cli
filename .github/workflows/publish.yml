@@ -125,9 +125,7 @@ jobs:
 
             ### What's New
 
-            - Skills picker inline mode: trigger skill selection directly with `$` while typing, with dynamic search queries based on current input
-            - Native file scanning: directory scanning now uses the Rust native accelerator with gitignore filtering for improved efficiency
-            - Inline substring matching for fuzzy search, improving single-line match precision and performance
+            - Site blocking rules: configure regex patterns in the proxy config screen to filter out search results from unwanted sites; when the blocked ratio reaches a threshold, the blocked results and matching rules are attached to the response so the AI can inform the user and decide whether to re-search
 
             ### Installation
             ```bash
