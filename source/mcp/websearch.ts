@@ -6,10 +6,16 @@ import {spawn, type ChildProcess} from 'node:child_process';
 import {
 	getProxyConfig,
 	sanitizeProxyHost,
+	compileBlockedPatterns,
+	isUrlBlocked,
 } from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 // Type definitions
-import type {SearchResponse, WebPageContent} from './types/websearch.types.js';
+import type {
+	SearchResponse,
+	SearchResult,
+	WebPageContent,
+} from './types/websearch.types.js';
 import {IMAGE_MIME_TYPES} from './types/filesystem.types.js';
 // Utility functions
 import {
@@ -468,6 +474,10 @@ export class WebSearchService {
 
 	/**
 	 * Perform a web search using the engine selected in proxy config.
+	 * Search results matching the configured blocking rules are filtered
+	 * out. When the blocked ratio reaches a threshold, the blocked results
+	 * and patterns are attached to the response so the AI can inform the
+	 * user.
 	 * @param query - Search query string
 	 * @param maxResults - Maximum number of results to return (default: 10)
 	 * @returns Search results with title, URL, and snippet
@@ -497,16 +507,87 @@ export class WebSearchService {
 			// Delegate the actual search/extraction to the engine.
 			const cleanedResults = await engine.search(page, query, limit);
 
-			return {
-				query,
-				results: cleanedResults,
-				totalResults: cleanedResults.length,
-			};
+			// Apply site blocking rules: filter out results whose URL matches
+			// any configured pattern.
+			const compiledPatterns = compileBlockedPatterns(
+				proxyConfig.blockedPatterns,
+			);
+			const response = this.applyBlockedRules(
+				cleanedResults,
+				compiledPatterns,
+			);
+			response.query = query;
+
+			return response;
 		} catch (error: any) {
 			throw new Error(`Web search failed: ${error.message}`);
 		} finally {
 			await this.closePage(page);
 		}
+	}
+
+	/** 屏蔽比例达到此阈值时，附带被屏蔽结果与规则回传给 AI。 */
+	private static readonly BLOCKED_REPORT_THRESHOLD = 0.5;
+	/** 回传给 AI 的被屏蔽结果明细上限。 */
+	private static readonly MAX_BLOCKED_REPORT = 10;
+
+	/**
+	 * 按屏蔽规则（已编译的正则列表）过滤搜索结果，返回过滤后的结果
+	 * 与屏蔽数量。当屏蔽比例达到阈值时，同时附带被屏蔽结果明细和
+	 * 触发屏蔽的规则，供 AI 判断是否需要补充搜索。
+	 */
+	private applyBlockedRules(
+		results: SearchResult[],
+		compiledPatterns: RegExp[],
+	): SearchResponse {
+		if (compiledPatterns.length === 0 || results.length === 0) {
+			return {
+				query: '',
+				results,
+				totalResults: results.length,
+			};
+		}
+
+		const blocked = results.filter(result =>
+			isUrlBlocked(result.url, compiledPatterns),
+		);
+		const filtered = results.filter(
+			result => !isUrlBlocked(result.url, compiledPatterns),
+		);
+
+		const response: SearchResponse = {
+			query: '',
+			results: filtered,
+			totalResults: filtered.length,
+		};
+
+		if (blocked.length > 0) {
+			response.blockedCount = blocked.length;
+		}
+
+		// 屏蔽比例达到阈值时附带被屏蔽结果与规则，供 AI 判断是否需要补充。
+		if (
+			results.length > 0 &&
+			blocked.length / results.length >=
+				WebSearchService.BLOCKED_REPORT_THRESHOLD
+		) {
+			response.blockedResults = blocked.slice(
+				0,
+				WebSearchService.MAX_BLOCKED_REPORT,
+			);
+			response.blockedPatterns = compiledPatterns.map(
+				regex => regex.source,
+			);
+			response.blockNote =
+				`${blocked.length} of ${results.length} search results were filtered ` +
+				`out by your site blocking rules (${response.blockedPatterns.join(', ')}). ` +
+				`These sites are NOT fetchable while the rules are active. ` +
+				`If one of them is truly relevant despite the rule, tell the user ` +
+				`which rule should be removed in Settings, or rephrase the query ` +
+				`to find the information on non-blocked sites.`;
+		}
+
+		return response;
 	}
 
 	private getImageMimeTypeFromUrl(url: string): string | undefined {
@@ -617,6 +698,21 @@ export class WebSearchService {
 		let page: Page | null = null;
 
 		try {
+			// Block fetches to URLs matching the configured blocking rules.
+			// This applies to both user-provided and AI-discovered URLs so
+			// that blocked sites cannot be reached via websearch-fetch.
+			const proxyConfig = getProxyConfig();
+			const compiledPatterns = compileBlockedPatterns(
+				proxyConfig.blockedPatterns,
+			);
+			if (isUrlBlocked(url, compiledPatterns)) {
+				const patterns = compiledPatterns.map(r => r.source).join(', ');
+				throw new Error(
+					`URL "${url}" is blocked by your site blocking rules (${patterns}). ` +
+						`Remove the matching rule in Proxy settings if you need to fetch this page.`,
+				);
+			}
+
 			if (isUserProvided || this.getImageMimeTypeFromUrl(url)) {
 				const imageContent = await this.fetchRemoteImageAsBase64(
 					url,

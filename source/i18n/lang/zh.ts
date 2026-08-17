@@ -184,6 +184,14 @@ export const zh: TranslationKeys = {
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',
+		blockedPatterns: '拦截规则(正则,每行一条):',
+		blockedPatternsPlaceholder:
+			'每行一条正则表达式,如 example\\.com 或 \\.seo\\-\\d+\\.xyz',
+		blockedPatternsInfo: '匹配的站点将从搜索结果中过滤,且无法被抓取。',
+		blockedPatternsValidationError: '无效的正则表达式: {{pattern}}',
+		recommendedTemplate: '推荐模板',
+		recommendedTemplateInfo:
+			'填入腾讯云、百度文库、百度智能云、百度开发者中心和 CSDN(含所有子域名)的推荐拦截规则',
 	},
 	codebaseConfig: {
 		title: '代码库配置',

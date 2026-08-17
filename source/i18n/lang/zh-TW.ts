@@ -184,6 +184,14 @@ export const zhTW: TranslationKeys = {
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',
+		blockedPatterns: '攔截規則(正則,每行一條):',
+		blockedPatternsPlaceholder:
+			'每行一條正規表達式,如 example\\.com 或 \\.seo\\-\\d+\\.xyz',
+		blockedPatternsInfo: '匹配的站點將從搜尋結果中過濾,且無法被抓取。',
+		blockedPatternsValidationError: '無效的正規表達式: {{pattern}}',
+		recommendedTemplate: '推薦模板',
+		recommendedTemplateInfo:
+			'填入騰訊雲、百度文庫、百度智能雲、百度開發者中心和 CSDN(含所有子網域)的推薦攔截規則',
 	},
 	codebaseConfig: {
 		title: '代碼庫配置',

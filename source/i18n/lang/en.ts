@@ -194,6 +194,15 @@ export const en: TranslationKeys = {
 		macosExample:
 			'• macOS: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 		linuxExample: '• Linux: /usr/bin/chromium-browser',
+		blockedPatterns: 'Blocked sites (regex, one per line):',
+		blockedPatternsPlaceholder:
+			'One regex per line, e.g. example\\.com or \\.seo\\-\\d+\\.xyz',
+		blockedPatternsInfo:
+			'Matching sites are filtered from search results and cannot be fetched.',
+		blockedPatternsValidationError: 'Invalid regex: {{pattern}}',
+		recommendedTemplate: 'Recommended template',
+		recommendedTemplateInfo:
+			'Fill in recommended patterns for Tencent Cloud, Baidu Wenku, Baidu AI Cloud, Baidu Developer Center and CSDN (including all subdomains)',
 	},
 	codebaseConfig: {
 		title: 'CodeBase Configuration',

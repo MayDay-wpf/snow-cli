@@ -173,6 +173,12 @@ export type TranslationKeys = {
 		windowsExample: string;
 		macosExample: string;
 		linuxExample: string;
+		blockedPatterns: string;
+		blockedPatternsPlaceholder: string;
+		blockedPatternsInfo: string;
+		blockedPatternsValidationError: string;
+		recommendedTemplate: string;
+		recommendedTemplateInfo: string;
 	};
 	// CodeBase Config Screen
 	codebaseConfig: {

@@ -19,6 +19,14 @@ export interface SearchResponse {
 	query: string;
 	results: SearchResult[];
 	totalResults: number;
+	/** 被屏蔽规则过滤掉的结果数量。 */
+	blockedCount?: number;
+	/** 屏蔽比例达到阈值时回传的被屏蔽结果明细。 */
+	blockedResults?: SearchResult[];
+	/** 触发屏蔽的规则（正则字符串）。 */
+	blockedPatterns?: string[];
+	/** 给 AI 的屏蔽说明，解释为何返回了被屏蔽明细。 */
+	blockNote?: string;
 }
 
 /**

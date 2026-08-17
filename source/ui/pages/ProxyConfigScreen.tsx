@@ -8,6 +8,7 @@ import {
 	updateProxyConfig,
 	DEFAULT_PROXY_HOST,
 	sanitizeProxyHost,
+	RECOMMENDED_BLOCKED_PATTERNS,
 	type ProxyConfig,
 	type SearchEngineId,
 } from '../../utils/config/proxyConfig.js';
@@ -40,8 +41,14 @@ export default function ProxyConfigScreen({
 	const [browserPath, setBrowserPath] = useState('');
 	const [searchEngine, setSearchEngine] =
 		useState<SearchEngineId>('duckduckgo');
+	const [blockedPatternsText, setBlockedPatternsText] = useState('');
 	const [currentField, setCurrentField] = useState<
-		'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
+		| 'enabled'
+		| 'searchEngine'
+		| 'port'
+		| 'host'
+		| 'browserPath'
+		| 'blockedPatterns'
 	>('enabled');
 	const [errors, setErrors] = useState<string[]>([]);
 	const [isEditing, setIsEditing] = useState(false);
@@ -60,6 +67,9 @@ export default function ProxyConfigScreen({
 		setHost(config.host || DEFAULT_PROXY_HOST);
 		setBrowserPath(config.browserPath || '');
 		setSearchEngine(config.searchEngine || 'duckduckgo');
+		setBlockedPatternsText(
+			(config.blockedPatterns || []).join('\n'),
+		);
 
 		let cancelled = false;
 		void listSearchEnginesAsync().then(engines => {
@@ -84,18 +94,48 @@ export default function ProxyConfigScreen({
 			validationErrors.push(t.proxyConfig.hostValidationError);
 		}
 
+		// Validate each blocked pattern line is a valid regex
+		const invalidPattern = blockedPatternsText
+			.split(/\r?\n/)
+			.map(line => line.trim())
+			.filter(line => line.length > 0)
+			.find(line => {
+				try {
+					new RegExp(line);
+					return false;
+				} catch {
+					return true;
+				}
+			});
+
+		if (invalidPattern) {
+			validationErrors.push(
+				t.proxyConfig.blockedPatternsValidationError.replace(
+					'{{pattern}}',
+					invalidPattern,
+				),
+			);
+		}
+
 		return validationErrors;
 	};
 
 	const saveConfig = async () => {
 		const validationErrors = validateConfig();
 		if (validationErrors.length === 0) {
+			const blockedPatterns = blockedPatternsText
+				.split(/\r?\n/)
+				.map(line => line.trim())
+				.filter(line => line.length > 0);
 			const config: ProxyConfig = {
 				enabled,
 				port: parseInt(port, 10),
 				host: sanitizeProxyHost(host),
 				browserPath: browserPath.trim() || undefined,
 				searchEngine,
+				blockedPatterns: blockedPatterns.length > 0
+					? blockedPatterns
+					: undefined,
 			};
 			await updateProxyConfig(config);
 			setErrors([]);
@@ -115,11 +155,23 @@ export default function ProxyConfigScreen({
 				}
 			});
 		} else if (key.escape) {
-			saveConfig().then(() => onBack()); // Try to save even on escape
+			if (isEditing) {
+				// Escape exits edit mode without leaving the screen
+				setIsEditing(false);
+			} else {
+				saveConfig().then(() => onBack()); // Try to save even on escape
+			}
 		} else if (key.return) {
 			if (isEditing) {
-				// Exit edit mode, return to navigation
-				setIsEditing(false);
+				if (currentField === 'blockedPatterns') {
+					// In blockedPatterns editing mode, Enter inserts a newline
+					// instead of exiting edit mode so the user can write
+					// multi-line regex patterns.
+					setBlockedPatternsText(prev => `${prev}\n`);
+				} else {
+					// Exit edit mode, return to navigation
+					setIsEditing(false);
+				}
 			} else {
 				// Enter edit mode for the current field (toggle for the
 				// boolean checkbox, list selection for searchEngine, text
@@ -132,18 +184,45 @@ export default function ProxyConfigScreen({
 			}
 		} else if (!isEditing && key.upArrow) {
 			const fields: Array<
-				'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
-			> = ['enabled', 'searchEngine', 'port', 'host', 'browserPath'];
+				| 'enabled'
+				| 'searchEngine'
+				| 'port'
+				| 'host'
+				| 'browserPath'
+				| 'blockedPatterns'
+			> = [
+				'enabled',
+				'searchEngine',
+				'port',
+				'host',
+				'browserPath',
+				'blockedPatterns',
+			];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex > 0 ? currentIndex - 1 : fields.length - 1;
 			setCurrentField(fields[newIndex]!);
 		} else if (!isEditing && key.downArrow) {
 			const fields: Array<
-				'enabled' | 'searchEngine' | 'port' | 'host' | 'browserPath'
-			> = ['enabled', 'searchEngine', 'port', 'host', 'browserPath'];
+				| 'enabled'
+				| 'searchEngine'
+				| 'port'
+				| 'host'
+				| 'browserPath'
+				| 'blockedPatterns'
+			> = [
+				'enabled',
+				'searchEngine',
+				'port',
+				'host',
+				'browserPath',
+				'blockedPatterns',
+			];
 			const currentIndex = fields.indexOf(currentField);
 			const newIndex = currentIndex < fields.length - 1 ? currentIndex + 1 : 0;
 			setCurrentField(fields[newIndex]!);
+		} else if (!isEditing && input === 'r' && currentField === 'blockedPatterns') {
+			// Fill in recommended blocked patterns template
+			setBlockedPatternsText(RECOMMENDED_BLOCKED_PATTERNS.join('\n'));
 		}
 	});
 
@@ -313,16 +392,62 @@ export default function ProxyConfigScreen({
 								/>
 							</Box>
 						)}
-						{(!isEditing || currentField !== 'browserPath') && (
-							<Box marginLeft={3}>
-								<Text color={theme.colors.menuSecondary}>
-									{browserPath || t.proxyConfig.autoDetect}
-								</Text>
-							</Box>
-						)}
-					</Box>
+					{(!isEditing || currentField !== 'browserPath') && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{browserPath || t.proxyConfig.autoDetect}
+							</Text>
+						</Box>
+					)}
 				</Box>
 			</Box>
+
+			<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Text
+						color={
+							currentField === 'blockedPatterns'
+								? theme.colors.menuSelected
+								: theme.colors.menuNormal
+						}
+					>
+						{currentField === 'blockedPatterns' ? '❯ ' : '  '}
+						{t.proxyConfig.blockedPatterns}
+					</Text>
+					{currentField === 'blockedPatterns' && isEditing && (
+						<Box marginLeft={3} flexDirection="column">
+							<TextInput
+								value={blockedPatternsText}
+								onChange={setBlockedPatternsText}
+								placeholder={t.proxyConfig.blockedPatternsPlaceholder}
+							/>
+							<Text color={theme.colors.menuInfo} dimColor>
+								{t.proxyConfig.blockedPatternsInfo}
+							</Text>
+						</Box>
+					)}
+					{(!isEditing || currentField !== 'blockedPatterns') && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{blockedPatternsText
+									? blockedPatternsText
+											.split(/\r?\n/)
+											.filter(l => l.trim().length > 0).length +
+									  ' rule(s)'
+									: t.proxyConfig.notSet}
+							</Text>
+						</Box>
+					)}
+					{!isEditing && currentField !== 'blockedPatterns' && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuInfo} dimColor>
+								{t.proxyConfig.recommendedTemplate}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			</Box>
+		</Box>
 
 			{errors.length > 0 && (
 				<Box flexDirection="column" marginBottom={2}>
@@ -345,28 +470,35 @@ export default function ProxyConfigScreen({
 				) : (
 					<>
 						<Alert variant="info">{t.proxyConfig.navigationHint}</Alert>
+						{currentField === 'blockedPatterns' && (
+							<Alert variant="info">
+								{t.proxyConfig.recommendedTemplateInfo} (press 'r')
+							</Alert>
+						)}
 					</>
 				)}
 			</Box>
 
-			<Box flexDirection="column" marginTop={1}>
-				<Alert variant="info">
-					{t.proxyConfig.browserExamplesTitle} <Newline />
-					<Text color={theme.colors.menuInfo}>
-						{t.proxyConfig.windowsExample}
-					</Text>{' '}
-					<Newline />
-					<Text color={theme.colors.success}>
-						{t.proxyConfig.macosExample}
-					</Text>{' '}
-					<Newline />
-					<Text color={theme.colors.warning}>
-						{t.proxyConfig.linuxExample}
-					</Text>{' '}
-					<Newline />
-					{t.proxyConfig.browserExamplesFooter}
-				</Alert>
-			</Box>
+			{currentField === 'browserPath' && (
+				<Box flexDirection="column" marginTop={1}>
+					<Alert variant="info">
+						{t.proxyConfig.browserExamplesTitle} <Newline />
+						<Text color={theme.colors.menuInfo}>
+							{t.proxyConfig.windowsExample}
+						</Text>{' '}
+						<Newline />
+						<Text color={theme.colors.success}>
+							{t.proxyConfig.macosExample}
+						</Text>{' '}
+						<Newline />
+						<Text color={theme.colors.warning}>
+							{t.proxyConfig.linuxExample}
+						</Text>{' '}
+						<Newline />
+						{t.proxyConfig.browserExamplesFooter}
+					</Alert>
+				</Box>
+			)}
 		</Box>
 	);
 }

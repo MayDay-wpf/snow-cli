@@ -27,10 +27,14 @@ export function cleanText(text: string): string {
  * @returns Formatted text representation
  */
 export function formatSearchResults(searchResponse: SearchResponse): string {
-	const {query, results, totalResults} = searchResponse;
+	const {query, results, totalResults, blockedCount, blockNote} = searchResponse;
 
 	let output = `Search Results for: "${query}"\n`;
-	output += `Found ${totalResults} results\n\n`;
+	output += `Found ${totalResults} results\n`;
+	if (blockedCount && blockedCount > 0) {
+		output += `(${blockedCount} result${blockedCount > 1 ? 's' : ''} filtered by blocking rules)\n`;
+	}
+	output += '\n';
 	output += '='.repeat(80) + '\n\n';
 
 	results.forEach((result, index) => {
@@ -41,6 +45,11 @@ export function formatSearchResults(searchResponse: SearchResponse): string {
 		}
 		output += '\n';
 	});
+
+	if (blockNote) {
+		output += '='.repeat(80) + '\n';
+		output += `${blockNote}\n`;
+	}
 
 	return output;
 }
