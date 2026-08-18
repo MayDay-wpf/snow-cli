@@ -186,6 +186,68 @@ export class FilesystemMCPService {
 	}
 
 	/**
+	 * Create or overwrite a file on a remote SSH server.
+	 */
+	private async createRemoteFile(
+		sshUrl: string,
+		content: string,
+		createDirectories: boolean,
+		overwrite: boolean,
+	): Promise<{message: string; filePath: string; content: string}> {
+		const parsed = parseSSHUrl(sshUrl);
+		if (!parsed) {
+			throw new Error(`Invalid SSH URL: ${sshUrl}`);
+		}
+
+		const sshConfig = await this.getSSHConfigForPath(sshUrl);
+		if (!sshConfig) {
+			throw new Error(`No SSH configuration found for: ${sshUrl}`);
+		}
+
+		const client = new SSHClient();
+		const connectResult = await client.connect(sshConfig);
+		if (!connectResult.success) {
+			throw new Error(`SSH connection failed: ${connectResult.error}`);
+		}
+
+		try {
+			const fileExisted = await client.fileExists(parsed.path);
+			if (fileExisted && !overwrite) {
+				throw new Error(`File already exists: ${sshUrl}`);
+			}
+
+			const originalContent = fileExisted
+				? await client.readFile(parsed.path)
+				: undefined;
+			await backupFileBeforeMutation({
+				filePath: sshUrl,
+				basePath: this.basePath,
+				fileExisted,
+				originalContent,
+			});
+
+			if (createDirectories) {
+				const lastSlashIndex = parsed.path.lastIndexOf('/');
+				const parentDirectory = parsed.path.slice(0, lastSlashIndex);
+				if (parentDirectory) {
+					await client.ensureDirectory(parentDirectory);
+				}
+			}
+
+			await client.writeFile(parsed.path, content);
+			return {
+				message: fileExisted
+					? `File overwritten successfully: ${sshUrl}`
+					: `File created successfully: ${sshUrl}`,
+				filePath: sshUrl,
+				content,
+			};
+		} finally {
+			client.disconnect();
+		}
+	}
+
+	/**
 	 * Check if a file is an image based on extension
 	 * @param filePath - Path to the file
 	 * @returns True if the file is an image
@@ -569,6 +631,15 @@ export class FilesystemMCPService {
 		overwrite: boolean = false,
 	): Promise<{message: string; filePath: string; content: string}> {
 		try {
+			if (this.isSSHPath(filePath)) {
+				return await this.createRemoteFile(
+					filePath,
+					content,
+					createDirectories,
+					overwrite,
+				);
+			}
+
 			const fullPath = this.resolvePath(filePath);
 
 			let fileExisted = false;
@@ -989,7 +1060,7 @@ export const mcpTools = [
 	{
 		name: 'filesystem-create',
 		description:
-			'Create a new file with content. **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
+			'Create a new file with content. **REMOTE SSH SUPPORT**: Supports remote files via SSH URL format (ssh://user@host:port/path). **PATH REQUIREMENT**: Use EXACT non-empty string path, never undefined/null/empty/placeholders like "path/to/file". Set `overwrite` to true to replace an existing file (original content is backed up for rollback). Automatically creates parent directories. **BATCH**: `filePath` may be a string (single file with top-level `content`), or an array of `{path, content, overwrite?, createDirectories?}` objects for batch creation.',
 		inputSchema: {
 			type: 'object',
 			properties: {

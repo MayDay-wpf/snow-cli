@@ -243,6 +243,84 @@ export class SSHClient {
 	}
 
 	/**
+	 * Check whether a remote file or directory exists.
+	 */
+	async fileExists(remotePath: string): Promise<boolean> {
+		if (!this.sftp) {
+			throw new Error('SFTP not initialized');
+		}
+
+		return new Promise((resolve, reject) => {
+			this.sftp!.stat(remotePath, error => {
+				if (!error) {
+					resolve(true);
+					return;
+				}
+
+				const errorCode = (error as Error & {code?: number | string}).code;
+				if (
+					errorCode === 2 ||
+					errorCode === 'ENOENT' ||
+					/no such file|not found/i.test(error.message)
+				) {
+					resolve(false);
+					return;
+				}
+
+				reject(
+					new Error(
+						`Failed to check remote path ${remotePath}: ${error.message}`,
+					),
+				);
+			});
+		});
+	}
+
+	/**
+	 * Create a remote directory and any missing parent directories.
+	 */
+	async ensureDirectory(remotePath: string): Promise<void> {
+		if (!this.sftp) {
+			throw new Error('SFTP not initialized');
+		}
+
+		const segments = remotePath
+			.split('/')
+			.filter(segment => segment.length > 0);
+		let currentPath = remotePath.startsWith('/') ? '' : '.';
+
+		for (const segment of segments) {
+			currentPath = currentPath ? `${currentPath}/${segment}` : `/${segment}`;
+
+			if (await this.isDirectory(currentPath)) {
+				continue;
+			}
+
+			await new Promise<void>((resolve, reject) => {
+				this.sftp!.mkdir(currentPath, error => {
+					if (!error) {
+						resolve();
+						return;
+					}
+
+					this.sftp!.stat(currentPath, (statError, stats) => {
+						if (!statError && stats.isDirectory()) {
+							resolve();
+							return;
+						}
+
+						reject(
+							new Error(
+								`Failed to create remote directory ${currentPath}: ${error.message}`,
+							),
+						);
+					});
+				});
+			});
+		}
+	}
+
+	/**
 	 * Read file content from remote
 	 */
 	async readFile(remotePath: string): Promise<string> {
