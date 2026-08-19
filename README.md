@@ -229,4 +229,4 @@ After running snow, `.snow/` directory is created in your home folder:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=MayDay-wpf/snow-cli&type=Date)](https://star-history.com/#MayDay-wpf/snow-cli&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=MayDay-wpf/snow-cli&type=Date)](https://star-history.dera.page/#MayDay-wpf/snow-cli&Date)
