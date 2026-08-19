@@ -149,6 +149,23 @@ const URL_QUERY_SECRET_PATTERN =
 	/([?&](api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|token|client[_-]?secret|signature|x-amz-signature|sig)=)([^&#\s]+)/gi;
 const CHINA_ID_PATTERN =
 	/\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dX]\b/gi;
+// 15 位旧版身份证（1999 年前签发）：地址码 6 位 + 出生日期 YYMMDD 6 位 + 顺序码 3 位，无校验码
+const CHINA_ID_15_PATTERN =
+	/\b[1-9]\d{5}\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}\b/g;
+// 国际格式（E.164）：+ 国家码（1-3 位）+ 7-14 位数字，支持空格/连字符/括号分组
+const E164_PHONE_PATTERN =
+	/(?<![\d])\+[1-9](?:[\s-]?(?:\d|\(\d{2,4}\))){7,14}(?![\d])/g;
+// 本地格式：括号区号 + 分组数字（(202) 555-0123、090-1234-5678、0412 345 678），
+// 或 0 开头 10-11 位连续数字（英/日/澳/德等本地手机号）
+const LOCAL_PHONE_PATTERN =
+	/(?<![\d-])(?:\(\d{2,4}\)[\s-]?)?(?:\d{3,4}(?:[\s-]\d{3,4}){1,2}|\d{4,5}[\s-]\d{5,8}|0\d{9,10})(?![\d])/g;
+// 中国 11 位手机号（1[3-9] 开头，可选 +86/86 前缀）
+const MOBILE_CN_PATTERN = /(?<![\d])(?:\+?86[\s-]?)?1[3-9]\d{9}(?![\d])/g;
+const PHONE_PATTERNS: Array<{pattern: RegExp; confidence: number}> = [
+	{pattern: E164_PHONE_PATTERN, confidence: 0.95},
+	{pattern: LOCAL_PHONE_PATTERN, confidence: 0.85},
+	{pattern: MOBILE_CN_PATTERN, confidence: 0.9},
+];
 const PAYMENT_CARD_PATTERN = /\b(?:\d[ -]*?){13,19}\b/g;
 
 function maskSecretValue(
@@ -364,6 +381,22 @@ function isValidChineseId(value: string): boolean {
 	return checksums[sum % 11] === normalized[17];
 }
 
+function isValidChineseId15(value: string): boolean {
+	// 15 位身份证无校验码，仅验证出生日期合法性（年份按 19YY 折算）
+	const year = 1900 + Number(value.slice(6, 8));
+	const month = Number(value.slice(8, 10));
+	const day = Number(value.slice(10, 12));
+	const birthDate = new Date(Date.UTC(year, month - 1, day));
+	if (
+		birthDate.getUTCFullYear() !== year ||
+		birthDate.getUTCMonth() !== month - 1 ||
+		birthDate.getUTCDate() !== day
+	) {
+		return false;
+	}
+	return true;
+}
+
 function isValidPaymentCard(value: string): boolean {
 	const digits = value.replace(/\D/g, '');
 	if (digits.length < 13 || digits.length > 19 || /^(\d)\1+$/.test(digits)) {
@@ -407,6 +440,21 @@ function collectValidatedMatches(
 		}
 	}
 
+	CHINA_ID_15_PATTERN.lastIndex = 0;
+	let chinaId15Match: RegExpExecArray | null;
+	while ((chinaId15Match = CHINA_ID_15_PATTERN.exec(text)) !== null) {
+		const value = chinaId15Match[0];
+		if (isValidChineseId15(value)) {
+			addSensitiveMatch(
+				matches,
+				chinaId15Match.index,
+				chinaId15Match.index + value.length,
+				'china_id',
+				0.9,
+			);
+		}
+	}
+
 	PAYMENT_CARD_PATTERN.lastIndex = 0;
 	let cardMatch: RegExpExecArray | null;
 	while ((cardMatch = PAYMENT_CARD_PATTERN.exec(text)) !== null) {
@@ -418,6 +466,21 @@ function collectValidatedMatches(
 				cardMatch.index + value.length,
 				'payment_card',
 				0.9,
+			);
+		}
+	}
+
+	for (const {pattern, confidence} of PHONE_PATTERNS) {
+		pattern.lastIndex = 0;
+		let phoneMatch: RegExpExecArray | null;
+		while ((phoneMatch = pattern.exec(text)) !== null) {
+			const value = phoneMatch[0];
+			addSensitiveMatch(
+				matches,
+				phoneMatch.index,
+				phoneMatch.index + value.length,
+				'phone',
+				confidence,
 			);
 		}
 	}
@@ -543,6 +606,28 @@ function maskSensitiveValueByType(type: string, value: string): string {
 		return `${value.slice(0, 6)}${'*'.repeat(value.length - 10)}${value.slice(
 			-4,
 		)}`;
+	}
+
+	if (type === 'phone') {
+		// 中国号段优先按号码本体前3后4掩码，保留 +86/86 前缀
+		const cnMatch = value.match(/1[3-9]\d{9}/);
+		if (cnMatch && cnMatch.index !== undefined) {
+			return `${value.slice(0, cnMatch.index)}${cnMatch[0].slice(
+				0,
+				3,
+			)}****${cnMatch[0].slice(-4)}`;
+		}
+
+		// 其他格式：按数字主体前3后4掩码，保留括号/空格/连字符等分隔符与国家码
+		const digits = value.replace(/\D/g, '');
+		if (digits.length >= 8) {
+			const maskedDigits = `${digits.slice(0, 3)}${'*'.repeat(
+				digits.length - 7,
+			)}${digits.slice(-4)}`;
+			let digitIndex = 0;
+			return value.replace(/\d/g, () => maskedDigits[digitIndex++] ?? '');
+		}
+		return maskSecretValue(value, 3, 4);
 	}
 
 	if (type === 'jwt') {
