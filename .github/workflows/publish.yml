@@ -125,7 +125,7 @@ jobs:
 
             ### What's New
 
-            - Site blocking rules: configure regex patterns in the proxy config screen to filter out search results from unwanted sites; when the blocked ratio reaches a threshold, the blocked results and matching rules are attached to the response so the AI can inform the user and decide whether to re-search
+            - Add remote file handling capabilities with SSH support
 
             ### Installation
             ```bash
