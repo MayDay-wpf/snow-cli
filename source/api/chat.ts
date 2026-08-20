@@ -632,11 +632,15 @@ export async function* createStreamingChatCompletion(
 				};
 
 				if (thinkingEnabled) {
-					requestBody['thinking'] = {type: 'enabled'};
+					// 启用思考:默认不传 thinking 字段(思考等级由 reasoning_effort 控制),
+					// 避免部分兼容 API 无法识别 thinking: {type: 'enabled'} 而拒绝请求
 					if (config.chatThinking?.reasoning_effort) {
 						requestBody['reasoning_effort'] =
 							config.chatThinking.reasoning_effort;
 					}
+				} else {
+					// 关闭思考:显式传递 thinking: {type: 'disabled'}
+					requestBody['thinking'] = {type: 'disabled'};
 				}
 
 				recordChatContent(
