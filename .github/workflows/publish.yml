@@ -125,7 +125,7 @@ jobs:
 
             ### What's New
 
-            - Add remote file handling capabilities with SSH support
+            - Enhanced privacy masking support for Chinese ID cards and phone numbers
 
             ### Installation
             ```bash
