@@ -62,6 +62,7 @@ import {
 } from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
+import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 
 import os from 'os';
 import path from 'path';
@@ -913,7 +914,9 @@ function getHttpTransportConfig(server: MCPServer): {
 
 	return {
 		url,
-		requestInit: {headers},
+		// MCP SDK 将 requestInit 传给 Node fetch。显式注入 dispatcher，
+		// 让 localhost/私有地址覆盖全局代理并直连，外部地址继续走代理。
+		requestInit: addProxyToFetchOptions(url.toString(), {headers}),
 	};
 }
 
