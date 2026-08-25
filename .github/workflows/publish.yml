@@ -125,7 +125,8 @@ jobs:
 
             ### What's New
 
-            - Enhanced privacy masking support for Chinese ID cards and phone numbers
+            - Proxy handling now bypasses the proxy for local and private network addresses (e.g., localhost, 10.x.x.x, 192.168.x.x), enabling direct connections for MCP local services
+            - Improved thinking feature handling in streaming chat completion: enabled thinking relies on reasoning_effort for better compatibility with third-party APIs, while disabled thinking is explicitly sent
 
             ### Installation
             ```bash
