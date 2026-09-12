@@ -213,7 +213,16 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
 	mcpServers: {},
 };
 
-const CONFIG_DIR = join(homedir(), '.snow');
+/**
+ * 解析 Snow 全局配置目录。
+ * 默认 ~/.snow；若设置了 SNOW_CONFIG_DIR（测试/多环境隔离用）则以其为准。
+ */
+export function resolveSnowConfigDir(): string {
+	const override = process.env['SNOW_CONFIG_DIR']?.trim();
+	return override ? override : join(homedir(), '.snow');
+}
+
+const CONFIG_DIR = resolveSnowConfigDir();
 const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
 
 const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本，保留用于迁移
@@ -422,56 +431,77 @@ export function reloadConfig(): AppConfig {
 	return loadConfig();
 }
 
+/** 把 Partial<ApiConfig> 变更叠加到基线 ApiConfig 上，并做字段归一化。 */
+function applyApiConfigPatch(
+	baseSnowcfg: ApiConfig,
+	patch: Partial<ApiConfig>,
+): ApiConfig {
+	return {
+		...baseSnowcfg,
+		...patch,
+		baseUrlMode: normalizeBaseUrlMode(
+			patch.baseUrlMode ?? baseSnowcfg.baseUrlMode,
+		),
+		visionBaseUrlMode: normalizeBaseUrlMode(
+			patch.visionBaseUrlMode ?? baseSnowcfg.visionBaseUrlMode,
+		),
+		requestMethod: normalizeRequestMethod(
+			patch.requestMethod ?? baseSnowcfg.requestMethod,
+		),
+		visionRequestMethod: normalizeRequestMethod(
+			patch.visionRequestMethod ?? baseSnowcfg.visionRequestMethod,
+		),
+		streamIdleTimeoutSec: normalizeStreamIdleTimeoutSec(
+			patch.streamIdleTimeoutSec ?? baseSnowcfg.streamIdleTimeoutSec,
+		),
+		retryDelayMs: normalizeRetryDelayMs(
+			patch.retryDelayMs ?? baseSnowcfg.retryDelayMs,
+		),
+	};
+}
+
 export async function updateSnowConfig(
 	apiConfig: Partial<ApiConfig>,
 ): Promise<void> {
-	const currentConfig = loadConfig();
-	const normalizedIdleTimeoutSec = normalizeStreamIdleTimeoutSec(
-		apiConfig.streamIdleTimeoutSec ??
-			currentConfig.snowcfg.streamIdleTimeoutSec,
-	);
-	const normalizedRetryDelayMs = normalizeRetryDelayMs(
-		apiConfig.retryDelayMs ?? currentConfig.snowcfg.retryDelayMs,
-	);
-	const normalizedBaseUrlMode = normalizeBaseUrlMode(
-		apiConfig.baseUrlMode ?? currentConfig.snowcfg.baseUrlMode,
-	);
-	const normalizedVisionBaseUrlMode = normalizeBaseUrlMode(
-		apiConfig.visionBaseUrlMode ?? currentConfig.snowcfg.visionBaseUrlMode,
-	);
-	const normalizedVisionRequestMethod = normalizeRequestMethod(
-		apiConfig.visionRequestMethod ?? currentConfig.snowcfg.visionRequestMethod,
-	);
+	// 关键：写回 active profile 前，必须以"磁盘上该 profile 的当前内容"作为基线，
+	// 而不是以本进程内存缓存 (config.json) 作为基线。
+	// 场景：用户用 Alt+P 在别处/另一实例切换了 profile（磁盘 active 已变），
+	// 本进程缓存仍是旧 profile；此时若用缓存基线整份写回，会把旧 profile 的
+	// baseUrl/apiKey 等覆盖到新 profile 文件上，导致新 profile 配置丢失。
+	let activeProfileName: string | undefined;
+	let activeProfileConfig: AppConfig | undefined;
+	try {
+		// Dynamic import for ESM compatibility
+		const {getActiveProfileName, loadProfile} = await import(
+			'./configManager.js'
+		);
+		activeProfileName = getActiveProfileName();
+		if (activeProfileName) {
+			activeProfileConfig = loadProfile(activeProfileName);
+		}
+	} catch {
+		// Profiles system not available yet (during initialization), skip sync
+	}
+
+	const currentConfig = activeProfileConfig ?? loadConfig();
 	const updatedConfig: AppConfig = {
 		...currentConfig,
-		snowcfg: {
-			...currentConfig.snowcfg,
-			...apiConfig,
-			baseUrlMode: normalizedBaseUrlMode,
-			visionBaseUrlMode: normalizedVisionBaseUrlMode,
-			requestMethod: normalizeRequestMethod(
-				apiConfig.requestMethod ?? currentConfig.snowcfg.requestMethod,
-			),
-			visionRequestMethod: normalizedVisionRequestMethod,
-			streamIdleTimeoutSec: normalizedIdleTimeoutSec,
-			retryDelayMs: normalizedRetryDelayMs,
-		},
+		snowcfg: applyApiConfigPatch(currentConfig.snowcfg, apiConfig),
 	};
 	saveConfig(updatedConfig);
 
 	// Also save to the active profile if profiles system is initialized
-	try {
-		// Dynamic import for ESM compatibility
-		const {getActiveProfileName, saveProfile, clearAllAgentCaches} =
-			await import('./configManager.js');
-		const activeProfileName = getActiveProfileName();
-		if (activeProfileName) {
+	if (activeProfileName) {
+		try {
+			const {saveProfile, clearAllAgentCaches} = await import(
+				'./configManager.js'
+			);
 			saveProfile(activeProfileName, updatedConfig);
+			// Clear all agent caches to ensure they reload with new configuration
+			clearAllAgentCaches();
+		} catch {
+			// Profiles system not available yet (during initialization), skip sync
 		}
-		// Clear all agent caches to ensure they reload with new configuration
-		clearAllAgentCaches();
-	} catch {
-		// Profiles system not available yet (during initialization), skip sync
 	}
 }
 

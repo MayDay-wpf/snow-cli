@@ -1,4 +1,3 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {
 	readFileSync,
@@ -15,6 +14,7 @@ import {
 	DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
 	DEFAULT_RETRY_DELAY_MS,
 	normalizeBaseUrlMode,
+	resolveSnowConfigDir,
 	type ApiConfig,
 	type AppConfig,
 	type RequestMethod,
@@ -25,7 +25,7 @@ import {summaryAgent} from '../../agents/summaryAgent.js';
 import {bashOutputSummaryAgent} from '../../agents/bashOutputSummaryAgent.js';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = resolveSnowConfigDir();
 const PROFILES_DIR = join(CONFIG_DIR, 'profiles');
 const ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.json');
 const LEGACY_ACTIVE_PROFILE_FILE = join(CONFIG_DIR, 'active-profile.txt');
