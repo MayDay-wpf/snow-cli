@@ -144,12 +144,17 @@ function convertToOpenAIMessages(
 				});
 			}
 
-			// 添加图片内容
+			// 添加图片内容：data 可能是 data URL、http(s) URL 或纯 base64，
+			// 纯 base64 需要补全为 data URL，否则服务端无法识别图片而报 400
 			for (const image of msg.images) {
+				const imageUrl =
+					/^data:/i.test(image.data) || /^https?:\/\//i.test(image.data)
+						? image.data
+						: `data:${image.mimeType};base64,${image.data}`;
 				contentParts.push({
 					type: 'image_url',
 					image_url: {
-						url: image.data, // Base64 data URL
+						url: imageUrl,
 					},
 				});
 			}
@@ -180,7 +185,9 @@ function convertToOpenAIMessages(
 		}
 
 		if (msg.role === 'tool' && msg.tool_call_id) {
-			// Handle multimodal tool results with images
+			// DeepSeek Vision 方案：tool 消息的 content 支持内容块数组（可携带图片），
+			// 图片以 image_url 块的 data URL 形式直接内联在 tool 消息中发送，
+			// 不额外拆分为 user 消息。
 			if (msg.images && msg.images.length > 0) {
 				const content: Array<{
 					type: 'text' | 'image_url';
