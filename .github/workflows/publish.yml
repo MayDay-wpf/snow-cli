@@ -125,8 +125,10 @@ jobs:
 
             ### What's New
 
-            - Proxy handling now bypasses the proxy for local and private network addresses (e.g., localhost, 10.x.x.x, 192.168.x.x), enabling direct connections for MCP local services
-            - Improved thinking feature handling in streaming chat completion: enabled thinking relies on reasoning_effort for better compatibility with third-party APIs, while disabled thinking is explicitly sent
+            - Enhanced image content processing: images in data URL, http(s) URL, or raw base64 format are now handled uniformly, with bare base64 automatically completed into a data URL to prevent 400 errors from servers that reject malformed image URLs
+            - Optimized inline image sending for tool messages: images are inlined as image_url content blocks within the tool message itself (DeepSeek Vision scheme), instead of being split into separate user messages
+            - Profile switching safety: configuration updates now read the active profile's current content from disk before writing back, so a profile switched elsewhere (e.g., via Alt+P in another session or instance) is no longer overwritten with stale in-memory baseUrl/apiKey values
+            - New SNOW_CONFIG_DIR environment variable to override the Snow global config directory (default ~/.snow), useful for multi-environment and test isolation
 
             ### Installation
             ```bash
