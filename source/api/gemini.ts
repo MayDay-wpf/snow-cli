@@ -595,6 +595,7 @@ export async function* createStreamingGeminiCompletion(
 					options.customHeaders || getCustomHeadersForConfig(config);
 				const customHeaders = await resolveCustomHeaderPlaceholders(
 					rawCustomHeaders,
+					{sessionId: options.sessionId},
 				);
 
 				const fetchOptions = addProxyToFetchOptions(url, {

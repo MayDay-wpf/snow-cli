@@ -707,6 +707,7 @@ export async function* createStreamingResponse(
 					options.customHeaders || getCustomHeadersForConfig(config);
 				const customHeaders = await resolveCustomHeaderPlaceholders(
 					rawCustomHeaders,
+					{sessionId: options.sessionId ?? options.prompt_cache_key},
 				);
 
 				const fetchOptions = addProxyToFetchOptions(url, {

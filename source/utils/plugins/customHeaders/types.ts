@@ -29,6 +29,13 @@ export interface CustomHeaderPluginContext {
 	readonly cwd: string;
 	/** Operating system platform (e.g. 'darwin', 'win32', 'linux'). */
 	readonly platform: string;
+	/**
+	 * Current session ID (the active conversation's ID).
+	 *
+	 * Undefined for requests that are not tied to a conversation session
+	 * (e.g. fetching the model list from the settings UI).
+	 */
+	readonly sessionId?: string;
 }
 
 /**

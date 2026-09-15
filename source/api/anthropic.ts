@@ -821,6 +821,7 @@ export async function* createStreamingAnthropicCompletion(
 					options.customHeaders || getCustomHeadersForConfig(config);
 				const customHeaders = await resolveCustomHeaderPlaceholders(
 					rawCustomHeaders,
+					{sessionId: options.sessionId},
 				);
 
 				// Prepare headers
