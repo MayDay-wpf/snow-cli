@@ -125,10 +125,7 @@ jobs:
 
             ### What's New
 
-            - Enhanced image content processing: images in data URL, http(s) URL, or raw base64 format are now handled uniformly, with bare base64 automatically completed into a data URL to prevent 400 errors from servers that reject malformed image URLs
-            - Optimized inline image sending for tool messages: images are inlined as image_url content blocks within the tool message itself (DeepSeek Vision scheme), instead of being split into separate user messages
-            - Profile switching safety: configuration updates now read the active profile's current content from disk before writing back, so a profile switched elsewhere (e.g., via Alt+P in another session or instance) is no longer overwritten with stale in-memory baseUrl/apiKey values
-            - New SNOW_CONFIG_DIR environment variable to override the Snow global config directory (default ~/.snow), useful for multi-environment and test isolation
+            - Add session ID support to the custom request header plugin, optimize request context processing
 
             ### Installation
             ```bash
