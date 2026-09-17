@@ -349,7 +349,7 @@ export async function processStreamRound(ctx: {
 			thinkingLineBuffer += chunk.delta;
 			const cleanedThinking = cleanThinkingContent(thinkingLineBuffer);
 			// 清洗后仍为空（例如只有 <think> 标签）时不激活 ThinkingStatus，
-			// 否则会出现“Thinking...”标题 + 5 行空白占位的空思考。
+			// 否则会出现空的思考面板占位。
 			if (!cleanedThinking.trim()) {
 				continue;
 			}

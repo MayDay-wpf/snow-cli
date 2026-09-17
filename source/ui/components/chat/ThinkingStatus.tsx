@@ -2,7 +2,6 @@ import React from 'react';
 import {Box, Text} from 'ink';
 import stringWidth from 'string-width';
 import {useTheme} from '../../contexts/ThemeContext.js';
-import ShimmerText from '../common/ShimmerText.js';
 
 export type ThinkingStatus = {
 	isActive: boolean;
@@ -17,8 +16,6 @@ interface ThinkingStatusProps {
 const STREAM_VIEWPORT_HEIGHT = 5;
 const STREAM_VIEWPORT_RESERVED_COLUMNS = 4;
 const STREAM_VIEWPORT_INDENT_WIDTH = 2;
-const TITLE_PREFIX = '❆ ';
-const TITLE_TEXT = 'Thinking...';
 
 function getSafeLineWidth(terminalWidth: number, reservedColumns = 0): number {
 	return Math.max(1, terminalWidth - reservedColumns);
@@ -87,16 +84,6 @@ function buildStreamViewportLines(
 	];
 }
 
-function buildSafeShimmerText(text: string, terminalWidth: number): string {
-	const titleSafeWidth = getSafeLineWidth(terminalWidth, 1);
-	const prefixWidth = stringWidth(TITLE_PREFIX);
-	const available = Math.max(0, titleSafeWidth - prefixWidth);
-	return sliceByVisualWidth(text, available);
-}
-
-const THINKING_SHIMMER_BASE = '#1ACEB0';
-const THINKING_SHIMMER_COLOR = '#00FFFF';
-
 export function ThinkingStatus({status, terminalWidth}: ThinkingStatusProps) {
 	const {theme} = useTheme();
 
@@ -108,8 +95,11 @@ export function ThinkingStatus({status, terminalWidth}: ThinkingStatusProps) {
 		status.content,
 		terminalWidth,
 	);
-	const safeShimmerText = buildSafeShimmerText(TITLE_TEXT, terminalWidth);
-	const hasThinkingContent = streamViewportLines.length > 0;
+	// 思考内容为空时不渲染，避免出现空思考面板；
+	// “Thinking...” 流光标题已移除，该状态统一由 LoadingIndicator 承担，避免重复。
+	if (streamViewportLines.length === 0) {
+		return null;
+	}
 
 	return (
 		<Box
@@ -118,37 +108,20 @@ export function ThinkingStatus({status, terminalWidth}: ThinkingStatusProps) {
 			paddingX={1}
 			marginBottom={1}
 		>
-			<Box height={1}>
-				<Text color={THINKING_SHIMMER_BASE} bold wrap="truncate">
-					{TITLE_PREFIX}
-					<ShimmerText
-						text={safeShimmerText}
-						baseColor={THINKING_SHIMMER_BASE}
-						shimmerColor={THINKING_SHIMMER_COLOR}
-					/>
-				</Text>
+			<Box paddingLeft={STREAM_VIEWPORT_INDENT_WIDTH} flexDirection="column">
+				{streamViewportLines.map((line, index) => (
+					<Box key={`thinking-stream-line-${index}`} height={1}>
+						<Text
+							italic
+							dimColor
+							color={theme.colors.menuSecondary}
+							wrap="truncate"
+						>
+							{line.text}
+						</Text>
+					</Box>
+				))}
 			</Box>
-
-			{hasThinkingContent && (
-				<Box
-					paddingLeft={STREAM_VIEWPORT_INDENT_WIDTH}
-					marginTop={1}
-					flexDirection="column"
-				>
-					{streamViewportLines.map((line, index) => (
-						<Box key={`thinking-stream-line-${index}`} height={1}>
-							<Text
-								italic
-								dimColor
-								color={theme.colors.menuSecondary}
-								wrap="truncate"
-							>
-								{line.text}
-							</Text>
-						</Box>
-					))}
-				</Box>
-			)}
 		</Box>
 	);
 }
