@@ -61,6 +61,8 @@ export interface UnifiedSettings {
 	codebase?: {
 		enabled?: boolean;
 		enableAgentReview?: boolean;
+		/** Agent 审查选用的决策模型 id；'' = 使用基础 LLM 模型 */
+		agentReviewModelId?: string;
 		enableReranking?: boolean;
 		batch?: {
 			maxLines?: number;

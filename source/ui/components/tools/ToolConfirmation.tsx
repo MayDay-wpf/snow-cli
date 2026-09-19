@@ -196,6 +196,23 @@ export default function ToolConfirmation({
 		}
 	}, [toolName, toolArguments]);
 
+	// 仅 terminal-execute 展示命令解释（AI 通过 explanation 参数说明命令要做什么）
+	const commandExplanation = useMemo(() => {
+		if (toolName !== 'terminal-execute' || !toolArguments) {
+			return null;
+		}
+
+		try {
+			const parsed = JSON.parse(toolArguments);
+			const explanation = parsed.explanation;
+			return typeof explanation === 'string' && explanation.trim()
+				? explanation.trim()
+				: null;
+		} catch {
+			return null;
+		}
+	}, [toolName, toolArguments]);
+
 	useEffect(() => {
 		// 切换到新命令时重置翻阅位置
 		setCommandPageOffset(0);
@@ -765,6 +782,16 @@ export default function ToolConfirmation({
 									</Text>
 								</Box>
 							))}
+						</Box>
+					) : null}
+
+					{/* terminal-execute: 命令解释（AI 说明这条命令要做什么） */}
+					{toolName === 'terminal-execute' && commandExplanation ? (
+						<Box flexDirection="column" marginBottom={1}>
+							<Text dimColor>{t.toolConfirmation.commandExplanation}</Text>
+							<Box paddingLeft={2}>
+								<Text color="white">{commandExplanation}</Text>
+							</Box>
 						</Box>
 					) : null}
 

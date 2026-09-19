@@ -9,6 +9,7 @@ import {
 	saveCodebaseConfig,
 	type CodebaseConfig,
 } from '../../utils/config/codebaseConfig.js';
+import {getDecisionModelsConfig} from '../../utils/config/decisionModelsConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
@@ -22,6 +23,7 @@ type Props = {
 type ConfigField =
 	| 'enabled'
 	| 'enableAgentReview'
+	| 'agentReviewModel'
 	| 'enableReranking'
 	| 'embeddingSettings'
 	| 'embeddingType'
@@ -96,6 +98,10 @@ export default function CodeBaseConfigScreen({
 	// Configuration state
 	const [enabled, setEnabled] = useState(false);
 	const [enableAgentReview, setEnableAgentReview] = useState(true);
+	const [agentReviewModelId, setAgentReviewModelId] = useState('');
+	const [reviewModelOptions, setReviewModelOptions] = useState<
+		Array<{label: string; value: string}>
+	>([]);
 	const [enableReranking, setEnableReranking] = useState(false);
 	const [embeddingType, setEmbeddingType] = useState<
 		'jina' | 'ollama' | 'gemini' | 'mistral'
@@ -156,6 +162,7 @@ export default function CodeBaseConfigScreen({
 	const allFields: ConfigField[] = [
 		'enabled',
 		'enableAgentReview',
+		'agentReviewModel',
 		'enableReranking',
 		'embeddingSettings',
 		...(embeddingExpanded ? embeddingSubFields : []),
@@ -205,6 +212,22 @@ export default function CodeBaseConfigScreen({
 		const config = loadCodebaseConfig();
 		setEnabled(config.enabled);
 		setEnableAgentReview(config.enableAgentReview);
+		setAgentReviewModelId(config.agentReviewModelId ?? '');
+
+		// Review-model options: the basic LLM plus every decision model managed
+		// on the decision-models page.
+		const decisionConfig = getDecisionModelsConfig();
+		setReviewModelOptions([
+			{label: t.codebaseConfig.agentReviewModelLlm, value: ''},
+			...(decisionConfig?.models ?? []).map(model => ({
+				label:
+					model.name && model.model
+						? `${model.name} (${model.model})`
+						: model.name || model.model || model.id,
+				value: model.id,
+			})),
+		]);
+
 		setEnableReranking(config.enableReranking);
 		setEmbeddingType(config.embedding.type || 'jina');
 		setEmbeddingModelName(config.embedding.modelName);
@@ -313,6 +336,7 @@ export default function CodeBaseConfigScreen({
 			const config: CodebaseConfig = {
 				enabled,
 				enableAgentReview,
+				agentReviewModelId,
 				enableReranking,
 				embedding: {
 					type: embeddingType,
@@ -402,6 +426,54 @@ export default function CodeBaseConfigScreen({
 						</Box>
 					</Box>
 				);
+
+			case 'agentReviewModel': {
+				const selectedOption = reviewModelOptions.find(
+					option => option.value === agentReviewModelId,
+				);
+				const modelDisplay =
+					selectedOption?.label ||
+					(agentReviewModelId
+						? agentReviewModelId
+						: t.codebaseConfig.agentReviewModelLlm);
+
+				return (
+					<Box key={field} flexDirection="column">
+						<Text
+							color={
+								isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+							}
+						>
+							{isActive ? '❯ ' : '  '}
+							{t.codebaseConfig.agentReviewModel}
+						</Text>
+						{isEditing && isActive ? (
+							<Box marginLeft={3}>
+								<ScrollableSelectInput
+									items={reviewModelOptions}
+									initialIndex={Math.max(
+										0,
+										reviewModelOptions.findIndex(
+											option => option.value === agentReviewModelId,
+										),
+									)}
+									isFocused={true}
+									onSelect={item => {
+										setAgentReviewModelId(item.value);
+										setIsEditing(false);
+									}}
+								/>
+							</Box>
+						) : (
+							<Box marginLeft={3}>
+								<Text color={theme.colors.menuSecondary}>
+									{modelDisplay} {t.codebaseConfig.toggleHint}
+								</Text>
+							</Box>
+						)}
+					</Box>
+				);
+			}
 
 			case 'enableReranking':
 				return (
@@ -1134,6 +1206,12 @@ export default function CodeBaseConfigScreen({
 			if (newValue) {
 				setEnableReranking(false);
 			}
+			return;
+		}
+
+		// Open the review-model selector (basic LLM or a configured decision model)
+		if (key.return && currentField === 'agentReviewModel') {
+			setIsEditing(true);
 			return;
 		}
 

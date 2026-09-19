@@ -12,12 +12,14 @@ import {useConfigState} from './configScreen/useConfigState.js';
 import {useConfigInput} from './configScreen/useConfigInput.js';
 import ConfigFieldRenderer from './configScreen/ConfigFieldRenderer.js';
 import ConfigSelectPanel from './configScreen/ConfigSelectPanel.js';
+import DecisionModelConfigScreen from './DecisionModelConfigScreen.js';
 import {
 	ProfileCreateView,
 	ProfileDeleteView,
 	ProfileRenameView,
 	LoadingView,
 	ManualInputView,
+	ConfigScopeSelectView,
 } from './configScreen/ConfigSubViews.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 
@@ -37,6 +39,9 @@ export default function ConfigScreen({
 		loading,
 		manualInputMode,
 		visionConfigMode,
+		configScope,
+		setConfigScope,
+		refreshDecisionModelsSummary,
 		isEditing,
 		currentField,
 		activeProfile,
@@ -69,6 +74,21 @@ export default function ConfigScreen({
 
 	if (manualInputMode) {
 		return <ManualInputView state={state} inlineMode={inlineMode} />;
+	}
+
+	if (configScope === 'select') {
+		return <ConfigScopeSelectView state={state} inlineMode={inlineMode} />;
+	}
+
+	if (configScope === 'decision') {
+		return (
+			<DecisionModelConfigScreen
+				onBack={() => {
+					setConfigScope('select');
+					refreshDecisionModelsSummary();
+				}}
+			/>
+		);
 	}
 
 	const isSelectEditing = isEditing && isSelectField(currentField);

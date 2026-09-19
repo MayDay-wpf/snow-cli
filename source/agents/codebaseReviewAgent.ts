@@ -5,19 +5,52 @@ import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../api/anthropic.js';
 import type {RequestMethod} from '../utils/config/apiConfig.js';
+import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
+import {getDecisionModelsConfig} from '../utils/config/decisionModelsConfig.js';
+import {
+	evaluateRelevance,
+	resolveDecisionModelReviewConfig,
+	type DecisionModelReviewConfig,
+} from '../api/decisionModel.js';
+
+/** One search result as produced by the codebase search service. */
+type ReviewResultItem = {
+	rank: number;
+	filePath: string;
+	startLine: number;
+	endLine: number;
+	content: string;
+	similarityScore: string;
+	location: string;
+};
 
 /**
  * Codebase Review Agent Service
  *
  * Reviews codebase search results to filter out irrelevant items.
- * Uses basicModel for efficient, low-cost relevance checking.
- * Can also suggest better search keywords if results are not relevant.
+ *
+ * Two review backends share this service:
+ * - LLM (default): the active API config's basic model judges relevance with
+ *   function calling and can suggest a refined search query.
+ * - Decision model: when `codebase.agentReviewModelId` selects a configured
+ *   decision model, its per-result verdict is the review; the LLM is only used
+ *   to write a refined query when the verdict calls for a re-search.
+ *
+ * A decision-model failure (transport, protocol, missing configuration) falls
+ * back to the full LLM review, so a search never degrades because of the
+ * review backend.
  */
 export class CodebaseReviewAgent {
 	private modelName: string = '';
 	private requestMethod: RequestMethod = 'chat';
 	private initialized: boolean = false;
 	private readonly MAX_RETRIES = 3;
+
+	/**
+	 * When the decision model removes more than this fraction of the results,
+	 * ask the LLM for a refined query so the search can be retried.
+	 */
+	private readonly DECISION_RESEARCH_THRESHOLD = 0.5;
 
 	/**
 	 * Function calling tool definition for result review
@@ -94,6 +127,8 @@ export class CodebaseReviewAgent {
 	 * Clear cached configuration (called when profile switches)
 	 */
 	clearCache(): void {
+		// The decision model selection is read from the codebase config on every
+		// review, so there is nothing to cache or clear for it here.
 		this.initialized = false;
 		this.modelName = '';
 		this.requestMethod = 'chat';
@@ -116,6 +151,7 @@ export class CodebaseReviewAgent {
 	private async callModel(
 		messages: ChatMessage[],
 		abortSignal?: AbortSignal,
+		useReviewTool: boolean = true,
 	): Promise<{content: string; tool_calls?: any[]}> {
 		let streamGenerator: AsyncGenerator<any, void, unknown>;
 
@@ -125,7 +161,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
-						tools: [this.REVIEW_TOOL],
+						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 					},
@@ -138,7 +174,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
-						tools: [this.REVIEW_TOOL],
+						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true, // Agents 不使用思考功能
 					},
@@ -151,7 +187,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
-						tools: [this.REVIEW_TOOL],
+						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						stream: true,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true, // Agents 不使用思考功能
@@ -166,7 +202,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
-						tools: [this.REVIEW_TOOL],
+						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						stream: true,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true, // Agents 不使用思考功能
@@ -401,6 +437,165 @@ Guidelines:
 	}
 
 	/**
+	 * Resolve the decision model selected for codebase agent review.
+	 *
+	 * Returns `undefined` when nothing is selected, when the selected entry no
+	 * longer exists, or when its request information is incomplete — the caller
+	 * then keeps using the LLM review path.
+	 */
+	private resolveDecisionReviewConfig(): DecisionModelReviewConfig | undefined {
+		try {
+			const config = loadCodebaseConfig();
+			const modelId = config.agentReviewModelId?.trim();
+			if (!modelId) {
+				return undefined;
+			}
+
+			const models = getDecisionModelsConfig();
+			const item = models?.models.find(model => model.id === modelId);
+			if (!item) {
+				logger.warn(
+					`Codebase review agent: Decision model "${modelId}" not found, using LLM review`,
+				);
+				return undefined;
+			}
+
+			const resolved = resolveDecisionModelReviewConfig(item);
+			if (!resolved) {
+				logger.warn(
+					`Codebase review agent: Decision model "${modelId}" is missing API key or model, using LLM review`,
+				);
+				return undefined;
+			}
+
+			return resolved;
+		} catch (error) {
+			logger.warn(
+				'Codebase review agent: Failed to resolve the decision model, using LLM review:',
+				error,
+			);
+			return undefined;
+		}
+	}
+
+	/**
+	 * Review results with the selected decision model.
+	 *
+	 * The decision model's verdict *is* the review, so the LLM is never asked to
+	 * judge the same results again. A decision model cannot write a refined
+	 * query, so when the verdict removes enough results to warrant a re-search
+	 * the LLM is asked for that single job. Any failure returns `null` and the
+	 * caller falls back to the full LLM review.
+	 */
+	private async reviewViaDecisionModel(
+		config: DecisionModelReviewConfig,
+		query: string,
+		results: ReviewResultItem[],
+		abortSignal?: AbortSignal,
+	): Promise<{
+		filteredResults: ReviewResultItem[];
+		removedCount: number;
+		suggestion?: string;
+		reviewFailed: boolean;
+	} | null> {
+		try {
+			const relevantIndices = await evaluateRelevance(
+				config,
+				query,
+				results,
+				abortSignal,
+			);
+
+			const filteredResults = results.filter((_, index) =>
+				relevantIndices.includes(index),
+			);
+			const removedCount = results.length - filteredResults.length;
+
+			let suggestion: string | undefined;
+			const removedFraction =
+				results.length > 0 ? removedCount / results.length : 0;
+			if (removedFraction > this.DECISION_RESEARCH_THRESHOLD) {
+				suggestion = await this.generateRefinedQuery(
+					query,
+					results,
+					abortSignal,
+				);
+			}
+
+			logger.info('Codebase review agent: Decision model review completed', {
+				originalCount: results.length,
+				filteredCount: filteredResults.length,
+				removedCount,
+				hasSuggestion: Boolean(suggestion),
+			});
+
+			return {
+				filteredResults,
+				removedCount,
+				suggestion,
+				reviewFailed: false,
+			};
+		} catch (error) {
+			logger.warn(
+				'Codebase review agent: Decision model review failed, falling back to LLM review:',
+				error,
+			);
+			return null;
+		}
+	}
+
+	/**
+	 * Ask the LLM for a better search query.
+	 *
+	 * The decision model cannot rewrite the query, so this is the only LLM job
+	 * in the decision review path. A failure keeps the decision verdict and
+	 * simply drops the suggestion.
+	 */
+	private async generateRefinedQuery(
+		query: string,
+		results: ReviewResultItem[],
+		abortSignal?: AbortSignal,
+	): Promise<string | undefined> {
+		try {
+			const resultsSummary = results
+				.map(
+					(result, index) =>
+						`[${index + 1}] ${result.filePath} (lines ${result.startLine}-${
+							result.endLine
+						})\n${result.content.slice(0, 400)}`,
+				)
+				.join('\n---\n');
+
+			const messages: ChatMessage[] = [
+				{
+					role: 'user',
+					content: `The developer's code search query returned mostly irrelevant results.\n\nOriginal query: "${query}"\n\nResults:\n${resultsSummary}\n\nWrite a better search query that is more likely to find the code they are actually looking for. Output ONLY the new search query on a single line: no quotes, no explanation, no markdown, no JSON. Keep the same language as the original query. If no better query exists, repeat the original query unchanged.`,
+				},
+			];
+
+			const response = await this.callModel(messages, abortSignal, false);
+			const refined = response.content
+				.split('\n')
+				.map(line => line.trim())
+				.find(line => line.length > 0)
+				?.replace(/^["'`]+|["'`]+$/g, '')
+				.trim();
+
+			if (!refined || refined === query) {
+				return undefined;
+			}
+
+			return refined;
+		} catch (error) {
+			logger.warn(
+				'Codebase review agent: Failed to generate a refined query, keeping the decision verdict:',
+				error,
+			);
+			return undefined;
+		}
+	}
+
+	/**
 	 * Review search results and filter out irrelevant ones
 	 * With retry mechanism and graceful degradation
 	 *
@@ -429,6 +624,21 @@ Guidelines:
 		highConfidenceFiles?: string[];
 		reviewFailed?: boolean;
 	}> {
+		// A decision model selected for review replaces the generative review
+		// entirely; any failure falls through to the LLM review below.
+		const decisionConfig = this.resolveDecisionReviewConfig();
+		if (decisionConfig) {
+			const decisionReview = await this.reviewViaDecisionModel(
+				decisionConfig,
+				query,
+				results,
+				abortSignal,
+			);
+			if (decisionReview) {
+				return decisionReview;
+			}
+		}
+
 		const available = await this.isAvailable();
 
 		if (!available) {

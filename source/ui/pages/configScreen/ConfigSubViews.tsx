@@ -273,6 +273,81 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 	);
 }
 
+/**
+ * API 配置页的顶层选择视图：先选「配置 LLM 模型」还是「决策模型配置」。
+ * 默认光标停在 LLM（首选），按键交互由 useConfigInput 处理。
+ */
+export function ConfigScopeSelectView({state, inlineMode}: SubViewProps) {
+	const {t, theme, configScopeIndex, activeDecisionModelName} = state;
+
+	const options = [
+		{
+			label: t.configScreen.llmConfigEntry,
+			subtitle: t.configScreen.llmConfigEntrySubtitle,
+		},
+		{
+			label: t.configScreen.decisionModelConfig,
+			subtitle: t.configScreen.decisionModelConfigSubtitle,
+		},
+	];
+
+	return (
+		<Box flexDirection="column" padding={1}>
+			{!inlineMode && (
+				<Box
+					marginBottom={1}
+					borderStyle="double"
+					borderColor={theme.colors.menuInfo}
+					paddingX={2}
+				>
+					<Box flexDirection="column">
+						<Gradient name="rainbow">
+							{t.configScreen.scopeSelectTitle}
+						</Gradient>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.configScreen.scopeSelectSubtitle}
+						</Text>
+					</Box>
+				</Box>
+			)}
+
+			<Box flexDirection="column" marginBottom={1}>
+				{options.map((option, index) => {
+					const isActive = index === configScopeIndex;
+					return (
+						<Box key={option.label} flexDirection="column" marginBottom={1}>
+							<Text
+								color={
+									isActive ? theme.colors.menuSelected : theme.colors.menuNormal
+								}
+								bold={isActive}
+							>
+								{isActive ? '❯ ' : '  '}
+								{option.label}
+							</Text>
+							<Box marginLeft={3} flexDirection="column">
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{option.subtitle}
+								</Text>
+								{index === 1 && (
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{t.decisionModels.activeModel}{' '}
+										{activeDecisionModelName || t.decisionModels.none}
+									</Text>
+								)}
+							</Box>
+						</Box>
+					);
+				})}
+			</Box>
+
+			<Box marginTop={1}>
+				<Alert variant="info">{t.configScreen.scopeSelectHint}</Alert>
+			</Box>
+		</Box>
+	);
+}
+
 type ResponsesReasoningModeSelectProps = {
 	value: ResponsesReasoningMode | undefined;
 	noneLabel: string;

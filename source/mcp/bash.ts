@@ -790,7 +790,7 @@ export const mcpTools = [
 	{
 		name: 'terminal-execute',
 		description:
-			'Execute terminal commands like npm, git, build scripts, etc. **REMOTE SSH SUPPORT**: When workingDirectory is a remote SSH path (ssh://...), commands are automatically executed on the remote server via SSH - DO NOT wrap commands with "ssh user@host" yourself, just provide the raw command (e.g., "cat /etc/os-release" instead of "ssh root@host cat /etc/os-release"). BEST PRACTICE: For file modifications, prefer filesystem-edit/filesystem-create tools first. Primary use cases: (1) Running build/test/lint scripts, (2) Version control operations, (3) Package management, (4) System utilities.',
+			'Execute terminal commands like npm, git, build scripts, etc. **REMOTE SSH SUPPORT**: When workingDirectory is a remote SSH path (ssh://...), commands are automatically executed on the remote server via SSH - DO NOT wrap commands with "ssh user@host" yourself, just provide the raw command (e.g., "cat /etc/os-release" instead of "ssh root@host cat /etc/os-release"). BEST PRACTICE: For file modifications, prefer filesystem-edit/filesystem-create tools first. Primary use cases: (1) Running build/test/lint scripts, (2) Version control operations, (3) Package management, (4) System utilities. ALWAYS also fill the `explanation` field so the user can understand what the command is going to do before it runs.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -798,6 +798,11 @@ export const mcpTools = [
 					type: 'string',
 					description:
 						'Terminal command to execute directly. For remote SSH working directories, provide raw commands without ssh wrapper - the system handles SSH connection automatically.',
+				},
+				explanation: {
+					type: 'string',
+					description:
+						'REQUIRED: A short, user-facing explanation (one sentence, written in the SAME language as the user) telling the user WHAT this command does and WHY it is needed. It is displayed in the command confirmation prompt and in the tool result preview, so use plain language and do NOT just repeat the command text.',
 				},
 				workingDirectory: {
 					type: 'string',
@@ -822,7 +827,12 @@ export const mcpTools = [
 					default: false,
 				},
 			},
-			required: ['command', 'workingDirectory', 'enableAiSummary'],
+			required: [
+				'command',
+				'explanation',
+				'workingDirectory',
+				'enableAiSummary',
+			],
 		},
 	},
 ];

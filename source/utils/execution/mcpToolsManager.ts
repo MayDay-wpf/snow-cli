@@ -1738,6 +1738,17 @@ export async function executeMCPTool(
 							args.isInteractive ?? false, // Pass isInteractive flag for AI-determined interactive commands
 							args.enableAiSummary,
 						);
+
+						// Attach the AI-provided command explanation to the execution result
+						// so the UI (tool result preview) can show what the command did.
+						if (
+							result &&
+							typeof result === 'object' &&
+							typeof args.explanation === 'string' &&
+							args.explanation.trim()
+						) {
+							result.explanation = args.explanation.trim();
+						}
 					} finally {
 						// Clear execution state
 						setTerminalExecutionState({

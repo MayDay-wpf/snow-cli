@@ -119,6 +119,7 @@ function migrateScope(
 		};
 		copyTopLevel('enabled', data['enabled']);
 		copyTopLevel('enableAgentReview', data['enableAgentReview']);
+		copyTopLevel('agentReviewModelId', data['agentReviewModelId']);
 		copyTopLevel('enableReranking', data['enableReranking']);
 		copyTopLevel('batch', data['batch']);
 		copyTopLevel('chunking', data['chunking']);
@@ -275,7 +276,6 @@ function migrateScope(
 		}
 		return false;
 	});
-
 
 	if (settings.goal?.defaultTokenBudgetM === undefined) {
 		settings.goal = {

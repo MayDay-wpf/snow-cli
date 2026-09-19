@@ -188,6 +188,8 @@ export type TranslationKeys = {
 		scrollHint: string;
 		codebaseEnabled: string;
 		agentReview: string;
+		agentReviewModel: string;
+		agentReviewModelLlm: string;
 		enabled: string;
 		disabled: string;
 		toggleHint: string;
@@ -413,6 +415,46 @@ export type TranslationKeys = {
 		modelGroup: string;
 		tokenTimeoutGroup: string;
 		groupExpandHint: string;
+		scopeSelectTitle: string;
+		scopeSelectSubtitle: string;
+		llmConfigEntry: string;
+		llmConfigEntrySubtitle: string;
+		scopeSelectHint: string;
+		decisionModelConfig: string;
+		decisionModelConfigSubtitle: string;
+	};
+	// Decision Models Screen
+	decisionModels: {
+		title: string;
+		subtitle: string;
+		activeModel: string;
+		none: string;
+		noModelsConfigured: string;
+		availableModels: string;
+		actions: string;
+		activate: string;
+		deactivate: string;
+		edit: string;
+		delete: string;
+		addNew: string;
+		escBack: string;
+		navigationHint: string;
+		addNewTitle: string;
+		editTitle: string;
+		nameLabel: string;
+		namePlaceholder: string;
+		baseUrlLabel: string;
+		baseUrlModeLabel: string;
+		apiKeyLabel: string;
+		modelLabel: string;
+		untitled: string;
+		notSet: string;
+		editingHint: string;
+		selectHint: string;
+		confirmDelete: string;
+		deleteConfirmMessage: string;
+		confirmHint: string;
+		saveError: string;
 	};
 	// Custom Headers Screen
 	customHeaders: {
@@ -1874,6 +1916,7 @@ export type TranslationKeys = {
 		reason: string;
 		requiresConfirmation: string;
 		arguments: string;
+		commandExplanation: string;
 		commandPagerTitle: string;
 		commandPagerStatus: string;
 		commandPagerHint: string;

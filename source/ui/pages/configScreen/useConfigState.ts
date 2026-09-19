@@ -27,10 +27,12 @@ import {
 	loadProfile,
 	type ConfigProfile,
 } from '../../../utils/config/configManager.js';
+import {getDecisionModelsConfig} from '../../../utils/config/decisionModelsConfig.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {
 	type ConfigField,
+	type ConfigScope,
 	type ProfileMode,
 	type RequestMethodOption,
 	MAX_VISIBLE_FIELDS,
@@ -151,6 +153,15 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [manualInputMode, setManualInputMode] = useState(false);
 	const [manualInputValue, setManualInputValue] = useState('');
 	const [visionConfigMode, setVisionConfigMode] = useState(false);
+	// 顶层作用域：先选择配置 LLM 模型还是决策模型，再分别进入各自页面。
+	// 从 ProfileEditPanel 指定 targetProfileName 进入时跳过选择页，直接进 LLM 配置。
+	const [configScope, setConfigScope] = useState<ConfigScope>(
+		targetProfileName ? 'llm' : 'select',
+	);
+	const [configScopeIndex, setConfigScopeIndex] = useState(0);
+	const [activeDecisionModelName, setActiveDecisionModelName] = useState('');
+	// 指定 targetProfileName 时不展示选择页（Esc 语义保持为直接返回上一层）
+	const scopeSelectEnabled = !targetProfileName;
 
 	// Group expansion state (collapsible categories)
 	const [apiConnectionExpanded, setApiConnectionExpanded] = useState(false);
@@ -394,6 +405,15 @@ export function useConfigState(options?: UseConfigStateOptions) {
 
 	// --- Data loading ---
 
+	/** 重新读取决策模型的激活项名称，供前置入口展示。 */
+	const refreshDecisionModelsSummary = () => {
+		const decisionConfig = getDecisionModelsConfig();
+		const active = decisionConfig?.models.find(
+			model => model.id === decisionConfig.active,
+		);
+		setActiveDecisionModelName(active?.name || '');
+	};
+
 	const loadProfilesAndConfig = () => {
 		const loadedProfiles = getAllProfiles();
 		setProfiles(loadedProfiles);
@@ -471,6 +491,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		// 当编辑指定 profile 时，把 activeProfile 状态指向目标 profile，
 		// 让 UI（标题/保存逻辑等）按目标 profile 显示，但不实际切换全局 active。
 		setActiveProfile(targetProfileName ?? getActiveProfileName());
+		refreshDecisionModelsSummary();
 	};
 
 	const loadModels = async () => {
@@ -1138,6 +1159,13 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setManualInputValue,
 		visionConfigMode,
 		setVisionConfigMode,
+		configScope,
+		setConfigScope,
+		configScopeIndex,
+		setConfigScopeIndex,
+		scopeSelectEnabled,
+		activeDecisionModelName,
+		refreshDecisionModelsSummary,
 		// Group expansion
 		apiConnectionExpanded,
 		setApiConnectionExpanded,

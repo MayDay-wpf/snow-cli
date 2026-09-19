@@ -65,6 +65,14 @@ export const isGroupField = (field: ConfigField) =>
 
 export type ProfileMode = 'normal' | 'creating' | 'renaming' | 'deleting';
 
+/**
+ * API 配置页的顶层作用域。
+ * select = 顶部选择页（配置 LLM 模型 / 决策模型配置）
+ * llm = LLM 模型配置（原有的字段列表）
+ * decision = 决策模型配置（独立页面）
+ */
+export type ConfigScope = 'select' | 'llm' | 'decision';
+
 export type ConfigScreenProps = {
 	onBack: () => void;
 	onSave: () => void;

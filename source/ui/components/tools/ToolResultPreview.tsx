@@ -229,6 +229,27 @@ function renderSubAgentPreview(data: any, _maxLines: number, theme: Theme) {
 	);
 }
 
+/**
+ * Render the AI-provided command explanation (terminal-execute `explanation` param).
+ * Returns null when no explanation is available.
+ */
+function renderCommandExplanation(explanation: string | null, theme: Theme) {
+	if (!explanation) {
+		return null;
+	}
+
+	return (
+		<Box flexDirection="column">
+			<Text color={theme.colors.menuSecondary} dimColor>
+				├─ explanation:
+			</Text>
+			<Box marginLeft={2}>
+				<Text color={theme.colors.text}>{explanation}</Text>
+			</Box>
+		</Box>
+	);
+}
+
 function renderTerminalExecutePreview(
 	data: any,
 	maxLines: number,
@@ -246,6 +267,12 @@ function renderTerminalExecutePreview(
 		return {lines: lines.slice(0, limit), truncated: true};
 	};
 
+	// AI 通过 explanation 参数说明这条命令要做什么
+	const explanation =
+		typeof data.explanation === 'string' && data.explanation.trim()
+			? data.explanation.trim()
+			: null;
+
 	// 对于子代理内部的 terminal-execute：需要展示可读的执行结果（stdout/stderr/exitCode）
 	// 但要限制行数，避免刷屏
 	if (isSubAgentInternal) {
@@ -254,6 +281,7 @@ function renderTerminalExecutePreview(
 
 		return (
 			<Box flexDirection="column" marginLeft={2}>
+				{renderCommandExplanation(explanation, theme)}
 				{data.command && (
 					<Box flexDirection="column">
 						<Text color={theme.colors.menuSecondary} dimColor>
@@ -329,7 +357,8 @@ function renderTerminalExecutePreview(
 		// Success case - show stdout directly
 		if (!hasStdout) {
 			return (
-				<Box marginLeft={2}>
+				<Box flexDirection="column" marginLeft={2}>
+					{renderCommandExplanation(explanation, theme)}
 					<Text color={theme.colors.success} dimColor>
 						└─ ✓ Exit code: {data.exitCode}
 					</Text>
@@ -339,6 +368,7 @@ function renderTerminalExecutePreview(
 
 		return (
 			<Box flexDirection="column" marginLeft={2}>
+				{renderCommandExplanation(explanation, theme)}
 				<Box flexDirection="column">
 					<Text color={theme.colors.success} dimColor>
 						├─ command:
@@ -372,6 +402,8 @@ function renderTerminalExecutePreview(
 	// Error case - show full details including stderr
 	return (
 		<Box flexDirection="column" marginLeft={2}>
+			{renderCommandExplanation(explanation, theme)}
+
 			{/* Command */}
 			<Box flexDirection="column">
 				<Text color={theme.colors.menuSecondary} dimColor>

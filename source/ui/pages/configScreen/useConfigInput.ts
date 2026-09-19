@@ -85,6 +85,11 @@ export function useConfigInput(
 		setVisionModel,
 		visionConfigMode,
 		setVisionConfigMode,
+		configScope,
+		setConfigScope,
+		configScopeIndex,
+		setConfigScopeIndex,
+		scopeSelectEnabled,
 		systemPromptId,
 		// Group expansion
 		apiConnectionExpanded,
@@ -102,6 +107,26 @@ export function useConfigInput(
 	} = state;
 
 	useInput((rawInput, key) => {
+		// 决策模型配置是独立子页面，按键由 DecisionModelConfigScreen 自行处理，
+		// 这里必须整体让出，避免同一个按键被两个组件同时消费。
+		if (configScope === 'decision') {
+			return;
+		}
+
+		// 顶层选择页：选择「配置 LLM 模型」还是「决策模型配置」
+		if (configScope === 'select') {
+			if (key.escape) {
+				onBack();
+			} else if (key.upArrow) {
+				setConfigScopeIndex(prev => (prev > 0 ? prev - 1 : 1));
+			} else if (key.downArrow) {
+				setConfigScopeIndex(prev => (prev < 1 ? prev + 1 : 0));
+			} else if (key.return) {
+				setConfigScope(configScopeIndex === 0 ? 'llm' : 'decision');
+			}
+			return;
+		}
+
 		const input = stripFocusArtifacts(rawInput);
 
 		if (!input && isFocusEventInput(rawInput)) {
@@ -294,7 +319,14 @@ export function useConfigInput(
 				setIsEditing(false);
 				return;
 			}
-			saveConfiguration().then(() => onBack());
+			saveConfiguration().then(() => {
+				// 有选择页时先回到选择页，否则直接返回上一层（ProfileEditPanel 场景）
+				if (scopeSelectEnabled) {
+					setConfigScope('select');
+				} else {
+					onBack();
+				}
+			});
 		} else if (key.return) {
 			handleEnterKey();
 		} else if (input === 'm' && !isEditing) {

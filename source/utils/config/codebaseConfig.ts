@@ -5,8 +5,8 @@ import {readSettings, updateSettings} from './unifiedSettings.js';
  *
  * Storage layout (now unified into `settings.json`):
  *   - Project-level fields (enabled / batch / chunking / enableAgentReview /
- *     enableReranking) live in `<cwd>/.snow/settings.json` under
- *     `settings.codebase`.
+ *     agentReviewModelId / enableReranking) live in
+ *     `<cwd>/.snow/settings.json` under `settings.codebase`.
  *   - Embedding & reranking provider settings are shared across projects and
  *     live in `~/.snow/settings.json` under `settings.codebase.embedding` /
  *     `settings.codebase.reranking`.
@@ -14,6 +14,13 @@ import {readSettings, updateSettings} from './unifiedSettings.js';
 export interface CodebaseConfig {
 	enabled: boolean;
 	enableAgentReview: boolean;
+	/**
+	 * Agent 审查所使用的决策模型 id。
+	 *
+	 * '' 表示使用基础 LLM 模型做审查（默认）；非空时必须指向
+	 * `~/.snow/decision-models.json` 中已配置的条目，否则回退到 LLM 审查。
+	 */
+	agentReviewModelId: string;
 	enableReranking: boolean;
 	embedding: {
 		type?: 'jina' | 'ollama' | 'gemini' | 'mistral'; // 请求类型，默认为jina
@@ -44,6 +51,7 @@ export interface CodebaseConfig {
 const DEFAULT_CONFIG: CodebaseConfig = {
 	enabled: false,
 	enableAgentReview: true,
+	agentReviewModelId: '',
 	enableReranking: false,
 	embedding: {
 		type: 'jina', // 默认使用jina
@@ -106,6 +114,8 @@ export const loadCodebaseConfig = (
 			enabled: projectCb.enabled ?? DEFAULT_CONFIG.enabled,
 			enableAgentReview:
 				projectCb.enableAgentReview ?? DEFAULT_CONFIG.enableAgentReview,
+			agentReviewModelId:
+				projectCb.agentReviewModelId ?? DEFAULT_CONFIG.agentReviewModelId,
 			enableReranking:
 				projectCb.enableReranking ?? DEFAULT_CONFIG.enableReranking,
 			embedding,
@@ -158,6 +168,7 @@ export const saveCodebaseConfig = (
 				const cb = settings.codebase ?? {};
 				cb.enabled = config.enabled;
 				cb.enableAgentReview = config.enableAgentReview;
+				cb.agentReviewModelId = config.agentReviewModelId;
 				cb.enableReranking = config.enableReranking;
 				cb.batch = config.batch;
 				cb.chunking = config.chunking;
