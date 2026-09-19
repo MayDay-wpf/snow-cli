@@ -249,6 +249,12 @@ export function useCommandPanel(
 				description: t.commandPanel.commands.usage,
 			},
 			{
+				name: 'cleanup',
+				description:
+					t.commandPanel.commands.cleanup ||
+					'Clean up ~/.snow data (sessions, snapshots, logs)',
+			},
+			{
 				name: 'backend',
 				description:
 					t.commandPanel.commands.backend || 'Show background processes',

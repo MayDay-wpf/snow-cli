@@ -850,6 +850,7 @@ type CommandHandlerOptions = {
 	setShowRoleSubagentDeletion: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowRoleSubagentList: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowWorkingDirPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowCleanupPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowReviewCommitPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowDiffReviewPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPermissionsPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1182,6 +1183,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setShowTelemetryPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
 				options.setShowMcpPanel(true);
+				const commandMessage: Message = {
+					role: 'command',
+					content: '',
+					commandName: commandName,
+				};
+				options.setMessages(prev => [...prev, commandMessage]);
+			} else if (result.success && result.action === 'showCleanupPanel') {
+				options.setShowCleanupPanel(true);
 				const commandMessage: Message = {
 					role: 'command',
 					content: '',

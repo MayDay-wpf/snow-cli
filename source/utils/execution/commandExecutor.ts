@@ -21,6 +21,7 @@ export interface CommandResult {
 		| 'showUsagePanel'
 		| 'showBackgroundPanel'
 		| 'showWorkingDirPanel'
+		| 'showCleanupPanel'
 		| 'home'
 		| 'review'
 		| 'showReviewCommitPanel'

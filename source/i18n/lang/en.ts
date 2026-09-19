@@ -870,6 +870,8 @@ export const en: TranslationKeys = {
 			roleSubagent:
 				'Customize sub-agent prompts with ROLE-{name}.md files. Use -l to list, -d to delete',
 			usage: 'View token usage statistics with interactive charts',
+			cleanup:
+				'Clean up ~/.snow data: delete sessions, snapshots, logs by project or by age',
 			export: 'Export chat conversation to text file with save dialog',
 			config:
 				'Export or import Snow CLI YAML configuration. Usage: /config <export|import>',
@@ -2294,6 +2296,48 @@ export const en: TranslationKeys = {
 		confirmHint: 'Y to confirm, N to cancel',
 		// Alert messages
 		alertDefaultCannotDelete: 'Default directory cannot be deleted',
+	},
+	cleanupPanel: {
+		title: 'Cleanup ~/.snow',
+		loading: 'Scanning disk usage...',
+		totalUsage: 'Total disk usage: {size}',
+		menu: {
+			byProject: 'Clean up by project (sessions, snapshots...)',
+			byAge: 'Clean up by age (logs, usage, old data)',
+		},
+		menuHint: '↑↓ Select • Enter Open • ESC Close',
+		byProjectHint:
+			'↑↓ Navigate • Space Mark/Unmark • A Mark all • D Delete marked • ESC Back',
+		noProjects: 'No project data found',
+		markedProjects: '{count} project(s) marked for deletion',
+		byAgeHint:
+			'↑↓ Select days • D Delete data older than the selected age • ESC Back',
+		olderThan: 'Older than {days} days',
+		filesCount: '{count} files',
+		ageIncludes:
+			'Includes: logs, usage statistics, tasks, exports, sessions, snapshots, history, todos',
+		ageSelected: 'Selected: older than {days} days • about {size} to delete',
+		confirmTitle: 'Confirm Cleanup',
+		confirmProjects: 'Delete all data for {count} project(s): {names}?',
+		confirmAge: 'Delete all data older than {days} days (about {size})?',
+		confirmHint: 'Y to confirm, N to cancel',
+		deleting: 'Cleaning up...',
+		resultTitle: 'Cleanup Complete',
+		resultSummary: 'Deleted {files} file(s), freed {size}',
+		resultErrors: '{count} error(s) occurred:',
+		resultHint: 'Press any key to return to menu',
+		categories: {
+			sessions: 'Sessions',
+			snapshots: 'Snapshots',
+			history: 'History',
+			todos: 'TODOs',
+			goals: 'Goals',
+			teams: 'Teams',
+			logs: 'Logs',
+			tasks: 'Tasks',
+			usage: 'Usage',
+			exports: 'Exports',
+		},
 	},
 	diffReviewPanel: {
 		title: 'Diff Review',

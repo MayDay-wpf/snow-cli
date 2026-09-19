@@ -793,6 +793,7 @@ export type TranslationKeys = {
 			role: string;
 			roleSubagent: string;
 			usage: string;
+			cleanup: string;
 			backend: string;
 			loop: string;
 			profiles: string;
@@ -2016,6 +2017,46 @@ export type TranslationKeys = {
 		confirmHint: string;
 		// Alert messages
 		alertDefaultCannotDelete: string;
+	};
+	// Cleanup Panel (~/.snow data cleanup, Issue #208)
+	cleanupPanel: {
+		title: string;
+		loading: string;
+		totalUsage: string;
+		menu: {
+			byProject: string;
+			byAge: string;
+		};
+		menuHint: string;
+		byProjectHint: string;
+		noProjects: string;
+		markedProjects: string;
+		byAgeHint: string;
+		olderThan: string;
+		filesCount: string;
+		ageIncludes: string;
+		ageSelected: string;
+		confirmTitle: string;
+		confirmProjects: string;
+		confirmAge: string;
+		confirmHint: string;
+		deleting: string;
+		resultTitle: string;
+		resultSummary: string;
+		resultErrors: string;
+		resultHint: string;
+		categories: {
+			sessions: string;
+			snapshots: string;
+			history: string;
+			todos: string;
+			goals: string;
+			teams: string;
+			logs: string;
+			tasks: string;
+			usage: string;
+			exports: string;
+		};
 	};
 	diffReviewPanel: {
 		title: string;

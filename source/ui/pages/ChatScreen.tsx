@@ -404,6 +404,7 @@ export default function ChatScreen({
 		setShowRoleSubagentDeletion: panelState.setShowRoleSubagentDeletion,
 		setShowRoleSubagentList: panelState.setShowRoleSubagentList,
 		setShowWorkingDirPanel: panelState.setShowWorkingDirPanel,
+		setShowCleanupPanel: panelState.setShowCleanupPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
 		setShowConnectionPanel: panelState.setShowConnectionPanel,
@@ -527,6 +528,7 @@ export default function ChatScreen({
 		panelState.showRoleSubagentDeletion ||
 		panelState.showRoleSubagentList ||
 		panelState.showWorkingDirPanel ||
+		panelState.showCleanupPanel ||
 		panelState.showBranchPanel ||
 		panelState.showConnectionPanel ||
 		panelState.showTelemetryPanel ||

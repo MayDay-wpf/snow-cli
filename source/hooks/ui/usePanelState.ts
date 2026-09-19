@@ -24,6 +24,7 @@ export type PanelState = {
 	showRoleSubagentDeletion: boolean;
 	showRoleSubagentList: boolean;
 	showWorkingDirPanel: boolean;
+	showCleanupPanel: boolean;
 	showReviewCommitPanel: boolean;
 	showBranchPanel: boolean;
 	showProfilePanel: boolean;
@@ -76,6 +77,7 @@ export type PanelActions = {
 	setShowRoleSubagentDeletion: Dispatch<SetStateAction<boolean>>;
 	setShowRoleSubagentList: Dispatch<SetStateAction<boolean>>;
 	setShowWorkingDirPanel: Dispatch<SetStateAction<boolean>>;
+	setShowCleanupPanel: Dispatch<SetStateAction<boolean>>;
 	setShowReviewCommitPanel: Dispatch<SetStateAction<boolean>>;
 	setShowBranchPanel: Dispatch<SetStateAction<boolean>>;
 	setShowProfilePanel: Dispatch<SetStateAction<boolean>>;
@@ -125,6 +127,7 @@ export function usePanelState(): PanelState & PanelActions {
 		useState(false);
 	const [showRoleSubagentList, setShowRoleSubagentList] = useState(false);
 	const [showWorkingDirPanel, setShowWorkingDirPanel] = useState(false);
+	const [showCleanupPanel, setShowCleanupPanel] = useState(false);
 	const [showReviewCommitPanel, setShowReviewCommitPanel] = useState(false);
 	const [showBranchPanel, setShowBranchPanel] = useState(false);
 	const [showProfilePanel, setShowProfilePanel] = useState(false);
@@ -328,6 +331,12 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let WorkingDirectoryPanel handle ESC
 		}
 
+		// CleanupPanel handles its own ESC key logic internally
+		// Don't close it here - let the panel decide when to close
+		if (showCleanupPanel) {
+			return false; // Let CleanupPanel handle ESC
+		}
+
 		if (showReviewCommitPanel) {
 			setShowReviewCommitPanel(false);
 			return true;
@@ -425,6 +434,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showRoleSubagentDeletion ||
 			showRoleSubagentList ||
 			showWorkingDirPanel ||
+			showCleanupPanel ||
 			showReviewCommitPanel ||
 			showBranchPanel ||
 			showProfilePanel ||
@@ -461,6 +471,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showRoleSubagentDeletion,
 		showRoleSubagentList,
 		showWorkingDirPanel,
+		showCleanupPanel,
 		showReviewCommitPanel,
 		showBranchPanel,
 		showProfilePanel,
@@ -499,6 +510,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowRoleSubagentDeletion,
 		setShowRoleSubagentList,
 		setShowWorkingDirPanel,
+		setShowCleanupPanel,
 		setShowReviewCommitPanel,
 		setShowBranchPanel,
 		setShowProfilePanel,

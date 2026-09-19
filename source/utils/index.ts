@@ -2,6 +2,7 @@ import {Command} from '../types/index.js';
 
 // Import commands to register them
 import './commands/addDir.js';
+import './commands/cleanup.js';
 import './commands/agent.js';
 import './commands/pause.js';
 import './commands/continue.js';

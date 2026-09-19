@@ -8,7 +8,8 @@ export function useChatScreenCommands(workingDirectory: string) {
 		let isMounted = true;
 
 		Promise.all([
-			import('../../../utils/commands/clear.js'),
+			import('../../../utils/commands/addDir.js'),
+			import('../../../utils/commands/cleanup.js'),
 			import('../../../utils/commands/delSession.js'),
 			import('../../../utils/commands/profiles.js'),
 			import('../../../utils/commands/hybridCompress.js'),

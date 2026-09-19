@@ -131,6 +131,7 @@ export default function ChatScreenPanels({
 				showRoleSubagentDeletion={panelState.showRoleSubagentDeletion}
 				showRoleSubagentList={panelState.showRoleSubagentList}
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
+				showCleanupPanel={panelState.showCleanupPanel}
 				showBranchPanel={panelState.showBranchPanel}
 				showConnectionPanel={panelState.showConnectionPanel}
 				showTelemetryPanel={panelState.showTelemetryPanel}
@@ -149,6 +150,7 @@ export default function ChatScreenPanels({
 				setShowRoleSubagentDeletion={panelState.setShowRoleSubagentDeletion}
 				setShowRoleSubagentList={panelState.setShowRoleSubagentList}
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
+				setShowCleanupPanel={panelState.setShowCleanupPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
 				setShowConnectionPanel={panelState.setShowConnectionPanel}
 				setShowTelemetryPanel={panelState.setShowTelemetryPanel}

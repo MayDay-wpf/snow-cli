@@ -13,6 +13,7 @@ import {RoleSubagentCreationPanel} from './RoleSubagentCreationPanel.js';
 import {RoleSubagentDeletionPanel} from './RoleSubagentDeletionPanel.js';
 import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
+import CleanupPanel from './CleanupPanel.js';
 import {BranchPanel} from './BranchPanel.js';
 import {ConnectionPanel} from './ConnectionPanel.js';
 import TelemetryPanel from './TelemetryPanel.js';
@@ -50,6 +51,7 @@ type PanelsManagerProps = {
 	showRoleSubagentDeletion: boolean;
 	showRoleSubagentList: boolean;
 	showWorkingDirPanel: boolean;
+	showCleanupPanel: boolean;
 	showBranchPanel: boolean;
 	showConnectionPanel: boolean;
 	showTelemetryPanel: boolean;
@@ -68,6 +70,7 @@ type PanelsManagerProps = {
 	setShowRoleSubagentDeletion: (show: boolean) => void;
 	setShowRoleSubagentList: (show: boolean) => void;
 	setShowWorkingDirPanel: (show: boolean) => void;
+	setShowCleanupPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
 	setShowConnectionPanel: (show: boolean) => void;
 	setShowTelemetryPanel: (show: boolean) => void;
@@ -123,6 +126,7 @@ export default function PanelsManager({
 	showRoleSubagentDeletion,
 	showRoleSubagentList,
 	showWorkingDirPanel,
+	showCleanupPanel,
 	showBranchPanel,
 	showConnectionPanel,
 	showTelemetryPanel,
@@ -141,6 +145,7 @@ export default function PanelsManager({
 	setShowRoleSubagentDeletion,
 	setShowRoleSubagentList,
 	setShowWorkingDirPanel,
+	setShowCleanupPanel,
 	setShowBranchPanel,
 	setShowConnectionPanel,
 	setShowTelemetryPanel,
@@ -342,6 +347,13 @@ export default function PanelsManager({
 					<WorkingDirectoryPanel
 						onClose={() => setShowWorkingDirPanel(false)}
 					/>
+				</Box>
+			)}
+
+			{/* Show cleanup panel if active */}
+			{showCleanupPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<CleanupPanel onClose={() => setShowCleanupPanel(false)} />
 				</Box>
 			)}
 
