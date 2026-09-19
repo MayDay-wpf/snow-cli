@@ -19,8 +19,6 @@ import {HookStatusDisplay} from '../../components/special/HookStatusDisplay.js';
 import type {HookStatusEvent} from '../../../utils/execution/hookStatusEvents.js';
 import {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {CompressionStatus as CompressionStatusType} from '../../components/compression/CompressionStatus.js';
-import {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
-import type {ThinkingStatus as ThinkingStatusType} from '../../components/chat/ThinkingStatus.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {
@@ -52,7 +50,6 @@ type Props = {
 	handleUserQuestionAnswer: (result: any) => void;
 	setHookError: React.Dispatch<React.SetStateAction<HookErrorDetails | null>>;
 	compressionStatus: CompressionStatusType | null;
-	thinkingStatus: ThinkingStatusType | null;
 };
 
 export default function ChatScreenConversationView({
@@ -77,7 +74,6 @@ export default function ChatScreenConversationView({
 	handleUserQuestionAnswer,
 	setHookError,
 	compressionStatus,
-	thinkingStatus,
 }: Props) {
 	// Pre-compute parallel group edges for non-streaming messages.
 	// This replaces the old index-based lookups inside MessageRenderer,
@@ -139,15 +135,6 @@ export default function ChatScreenConversationView({
 				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
 					<CompressionStatus
 						status={compressionStatus}
-						terminalWidth={terminalWidth}
-					/>
-				</Box>
-			)}
-
-			{thinkingStatus && thinkingStatus.isActive && showThinking && (
-				<Box paddingX={1} width={terminalWidth} marginBottom={1}>
-					<ThinkingStatus
-						status={thinkingStatus}
 						terminalWidth={terminalWidth}
 					/>
 				</Box>

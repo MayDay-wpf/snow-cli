@@ -125,7 +125,9 @@ jobs:
 
             ### What's New
 
-            - Add session ID support to the custom request header plugin, optimize request context processing
+            - Add decision model configuration support: configure TypeSafe System One (Jev) decision models and use them during codebase agent review to judge search-result relevance
+            - Add a `/cleanup` panel for managing `~/.snow` data: clean per-project data (sessions / snapshots / history / todos / goals / teams) or global data (logs / tasks / usage / exports) older than a chosen age, with live size statistics and automatic empty-directory reclamation
+            - Optimize the thinking status panel: remove the redundant glow title and skip rendering empty thinking panels
 
             ### Installation
             ```bash

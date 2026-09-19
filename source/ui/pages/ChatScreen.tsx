@@ -657,7 +657,6 @@ export default function ChatScreen({
 				handleUserQuestionAnswer={handleUserQuestionAnswer}
 				setHookError={setHookError}
 				compressionStatus={compressionStatus}
-				thinkingStatus={thinkingStatus}
 			/>
 
 			<ChatScreenPanels
@@ -807,6 +806,10 @@ export default function ChatScreen({
 					retryStatus={streamingState.retryStatus}
 					codebaseSearchStatus={streamingState.codebaseSearchStatus}
 					isReasoning={streamingState.isReasoning}
+					// 思考内容只做行内单行预览，不再使用独立面板，避免 footer 高度跳变
+					thinkingPreview={
+						showThinking ? thinkingStatus?.content ?? null : null
+					}
 					streamTokenCount={streamingState.streamTokenCount}
 					elapsedSeconds={streamingState.elapsedSeconds}
 					currentModel={streamingState.currentModel}

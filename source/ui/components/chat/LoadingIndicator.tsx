@@ -1,10 +1,11 @@
-import React, {useRef, useSyncExternalStore} from 'react';
+import React, {useMemo, useRef, useSyncExternalStore} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import ShimmerText from '../common/ShimmerText.js';
 import CodebaseSearchStatus from './CodebaseSearchStatus.js';
 import {formatElapsedTime} from '../../../utils/core/textUtils.js';
+import {buildThinkingPreviewLine} from './ThinkingStatus.js';
 import {
 	subscribeTeammateStream,
 	getTeammateStreamSnapshot,
@@ -111,6 +112,8 @@ type LoadingIndicatorProps = {
 		suggestion?: string;
 	} | null;
 	isReasoning: boolean;
+	/** 实时思考内容（原始全文），由本组件裁剪为单行预览 */
+	thinkingPreview?: string | null;
 	streamTokenCount: number;
 	elapsedSeconds: number;
 	currentModel?: string | null;
@@ -132,6 +135,7 @@ export default function LoadingIndicator({
 	retryStatus,
 	codebaseSearchStatus,
 	isReasoning,
+	thinkingPreview,
 	streamTokenCount,
 	elapsedSeconds,
 	currentModel,
@@ -139,6 +143,16 @@ export default function LoadingIndicator({
 }: LoadingIndicatorProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+
+	// 思考预览：单行 + 按安全宽度预裁剪，仅替换 tips 行位置，
+	// 使「思考中 → 回答中」切换前后 footer 高度完全一致。
+	const thinkingPreviewLine = useMemo(
+		() =>
+			thinkingPreview
+				? buildThinkingPreviewLine(thinkingPreview, terminalWidth)
+				: '',
+		[thinkingPreview, terminalWidth],
+	);
 
 	const teammateStream = useSyncExternalStore(
 		subscribeTeammateStream,
@@ -230,6 +244,20 @@ export default function LoadingIndicator({
 			<Text color={theme.colors.menuSecondary} dimColor>
 				<Text color={theme.colors.menuSecondary}>└─ tips: </Text>
 				{loadingTip}
+			</Text>
+		);
+	};
+
+	// 思考预览与 tips 行共用同一行位置，二者互换时高度不变。
+	const renderThinkingPreview = () => {
+		if (!thinkingPreviewLine || !isStreaming || isStopping) {
+			return null;
+		}
+
+		return (
+			<Text color={theme.colors.menuSecondary} dimColor italic wrap="truncate">
+				<Text color={theme.colors.menuSecondary}>└─ </Text>
+				{thinkingPreviewLine}
 			</Text>
 		);
 	};
@@ -433,7 +461,7 @@ export default function LoadingIndicator({
 								{')'}
 							</Text>
 						)}
-						{renderLoadingTip()}
+						{renderThinkingPreview() ?? renderLoadingTip()}
 						{isPaused && (
 							<Text color={theme.colors.warning} dimColor>
 								└─ {t.chatScreen.statusPaused}

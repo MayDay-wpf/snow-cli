@@ -188,6 +188,8 @@ type ChatFooterProps = {
 		suggestion?: string;
 	} | null;
 	isReasoning: boolean;
+	/** 实时思考内容（原始全文），供 LoadingIndicator 做单行行内预览 */
+	thinkingPreview?: string | null;
 	streamTokenCount: number;
 	elapsedSeconds: number;
 	currentModel?: string | null;
@@ -351,6 +353,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							retryStatus={props.retryStatus}
 							codebaseSearchStatus={props.codebaseSearchStatus}
 							isReasoning={props.isReasoning}
+							thinkingPreview={props.thinkingPreview ?? null}
 							streamTokenCount={props.streamTokenCount}
 							elapsedSeconds={props.elapsedSeconds}
 							currentModel={props.currentModel}
