@@ -118,6 +118,7 @@ export default function SubAgentConfigScreen({
 				'filesystem-create',
 				'filesystem-replaceedit',
 				'filesystem-edit',
+				'filesystem-copy',
 			],
 		},
 		{

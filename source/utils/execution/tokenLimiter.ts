@@ -260,7 +260,8 @@ function isFilesystemEditToolName(toolName: string): boolean {
 	return (
 		toolName === 'filesystem-edit' ||
 		toolName === 'filesystem-replaceedit' ||
-		toolName === 'filesystem-create'
+		toolName === 'filesystem-create' ||
+		toolName === 'filesystem-copy'
 	);
 }
 

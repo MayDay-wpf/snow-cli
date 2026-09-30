@@ -12,6 +12,7 @@ import {
 	extractHookProvidedConfirmation,
 } from '../../../utils/execution/hookResultInterpreter.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
+import {collectDiffPreviewEntries} from '../../../utils/ui/diffPreview.js';
 import fs from 'fs';
 
 export type ConfirmationResult =
@@ -499,6 +500,20 @@ export default function ToolConfirmation({
 							originalContent,
 							newContent: parsed.content,
 							label: 'Create',
+						});
+					}
+				}
+
+				// Handle filesystem-copy (copy/cut of a line-range segment).
+				// Reuse the shared preview algorithm so the VSCode review panel
+				// matches the terminal DiffViewer and the executed result.
+				if (name === 'filesystem-copy' && parsed.filePath) {
+					for (const entry of collectDiffPreviewEntries(name, args)) {
+						entries.push({
+							filePath: entry.filePath,
+							originalContent: entry.oldContent,
+							newContent: entry.newContent,
+							label: parsed.mode === 'cut' ? 'Cut' : 'Copy',
 						});
 					}
 				}

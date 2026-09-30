@@ -168,6 +168,126 @@ export interface DiffPreviewEntry {
 	newContent: string;
 }
 
+/** Resolve a 1-indexed target line into a 0-based insertion index (preview). */
+function previewResolveInsertIndex(
+	targetLine: unknown,
+	position: string,
+	lineCount: number,
+): number {
+	if (typeof targetLine !== 'number' || !Number.isInteger(targetLine)) {
+		return lineCount;
+	}
+	if (targetLine < 1) {
+		return 0;
+	}
+	const index = position === 'after' ? targetLine : targetLine - 1;
+	return Math.max(0, Math.min(lineCount, index));
+}
+
+/**
+ * Compute diff preview entries for a `filesystem-copy` call (copy/cut of a
+ * line-range segment). Mirrors the server-side algorithm so the pending
+ * DiffViewer matches the executed result. Local paths only — remote (ssh://)
+ * paths are skipped because their content cannot be read synchronously.
+ */
+function computeCopySegmentPreviewEntries(parsed: any): DiffPreviewEntry[] {
+	const entries: DiffPreviewEntry[] = [];
+	if (typeof parsed.filePath !== 'string') {
+		return entries;
+	}
+	if (
+		!Number.isInteger(parsed.startLine) ||
+		!Number.isInteger(parsed.endLine)
+	) {
+		return entries;
+	}
+	const sourceContent = readOriginalFile(parsed.filePath);
+	if (sourceContent === null) {
+		return entries;
+	}
+	const sourceLines = sourceContent.split('\n');
+	const startLine = Math.max(1, parsed.startLine);
+	const endLine = Math.min(parsed.endLine, sourceLines.length);
+	if (startLine > endLine) {
+		return entries;
+	}
+	const segment = sourceLines.slice(startLine - 1, endLine);
+	const mode = parsed.mode === 'cut' ? 'cut' : 'copy';
+	const position = parsed.position === 'before' ? 'before' : 'after';
+	const targetPath =
+		typeof parsed.targetPath === 'string' ? parsed.targetPath : parsed.filePath;
+
+	if (targetPath === parsed.filePath) {
+		const anchor = previewResolveInsertIndex(
+			parsed.targetLine,
+			position,
+			sourceLines.length,
+		);
+		let newLines: string[];
+		if (mode === 'cut') {
+			const remaining = [
+				...sourceLines.slice(0, startLine - 1),
+				...sourceLines.slice(endLine),
+			];
+			let idx = anchor;
+			if (idx >= endLine) {
+				idx -= segment.length;
+			}
+			idx = Math.max(0, Math.min(remaining.length, idx));
+			newLines = [
+				...remaining.slice(0, idx),
+				...segment,
+				...remaining.slice(idx),
+			];
+		} else {
+			const idx = Math.max(0, Math.min(sourceLines.length, anchor));
+			newLines = [
+				...sourceLines.slice(0, idx),
+				...segment,
+				...sourceLines.slice(idx),
+			];
+		}
+		entries.push({
+			filePath: parsed.filePath,
+			oldContent: sourceContent,
+			newContent: newLines.join('\n'),
+		});
+		return entries;
+	}
+
+	const targetContent = readOriginalFile(targetPath);
+	const targetLines = targetContent !== null ? targetContent.split('\n') : [];
+	const idx = previewResolveInsertIndex(
+		parsed.targetLine,
+		position,
+		targetLines.length,
+	);
+	const newTargetLines = [
+		...targetLines.slice(0, idx),
+		...segment,
+		...targetLines.slice(idx),
+	];
+
+	if (mode === 'cut') {
+		const remaining = [
+			...sourceLines.slice(0, startLine - 1),
+			...sourceLines.slice(endLine),
+		];
+		entries.push({
+			filePath: parsed.filePath,
+			oldContent: sourceContent,
+			newContent: remaining.join('\n'),
+		});
+	}
+
+	entries.push({
+		filePath: targetPath,
+		oldContent: targetContent ?? '',
+		newContent: newTargetLines.join('\n'),
+	});
+	return entries;
+}
+
 /**
  * Collect diff preview entries for a given filesystem tool call.
  *
@@ -199,6 +319,11 @@ export function collectDiffPreviewEntries(
 			} catch {
 				// Not valid JSON — leave as-is (single file path string)
 			}
+		}
+
+		if (toolName === 'filesystem-copy') {
+			entries.push(...computeCopySegmentPreviewEntries(parsed));
+			return entries;
 		}
 
 		if (toolName === 'filesystem-edit' && parsed.filePath) {
@@ -373,7 +498,8 @@ export function enrichPendingEditArgs(
 	if (
 		toolName !== 'filesystem-edit' &&
 		toolName !== 'filesystem-replaceedit' &&
-		toolName !== 'filesystem-create'
+		toolName !== 'filesystem-create' &&
+		toolName !== 'filesystem-copy'
 	) {
 		return toolArgs;
 	}
@@ -393,6 +519,38 @@ export function enrichPendingEditArgs(
 	}
 
 	const isBatch = toolArgs['isBatch'] || Array.isArray(toolArgs['filePath']);
+
+	// filesystem-copy: a call may touch 1 file (copy) or 2 files (cut across
+	// files). Present multiple touched files as batchResults so each file
+	// gets its own DiffViewer during pending.
+	if (toolName === 'filesystem-copy') {
+		const copyEntries = collectDiffPreviewEntries(
+			toolName,
+			JSON.stringify(toolArgs),
+		);
+		if (copyEntries.length === 0) {
+			return toolArgs;
+		}
+		if (copyEntries.length === 1) {
+			const entry = copyEntries[0]!;
+			return {
+				...toolArgs,
+				oldContent: entry.oldContent,
+				newContent: entry.newContent,
+				filename: entry.filePath,
+			};
+		}
+		return {
+			...toolArgs,
+			isBatch: true,
+			batchResults: copyEntries.map(entry => ({
+				success: true,
+				path: entry.filePath,
+				oldContent: entry.oldContent,
+				newContent: entry.newContent,
+			})),
+		};
+	}
 
 	// Single-file (non-batch) calls: compute oldContent/newContent directly.
 	if (!isBatch) {

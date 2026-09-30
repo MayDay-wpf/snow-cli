@@ -131,6 +131,7 @@ export function formatToolCallMessage(toolCall: ToolCall): {
 			'filesystem-edit',
 			'filesystem-replaceedit',
 			'filesystem-create',
+			'filesystem-copy',
 		];
 
 		const isEditTool = editTools.includes(toolCall.function.name);

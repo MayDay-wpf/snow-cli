@@ -105,6 +105,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 - filesystem-replaceedit: Default edit tool for search-replace workflow and readable diffs
 - filesystem-edit: Optional strict hash-anchored editing (reference "lineNum:hash" anchors from read output)
 - filesystem-create: Create new files with content
+- filesystem-copy: Copy or cut a code segment (by line range) to another location without re-emitting it
 
 ### Terminal Tools (Build and Test)
 - terminal-execute: Run builds, tests, package commands
@@ -187,6 +188,7 @@ You are a versatile task execution agent with full tool access, capable of handl
 		'filesystem-create',
 		'filesystem-replaceedit',
 		'filesystem-edit',
+		'filesystem-copy',
 		'terminal-execute',
 		'ace-search',
 		'websearch-search',

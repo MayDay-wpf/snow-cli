@@ -1689,6 +1689,72 @@ export async function executeMCPTool(
 						args.contextLines,
 					);
 					break;
+				case 'copy':
+					if (!args.filePath) {
+						throw new Error(
+							`Missing required parameter 'filePath' for filesystem-copy tool.\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}`,
+						);
+					}
+					if (typeof args.filePath !== 'string') {
+						throw new Error(
+							`Invalid type for parameter 'filePath' in filesystem-copy tool. ` +
+								`Expected string but received ${typeof args.filePath}.\n` +
+								`AI Tip: 'filePath' is the single source file path.`,
+						);
+					}
+					if (
+						!Number.isInteger(args.startLine) ||
+						!Number.isInteger(args.endLine)
+					) {
+						throw new Error(
+							`Missing or invalid 'startLine'/'endLine' for filesystem-copy tool. ` +
+								`Both must be integers (1-indexed).\n` +
+								`Received args: ${JSON.stringify(args, null, 2)}`,
+						);
+					}
+					if (
+						args.targetPath !== undefined &&
+						typeof args.targetPath !== 'string'
+					) {
+						throw new Error(
+							`Invalid type for parameter 'targetPath' in filesystem-copy tool. ` +
+								`Expected string but received ${typeof args.targetPath}.`,
+						);
+					}
+					if (
+						args.mode !== undefined &&
+						args.mode !== 'copy' &&
+						args.mode !== 'cut'
+					) {
+						throw new Error(
+							`Invalid 'mode' for filesystem-copy tool. Expected "copy" or "cut" but received ${JSON.stringify(
+								args.mode,
+							)}.`,
+						);
+					}
+					if (
+						args.position !== undefined &&
+						args.position !== 'before' &&
+						args.position !== 'after'
+					) {
+						throw new Error(
+							`Invalid 'position' for filesystem-copy tool. Expected "before" or "after" but received ${JSON.stringify(
+								args.position,
+							)}.`,
+						);
+					}
+					result = await filesystemService.copySegment(
+						args.filePath,
+						args.startLine,
+						args.endLine,
+						args.targetPath,
+						args.targetLine,
+						args.position ?? 'after',
+						args.mode ?? 'copy',
+						args.contextLines,
+					);
+					break;
 
 				default:
 					throw new Error(`Unknown filesystem tool: ${actualToolName}`);

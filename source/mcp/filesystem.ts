@@ -24,6 +24,7 @@ import type {
 	FileCreateConfig,
 	FileCreateBatchResultItem,
 	FileCreateResult,
+	CopySegmentResult,
 } from './types/filesystem.types.js';
 import {IMAGE_MIME_TYPES, OFFICE_FILE_TYPES} from './types/filesystem.types.js';
 import {
@@ -35,6 +36,7 @@ import {getFreshDiagnostics} from './utils/filesystem/diagnostics.utils.js';
 import {appendDiagnosticsSummary} from './utils/filesystem/message-format.utils.js';
 import {backupFileBeforeMutation} from './utils/filesystem/backup.utils.js';
 import {
+	executeCopySegmentSingle,
 	executeEditBySearchSingle,
 	executeHashlineEditSingle,
 } from './utils/filesystem/edit-tools.utils.js';
@@ -946,6 +948,48 @@ export class FilesystemMCPService {
 	}
 
 	/**
+	 * Copy or cut a code segment (identified by a line range) and paste it at a
+	 * target location in the same or another file.
+	 *
+	 * - `mode: "copy"` duplicates the segment, leaving the source untouched.
+	 * - `mode: "cut"` moves the segment (removes it from the source).
+	 *
+	 * This avoids re-emitting the whole block in tokens: the segment is read
+	 * from the source and written to the target internally. Supports local and
+	 * SSH (`ssh://`) paths.
+	 */
+	async copySegment(
+		filePath: string,
+		startLine: number,
+		endLine: number,
+		targetPath?: string,
+		targetLine?: number,
+		position: 'before' | 'after' = 'after',
+		mode: 'copy' | 'cut' = 'copy',
+		contextLines: number = 8,
+	): Promise<CopySegmentResult> {
+		return await executeCopySegmentSingle(
+			{
+				basePath: this.basePath,
+				prettierSupportedExtensions: this.prettierSupportedExtensions,
+				isSSHPath: this.isSSHPath.bind(this),
+				readRemoteFile: this.readRemoteFile.bind(this),
+				writeRemoteFile: this.writeRemoteFile.bind(this),
+				resolvePath: this.resolvePath.bind(this),
+				validatePath: this.validatePath.bind(this),
+			},
+			filePath,
+			startLine,
+			endLine,
+			targetPath,
+			targetLine,
+			position,
+			mode,
+			contextLines,
+		);
+	}
+
+	/**
 	 * Resolve path relative to base path and normalize it
 	 * Supports contextPath for smart relative path resolution in batch operations
 	 * @param filePath - Path to resolve
@@ -1196,11 +1240,72 @@ export const mcpTools = [
 				},
 				contextLines: {
 					type: 'number',
-					description: 'Context lines to show before/after (default: 8)',
+					description: 'Context lines to show before/after edit (default: 8)',
 					default: 8,
 				},
 			},
 			required: ['filePath'],
+		},
+	},
+	{
+		name: 'filesystem-copy',
+		description:
+			'Copy or CUT a code segment (by file path + line range) and paste it at another location — in the same file or a different file — without re-emitting the block, saving tokens. ' +
+			'**WHEN**: Use this instead of reading a block and rewriting it via filesystem-create/edit when you only need to duplicate or move an existing block. ' +
+			'**MODE**: `mode: "copy"` (default) duplicates the segment and leaves the source unchanged; `mode: "cut"` moves the segment and removes it from the source. ' +
+			'**TARGET**: `targetPath` defaults to `filePath` (same-file move/duplicate); when omitted, `targetLine` defaults to the end of the target file. ' +
+			'`position` ("after" default, or "before") controls whether insertion is placed after or before `targetLine`. ' +
+			'**REMOTE SSH SUPPORT**: Supports ssh:// paths for both source and target. ' +
+			'**PATH REQUIREMENT**: Use EXACT 1-indexed line numbers from filesystem-read. The returned result includes per-file oldContent/newContent for diff preview.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				filePath: {
+					type: 'string',
+					description:
+						'Source file path to copy/cut from (supports ssh:// URLs).',
+				},
+				startLine: {
+					type: 'number',
+					description:
+						'First line of the segment to copy/cut (1-indexed, inclusive).',
+				},
+				endLine: {
+					type: 'number',
+					description:
+						'Last line of the segment to copy/cut (1-indexed, inclusive).',
+				},
+				targetPath: {
+					type: 'string',
+					description:
+						'Target file path to paste into (supports ssh:// URLs). Defaults to filePath (same-file move/duplicate).',
+				},
+				targetLine: {
+					type: 'number',
+					description:
+						'Reference line in the target file (1-indexed). Omit to append at the end of the target file.',
+				},
+				position: {
+					type: 'string',
+					enum: ['before', 'after'],
+					description: 'Insert before or after targetLine (default: after).',
+					default: 'after',
+				},
+				mode: {
+					type: 'string',
+					enum: ['copy', 'cut'],
+					description:
+						'"copy" duplicates the segment (source unchanged); "cut" moves it (removed from source). Default: copy.',
+					default: 'copy',
+				},
+				contextLines: {
+					type: 'number',
+					description:
+						'Context lines to include in the returned diff preview (default: 8)',
+					default: 8,
+				},
+			},
+			required: ['filePath', 'startLine', 'endLine'],
 		},
 	},
 	{

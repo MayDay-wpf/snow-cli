@@ -126,6 +126,7 @@ export default function PrivacySettingsScreen({
 					'filesystem-create',
 					'filesystem-replaceedit',
 					'filesystem-edit',
+					'filesystem-copy',
 				],
 			},
 			{

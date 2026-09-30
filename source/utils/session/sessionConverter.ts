@@ -342,7 +342,8 @@ export function convertSessionMessagesToUI(
 					!isError &&
 					(toolName === 'filesystem-create' ||
 						toolName === 'filesystem-edit' ||
-						toolName === 'filesystem-replaceedit')
+						toolName === 'filesystem-replaceedit' ||
+						toolName === 'filesystem-copy')
 				) {
 					const editDiffData = (msg as any).editDiffData;
 					if (
@@ -596,7 +597,8 @@ export function convertSessionMessagesToUI(
 						if (
 							(toolName === 'filesystem-edit' ||
 								toolName === 'filesystem-replaceedit' ||
-								toolName === 'filesystem-create') &&
+								toolName === 'filesystem-create' ||
+								toolName === 'filesystem-copy') &&
 							!isError
 						) {
 							if (

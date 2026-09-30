@@ -3,6 +3,8 @@ import * as prettier from 'prettier';
 import {isAbsolute} from 'path';
 import type {Diagnostic} from '../../../utils/ui/vscodeConnection.js';
 import type {
+	CopySegmentChangedFile,
+	CopySegmentResult,
 	EditByHashlineSingleResult,
 	EditBySearchSingleResult,
 	HashlineOperation,
@@ -1082,6 +1084,367 @@ export async function executeHashlineEditSingle(
 	} catch (error) {
 		throw new Error(
 			`Failed to edit file ${filePath}: ${
+				error instanceof Error ? error.message : 'Unknown error'
+			}`,
+		);
+	}
+}
+
+/**
+ * Resolve a target line (1-indexed) into a 0-based insertion index.
+ * When targetLine is omitted, the segment is appended at the end.
+ */
+function resolveInsertIndex(
+	targetLine: number | undefined,
+	position: 'before' | 'after',
+	lineCount: number,
+): number {
+	if (targetLine === undefined || targetLine === null) {
+		return lineCount;
+	}
+	if (!Number.isInteger(targetLine) || targetLine < 1) {
+		throw new Error('targetLine must be a positive integer (1-indexed).');
+	}
+	const index = position === 'after' ? targetLine : targetLine - 1;
+	return Math.max(0, Math.min(lineCount, index));
+}
+
+/** Slice a padded context snippet (1-indexed, inclusive) for diff display. */
+function sliceContextSnippet(
+	lines: string[],
+	from: number,
+	to: number,
+	padding: number,
+): string {
+	const start = Math.max(1, from - padding);
+	const end = Math.min(lines.length, to + padding);
+	if (end < start) {
+		return '';
+	}
+	return lines.slice(start - 1, end).join('\n');
+}
+
+/** Insert lines into an array without mutating the source array. */
+function insertLines(
+	base: string[],
+	index: number,
+	inserted: string[],
+): string[] {
+	return [...base.slice(0, index), ...inserted, ...base.slice(index)];
+}
+
+/**
+ * Copy or cut a code segment identified by a line range and paste it at a
+ * target location (same file or another file).
+ *
+ * - `copy` duplicates the segment, leaving the source untouched.
+ * - `cut` moves the segment (removes it from the source).
+ *
+ * The segment content is never re-emitted by the caller, which saves tokens
+ * compared to reading the file and re-writing the block by hand. Supports
+ * local and SSH (`ssh://`) paths; on SSH, the source/target file must already
+ * be reachable via SFTP.
+ */
+export async function executeCopySegmentSingle(
+	ctx: EditToolContext,
+	filePath: string,
+	startLine: number,
+	endLine: number,
+	targetPath: string | undefined,
+	targetLine: number | undefined,
+	position: 'before' | 'after',
+	mode: 'copy' | 'cut',
+	contextLines: number,
+): Promise<CopySegmentResult> {
+	try {
+		if (mode !== 'copy' && mode !== 'cut') {
+			throw new Error('Invalid mode. Expected "copy" or "cut".');
+		}
+		if (position !== 'before' && position !== 'after') {
+			throw new Error('Invalid position. Expected "before" or "after".');
+		}
+
+		// --- Read source file ---
+		const sourceIsRemote = ctx.isSSHPath(filePath);
+		let sourceFullPath: string;
+		let sourceContent: string;
+		if (sourceIsRemote) {
+			sourceContent = await ctx.readRemoteFile(filePath);
+			sourceFullPath = filePath;
+		} else {
+			sourceFullPath = ctx.resolvePath(filePath);
+			if (!isAbsolute(filePath)) {
+				await ctx.validatePath(sourceFullPath);
+			}
+			sourceContent = await readFileSmart(sourceFullPath);
+		}
+
+		const sourceLines = sourceContent.split('\n');
+		const totalSourceLines = sourceLines.length;
+
+		if (!Number.isInteger(startLine) || !Number.isInteger(endLine)) {
+			throw new Error('startLine and endLine must be integers.');
+		}
+		if (startLine < 1 || endLine < 1) {
+			throw new Error('startLine and endLine are 1-indexed and must be >= 1.');
+		}
+		if (startLine > endLine) {
+			throw new Error(
+				`startLine (${startLine}) must be <= endLine (${endLine}).`,
+			);
+		}
+		if (startLine > totalSourceLines) {
+			throw new Error(
+				`startLine ${startLine} is out of range (source has ${totalSourceLines} lines).`,
+			);
+		}
+
+		const effectiveEndLine = Math.min(endLine, totalSourceLines);
+		const startIdx = startLine - 1;
+		const segmentLines = sourceLines.slice(startIdx, effectiveEndLine);
+		if (segmentLines.length === 0) {
+			throw new Error('Selected segment is empty.');
+		}
+
+		// --- Resolve target file ---
+		const resolvedTargetPath = targetPath ?? filePath;
+		const targetIsRemote = ctx.isSSHPath(resolvedTargetPath);
+		let targetFullPath: string;
+		if (targetIsRemote) {
+			targetFullPath = resolvedTargetPath;
+		} else {
+			targetFullPath = ctx.resolvePath(resolvedTargetPath);
+			if (!isAbsolute(resolvedTargetPath)) {
+				await ctx.validatePath(targetFullPath);
+			}
+		}
+
+		const isSameFile =
+			sourceIsRemote === targetIsRemote && sourceFullPath === targetFullPath;
+
+		const changedFiles: CopySegmentChangedFile[] = [];
+		let sourceNewContent: string | undefined;
+		let targetNewContent: string | undefined;
+
+		if (isSameFile) {
+			// --- Same file: move (cut) or duplicate (copy) ---
+			const anchor = resolveInsertIndex(targetLine, position, totalSourceLines);
+			const segmentEndIdx = startIdx + segmentLines.length;
+
+			if (mode === 'cut') {
+				if (anchor > startIdx && anchor < segmentEndIdx) {
+					throw new Error(
+						'Target position is inside the selected segment. Choose a target outside the cut range.',
+					);
+				}
+				const remaining = [
+					...sourceLines.slice(0, startIdx),
+					...sourceLines.slice(segmentEndIdx),
+				];
+				let insertIdx = anchor;
+				if (insertIdx >= segmentEndIdx) {
+					insertIdx -= segmentLines.length;
+				}
+				insertIdx = Math.max(0, Math.min(remaining.length, insertIdx));
+				const newLines = insertLines(remaining, insertIdx, segmentLines);
+				sourceNewContent = newLines.join('\n');
+				const from = Math.min(startLine, insertIdx + 1);
+				const to = Math.max(effectiveEndLine, insertIdx + segmentLines.length);
+				changedFiles.push({
+					path: filePath,
+					success: true,
+					oldContent: sliceContextSnippet(sourceLines, from, to, contextLines),
+					newContent: sliceContextSnippet(newLines, from, to, contextLines),
+				});
+			} else {
+				const insertIdx = Math.max(0, Math.min(sourceLines.length, anchor));
+				const newLines = insertLines(sourceLines, insertIdx, segmentLines);
+				sourceNewContent = newLines.join('\n');
+				const from = Math.min(startLine, insertIdx + 1);
+				const to = Math.max(effectiveEndLine, insertIdx + segmentLines.length);
+				changedFiles.push({
+					path: filePath,
+					success: true,
+					oldContent: sliceContextSnippet(sourceLines, from, to, contextLines),
+					newContent: sliceContextSnippet(newLines, from, to, contextLines),
+				});
+			}
+		} else {
+			// --- Cross-file: read target (may not exist yet) ---
+			let targetContent: string | undefined;
+			if (targetIsRemote) {
+				try {
+					targetContent = await ctx.readRemoteFile(targetFullPath);
+				} catch {
+					targetContent = undefined;
+				}
+			} else {
+				try {
+					targetContent = await readFileSmart(targetFullPath);
+				} catch {
+					targetContent = undefined;
+				}
+			}
+			const targetExisted = targetContent !== undefined;
+			const targetLines =
+				targetContent !== undefined ? targetContent.split('\n') : [];
+
+			const insertIdx = resolveInsertIndex(
+				targetLine,
+				position,
+				targetLines.length,
+			);
+			const newTargetLines = insertLines(targetLines, insertIdx, segmentLines);
+			targetNewContent = newTargetLines.join('\n');
+
+			if (mode === 'cut') {
+				const segmentEndIdx = startIdx + segmentLines.length;
+				const newSourceLines = [
+					...sourceLines.slice(0, startIdx),
+					...sourceLines.slice(segmentEndIdx),
+				];
+				sourceNewContent = newSourceLines.join('\n');
+				changedFiles.push({
+					path: filePath,
+					success: true,
+					oldContent: sliceContextSnippet(
+						sourceLines,
+						startLine,
+						effectiveEndLine,
+						contextLines,
+					),
+					newContent: sliceContextSnippet(
+						newSourceLines,
+						startLine,
+						startLine,
+						contextLines,
+					),
+				});
+			}
+
+			changedFiles.push({
+				path: resolvedTargetPath,
+				success: true,
+				oldContent: targetExisted
+					? sliceContextSnippet(
+							targetLines,
+							insertIdx + 1,
+							insertIdx + 1,
+							contextLines,
+					  )
+					: '',
+				newContent: sliceContextSnippet(
+					newTargetLines,
+					insertIdx + 1,
+					insertIdx + segmentLines.length,
+					contextLines,
+				),
+			});
+		}
+
+		// --- Auto-format then write mutated files ---
+		const maybeFormat = async (
+			fullPath: string,
+			content: string,
+		): Promise<string> => {
+			const fileExtension = path.extname(fullPath).toLowerCase();
+			const shouldFormat =
+				getAutoFormatEnabled() &&
+				ctx.prettierSupportedExtensions.includes(fileExtension);
+			if (!shouldFormat) {
+				return content;
+			}
+			try {
+				const prettierConfig = await prettier.resolveConfig(fullPath);
+				return await prettier.format(content, {
+					filepath: fullPath,
+					...prettierConfig,
+				});
+			} catch {
+				return content;
+			}
+		};
+
+		const writeFile = async (
+			isRemote: boolean,
+			fullPath: string,
+			content: string,
+		): Promise<void> => {
+			if (isRemote) {
+				await ctx.writeRemoteFile(fullPath, content);
+			} else {
+				await writeFileSmart(fullPath, content);
+			}
+		};
+
+		if (sourceNewContent !== undefined) {
+			const formatted = await maybeFormat(sourceFullPath, sourceNewContent);
+			await backupFileBeforeMutation({
+				filePath,
+				basePath: ctx.basePath,
+				fileExisted: true,
+				originalContent: sourceContent,
+			});
+			await writeFile(sourceIsRemote, sourceFullPath, formatted);
+		}
+
+		if (targetNewContent !== undefined) {
+			const formatted = await maybeFormat(targetFullPath, targetNewContent);
+			let targetExisted = true;
+			let targetOriginal: string | undefined;
+			if (targetIsRemote) {
+				try {
+					targetOriginal = await ctx.readRemoteFile(targetFullPath);
+				} catch {
+					targetExisted = false;
+				}
+			} else {
+				try {
+					targetOriginal = await readFileSmart(targetFullPath);
+				} catch {
+					targetExisted = false;
+				}
+			}
+			await backupFileBeforeMutation({
+				filePath: resolvedTargetPath,
+				basePath: ctx.basePath,
+				fileExisted: targetExisted,
+				originalContent: targetOriginal,
+			});
+			await writeFile(targetIsRemote, targetFullPath, formatted);
+		}
+
+		const successCount = changedFiles.filter(f => f.success).length;
+		const failureCount = changedFiles.length - successCount;
+		const totalLinesMoved = segmentLines.length;
+
+		const message =
+			`✅ Code segment ${mode === 'cut' ? 'cut' : 'copied'} successfully\\n` +
+			`   Source: ${filePath} (lines ${startLine}-${effectiveEndLine}, ${totalLinesMoved} line(s))\\n` +
+			`   Target: ${resolvedTargetPath}${
+				targetLine !== undefined
+					? ` (at line ${targetLine}, ${position})`
+					: ' (end of file)'
+			}\\n` +
+			`   Files changed: ${successCount}`;
+
+		return {
+			message,
+			filePath,
+			results: changedFiles,
+			totalFiles: changedFiles.length,
+			successCount,
+			failureCount,
+			copiedContent: segmentLines.join('\n'),
+			mode,
+			sourceRange: {startLine, endLine: effectiveEndLine},
+			targetLine: targetLine ?? 0,
+			sourcePath: filePath,
+			targetPath: resolvedTargetPath,
+		};
+	} catch (error) {
+		throw new Error(
+			`Failed to ${mode === 'cut' ? 'cut' : 'copy'} segment in ${filePath}: ${
 				error instanceof Error ? error.message : 'Unknown error'
 			}`,
 		);

@@ -40,6 +40,7 @@ export const TOOL_NAME_ICONS: Record<string, string> = {
 	'filesystem-create': '⊕',
 	'filesystem-edit': '⎙',
 	'filesystem-replaceedit': '≋',
+	'filesystem-copy': '⧉',
 
 	// Shell
 	'terminal-execute': '⌘',

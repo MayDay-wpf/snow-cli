@@ -751,7 +751,8 @@ function MessageRendererImpl({
 										)}
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
-											message.toolCall.name === 'filesystem-replaceedit') &&
+											message.toolCall.name === 'filesystem-replaceedit' ||
+											message.toolCall.name === 'filesystem-copy') &&
 										typeof message.toolCall.arguments.oldContent === 'string' &&
 										typeof message.toolCall.arguments.newContent === 'string' &&
 										message.messageStatus === 'pending' && (
@@ -775,7 +776,8 @@ function MessageRendererImpl({
 									{/* Show batch edit results (pending only — success uses tool result) */}
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
-											message.toolCall.name === 'filesystem-replaceedit') &&
+											message.toolCall.name === 'filesystem-replaceedit' ||
+											message.toolCall.name === 'filesystem-copy') &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) &&

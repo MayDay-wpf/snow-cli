@@ -194,6 +194,7 @@ Inserted log points:
 - filesystem-create: Create new files (write the logger helper function file in Phase 2)
 - filesystem-replaceedit: Default edit tool for readable diff validation and closure checks
 - filesystem-edit: Optional strict hash-anchored editing (insert/replace/delete via anchors)
+- filesystem-copy: Copy or cut a code segment (by line range) to another location without re-emitting it
 
 ### Terminal Tools (auxiliary)
 - terminal-execute: Execute commands (check directory structure, etc.)
@@ -217,6 +218,7 @@ Inserted log points:
 		'filesystem-create',
 		'filesystem-replaceedit',
 		'filesystem-edit',
+		'filesystem-copy',
 		'terminal-execute',
 		'ace-search',
 		'ide-get_diagnostics',

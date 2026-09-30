@@ -84,7 +84,8 @@ function extractEditDiffData(
 	if (
 		toolCall.function.name !== 'filesystem-edit' &&
 		toolCall.function.name !== 'filesystem-replaceedit' &&
-		toolCall.function.name !== 'filesystem-create'
+		toolCall.function.name !== 'filesystem-create' &&
+		toolCall.function.name !== 'filesystem-copy'
 	) {
 		return undefined;
 	}

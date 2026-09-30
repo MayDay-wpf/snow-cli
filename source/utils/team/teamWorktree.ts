@@ -520,7 +520,8 @@ export function rewriteToolArgsForWorktree(
 		const isWrite =
 			toolName === 'filesystem-create' ||
 			toolName === 'filesystem-edit' ||
-			toolName === 'filesystem-replaceedit';
+			toolName === 'filesystem-replaceedit' ||
+			toolName === 'filesystem-copy';
 		const verb = isWrite ? 'modify' : 'access';
 
 		if (typeof args.filePath === 'string') {

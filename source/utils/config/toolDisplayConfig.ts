@@ -12,6 +12,7 @@ const TWO_STEP_TOOLS = new Set([
 	'filesystem-edit',
 	'filesystem-replaceedit',
 	'filesystem-create',
+	'filesystem-copy',
 
 	// 终端执行工具 - 执行时间不确定，需要显示进度
 	'terminal-execute',
@@ -90,7 +91,8 @@ export function extractFilesystemEditDiffFromRawResult(
 	if (
 		toolName !== 'filesystem-edit' &&
 		toolName !== 'filesystem-replaceedit' &&
-		toolName !== 'filesystem-create'
+		toolName !== 'filesystem-create' &&
+		toolName !== 'filesystem-copy'
 	) {
 		return undefined;
 	}
@@ -153,7 +155,8 @@ export function extractFilesystemEditDiffDataForPersistence(
 	if (
 		(toolName !== 'filesystem-edit' &&
 			toolName !== 'filesystem-replaceedit' &&
-			toolName !== 'filesystem-create') ||
+			toolName !== 'filesystem-create' &&
+			toolName !== 'filesystem-copy') ||
 		content.startsWith('Error:')
 	) {
 		return undefined;

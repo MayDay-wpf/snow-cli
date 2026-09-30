@@ -271,6 +271,38 @@ export type FileCreateBatchResultItem = BatchResultItem & {
 };
 
 /**
+ * A single changed file entry produced by a copy/cut segment operation.
+ * Uses the batch-result shape so the UI DiffViewer can render every
+ * touched file (source and/or target).
+ */
+export interface CopySegmentChangedFile {
+	path: string;
+	success: boolean;
+	oldContent: string;
+	newContent: string;
+}
+
+/**
+ * Result of copying/cutting a code segment between locations.
+ * `results` intentionally mirrors BatchOperationResult so existing
+ * filesystem diff extraction renders per-file diffs.
+ */
+export interface CopySegmentResult {
+	message: string;
+	filePath: string;
+	results: CopySegmentChangedFile[];
+	totalFiles: number;
+	successCount: number;
+	failureCount: number;
+	copiedContent: string;
+	mode: 'copy' | 'cut';
+	sourceRange: {startLine: number; endLine: number};
+	targetLine: number;
+	sourcePath: string;
+	targetPath: string;
+}
+
+/**
  * Create file result (single string message or batch result)
  */
 export type FileCreateResult =

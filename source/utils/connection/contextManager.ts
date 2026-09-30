@@ -28,6 +28,7 @@ export class ContextManager {
 		'filesystem-create',
 		'filesystem-edit',
 		'filesystem-replaceedit',
+		'filesystem-copy',
 	];
 
 	constructor(stateManager: StateManager) {

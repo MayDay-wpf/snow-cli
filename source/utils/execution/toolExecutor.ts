@@ -759,7 +759,8 @@ function getToolResourceType(toolName: string): string {
 	if (
 		toolName === 'filesystem-edit' ||
 		toolName === 'filesystem-replaceedit' ||
-		toolName === 'filesystem-create'
+		toolName === 'filesystem-create' ||
+		toolName === 'filesystem-copy'
 	) {
 		return 'filesystem'; // Will be further refined by file path
 	}
