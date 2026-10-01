@@ -125,7 +125,7 @@ jobs:
 
             ### What's New
 
-            - Add WebSocket transport support for the Responses API: a new "Responses WebSocket Mode" toggle (off by default, only shown when the request method is Responses) that streams over a persistent WebSocket connection on the same /responses endpoint instead of HTTP + SSE, with proxy support, handshake timeout, and idle-timeout handling
+            - Add filesystem copy tool
 
             ### Installation
             ```bash
