@@ -71,6 +71,7 @@ export async function* streamBtwResponse(
 				{
 					model,
 					messages,
+					max_tokens: 2048,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},
@@ -84,6 +85,7 @@ export async function* streamBtwResponse(
 					model,
 					messages,
 					stream: true,
+					max_tokens: 2048,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},
@@ -98,6 +100,7 @@ export async function* streamBtwResponse(
 					model,
 					messages,
 					stream: true,
+					max_tokens: 2048,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},

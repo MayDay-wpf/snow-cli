@@ -30,6 +30,7 @@ export interface GeminiOptions {
 	model: string;
 	messages: ChatMessage[];
 	temperature?: number;
+	max_tokens?: number; // 最大回复令牌数（映射为 generationConfig.maxOutputTokens）
 	tools?: ChatCompletionTool[];
 	includeBuiltinSystemPrompt?: boolean; // 控制是否添加内置系统提示词（默认 true）
 	disableThinking?: boolean; // 禁用思考功能（用于 agents 等场景，默认 false）
@@ -547,14 +548,23 @@ export async function* createStreamingGeminiCompletion(
 						: undefined,
 				};
 
+				// generationConfig 承载最大回复令牌数与思考配置，两者可同时存在
+				const generationConfig: Record<string, any> = {};
+
+				// 最大回复令牌数 -> generationConfig.maxOutputTokens
+				if (options.max_tokens) {
+					generationConfig['maxOutputTokens'] = options.max_tokens;
+				}
+
 				// Add thinking configuration if enabled and not disabled
-				// Only include generationConfig when thinking is enabled
 				if (config.geminiThinking?.enabled && !options.disableThinking) {
-					requestBody.generationConfig = {
-						thinkingConfig: {
-							thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
-						},
+					generationConfig['thinkingConfig'] = {
+						thinkingLevel: config.geminiThinking.thinkingLevel || 'high',
 					};
+				}
+
+				if (Object.keys(generationConfig).length > 0) {
+					requestBody.generationConfig = generationConfig;
 				}
 
 				// Add tools if provided

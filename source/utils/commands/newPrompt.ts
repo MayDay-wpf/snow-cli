@@ -573,6 +573,7 @@ Output ONLY the generated prompt text, nothing else.`;
 				{
 					model,
 					messages,
+					max_tokens: 4096,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},
@@ -586,6 +587,7 @@ Output ONLY the generated prompt text, nothing else.`;
 					model,
 					messages,
 					stream: true,
+					max_tokens: 4096,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},
@@ -600,6 +602,7 @@ Output ONLY the generated prompt text, nothing else.`;
 					model,
 					messages,
 					stream: true,
+					max_tokens: 4096,
 					includeBuiltinSystemPrompt: false,
 					disableThinking: true,
 				},

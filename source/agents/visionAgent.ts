@@ -142,6 +142,7 @@ export class VisionAgent {
 					{
 						model: modelName,
 						messages,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 						configOverride,
@@ -155,6 +156,7 @@ export class VisionAgent {
 						model: modelName,
 						messages,
 						stream: true,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 						configOverride,
@@ -169,6 +171,7 @@ export class VisionAgent {
 						model: modelName,
 						messages,
 						stream: true,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 						configOverride,

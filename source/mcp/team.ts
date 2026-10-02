@@ -164,16 +164,31 @@ export class TeamService {
 						break;
 					case 'gemini':
 						await collectContent(
-							createStreamingGeminiCompletion({model, messages}),
+							createStreamingGeminiCompletion({
+								model,
+								messages,
+								max_tokens: config.maxTokens || 8192,
+							}),
 						);
 						break;
 					case 'responses':
-						await collectContent(createStreamingResponse({model, messages}));
+						await collectContent(
+							createStreamingResponse({
+								model,
+								messages,
+								max_tokens: config.maxTokens || 8192,
+							}),
+						);
 						break;
 					case 'chat':
 					default:
 						await collectContent(
-							createStreamingChatCompletion({model, messages, temperature: 0}),
+							createStreamingChatCompletion({
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 8192,
+							}),
 						);
 						break;
 				}

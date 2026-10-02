@@ -435,6 +435,7 @@ async function aiSummaryCompress(
 				for await (const chunk of createStreamingGeminiCompletion({
 					model: config.model,
 					messages: compressionMessages,
+					max_tokens: config.maxTokens || 4096,
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
@@ -477,6 +478,7 @@ async function aiSummaryCompress(
 				for await (const chunk of createStreamingResponse({
 					model: config.model,
 					messages: compressionMessages,
+					max_tokens: config.maxTokens || 4096,
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {
@@ -499,6 +501,7 @@ async function aiSummaryCompress(
 					model: config.model,
 					messages: compressionMessages,
 					stream: true,
+					max_tokens: config.maxTokens || 4096,
 					configProfile: config.configProfile,
 				})) {
 					if (chunk.type === 'content' && chunk.content) {

@@ -470,6 +470,7 @@ Please provide your review in a clear, structured format.`;
 					{
 						model: this.modelName,
 						messages: processedMessages,
+						max_tokens: 4096,
 					},
 					abortSignal,
 				);
@@ -481,6 +482,7 @@ Please provide your review in a clear, structured format.`;
 						model: this.modelName,
 						messages: processedMessages,
 						stream: true,
+						max_tokens: 4096,
 					},
 					abortSignal,
 				);
@@ -493,6 +495,7 @@ Please provide your review in a clear, structured format.`;
 						model: this.modelName,
 						messages: processedMessages,
 						stream: true,
+						max_tokens: 4096,
 					},
 					abortSignal,
 				);

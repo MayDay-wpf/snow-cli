@@ -921,6 +921,11 @@ export async function* createStreamingResponse(
 					prompt_cache_key: options.prompt_cache_key,
 				};
 
+				// 最大回复令牌数 -> max_output_tokens（Responses API 的字段名）
+				if (options.max_tokens) {
+					requestPayload['max_output_tokens'] = options.max_tokens;
+				}
+
 				recordChatContent(
 					telemetry.span,
 					'request',

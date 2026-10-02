@@ -913,6 +913,7 @@ Rules:
 					{
 						model: this.modelName,
 						messages,
+						max_tokens: 500, // Prompt hooks 限制 token 数量
 						includeBuiltinSystemPrompt: false,
 					},
 					abortSignal,
@@ -925,6 +926,7 @@ Rules:
 						model: this.modelName,
 						messages,
 						stream: true,
+						max_tokens: 500, // Prompt hooks 限制 token 数量
 						includeBuiltinSystemPrompt: false,
 					},
 					abortSignal,
@@ -938,6 +940,7 @@ Rules:
 						model: this.modelName,
 						messages,
 						stream: true,
+						max_tokens: 500, // Prompt hooks 限制 token 数量
 						includeBuiltinSystemPrompt: false,
 					},
 					abortSignal,
