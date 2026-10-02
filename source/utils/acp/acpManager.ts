@@ -438,6 +438,7 @@ class AcpManager {
 						{
 							messages: session.messages,
 							model,
+							max_tokens: config.maxTokens || 4096,
 							tools: mcpTools,
 							store: false,
 						},
@@ -454,6 +455,7 @@ class AcpManager {
 						{
 							messages: session.messages,
 							model,
+							max_tokens: config.maxTokens || 4096,
 							tools: mcpTools,
 						},
 						controller.signal,
@@ -469,6 +471,7 @@ class AcpManager {
 						{
 							messages: session.messages,
 							model,
+							max_tokens: config.maxTokens || 4096,
 							tools: mcpTools,
 						},
 						controller.signal,
@@ -485,6 +488,7 @@ class AcpManager {
 						{
 							messages: session.messages,
 							model,
+							max_tokens: config.maxTokens || 4096,
 							tools: mcpTools,
 						},
 						controller.signal,

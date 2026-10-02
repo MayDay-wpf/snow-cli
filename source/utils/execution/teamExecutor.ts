@@ -442,7 +442,13 @@ ${role ? `Your role: ${role}` : ''}
 					  )
 					: config.requestMethod === 'gemini'
 					? createStreamingGeminiCompletion(
-							{model, messages, temperature: 0, tools: allowedTools},
+							{
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: allowedTools,
+							},
 							abortSignal,
 					  )
 					: config.requestMethod === 'responses'
@@ -451,13 +457,20 @@ ${role ? `Your role: ${role}` : ''}
 								model,
 								messages,
 								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
 								tools: allowedTools,
 								prompt_cache_key: currentSession?.id,
 							},
 							abortSignal,
 					  )
 					: createStreamingChatCompletion(
-							{model, messages, temperature: 0, tools: allowedTools},
+							{
+								model,
+								messages,
+								temperature: 0,
+								max_tokens: config.maxTokens || 4096,
+								tools: allowedTools,
+							},
 							abortSignal,
 					  );
 

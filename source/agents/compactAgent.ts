@@ -122,6 +122,7 @@ export class CompactAgent {
 						{
 							model: this.modelName,
 							messages,
+							max_tokens: 4096,
 							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 							disableThinking: true, // Agents 不使用思考功能
 						},
@@ -135,6 +136,7 @@ export class CompactAgent {
 							model: this.modelName,
 							messages,
 							stream: true,
+							max_tokens: 4096,
 							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 							disableThinking: true, // Agents 不使用思考功能
 						},
@@ -149,6 +151,7 @@ export class CompactAgent {
 							model: this.modelName,
 							messages,
 							stream: true,
+							max_tokens: 4096,
 							includeBuiltinSystemPrompt: false, // 不需要内置系统提示词
 							disableThinking: true, // Agents 不使用思考功能
 						},

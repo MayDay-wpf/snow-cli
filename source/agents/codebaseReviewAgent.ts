@@ -174,6 +174,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						max_tokens: 4096,
 						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true, // Agents 不使用思考功能
@@ -187,6 +188,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						max_tokens: 4096,
 						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						stream: true,
 						includeBuiltinSystemPrompt: false,
@@ -202,6 +204,7 @@ export class CodebaseReviewAgent {
 					{
 						model: this.modelName,
 						messages,
+						max_tokens: 4096,
 						...(useReviewTool ? {tools: [this.REVIEW_TOOL]} : {}),
 						stream: true,
 						includeBuiltinSystemPrompt: false,

@@ -633,10 +633,14 @@ export async function* createStreamingChatCompletion(
 					stream: true,
 					stream_options: {include_usage: true},
 					temperature: options.temperature || 0.7,
-					max_tokens: options.max_tokens,
 					tools: options.tools,
 					tool_choice: options.tool_choice,
 				};
+
+				// 仅当显式传入时发送 max_tokens，避免未配置时把 undefined/0 传给 API
+				if (options.max_tokens) {
+					requestBody['max_tokens'] = options.max_tokens;
+				}
 
 				if (thinkingEnabled) {
 					// 启用思考:默认不传 thinking 字段(思考等级由 reasoning_effort 控制),

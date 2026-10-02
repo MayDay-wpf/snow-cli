@@ -450,6 +450,7 @@ async function compressWithChatCompletions(
 		model: modelName,
 		messages,
 		stream: true,
+		max_tokens: 4096,
 	})) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
@@ -504,6 +505,7 @@ async function compressWithResponses(
 		model: modelName,
 		messages,
 		stream: true,
+		max_tokens: 4096,
 	})) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
@@ -557,6 +559,7 @@ async function compressWithGemini(
 	for await (const chunk of createStreamingGeminiCompletion({
 		model: modelName,
 		messages,
+		max_tokens: 4096,
 	})) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {

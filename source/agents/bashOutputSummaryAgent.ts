@@ -70,6 +70,7 @@ export class BashOutputSummaryAgent {
 					{
 						model: this.modelName,
 						messages,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 					},
@@ -82,6 +83,7 @@ export class BashOutputSummaryAgent {
 						model: this.modelName,
 						messages,
 						stream: true,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 					},
@@ -95,6 +97,7 @@ export class BashOutputSummaryAgent {
 						model: this.modelName,
 						messages,
 						stream: true,
+						max_tokens: 1200,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
 					},

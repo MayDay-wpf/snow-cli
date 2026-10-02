@@ -240,6 +240,7 @@ async function callModelForText(
 				{
 					model,
 					messages,
+					max_tokens: 3000,
 					includeBuiltinSystemPrompt: false,
 				},
 				abortSignal,
@@ -250,6 +251,7 @@ async function callModelForText(
 				{
 					model,
 					messages,
+					max_tokens: 3000,
 					includeBuiltinSystemPrompt: false,
 					tool_choice: 'none',
 				},
@@ -262,6 +264,7 @@ async function callModelForText(
 				{
 					model,
 					messages,
+					max_tokens: 3000,
 					includeBuiltinSystemPrompt: false,
 					// NOTE: chat.ts uses `options.temperature || 0.7`, so 0 would be ignored.
 					temperature: 0.0001,

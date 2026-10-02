@@ -238,6 +238,7 @@ export async function generateBuddyReply(
 					{
 						model,
 						messages,
+						max_tokens: 256,
 						temperature: 0.8,
 						includeBuiltinSystemPrompt: false,
 						disableThinking: true,
