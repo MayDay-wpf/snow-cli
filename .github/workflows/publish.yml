@@ -125,7 +125,7 @@ jobs:
 
             ### What's New
 
-            - Add filesystem copy tool
+            - Make maximum number of reply tokens effective for chat/responses/gemini
 
             ### Installation
             ```bash
