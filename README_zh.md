@@ -39,6 +39,14 @@ _在终端中进行 Agentic 编程_
   <tbody>
     <tr>
       <td align="center">
+        <a href="https://go.apimart.ai/gh-snow-cli"><img src="docs/images/apimart.jpg" alt="APIMart" width="360"/></a>
+        <br/>
+        <a href="https://go.apimart.ai/gh-snow-cli"><b>APIMart</b></a>
+      </td>
+      <td>APIMart 是专注 AI 图片/视频生成的低价 API 平台，GPT-Image-2 低至 $0.006/张，1 美元可出图 160+ 张。图片、视频一套异步 API 通吃，提交任务拿 ID、回调取结果，跑批万张不超时、换模型不改代码。按量付费、无月费，通过此<a href="https://go.apimart.ai/gh-snow-cli">注册链接</a>注册即可开用</td>
+    </tr>
+    <tr>
+      <td align="center">
         <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><img src="docs/images/bloome-home.png" alt="Bloome" width="360"/></a>
         <br/>
         ☁️ <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><b>Bloome</b></a>
@@ -225,7 +233,7 @@ VSIX/                       # VSCode 扩展源码
 
 ## 友情链接
 
-* [Linux DO](https://linux.do)
+- [Linux DO](https://linux.do)
 
 ## Star History
 
