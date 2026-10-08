@@ -41,6 +41,7 @@ const ModelsPanel = lazy(() =>
 		default: m.ModelsPanel,
 	})),
 );
+const OAuthPanel = lazy(() => import('../../components/panels/OAuthPanel.js'));
 
 type SnapshotState = {
 	snapshotFileCount: Map<number, number>;
@@ -572,6 +573,41 @@ export default function ChatScreenPanels({
 							basicModel={modelsPanelBasicModel}
 							visible={panelState.showModelsPanel}
 							onClose={() => panelState.setShowModelsPanel(false)}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{/* OAuthPanel：/oauth 订阅账号登录（4 种登录方式） */}
+			{panelState.showOAuthPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<OAuthPanel
+							visible={panelState.showOAuthPanel}
+							onClose={() => panelState.setShowOAuthPanel(false)}
+							onActivated={profileName => {
+								// 切换已落盘且运行期缓存已重置：刷新界面上的当前配置名
+								// （状态栏/配置面板高亮），并在会话中留一条结果记录
+								panelState.refreshCurrentProfileName();
+								const template =
+									t.oauthPanel?.activatedMessage ??
+									'Activated profile: {profile}';
+								const content = template.replace('{profile}', profileName);
+								const activatedMessage: Message = {
+									role: 'command',
+									content,
+									commandName: 'oauth',
+								};
+								setMessages(prev => [...prev, activatedMessage]);
+							}}
 						/>
 					</Suspense>
 				</Box>

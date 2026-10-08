@@ -940,6 +940,8 @@ export const en: TranslationKeys = {
 			loop: 'Schedule recurring tasks by interval or daily time. Usage: /loop 5m <prompt> or /loop daily 09:30 <prompt>',
 			profiles: 'Switch configuration profiles',
 			models: 'Open the model switching panel',
+			oauth:
+				'Sign in with a subscription account (ChatGPT / Claude / Google / xAI)',
 			subAgentDepth: 'Set the maximum nested spawn depth for sub-agents',
 			vulnerabilityHunting:
 				'Toggle vulnerability hunting mode for security-focused code analysis',
@@ -1442,6 +1444,35 @@ export const en: TranslationKeys = {
 		modelCount: '{count} models',
 		scrollHint: '↑↓ scroll for more',
 	},
+	oauthPanel: {
+		title: 'OAuth Sign-in',
+		subtitle:
+			'Sign in with a subscription account. A browser window will open for authorization.',
+		signInHint: '↑↓ select · Enter sign in · ESC close',
+		waiting: 'Waiting for authorization in the browser...',
+		authUrlLabel: 'Authorization URL',
+		openBrowserHint:
+			'O open the link again · M paste callback URL · ESC cancel',
+		manualHint:
+			'Local callback port is unavailable; press M to paste the callback URL or code.',
+		manualTitle: 'Paste the callback URL or authorization code',
+		manualInputHint: 'Callback',
+		successTitle: 'Sign-in complete',
+		accountLabel: 'Account',
+		planLabel: 'Plan',
+		profileLabel: 'Profile',
+		modelsLabel: 'Models',
+		applyHint: 'Enter activate and return to chat · ESC keep current profile',
+		appliedHint: 'Profile activated. It will be used for new requests.',
+		activatedMessage: 'Activated profile: {profile}',
+		errorTitle: 'Sign-in failed',
+		retryHint: 'Enter back to provider list · ESC close',
+		escHint: 'ESC close',
+		providerCodex: 'ChatGPT Codex',
+		providerAnthropic: 'Anthropic (Claude)',
+		providerAntigravity: 'Antigravity (Google)',
+		providerXai: 'xAI (Grok)',
+	},
 	profilePanel: {
 		title: 'Select Profile',
 		scrollHint: '↑↓ to scroll',
@@ -1869,6 +1900,7 @@ export const en: TranslationKeys = {
 			'For code reviews, describe the risk areas you care about most',
 			'When requirements are uncertain, ask Snow to list assumptions first',
 			'Use /models to switch models without leaving the chat',
+			'Use /oauth to sign in with a subscription account (ChatGPT / Claude / Google / xAI)',
 			'Use /profiles to switch API and model profiles quickly',
 			'Use /compact when long conversations start approaching the context limit',
 			'Use /review to ask Snow to inspect working tree changes or selected commits',

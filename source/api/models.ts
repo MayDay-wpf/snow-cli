@@ -7,6 +7,8 @@ import {
 import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
+import {fetchModels as fetchOAuthModels} from '../utils/oauth/flows.js';
+import {refreshOAuthTokenIfNeeded} from '../utils/oauth/profileStore.js';
 
 export interface Model {
 	id: string;
@@ -198,6 +200,24 @@ export async function fetchAvailableModels(
 
 	try {
 		let models: Model[];
+
+		// OAuth 订阅账号档案：走 provider 专属模型列表接口（含 token 刷新与专属请求头）
+		if (config.oauth?.provider) {
+			await refreshOAuthTokenIfNeeded(config);
+			const ids = await fetchOAuthModels(
+				config.oauth.provider,
+				config.apiKey,
+				config.oauth.accountId,
+			);
+			return ids
+				.map(id => ({
+					id,
+					object: 'model',
+					created: 0,
+					owned_by: config.oauth?.provider ?? 'oauth',
+				}))
+				.sort((a, b) => a.id.localeCompare(b.id));
+		}
 
 		const defaultOpenAiBaseUrl = 'https://api.openai.com/v1';
 		const trimmedBaseUrl = config.baseUrl.replace(/\/$/, '');

@@ -32,6 +32,7 @@ export type PanelState = {
 	showProfileEditPanel: boolean;
 	editingProfileName: string | null;
 	showModelsPanel: boolean;
+	showOAuthPanel: boolean;
 	showDiffReviewPanel: boolean;
 	showConnectionPanel: boolean;
 	showTelemetryPanel: boolean;
@@ -84,6 +85,7 @@ export type PanelActions = {
 	setShowProfileEditPanel: Dispatch<SetStateAction<boolean>>;
 	setEditingProfileName: Dispatch<SetStateAction<string | null>>;
 	setShowModelsPanel: Dispatch<SetStateAction<boolean>>;
+	setShowOAuthPanel: Dispatch<SetStateAction<boolean>>;
 	setShowDiffReviewPanel: Dispatch<SetStateAction<boolean>>;
 	setProfileSelectedIndex: Dispatch<SetStateAction<number>>;
 	setProfileSearchQuery: Dispatch<SetStateAction<string>>;
@@ -103,6 +105,12 @@ export type PanelActions = {
 		hasPendingUserQuestion: boolean;
 	}) => void;
 	handleProfileSelect: (profileName: string) => void;
+	/**
+	 * 重新从磁盘读取 active profile 并刷新内存状态。
+	 * /oauth 登录后切换配置等"绕过 ProfilePanel"的切换路径必须调用它，
+	 * 否则状态栏等界面仍会显示旧配置（看起来像需要重启才生效）。
+	 */
+	refreshCurrentProfileName: () => void;
 	handleEscapeKey: () => boolean; // Returns true if ESC was handled
 	isAnyPanelOpen: () => boolean;
 };
@@ -136,6 +144,7 @@ export function usePanelState(): PanelState & PanelActions {
 		null,
 	);
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
+	const [showOAuthPanel, setShowOAuthPanel] = useState(false);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
 	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
 	const [showTelemetryPanel, setShowTelemetryPanel] = useState(false);
@@ -186,6 +195,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showBranchPanel ||
 			showProfilePanel ||
 			showModelsPanel ||
+			showOAuthPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
 			showTelemetryPanel ||
@@ -251,6 +261,15 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowProfilePanel(false);
 		setProfileSelectedIndex(0);
 		setProfileSearchQuery('');
+	};
+
+	// 刷新"当前配置"显示：/oauth 等路径直接切换 active profile 后调用，
+	// 否则状态栏、ProfilePanel 高亮等仍按旧配置渲染（需重启才更新）。
+	const refreshCurrentProfileName = () => {
+		const profiles = getAllProfiles();
+		const activeName = getActiveProfileName();
+		const profile = profiles.find(p => p.name === activeName);
+		setCurrentProfileName(profile?.displayName || activeName);
 	};
 
 	const handleEscapeKey = (): boolean => {
@@ -382,6 +401,12 @@ export function usePanelState(): PanelState & PanelActions {
 			return false; // Let ModelsPanel handle ESC
 		}
 
+		// OAuthPanel handles its own ESC key logic internally
+		// Don't close it here - let the panel decide when to close
+		if (showOAuthPanel) {
+			return false; // Let OAuthPanel handle ESC
+		}
+
 		// NewPromptPanel handles its own ESC key logic internally
 		if (showNewPromptPanel) {
 			return false; // Let NewPromptPanel handle ESC
@@ -440,6 +465,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showProfilePanel ||
 			showProfileEditPanel ||
 			showModelsPanel ||
+			showOAuthPanel ||
 			showDiffReviewPanel ||
 			showConnectionPanel ||
 			showTelemetryPanel ||
@@ -478,6 +504,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showProfileEditPanel,
 		editingProfileName,
 		showModelsPanel,
+		showOAuthPanel,
 		showDiffReviewPanel,
 		showConnectionPanel,
 		showTelemetryPanel,
@@ -517,6 +544,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowProfileEditPanel,
 		setEditingProfileName,
 		setShowModelsPanel,
+		setShowOAuthPanel,
 		openProfileEdit,
 		closeProfileEditAndReturnToPicker,
 		setShowDiffReviewPanel,
@@ -535,6 +563,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setProfileSearchQuery,
 		handleSwitchProfile,
 		handleProfileSelect,
+		refreshCurrentProfileName,
 		handleEscapeKey,
 		isAnyPanelOpen,
 	};

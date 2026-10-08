@@ -22,6 +22,10 @@ import type {
 	ImageContent,
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {
+	applyOAuthProviderHeaders,
+	refreshOAuthTokenIfNeeded,
+} from '../utils/oauth/profileStore.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
@@ -676,14 +680,21 @@ export async function* createStreamingChatCompletion(
 					{sessionId: options.sessionId},
 				);
 
+				// OAuth 订阅账号档案：请求前按需刷新 access token（刷新结果就地写回 config）
+				await refreshOAuthTokenIfNeeded(config);
+
+				const chatHeaders: Record<string, string> = {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${config.apiKey}`,
+					'x-snow': getVersionHeader(),
+					...customHeaders,
+				};
+				// OAuth provider 专属请求头（codex/anthropic/antigravity 需要）
+				applyOAuthProviderHeaders(config, chatHeaders);
+
 				const fetchOptions = addProxyToFetchOptions(url, {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${config.apiKey}`,
-						'x-snow': getVersionHeader(),
-						...customHeaders,
-					},
+					headers: chatHeaders,
 					body: JSON.stringify(requestBody),
 					signal: abortSignal,
 				});

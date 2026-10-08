@@ -8,6 +8,7 @@ import {
 	unlinkSync,
 } from 'fs';
 import {readSettings, updateSettings} from './unifiedSettings.js';
+import type {OAuthProfileMetadata} from '../oauth/types.js';
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
@@ -83,6 +84,8 @@ export interface ApiConfig {
 	maxRetries?: number;
 	// API 请求重试间隔 (单位: ms, 默认: 3000)
 	retryDelayMs?: number;
+	// OAuth 订阅账号登录元数据（由 /oauth 登录生成；存在时请求会自动刷新 token 并注入 provider 请求头）
+	oauth?: OAuthProfileMetadata;
 }
 
 export interface MCPServer {

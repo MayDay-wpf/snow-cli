@@ -7,6 +7,10 @@ import {
 	type ThinkingConfig,
 } from '../utils/config/apiConfig.js';
 import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
+import {
+	applyOAuthProviderHeaders,
+	refreshOAuthTokenIfNeeded,
+} from '../utils/oauth/profileStore.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
@@ -824,6 +828,9 @@ export async function* createStreamingAnthropicCompletion(
 					{sessionId: options.sessionId},
 				);
 
+				// OAuth 订阅账号档案：请求前按需刷新 access token（刷新结果就地写回 config）
+				await refreshOAuthTokenIfNeeded(config);
+
 				// Prepare headers
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
@@ -832,6 +839,8 @@ export async function* createStreamingAnthropicCompletion(
 					'x-snow': getVersionHeader(),
 					...customHeaders,
 				};
+				// OAuth provider 专属请求头（Claude OAuth 需要 anthropic-beta 并移除 x-api-key）
+				applyOAuthProviderHeaders(config, headers);
 
 				// Add beta parameter if configured
 				// if (config.anthropicBeta) {

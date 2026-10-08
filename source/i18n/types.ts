@@ -841,6 +841,7 @@ export type TranslationKeys = {
 			loop: string;
 			profiles: string;
 			models: string;
+			oauth: string;
 			subAgentDepth: string;
 			export: string;
 			config: string;
@@ -1328,6 +1329,34 @@ export type TranslationKeys = {
 		tipLabel: string;
 		modelCount: string;
 		scrollHint: string;
+	};
+
+	// OAuth sign-in panel (/oauth)：4 种订阅账号登录
+	oauthPanel: {
+		title: string;
+		subtitle: string;
+		signInHint: string;
+		waiting: string;
+		authUrlLabel: string;
+		openBrowserHint: string;
+		manualHint: string;
+		manualTitle: string;
+		manualInputHint: string;
+		successTitle: string;
+		accountLabel: string;
+		planLabel: string;
+		profileLabel: string;
+		modelsLabel: string;
+		applyHint: string;
+		appliedHint: string;
+		activatedMessage: string;
+		errorTitle: string;
+		retryHint: string;
+		escHint: string;
+		providerCodex: string;
+		providerAnthropic: string;
+		providerAntigravity: string;
+		providerXai: string;
 	};
 
 	// Hooks

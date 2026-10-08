@@ -392,6 +392,7 @@ export default function ChatScreen({
 		setShowHelpPanel: panelState.setShowHelpPanel,
 		setShowUsagePanel: panelState.setShowUsagePanel,
 		setShowModelsPanel: panelState.setShowModelsPanel,
+		setShowOAuthPanel: panelState.setShowOAuthPanel,
 		setShowSubAgentDepthPanel,
 		setShowCustomCommandConfig: panelState.setShowCustomCommandConfig,
 		setShowSkillsCreation: panelState.setShowSkillsCreation,
@@ -518,6 +519,7 @@ export default function ChatScreen({
 		panelState.showHelpPanel ||
 		panelState.showProfileEditPanel ||
 		panelState.showModelsPanel ||
+		panelState.showOAuthPanel ||
 		panelState.showCustomCommandConfig ||
 		panelState.showSkillsCreation ||
 		panelState.showSkillsInstall ||

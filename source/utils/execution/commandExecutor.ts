@@ -33,6 +33,7 @@ export interface CommandResult {
 		| 'showTodoListPanel'
 		| 'showProfilePanel'
 		| 'showModelsPanel'
+		| 'showOAuthPanel'
 		| 'showSubAgentDepthPanel'
 		| 'showSkillsPicker'
 		| 'showGitLinePicker'

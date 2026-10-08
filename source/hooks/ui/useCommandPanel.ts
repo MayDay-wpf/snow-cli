@@ -269,6 +269,12 @@ export function useCommandPanel(
 					t.commandPanel.commands.models || 'Open the model switching panel',
 			},
 			{
+				name: 'oauth',
+				description:
+					t.commandPanel.commands.oauth ||
+					'Sign in with a subscription account (ChatGPT / Claude / Google / xAI)',
+			},
+			{
 				name: 'loop',
 				description:
 					t.commandPanel.commands.loop ||

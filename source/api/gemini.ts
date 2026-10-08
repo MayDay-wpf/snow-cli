@@ -5,6 +5,14 @@ import {
 	type ApiConfig,
 } from '../utils/config/apiConfig.js';
 import {resolveCustomHeaderPlaceholders} from '../utils/plugins/customHeaders/index.js';
+import {
+	applyOAuthProviderHeaders,
+	refreshOAuthTokenIfNeeded,
+} from '../utils/oauth/profileStore.js';
+import {
+	resolveAntigravityEndpoint,
+	wrapAntigravityPayload,
+} from '../utils/oauth/antigravityPayload.js';
 import {getSystemPromptForMode} from '../prompt/systemPrompt.js';
 import {
 	withRetryGenerator,
@@ -541,7 +549,7 @@ export async function* createStreamingGeminiCompletion(
 				);
 
 				// Build request payload
-				const requestBody: any = {
+				let requestBody: any = {
 					contents,
 					systemInstruction: systemInstruction
 						? {parts: systemInstruction.map(text => ({text}))}
@@ -573,6 +581,17 @@ export async function* createStreamingGeminiCompletion(
 					requestBody.tools = geminiTools;
 				}
 
+				// Antigravity OAuth 档案：包装为 Cloud Code Assist 内部协议载荷
+				const isAntigravityProfile = config.oauth?.provider === 'antigravity';
+				if (isAntigravityProfile) {
+					const antigravityModel = options.model || config.advancedModel || '';
+					requestBody = wrapAntigravityPayload(
+						requestBody,
+						antigravityModel,
+						config.oauth?.accountId ?? '',
+					);
+				}
+
 				recordChatContent(
 					telemetry.span,
 					'request',
@@ -592,12 +611,14 @@ export async function* createStreamingGeminiCompletion(
 						? config.baseUrl
 						: 'https://generativelanguage.googleapis.com/v1beta';
 
-				const url = resolveApiEndpoint(
-					baseUrl,
-					'geminiStreamGenerateContent',
-					config.baseUrlMode,
-					{modelName},
-				);
+				const url = isAntigravityProfile
+					? resolveAntigravityEndpoint(baseUrl)
+					: resolveApiEndpoint(
+							baseUrl,
+							'geminiStreamGenerateContent',
+							config.baseUrlMode,
+							{modelName},
+					  );
 
 				// Use custom headers from options if provided, otherwise get from current config (supports profile override)
 				// Header values may contain {{placeholder}} tokens resolved by plugins in ~/.snow/plugin/custom_headers/
@@ -608,15 +629,22 @@ export async function* createStreamingGeminiCompletion(
 					{sessionId: options.sessionId},
 				);
 
+				// OAuth 订阅账号档案：请求前按需刷新 access token（刷新结果就地写回 config）
+				await refreshOAuthTokenIfNeeded(config);
+
+				const geminiHeaders: Record<string, string> = {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${config.apiKey}`,
+					'x-goog-api-key': config.apiKey,
+					'x-snow': getVersionHeader(),
+					...customHeaders,
+				};
+				// OAuth provider 专属请求头（Antigravity 需要 UA / x-goog-api-client，并移除 x-goog-api-key）
+				applyOAuthProviderHeaders(config, geminiHeaders);
+
 				const fetchOptions = addProxyToFetchOptions(url, {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${config.apiKey}`,
-						'x-goog-api-key': config.apiKey,
-						'x-snow': getVersionHeader(),
-						...customHeaders,
-					},
+					headers: geminiHeaders,
 					body: JSON.stringify(requestBody),
 					signal: abortSignal,
 				});

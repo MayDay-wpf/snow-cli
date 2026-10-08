@@ -21,6 +21,10 @@ import type {
 	UsageInfo,
 } from './types.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {
+	applyOAuthProviderHeaders,
+	refreshOAuthTokenIfNeeded,
+} from '../utils/oauth/profileStore.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {getVersionHeader} from '../utils/core/version.js';
 import {resolveApiEndpoint} from './endpointResolver.js';
@@ -948,7 +952,10 @@ export async function* createStreamingResponse(
 					{sessionId: options.sessionId ?? options.prompt_cache_key},
 				);
 
-				const requestHeaders = {
+				// OAuth 订阅账号档案：请求前按需刷新 access token（刷新结果就地写回 config）
+				await refreshOAuthTokenIfNeeded(config);
+
+				const requestHeaders: Record<string, string> = {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${config.apiKey}`,
 					'x-snow': getVersionHeader(),
@@ -958,6 +965,8 @@ export async function* createStreamingResponse(
 					}),
 					...customHeaders,
 				};
+				// OAuth provider 专属请求头（codex/xai 走 responses 后端需要）
+				applyOAuthProviderHeaders(config, requestHeaders);
 
 				const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 180) * 1000;
 

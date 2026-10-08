@@ -44,6 +44,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/backend.js'),
 			import('../../../utils/commands/loop.js'),
 			import('../../../utils/commands/models.js'),
+			import('../../../utils/commands/oauth.js'),
 			import('../../../utils/commands/telemetry.js'),
 			import('../../../utils/commands/subagentDepth.js'),
 			import('../../../utils/commands/worktree.js'),

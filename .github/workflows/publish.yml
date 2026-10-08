@@ -125,7 +125,8 @@ jobs:
 
             ### What's New
 
-            - Make maximum number of reply tokens effective for chat/responses/gemini
+            - Add `/oauth` sign-in for ChatGPT Codex, Claude, Google Antigravity, and xAI Grok, with automatic profile creation and token refresh
+            - Apply the maximum reply-token limit across Chat, Responses, and Gemini
 
             ### Installation
             ```bash
