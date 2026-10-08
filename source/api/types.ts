@@ -52,6 +52,15 @@ export interface ChatMessage {
 	};
 	// DeepSeek R1 Reasoning Content - complete reasoning chain
 	reasoning_content?: string; // Complete reasoning content from DeepSeek R1 models
+	// OpenRouter 等兼容 API 的 reasoning_details 数组形态：
+	// reasoning.text / reasoning.summary 为可读子块，reasoning.encrypted 为加密子块（忽略）
+	reasoning_details?: Array<{
+		type?: string; // 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted'
+		text?: string; // reasoning.text 子块的可读文本
+		summary?: string; // reasoning.summary 子块的可读摘要
+		data?: string; // reasoning.encrypted 子块的加密载荷（忽略）
+		[index: string]: unknown;
+	}>;
 }
 
 export interface ChatCompletionTool {

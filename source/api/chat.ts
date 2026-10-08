@@ -108,6 +108,124 @@ export interface ChatCompletionMessageParam {
 	tool_calls?: ToolCall[];
 }
 
+/** reasoning_details 数组中的单个子块（OpenRouter 等兼容 API） */
+interface ReasoningDetailBlock {
+	type?: string;
+	text?: string;
+	summary?: string;
+	data?: string;
+	[index: string]: unknown;
+}
+
+/**
+ * 从 reasoning_details 数组中提取可读思考文本。
+ * - reasoning.text / reasoning.summary 等含 text / summary 的可读子块，取其文本
+ * - reasoning.encrypted 加密子块不可读，忽略
+ */
+function extractReasoningDetailsText(details: unknown): string {
+	if (!Array.isArray(details)) {
+		return '';
+	}
+
+	let text = '';
+	for (const block of details) {
+		if (!block || typeof block !== 'object') {
+			continue;
+		}
+
+		const detail = block as ReasoningDetailBlock;
+		// 加密子块忽略
+		if (detail.type === 'reasoning.encrypted') {
+			continue;
+		}
+
+		if (typeof detail.text === 'string') {
+			text += detail.text;
+			continue;
+		}
+
+		if (typeof detail.summary === 'string') {
+			text += detail.summary;
+		}
+	}
+
+	return text;
+}
+
+/**
+ * 提取单条流式 delta 中的思考增量文本，兼容 3 种思考字段形态：
+ * 1. reasoning_content: string（DeepSeek R1 等）
+ * 2. reasoning: string（OpenRouter 等）
+ * 3. reasoning_details: ReasoningDetailBlock[]（OpenRouter 等，
+ *    含 reasoning.text / reasoning.summary 可读子块，reasoning.encrypted 忽略）
+ */
+function extractReasoningDeltaText(delta: any): string {
+	if (!delta || typeof delta !== 'object') {
+		return '';
+	}
+
+	const reasoningContent = delta.reasoning_content;
+	if (typeof reasoningContent === 'string' && reasoningContent) {
+		return reasoningContent;
+	}
+
+	const reasoning = delta.reasoning;
+	if (typeof reasoning === 'string' && reasoning) {
+		return reasoning;
+	}
+	if (reasoning && typeof reasoning === 'object') {
+		// 容错：个别实现将 reasoning 包装为对象（content / text 承载文本）
+		const nested = reasoning.content ?? reasoning.text;
+		if (typeof nested === 'string' && nested) {
+			return nested;
+		}
+	}
+
+	return extractReasoningDetailsText(delta.reasoning_details);
+}
+
+/**
+ * 将 assistant 消息携带的思考内容写入请求体，兼容 3 种思考字段形态：
+ * reasoning_content / reasoning（字符串）/ reasoning_details（数组）。
+ * thinkingEnabled 且消息未携带思考内容时，回传空 reasoning_content（DeepSeek 等要求）。
+ */
+function applyAssistantReasoningFields(
+	target: Record<string, any>,
+	msg: ChatMessage,
+	thinkingEnabled: boolean,
+): void {
+	const reasoningContent = (msg as any).reasoning_content;
+	if (reasoningContent !== undefined && reasoningContent !== null) {
+		target['reasoning_content'] = reasoningContent;
+		return;
+	}
+
+	const reasoning = (msg as any).reasoning;
+	if (typeof reasoning === 'string' && reasoning) {
+		target['reasoning'] = reasoning;
+		return;
+	}
+
+	const details = (msg as any).reasoning_details;
+	if (Array.isArray(details)) {
+		// 忽略加密子块，其余原样回传
+		const readableDetails = details.filter(
+			(block: unknown) =>
+				Boolean(block) &&
+				typeof block === 'object' &&
+				(block as ReasoningDetailBlock).type !== 'reasoning.encrypted',
+		);
+		if (readableDetails.length > 0) {
+			target['reasoning_details'] = readableDetails;
+			return;
+		}
+	}
+
+	if (thinkingEnabled) {
+		target['reasoning_content'] = '';
+	}
+}
+
 /**
  * Convert internal ChatMessage to OpenAI's message format
  * Supports both text-only and multimodal (text + images) messages
@@ -179,12 +297,7 @@ function convertToOpenAIMessages(
 				...baseMessage,
 				tool_calls: msg.tool_calls,
 			};
-			const rc = (msg as any).reasoning_content;
-			if (rc !== undefined && rc !== null) {
-				result.reasoning_content = rc;
-			} else if (thinkingEnabled) {
-				result.reasoning_content = '';
-			}
+			applyAssistantReasoningFields(result, msg, thinkingEnabled);
 			return result as ChatCompletionMessageParam;
 		}
 
@@ -236,17 +349,12 @@ function convertToOpenAIMessages(
 		}
 
 		if (msg.role === 'assistant') {
-			const rc = (msg as any).reasoning_content;
-			if (rc !== undefined && rc !== null) {
+			const reasoningFields: Record<string, any> = {};
+			applyAssistantReasoningFields(reasoningFields, msg, thinkingEnabled);
+			if (Object.keys(reasoningFields).length > 0) {
 				return {
 					...baseMessage,
-					reasoning_content: rc,
-				} as any;
-			}
-			if (thinkingEnabled) {
-				return {
-					...baseMessage,
-					reasoning_content: '',
+					...reasoningFields,
 				} as any;
 			}
 		}
@@ -404,7 +512,7 @@ export interface StreamChunk {
 	}>;
 	delta?: string; // For tool call streaming chunks or reasoning content
 	usage?: UsageInfo; // Token usage information
-	reasoning_content?: string; // Complete reasoning content for DeepSeek R1 models
+	reasoning_content?: string; // 归一化的完整思考内容（兼容 reasoning_content / reasoning / reasoning_details 三种形态）
 }
 /**
  * Parse Server-Sent Events (SSE) stream
@@ -510,6 +618,9 @@ async function* parseSSEStream(
 							return Boolean(
 								delta?.content ||
 									delta?.reasoning_content ||
+									delta?.reasoning ||
+									(delta?.reasoning_details &&
+										delta.reasoning_details.length > 0) ||
 									(delta?.tool_calls && delta.tool_calls.length > 0),
 							);
 						});
@@ -778,9 +889,12 @@ export async function* createStreamingChatCompletion(
 						};
 					}
 
-					// Stream reasoning content (for o1 models, etc.)
-					// Note: reasoning_content is NOT included in the response, only counted for tokens
-					const reasoningContent = (choice.delta as any)?.reasoning_content;
+					// Stream reasoning deltas（兼容 3 种思考字段形态）：
+					// 1. reasoning_content（DeepSeek R1 等）
+					// 2. reasoning（OpenRouter 等）
+					// 3. reasoning_details（含 reasoning.text / reasoning.summary
+					//    可读子块，reasoning.encrypted 忽略）
+					const reasoningContent = extractReasoningDeltaText(choice.delta);
 					if (reasoningContent) {
 						// Accumulate reasoning content for saving to message
 						reasoningContentBuffer += reasoningContent;
