@@ -43,7 +43,7 @@ _Agentic coding in your terminal_
         <br/>
         <a href="https://go.apimart.ai/gh-snow-cli"><b>APIMart</b></a>
       </td>
-      <td>APIMart is a low-cost API platform for AI image & video generation — GPT-Image-2 from $0.006/image, 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, fetch results via polling or callback. Batch tens of thousands of images without timeouts, switch models without changing code. Pay-as-you-go with no monthly fee — sign up <a href="https://go.apimart.ai/gh-snow-cli">here</a> to get started.</td>
+      <td>APIMart is a low-cost API platform for AI image & video generation — GPT-Image-2 from $0.006/image, 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, fetch results via polling or callback. Batch tens of thousands of images without timeouts, switch models without changing code. Pay-as-you-go with no monthly fee — <a href="https://go.apimart.ai/gh-snow-cli">sign up here</a> to get started.</td>
     </tr>
     <tr>
       <td align="center">
