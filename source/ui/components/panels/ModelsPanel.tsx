@@ -13,6 +13,7 @@ import {
 	updateSnowConfig,
 	type RequestMethod,
 	type ResponsesReasoningMode,
+	type ResponsesServiceTier,
 } from '../../../utils/config/apiConfig.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
@@ -97,7 +98,9 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [responsesReasoningMode, setResponsesReasoningMode] = useState<
 		ResponsesReasoningMode | undefined
 	>(undefined);
-	const [responsesFastMode, setResponsesFastMode] = useState(false);
+	const [responsesServiceTier, setResponsesServiceTier] = useState<
+		ResponsesServiceTier | undefined
+	>(undefined);
 	const [responsesVerbosity, setResponsesVerbosity] =
 		useState<ResponsesVerbosity>('medium');
 
@@ -112,6 +115,8 @@ export const ModelsPanel: React.FC<Props> = ({
 	const [isResponsesModeSelecting, setIsResponsesModeSelecting] =
 		useState(false);
 	const [isVerbositySelecting, setIsVerbositySelecting] = useState(false);
+	const [isResponsesServiceTierSelecting, setIsResponsesServiceTierSelecting] =
+		useState(false);
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
 		'fast' | 'standard' | undefined
 	>(undefined);
@@ -145,6 +150,7 @@ export const ModelsPanel: React.FC<Props> = ({
 		setIsThinkingEffortSelecting(false);
 		setIsResponsesModeSelecting(false);
 		setIsVerbositySelecting(false);
+		setIsResponsesServiceTierSelecting(false);
 		setIsSpeedSelecting(false);
 		setErrorMessage('');
 
@@ -177,7 +183,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				? (cfg as any).responsesReasoning.mode
 				: undefined,
 		);
-		setResponsesFastMode((cfg as any).responsesFastMode || false);
+		setResponsesServiceTier((cfg as any).responsesServiceTier);
 		setResponsesVerbosity((cfg as any).responsesVerbosity || 'medium');
 		setAnthropicSpeed((cfg as any).anthropicSpeed);
 		setChatThinkingEnabled((cfg as any).chatThinking?.enabled || false);
@@ -655,24 +661,27 @@ export const ModelsPanel: React.FC<Props> = ({
 		[],
 	);
 
-	const applyResponsesFastMode = useCallback(async (next: boolean) => {
-		setErrorMessage('');
-		try {
-			setResponsesFastMode(next);
-			await updateSnowConfig({
-				responsesFastMode: next,
-			} as any);
-		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : t.modelsPanel.saveFailed;
-			setErrorMessage(message);
-		}
-	}, []);
+	const applyResponsesServiceTier = useCallback(
+		async (next: ResponsesServiceTier | undefined) => {
+			setErrorMessage('');
+			try {
+				setResponsesServiceTier(next);
+				await updateSnowConfig({
+					responsesServiceTier: next,
+				} as any);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : t.modelsPanel.saveFailed;
+				setErrorMessage(message);
+			}
+		},
+		[],
+	);
 
 	// 每种请求方案的最大聚焦索引（各自独立）
 	// anthropic: 0=showThinking, 1=enableThinking, 2=thinkingMode, 3=thinkingStrength, 4=anthropicSpeed
 	// gemini:    0=showThinking, 1=enableThinking, 2=thinkingStrength
-	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=mode, 4=verbosity, 5=fastMode
+	// responses: 0=showThinking, 1=enableThinking, 2=thinkingStrength, 3=mode, 4=verbosity, 5=serviceTier
 	// chat:      0=showThinking, 1=enableThinking, 2=thinkingStrength
 	// other:     0=showThinking, 1=enableThinking
 	const maxThinkingIndex = useMemo(() => {
@@ -727,6 +736,10 @@ export const ModelsPanel: React.FC<Props> = ({
 				}
 				if (isVerbositySelecting) {
 					setIsVerbositySelecting(false);
+					return;
+				}
+				if (isResponsesServiceTierSelecting) {
+					setIsResponsesServiceTierSelecting(false);
 					return;
 				}
 				if (isSpeedSelecting) {
@@ -853,6 +866,7 @@ export const ModelsPanel: React.FC<Props> = ({
 				isThinkingEffortSelecting ||
 				isResponsesModeSelecting ||
 				isVerbositySelecting ||
+				isResponsesServiceTierSelecting ||
 				isSpeedSelecting ||
 				isChatEffortSelecting
 			) {
@@ -920,7 +934,7 @@ export const ModelsPanel: React.FC<Props> = ({
 						thinkingFocusIndex === 5 &&
 						requestMethod === 'responses'
 					) {
-						void applyResponsesFastMode(!responsesFastMode);
+						setIsResponsesServiceTierSelecting(true);
 					}
 					return;
 				}
@@ -1183,11 +1197,15 @@ export const ModelsPanel: React.FC<Props> = ({
 								}
 							>
 								{thinkingFocusIndex === 5 ? '❯ ' : '  '}
-								{t.configScreen.responsesFastMode}
+								{t.configScreen.responsesServiceTier}
 							</Text>
 							<Text color={theme.colors.menuSelected}>
 								{' '}
-								{responsesFastMode ? '[✓]' : '[ ]'}
+								{responsesServiceTier === 'fast'
+									? t.configScreen.responsesServiceTierFast
+									: responsesServiceTier === 'ultrafast'
+									? t.configScreen.responsesServiceTierUltrafast
+									: t.configScreen.responsesServiceTierNotUsed}
 							</Text>
 						</Box>
 					)}
@@ -1365,6 +1383,45 @@ export const ModelsPanel: React.FC<Props> = ({
 						</Box>
 					)}
 
+					{isResponsesServiceTierSelecting && (
+						<Box marginTop={1}>
+							<ScrollableSelectInput
+								items={[
+									{
+										label: t.configScreen.responsesServiceTierNotUsed,
+										value: '__NONE__',
+									},
+									{
+										label: t.configScreen.responsesServiceTierFast,
+										value: 'fast',
+									},
+									{
+										label: t.configScreen.responsesServiceTierUltrafast,
+										value: 'ultrafast',
+									},
+								]}
+								limit={6}
+								disableNumberShortcuts={true}
+								initialIndex={
+									responsesServiceTier === 'fast'
+										? 1
+										: responsesServiceTier === 'ultrafast'
+										? 2
+										: 0
+								}
+								isFocused={true}
+								onSelect={item => {
+									void applyResponsesServiceTier(
+										item.value === '__NONE__'
+											? undefined
+											: (item.value as 'fast' | 'ultrafast'),
+									);
+									setIsResponsesServiceTierSelecting(false);
+								}}
+							/>
+						</Box>
+					)}
+
 					{isGeminiLevelSelecting && (
 						<Box marginTop={1}>
 							<ScrollableSelectInput
@@ -1483,6 +1540,7 @@ export const ModelsPanel: React.FC<Props> = ({
 						!isThinkingEffortSelecting &&
 						!isResponsesModeSelecting &&
 						!isVerbositySelecting &&
+						!isResponsesServiceTierSelecting &&
 						!isSpeedSelecting &&
 						!isChatEffortSelecting && (
 							<Box marginTop={1}>

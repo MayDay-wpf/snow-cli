@@ -39,6 +39,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
+		responsesServiceTier,
+		setResponsesServiceTier,
 		anthropicSpeed,
 		setAnthropicSpeed,
 		chatReasoningEffort,
@@ -78,6 +80,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.responsesReasoningMode.replace(':', '');
 			case 'responsesVerbosity':
 				return t.configScreen.responsesVerbosity.replace(':', '');
+			case 'responsesServiceTier':
+				return t.configScreen.responsesServiceTier.replace(':', '');
 			case 'anthropicSpeed':
 				return t.configScreen.anthropicSpeed.replace(':', '');
 			case 'chatReasoningEffort':
@@ -360,6 +364,40 @@ export default function ConfigSelectPanel({state}: Props) {
 								item.value === '__NONE__'
 									? undefined
 									: (item.value as 'fast' | 'standard'),
+							);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'responsesServiceTier' && (
+					<ScrollableSelectInput
+						items={[
+							{
+								label: t.configScreen.responsesServiceTierNotUsed,
+								value: '__NONE__',
+							},
+							{
+								label: t.configScreen.responsesServiceTierFast,
+								value: 'fast',
+							},
+							{
+								label: t.configScreen.responsesServiceTierUltrafast,
+								value: 'ultrafast',
+							},
+						]}
+						initialIndex={
+							responsesServiceTier === 'fast'
+								? 1
+								: responsesServiceTier === 'ultrafast'
+								? 2
+								: 0
+						}
+						isFocused={true}
+						onSelect={item => {
+							setResponsesServiceTier(
+								item.value === '__NONE__'
+									? undefined
+									: (item.value as 'fast' | 'ultrafast'),
 							);
 							setIsEditing(false);
 						}}

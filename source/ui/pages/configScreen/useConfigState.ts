@@ -9,6 +9,7 @@ import {
 	type BaseUrlMode,
 	type ApiConfig,
 	type ResponsesReasoningMode,
+	type ResponsesServiceTier,
 } from '../../../utils/config/apiConfig.js';
 import {
 	fetchAvailableModels,
@@ -112,7 +113,9 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [responsesVerbosity, setResponsesVerbosity] = useState<
 		'low' | 'medium' | 'high'
 	>('medium');
-	const [responsesFastMode, setResponsesFastMode] = useState(false);
+	const [responsesServiceTier, setResponsesServiceTier] = useState<
+		ResponsesServiceTier | undefined
+	>(undefined);
 	const [responsesWebSocket, setResponsesWebSocket] = useState(false);
 	const [anthropicSpeed, setAnthropicSpeed] = useState<
 		'fast' | 'standard' | undefined
@@ -263,7 +266,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 							'responsesReasoningEffort',
 							'responsesReasoningMode',
 							'responsesVerbosity',
-							'responsesFastMode',
+							'responsesServiceTier',
 					  ] as ConfigField[])
 					: requestMethod === 'chat'
 					? ([
@@ -361,7 +364,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				currentField === 'responsesReasoningEffort' ||
 				currentField === 'responsesReasoningMode' ||
 				currentField === 'responsesVerbosity' ||
-				currentField === 'responsesFastMode')
+				currentField === 'responsesServiceTier')
 		) {
 			setCurrentField('reasoningGroup');
 		}
@@ -469,7 +472,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				: undefined,
 		);
 		setResponsesVerbosity(config.responsesVerbosity || 'medium');
-		setResponsesFastMode(config.responsesFastMode || false);
+		setResponsesServiceTier(config.responsesServiceTier);
 		setResponsesWebSocket(config.responsesWebSocket || false);
 		setAnthropicSpeed(config.anthropicSpeed);
 		setChatThinkingEnabled(config.chatThinking?.enabled || false);
@@ -587,6 +590,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		if (currentField === 'responsesReasoningEffort')
 			return responsesReasoningEffort;
 		if (currentField === 'anthropicSpeed') return anthropicSpeed || '';
+		if (currentField === 'responsesServiceTier')
+			return responsesServiceTier || '';
 		if (currentField === 'chatReasoningEffort') return chatReasoningEffort;
 		return '';
 	};
@@ -960,7 +965,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				mode: responsesReasoningMode,
 			};
 
-			config.responsesFastMode = responsesFastMode;
+			config.responsesServiceTier = responsesServiceTier;
 			config.responsesWebSocket = responsesWebSocket;
 			config.responsesVerbosity = responsesVerbosity;
 			config.anthropicSpeed = anthropicSpeed;
@@ -1013,7 +1018,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 							mode: responsesReasoningMode,
 						},
 						responsesVerbosity,
-						responsesFastMode,
+						responsesServiceTier,
 						responsesWebSocket,
 						anthropicSpeed,
 						chatThinking: chatThinkingEnabled
@@ -1118,8 +1123,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
-		responsesFastMode,
-		setResponsesFastMode,
+		responsesServiceTier,
+		setResponsesServiceTier,
 		responsesWebSocket,
 		setResponsesWebSocket,
 		anthropicSpeed,

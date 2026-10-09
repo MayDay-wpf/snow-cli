@@ -14,6 +14,7 @@ import {
 	DEFAULT_STREAM_IDLE_TIMEOUT_SEC,
 	DEFAULT_RETRY_DELAY_MS,
 	normalizeBaseUrlMode,
+	normalizeResponsesServiceTier,
 	resolveSnowConfigDir,
 	type ApiConfig,
 	type AppConfig,
@@ -238,6 +239,14 @@ export function loadProfile(profileName: string): AppConfig | undefined {
 				retryDelayMs: normalizeRetryDelayMs(parsedSnowcfg.retryDelayMs),
 			},
 		};
+
+		// 迁移旧版 responsesFastMode(boolean) -> responsesServiceTier
+		const legacyResponsesFastMode = (parsedSnowcfg as any).responsesFastMode;
+		mergedConfig.snowcfg.responsesServiceTier = normalizeResponsesServiceTier(
+			mergedConfig.snowcfg.responsesServiceTier,
+			legacyResponsesFastMode,
+		);
+		delete (mergedConfig.snowcfg as any)['responsesFastMode'];
 
 		return mergedConfig;
 	} catch {

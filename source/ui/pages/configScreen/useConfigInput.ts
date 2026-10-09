@@ -56,8 +56,6 @@ export function useConfigInput(
 		setGeminiThinkingEnabled,
 		responsesReasoningEnabled,
 		setResponsesReasoningEnabled,
-		responsesFastMode,
-		setResponsesFastMode,
 		responsesWebSocket,
 		setResponsesWebSocket,
 		maxContextTokens,
@@ -491,8 +489,6 @@ export function useConfigInput(
 			const next = !responsesReasoningEnabled;
 			setResponsesReasoningEnabled(next);
 			if (!next) setShowThinking(false);
-		} else if (currentField === 'responsesFastMode') {
-			setResponsesFastMode(!responsesFastMode);
 		} else if (currentField === 'responsesWebSocket') {
 			setResponsesWebSocket(!responsesWebSocket);
 		} else if (currentField === 'chatThinkingEnabled') {
@@ -514,6 +510,7 @@ export function useConfigInput(
 			currentField === 'responsesReasoningEffort' ||
 			currentField === 'responsesReasoningMode' ||
 			currentField === 'responsesVerbosity' ||
+			currentField === 'responsesServiceTier' ||
 			currentField === 'chatReasoningEffort'
 		) {
 			setIsEditing(true);

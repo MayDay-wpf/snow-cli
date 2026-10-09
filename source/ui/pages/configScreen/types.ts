@@ -29,7 +29,7 @@ export type ConfigField =
 	| 'responsesReasoningEffort'
 	| 'responsesReasoningMode'
 	| 'responsesVerbosity'
-	| 'responsesFastMode'
+	| 'responsesServiceTier'
 	| 'responsesWebSocket'
 	| 'chatThinkingEnabled'
 	| 'chatReasoningEffort'
@@ -146,6 +146,7 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'responsesReasoningEffort',
 	'responsesReasoningMode',
 	'responsesVerbosity',
+	'responsesServiceTier',
 	'anthropicSpeed',
 	'chatReasoningEffort',
 ];
@@ -172,7 +173,6 @@ export const TOGGLE_FIELDS: ConfigField[] = [
 	'thinkingEnabled',
 	'geminiThinkingEnabled',
 	'responsesReasoningEnabled',
-	'responsesFastMode',
 	'responsesWebSocket',
 	'chatThinkingEnabled',
 	'supportsVision',

@@ -63,7 +63,8 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		setResponsesReasoningMode,
 		responsesVerbosity,
 		setResponsesVerbosity,
-		responsesFastMode,
+		responsesServiceTier,
+		setResponsesServiceTier,
 		responsesWebSocket,
 		chatThinkingEnabled,
 		chatReasoningEffort,
@@ -742,21 +743,59 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 				</Box>
 			);
 
-		case 'responsesFastMode':
+		case 'responsesServiceTier':
 			return (
 				<Box key={field} flexDirection="column">
 					<Text color={activeColor}>
 						{activeIndicator}
-						{t.configScreen.responsesFastMode}
+						{t.configScreen.responsesServiceTier}
 					</Text>
-					<Box marginLeft={3}>
-						<Text color={theme.colors.menuSecondary}>
-							{responsesFastMode
-								? t.configScreen.enabled
-								: t.configScreen.disabled}{' '}
-							{t.configScreen.toggleHint}
-						</Text>
-					</Box>
+					{isCurrentlyEditing ? (
+						<Box marginLeft={3}>
+							<ScrollableSelectInput
+								items={[
+									{
+										label: t.configScreen.responsesServiceTierNotUsed,
+										value: '__NONE__',
+									},
+									{
+										label: t.configScreen.responsesServiceTierFast,
+										value: 'fast',
+									},
+									{
+										label: t.configScreen.responsesServiceTierUltrafast,
+										value: 'ultrafast',
+									},
+								]}
+								initialIndex={
+									responsesServiceTier === 'fast'
+										? 1
+										: responsesServiceTier === 'ultrafast'
+										? 2
+										: 0
+								}
+								isFocused={true}
+								onSelect={item => {
+									setResponsesServiceTier(
+										item.value === '__NONE__'
+											? undefined
+											: (item.value as 'fast' | 'ultrafast'),
+									);
+									state.setIsEditing(false);
+								}}
+							/>
+						</Box>
+					) : (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{responsesServiceTier === 'fast'
+									? t.configScreen.responsesServiceTierFast
+									: responsesServiceTier === 'ultrafast'
+									? t.configScreen.responsesServiceTierUltrafast
+									: t.configScreen.responsesServiceTierNotUsed}
+							</Text>
+						</Box>
+					)}
 				</Box>
 			);
 

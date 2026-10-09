@@ -322,7 +322,10 @@ export type TranslationKeys = {
 		responsesReasoningMode: string;
 		responsesReasoningModeNone: string;
 		responsesVerbosity: string;
-		responsesFastMode: string;
+		responsesServiceTier: string;
+		responsesServiceTierNotUsed: string;
+		responsesServiceTierFast: string;
+		responsesServiceTierUltrafast: string;
 		responsesWebSocket: string;
 		chatThinkingEnabled: string;
 		chatReasoningEffort: string;

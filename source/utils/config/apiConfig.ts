@@ -27,6 +27,8 @@ export interface GeminiThinkingConfig {
 
 export type ResponsesReasoningMode = 'standard' | 'pro';
 
+export type ResponsesServiceTier = 'fast' | 'ultrafast';
+
 export interface ResponsesReasoningConfig {
 	enabled: boolean;
 	effort: string; // e.g. 'none', 'low', 'medium', 'high', 'xhigh', or custom
@@ -60,7 +62,7 @@ export interface ApiConfig {
 	thinking?: ThinkingConfig; // Anthropic thinking configuration
 	geminiThinking?: GeminiThinkingConfig; // Gemini thinking configuration
 	responsesReasoning?: ResponsesReasoningConfig; // Responses API reasoning configuration
-	responsesFastMode?: boolean; // Responses API fast mode (service_tier: "priority")
+	responsesServiceTier?: ResponsesServiceTier; // Responses API service tier: 'fast' -> "priority", 'ultrafast' -> "ultrafast"; undefined = not sent
 	// Responses API WebSocket 模式：用 WebSocket 长连接替代 HTTP + SSE（默认关闭）
 	responsesWebSocket?: boolean;
 	responsesVerbosity?: 'low' | 'medium' | 'high'; // Responses API text verbosity (default: medium)
@@ -293,6 +295,25 @@ function normalizeRequestMethod(method: unknown): RequestMethod {
 	return DEFAULT_CONFIG.snowcfg.requestMethod;
 }
 
+/**
+ * 归一化 Responses service tier。
+ * 兼容旧版 responsesFastMode(boolean): true 迁移为 'fast'。
+ */
+export function normalizeResponsesServiceTier(
+	value: unknown,
+	legacyFastMode?: unknown,
+): ResponsesServiceTier | undefined {
+	if (value === 'fast' || value === 'ultrafast') {
+		return value;
+	}
+
+	if (legacyFastMode === true) {
+		return 'fast';
+	}
+
+	return undefined;
+}
+
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 function ensureConfigDirectory(): void {
@@ -367,6 +388,15 @@ export function loadConfig(): AppConfig {
 				retryDelayMs: DEFAULT_RETRY_DELAY_MS,
 			};
 		}
+
+		// 迁移旧版 responsesFastMode(boolean) -> responsesServiceTier
+		const legacyResponsesFastMode = (configWithoutMcp.snowcfg as any)
+			?.responsesFastMode;
+		apiConfig.responsesServiceTier = normalizeResponsesServiceTier(
+			apiConfig.responsesServiceTier,
+			legacyResponsesFastMode,
+		);
+		delete (apiConfig as any)['responsesFastMode'];
 
 		const mergedConfig: AppConfig = {
 			...DEFAULT_CONFIG,

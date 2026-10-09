@@ -135,7 +135,7 @@ export interface StatusLineSystemState {
 		responsesReasoningEffort?: string;
 		chatThinkingEnabled?: boolean;
 		chatReasoningEffort?: string;
-		responsesFastMode?: boolean;
+		responsesServiceTier?: string;
 		responsesVerbosity?: string;
 		anthropicSpeed?: string;
 		enablePromptOptimization?: boolean;

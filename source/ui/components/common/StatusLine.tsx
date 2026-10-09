@@ -468,7 +468,7 @@ export default function StatusLine({
 					responsesReasoningEffort: cfg?.responsesReasoning?.effort,
 					chatThinkingEnabled: cfg?.chatThinking?.enabled,
 					chatReasoningEffort: cfg?.chatThinking?.reasoning_effort,
-					responsesFastMode: cfg?.responsesFastMode,
+					responsesServiceTier: cfg?.responsesServiceTier,
 					responsesVerbosity: cfg?.responsesVerbosity,
 					anthropicSpeed: cfg?.anthropicSpeed,
 					enablePromptOptimization: cfg?.enablePromptOptimization,

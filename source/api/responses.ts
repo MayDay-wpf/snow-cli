@@ -913,8 +913,11 @@ export async function* createStreamingResponse(
 						!options.disableThinking && {
 							reasoning: configuredReasoning,
 						}),
-					...(config.responsesFastMode && {
-						service_tier: 'priority',
+					...(config.responsesServiceTier && {
+						service_tier:
+							config.responsesServiceTier === 'ultrafast'
+								? 'ultrafast'
+								: 'priority',
 					}),
 					text: {
 						verbosity: configuredVerbosity,
