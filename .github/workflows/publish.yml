@@ -125,7 +125,9 @@ jobs:
 
             ### What's New
 
-            - Added reasoning_details type and related functions to support multiple thinking content formats
+            - Renamed `responsesFastMode` to `responsesServiceTier` with three options: Not Used (default), fast (priority), and ultrafast
+            - Automatic migration from the legacy `responsesFastMode` boolean config (true migrates to `fast`)
+            - Updated the Models panel to select the Responses service tier from a dedicated option list
 
             ### Installation
             ```bash
