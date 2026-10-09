@@ -1,14 +1,20 @@
 /**
- * OAuth 登录类型定义（对齐 Snow App 的 4 种订阅账号登录方式）。
+ * OAuth 登录类型定义（对齐 Snow App 的 5 种订阅账号登录方式）。
  *
- * 四种登录方式：
+ * 五种登录方式：
  * - codex：ChatGPT（Codex CLI 同款 OAuth）
+ * - chatgpt：ChatGPT API（OpenAI 动态注册客户端，走 api.openai.com/v1）
  * - anthropic：Anthropic（Claude，Claude Code 同款 OAuth）
  * - antigravity：Antigravity（Google，Cloud Code Assist）
  * - xai：xAI（Grok）
  */
 
-export type OAuthProviderId = 'codex' | 'anthropic' | 'antigravity' | 'xai';
+export type OAuthProviderId =
+	| 'codex'
+	| 'chatgpt'
+	| 'anthropic'
+	| 'antigravity'
+	| 'xai';
 
 export interface OAuthPkceCodes {
 	verifier: string;
@@ -23,6 +29,11 @@ export interface OAuthTokenSet {
 	email: string;
 	planType: string;
 	projectId: string;
+	/**
+	 * 上游动态下发的 client_id（仅 chatgpt 使用；用于后续 refresh token）。
+	 * 其它 provider 为空串。
+	 */
+	clientId: string;
 	/** access token 过期时间（epoch 秒） */
 	expiresAt: number;
 }
@@ -41,6 +52,8 @@ export interface OAuthClaims {
 export interface OAuthProfileMetadata {
 	provider: OAuthProviderId;
 	refreshToken: string;
+	/** chatgpt 动态注册下发的 client_id（刷新 token 必需）；其它 provider 为空串 */
+	clientId: string;
 	/** Codex 的 chatgpt-account-id / Antigravity 的 project id */
 	accountId: string;
 	email: string;

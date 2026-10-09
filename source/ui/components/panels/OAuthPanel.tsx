@@ -51,6 +51,7 @@ type OAuthPanelMessages = {
 	retryHint?: string;
 	escHint?: string;
 	providerCodex?: string;
+	providerChatgpt?: string;
 	providerAnthropic?: string;
 	providerAntigravity?: string;
 	providerXai?: string;
@@ -58,6 +59,7 @@ type OAuthPanelMessages = {
 
 const DEFAULT_PROVIDER_LABELS: Record<OAuthProviderId, string> = {
 	codex: 'ChatGPT Codex',
+	chatgpt: 'ChatGPT (subscription plan)',
 	anthropic: 'Anthropic (Claude)',
 	antigravity: 'Antigravity (Google)',
 	xai: 'xAI (Grok)',
@@ -75,6 +77,10 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 			switch (provider) {
 				case 'codex':
 					return messages.providerCodex ?? DEFAULT_PROVIDER_LABELS.codex;
+				case 'chatgpt':
+					return (
+						messages.providerChatgpt ?? DEFAULT_PROVIDER_LABELS.chatgpt
+					);
 				case 'anthropic':
 					return (
 						messages.providerAnthropic ?? DEFAULT_PROVIDER_LABELS.anthropic

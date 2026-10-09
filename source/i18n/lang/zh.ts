@@ -1381,6 +1381,7 @@ export const zh: TranslationKeys = {
 		retryHint: 'Enter 返回登录方式列表 · ESC 关闭',
 		escHint: 'ESC 关闭',
 		providerCodex: 'ChatGPT Codex',
+		providerChatgpt: 'ChatGPT（订阅计划）',
 		providerAnthropic: 'Anthropic (Claude)',
 		providerAntigravity: 'Antigravity (Google)',
 		providerXai: 'xAI (Grok)',

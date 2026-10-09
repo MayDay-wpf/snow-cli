@@ -1472,6 +1472,7 @@ export const en: TranslationKeys = {
 		retryHint: 'Enter back to provider list · ESC close',
 		escHint: 'ESC close',
 		providerCodex: 'ChatGPT Codex',
+		providerChatgpt: 'ChatGPT (subscription plan)',
 		providerAnthropic: 'Anthropic (Claude)',
 		providerAntigravity: 'Antigravity (Google)',
 		providerXai: 'xAI (Grok)',

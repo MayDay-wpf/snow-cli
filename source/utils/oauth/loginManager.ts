@@ -3,13 +3,17 @@
  * 对齐 Snow App 的 native/src/api/oauth/sessions.rs。
  */
 
-import {OAUTH_PROVIDERS} from './constants.js';
+import {mkdir, readFile, writeFile} from 'fs/promises';
+import {dirname, join} from 'path';
+import {resolveSnowConfigDir} from '../config/apiConfig.js';
+import {CHATGPT_HOST_ID_FILE_NAME, OAUTH_PROVIDERS} from './constants.js';
 import {
 	startCallbackServer,
 	type CallbackServerHandle,
 } from './callbackServer.js';
 import {
 	buildAuthorizeUrl,
+	chatgptVerifyIdentity,
 	exchangeCode,
 	fetchModels,
 	parseClaims,
@@ -35,6 +39,10 @@ interface OAuthLoginSession {
 	sessionId: string;
 	provider: OAuthProviderId;
 	state: string;
+	/** chatgpt 授权时写入并在 id_token 中回验的 nonce */
+	nonce: string;
+	/** chatgpt 的 ext_agent_host_id（本地持久化） */
+	hostId: string;
 	codeVerifier: string;
 	redirectUri: string;
 	authUrl: string;
@@ -78,6 +86,7 @@ export async function startOAuthLogin(
 	const def = OAUTH_PROVIDERS[provider];
 	const pkce = generatePkce();
 	const state = generateState();
+	const nonce = generateState();
 	const sessionId = generateSessionId();
 
 	const server = await startCallbackServer({
@@ -99,12 +108,23 @@ export async function startOAuthLogin(
 	const manualMode = server === null;
 	const port = server?.port ?? def.callbackPorts[0] ?? 0;
 	const redirectUri = `http://${def.redirectHost}:${port}${def.callbackPath}`;
-	const authUrl = buildAuthorizeUrl(provider, redirectUri, pkce, state);
+	// chatgpt 走动态客户端注册：授权链接需要 nonce 与本地持久化的 ext_agent_host_id
+	const hostId = provider === 'chatgpt' ? await ensureChatGptHostId() : '';
+	const authUrl = buildAuthorizeUrl(
+		provider,
+		redirectUri,
+		pkce,
+		state,
+		nonce,
+		hostId,
+	);
 
 	const session: OAuthLoginSession = {
 		sessionId,
 		provider,
 		state,
+		nonce,
+		hostId,
 		codeVerifier: pkce.verifier,
 		redirectUri,
 		authUrl,
@@ -163,6 +183,39 @@ function closeEntry(entry: OAuthLoginEntry): void {
 		entry.server.close();
 		entry.server = undefined;
 	}
+}
+
+/**
+ * 读取/生成 ChatGPT 的 ext_agent_host_id（持久化在 Snow 配置目录）。
+ * 文件缺失或内容无效时重新生成；写入失败不阻断登录，仅使用本次生成的值。
+ */
+async function ensureChatGptHostId(): Promise<string> {
+	const path = join(resolveSnowConfigDir(), CHATGPT_HOST_ID_FILE_NAME);
+	try {
+		const existing = await readFile(path, 'utf8');
+		const parsed = JSON.parse(existing) as {ext_agent_host_id?: unknown};
+		const hostId =
+			typeof parsed?.ext_agent_host_id === 'string'
+				? parsed.ext_agent_host_id.trim()
+				: '';
+		if (hostId) {
+			return hostId;
+		}
+	} catch {
+		// 文件缺失或内容损坏：走下面的重新生成分支
+	}
+
+	const hostId = `urn:uuid:${generateSessionId()}`;
+	try {
+		await mkdir(dirname(path), {recursive: true});
+		await writeFile(path, JSON.stringify({ext_agent_host_id: hostId}), 'utf8');
+	} catch (error) {
+		console.error(
+			'[oauth] failed to persist the ChatGPT host id:',
+			error instanceof Error ? error.message : error,
+		);
+	}
+	return hostId;
 }
 
 /**
@@ -271,7 +324,10 @@ async function handleCallbackRequest(
 		throw new Error(message);
 	}
 
-	await completeLogin(entry, code);
+	// chatgpt 动态注册：授权回调会带回上游下发的 client_id，换 token 与后续刷新都需要它
+	const issuedClientId = params.get('client_id')?.trim() ?? '';
+
+	await completeLogin(entry, code, issuedClientId);
 }
 
 function setSessionError(entry: OAuthLoginEntry, message: string): void {
@@ -285,6 +341,7 @@ function setSessionError(entry: OAuthLoginEntry, message: string): void {
 async function completeLogin(
 	entry: OAuthLoginEntry,
 	code: string,
+	issuedClientId: string,
 ): Promise<void> {
 	if (entry.status === 'success' && entry.outcome) {
 		return;
@@ -298,7 +355,7 @@ async function completeLogin(
 	entry.completing = true;
 
 	try {
-		const outcome = await performLogin(entry.session, code);
+		const outcome = await performLogin(entry.session, code, issuedClientId);
 		entry.status = 'success';
 		entry.outcome = outcome;
 		entry.error = undefined;
@@ -317,6 +374,7 @@ async function completeLogin(
 async function performLogin(
 	session: OAuthLoginSession,
 	code: string,
+	issuedClientId: string,
 ): Promise<OAuthLoginOutcome> {
 	const provider = session.provider;
 	const tokens = await exchangeCode(
@@ -325,7 +383,11 @@ async function performLogin(
 		session.redirectUri,
 		session.codeVerifier,
 		session.state,
+		issuedClientId,
 	);
+	if (provider === 'chatgpt') {
+		chatgptVerifyIdentity(tokens.idToken, session.nonce);
+	}
 	const claims = parseClaims(provider, tokens);
 
 	let availableModels: string[] = [];
@@ -352,6 +414,7 @@ async function performLogin(
 		tokens,
 		advancedModel,
 		basicModel,
+		issuedClientId,
 	);
 	const outcome = saveOAuthProfile(draft);
 	return {

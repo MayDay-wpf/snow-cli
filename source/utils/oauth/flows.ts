@@ -13,6 +13,9 @@ import {
 	ANTIGRAVITY_CODE_ASSIST_HOSTS,
 	ANTIGRAVITY_PREFERRED_MODELS,
 	ANTIGRAVITY_USERINFO_URL,
+	CHATGPT_AGENT_NAME_HINT,
+	CHATGPT_PLAN_SCOPE,
+	CHATGPT_RESOURCE,
 	codexUserAgent,
 	CODEX_CLIENT_VERSION,
 	CODEX_ORIGINATOR,
@@ -92,6 +95,8 @@ export function buildAuthorizeUrl(
 	redirectUri: string,
 	pkce: OAuthPkceCodes,
 	state: string,
+	nonce: string = '',
+	hostId: string = '',
 ): string {
 	const def = providerDef(provider);
 	const url = new URL(def.authorizeUrl);
@@ -109,6 +114,21 @@ export function buildAuthorizeUrl(
 		query.append('id_token_add_organizations', 'true');
 		query.append('codex_cli_simplified_flow', 'true');
 		query.append('originator', CODEX_ORIGINATOR);
+		return url.toString();
+	}
+
+	if (provider === 'chatgpt') {
+		query.append('client_id', def.clientId);
+		query.append('response_type', 'code');
+		query.append('redirect_uri', redirectUri);
+		query.append('scope', def.scope);
+		query.append('resource', CHATGPT_RESOURCE);
+		query.append('state', state);
+		query.append('nonce', nonce);
+		query.append('code_challenge', pkce.challenge);
+		query.append('code_challenge_method', 'S256');
+		query.append('agent_name_hint', CHATGPT_AGENT_NAME_HINT);
+		query.append('ext_agent_host_id', hostId);
 		return url.toString();
 	}
 
@@ -166,6 +186,7 @@ function parseCodexTokenResponse(body: Record<string, unknown>): OAuthTokenSet {
 		email: '',
 		planType: '',
 		projectId: '',
+		clientId: '',
 		expiresAt,
 	};
 }
@@ -282,6 +303,178 @@ async function codexFetchModels(
 }
 
 // ---------------------------------------------------------------------------
+// ChatGPT（OpenAI API，动态注册客户端）
+// ---------------------------------------------------------------------------
+
+interface ChatGptTokenResponse {
+	tokens: OAuthTokenSet;
+	scopes: string[];
+}
+
+function parseChatGptTokenResponse(
+	body: Record<string, unknown>,
+): ChatGptTokenResponse {
+	const accessToken = readString(body, 'access_token');
+	if (!accessToken) {
+		throw new Error('Token response did not include an access token');
+	}
+	const expiresIn = readNumber(body, 'expires_in') ?? 3600;
+	const scopes = readString(body, 'scope')
+		.split(/\s+/)
+		.filter(scope => scope.length > 0);
+	return {
+		tokens: {
+			accessToken,
+			refreshToken: readString(body, 'refresh_token'),
+			idToken: readString(body, 'id_token'),
+			email: '',
+			planType: '',
+			projectId: '',
+			clientId: '',
+			expiresAt: jwtExpiry(accessToken) ?? nowEpochSecs() + expiresIn,
+		},
+		scopes,
+	};
+}
+
+async function chatgptTokenRequest(
+	params: Record<string, string>,
+	action: string,
+): Promise<ChatGptTokenResponse> {
+	const def = providerDef('chatgpt');
+	const response = await fetchWithProxy(def.tokenUrl, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/x-www-form-urlencoded',
+		},
+		body: toFormBody(params),
+	});
+	const body = await readJson(response);
+	requireOk(response, body, action);
+	return parseChatGptTokenResponse(body);
+}
+
+async function chatgptExchangeCode(
+	code: string,
+	redirectUri: string,
+	codeVerifier: string,
+	issuedClientId: string,
+): Promise<OAuthTokenSet> {
+	const def = providerDef('chatgpt');
+	// 动态注册：真正的 client_id 由授权回调下发，占位 client_id 视为注册未完成
+	const clientId = issuedClientId.trim();
+	if (!clientId || clientId === def.clientId) {
+		throw new Error(
+			'ChatGPT app registration did not complete; please restart the sign-in',
+		);
+	}
+
+	let response: ChatGptTokenResponse;
+	try {
+		response = await chatgptTokenRequest(
+			{
+				grant_type: 'authorization_code',
+				client_id: clientId,
+				code,
+				redirect_uri: redirectUri,
+				code_verifier: codeVerifier,
+				resource: CHATGPT_RESOURCE,
+			},
+			'Token exchange',
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (message.includes('invalid_grant')) {
+			throw new Error(
+				`${message}. Retry the sign-in; if it keeps failing, the account may not be eligible for ChatGPT plan usage (Plus or Pro plan required)`,
+			);
+		}
+		throw error;
+	}
+
+	if (!response.scopes.includes(CHATGPT_PLAN_SCOPE)) {
+		throw new Error(
+			'ChatGPT plan usage was not authorized. Sign in again and allow plan usage; if the option is unavailable, the account may not be eligible (Plus or Pro plan required)',
+		);
+	}
+
+	response.tokens.clientId = clientId;
+	return response.tokens;
+}
+
+async function chatgptRefreshTokens(
+	refreshToken: string,
+	clientId: string,
+): Promise<OAuthTokenSet> {
+	const issuedClientId = clientId.trim();
+	if (!issuedClientId) {
+		throw new Error(
+			'ChatGPT client registration is missing; please sign in again',
+		);
+	}
+	const response = await chatgptTokenRequest(
+		{
+			grant_type: 'refresh_token',
+			client_id: issuedClientId,
+			refresh_token: refreshToken,
+			resource: CHATGPT_RESOURCE,
+		},
+		'Token refresh',
+	);
+	response.tokens.clientId = issuedClientId;
+	return response.tokens;
+}
+
+/** 校验 id_token 中的 nonce，防止授权响应被替换（对齐 Snow App 的 verify_identity） */
+export function chatgptVerifyIdentity(idToken: string, nonce: string): void {
+	const payload = decodeJwtPayload(idToken);
+	if (!payload) {
+		throw new Error(
+			'ChatGPT identity could not be verified; please sign in again',
+		);
+	}
+	if (readString(payload, 'nonce') !== nonce) {
+		throw new Error(
+			'ChatGPT identity could not be verified (nonce mismatch); please sign in again',
+		);
+	}
+}
+
+async function chatgptFetchModels(accessToken: string): Promise<string[]> {
+	const def = providerDef('chatgpt');
+	const base = def.backendBaseUrl.replace(/\/+$/, '');
+	const response = await fetchWithProxy(`${base}/models`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			Authorization: `Bearer ${accessToken}`,
+		},
+	});
+	const body = await readJson(response);
+	requireOk(response, body, 'Model list request');
+	const items = Array.isArray(body['models'])
+		? (body['models'] as unknown[])
+		: [];
+	const models: string[] = [];
+	for (const item of items) {
+		if (!item || typeof item !== 'object') {
+			continue;
+		}
+		const record = item as Record<string, unknown>;
+		// 仅保留对外可见（visibility=list）的模型，与 Snow App 一致
+		if (readString(record, 'visibility') !== 'list') {
+			continue;
+		}
+		const slug = readString(record, 'slug');
+		if (slug && !models.includes(slug)) {
+			models.push(slug);
+		}
+	}
+	return models;
+}
+
+// ---------------------------------------------------------------------------
 // Anthropic（Claude）
 // ---------------------------------------------------------------------------
 
@@ -323,6 +516,7 @@ function parseAnthropicTokenResponse(
 		email,
 		planType: '',
 		projectId: '',
+		clientId: '',
 		expiresAt: nowEpochSecs() + expiresIn,
 	};
 }
@@ -432,6 +626,7 @@ function parseAntigravityTokenResponse(
 		email: '',
 		planType: '',
 		projectId: '',
+		clientId: '',
 		expiresAt: nowEpochSecs() + expiresIn,
 	};
 }
@@ -681,6 +876,7 @@ function parseXaiTokenResponse(body: Record<string, unknown>): OAuthTokenSet {
 		email: claims.email,
 		planType: claims.planType,
 		projectId: '',
+		clientId: '',
 		expiresAt: nowEpochSecs() + expiresIn,
 	};
 }
@@ -769,10 +965,13 @@ export async function exchangeCode(
 	redirectUri: string,
 	codeVerifier: string,
 	state: string,
+	issuedClientId: string = '',
 ): Promise<OAuthTokenSet> {
 	switch (provider) {
 		case 'codex':
 			return codexExchangeCode(code, redirectUri, codeVerifier);
+		case 'chatgpt':
+			return chatgptExchangeCode(code, redirectUri, codeVerifier, issuedClientId);
 		case 'anthropic':
 			return anthropicExchangeCode(code, redirectUri, codeVerifier, state);
 		case 'antigravity':
@@ -785,10 +984,13 @@ export async function exchangeCode(
 export async function refreshTokens(
 	provider: OAuthProviderId,
 	refreshToken: string,
+	clientId: string = '',
 ): Promise<OAuthTokenSet> {
 	switch (provider) {
 		case 'codex':
 			return codexRefreshTokens(refreshToken);
+		case 'chatgpt':
+			return chatgptRefreshTokens(refreshToken, clientId);
 		case 'anthropic':
 			return anthropicRefreshTokens(refreshToken);
 		case 'antigravity':
@@ -804,6 +1006,8 @@ export function parseClaims(
 ): OAuthClaims {
 	switch (provider) {
 		case 'codex':
+			return codexParseClaims(tokens.idToken);
+		case 'chatgpt':
 			return codexParseClaims(tokens.idToken);
 		case 'anthropic':
 			return {email: tokens.email.trim(), accountId: '', planType: ''};
@@ -826,6 +1030,8 @@ export async function fetchModels(
 	switch (provider) {
 		case 'codex':
 			return codexFetchModels(accessToken, accountId);
+		case 'chatgpt':
+			return chatgptFetchModels(accessToken);
 		case 'anthropic':
 			return anthropicFetchModels(accessToken);
 		case 'antigravity':
@@ -867,6 +1073,9 @@ export function applyProviderRequestHeaders(
 			delete headers['x-goog-api-key'];
 			return;
 		}
+		case 'chatgpt':
+			// ChatGPT API 直接使用标准 Authorization 头，无额外请求头
+			return;
 		case 'xai':
 			return;
 	}

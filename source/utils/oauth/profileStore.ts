@@ -107,11 +107,14 @@ export function buildProfileDraft(
 	tokens: OAuthTokenSet,
 	advancedModel: string,
 	basicModel: string,
+	clientId: string = '',
 ): OAuthProfileDraft {
 	const def = OAUTH_PROVIDERS[provider];
 	const metadata: OAuthProfileMetadata = {
 		provider,
 		refreshToken: tokens.refreshToken,
+		// chatgpt 动态注册下发的 client_id（刷新 token 必需），其它 provider 为空串
+		clientId: clientId.trim() || tokens.clientId.trim(),
 		accountId: claims.accountId,
 		email: claims.email,
 		planType: claims.planType,
@@ -214,7 +217,11 @@ export async function refreshOAuthTokenIfNeeded(
 
 	let tokens: OAuthTokenSet;
 	try {
-		tokens = await refreshTokens(metadata.provider, metadata.refreshToken);
+		tokens = await refreshTokens(
+			metadata.provider,
+			metadata.refreshToken,
+			metadata.clientId,
+		);
 	} catch (error) {
 		// 保留旧 token，让上游请求自行返回 401，避免静默失败难以排查
 		console.error(
@@ -227,6 +234,7 @@ export async function refreshOAuthTokenIfNeeded(
 	const updatedMetadata: OAuthProfileMetadata = {
 		provider: metadata.provider,
 		refreshToken: tokens.refreshToken.trim() || metadata.refreshToken,
+		clientId: tokens.clientId.trim() || metadata.clientId,
 		accountId: tokens.projectId.trim() || metadata.accountId,
 		email: tokens.email.trim() || metadata.email,
 		planType: tokens.planType.trim() || metadata.planType,

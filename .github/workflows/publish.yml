@@ -125,9 +125,7 @@ jobs:
 
             ### What's New
 
-            - Renamed `responsesFastMode` to `responsesServiceTier` with three options: Not Used (default), fast (priority), and ultrafast
-            - Automatic migration from the legacy `responsesFastMode` boolean config (true migrates to `fast`)
-            - Updated the Models panel to select the Responses service tier from a dedicated option list
+            - Sign with ChatGPT(`/oauth`)
 
             ### Installation
             ```bash

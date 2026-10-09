@@ -1382,6 +1382,7 @@ export const zhTW: TranslationKeys = {
 		retryHint: 'Enter 返回登入方式清單 · ESC 關閉',
 		escHint: 'ESC 關閉',
 		providerCodex: 'ChatGPT Codex',
+		providerChatgpt: 'ChatGPT（訂閱方案）',
 		providerAnthropic: 'Anthropic (Claude)',
 		providerAntigravity: 'Antigravity (Google)',
 		providerXai: 'xAI (Grok)',

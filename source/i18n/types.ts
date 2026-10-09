@@ -1357,6 +1357,7 @@ export type TranslationKeys = {
 		retryHint: string;
 		escHint: string;
 		providerCodex: string;
+		providerChatgpt: string;
 		providerAnthropic: string;
 		providerAntigravity: string;
 		providerXai: string;

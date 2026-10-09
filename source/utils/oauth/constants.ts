@@ -1,5 +1,5 @@
 /**
- * 四种 OAuth 登录方式的静态注册表。
+ * 五种 OAuth 登录方式的静态注册表。
  *
  * 常量与 Snow App（native/src/api/oauth/*.rs）保持一一对应，
  * 保证两种客户端登录到同一批上游账号。
@@ -50,6 +50,28 @@ export const OAUTH_PROVIDERS: Record<OAuthProviderId, OAuthProviderDefinition> =
 			defaultModel: 'gpt-5.2-codex',
 			maxContextTokens: 400000,
 			backendBaseUrl: 'https://chatgpt.com/backend-api/codex',
+			requestMethod: 'responses',
+			supportsVision: true,
+		},
+		chatgpt: {
+			id: 'chatgpt',
+			displayName: 'ChatGPT',
+			description: 'Sign in with your ChatGPT account (OpenAI API)',
+			// 占位 client_id：真正的 client_id 由授权回调动态下发（见 CHATGPT_* 常量）
+			clientId: 'dynamic_agent_client',
+			clientSecret: '',
+			authorizeUrl: 'https://auth.openai.com/api/accounts/authorize',
+			tokenUrl: 'https://auth.openai.com/api/accounts/oauth/token',
+			scope:
+				'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct',
+			// chatgpt 刷新 token 走 resource 参数而非 scope，这里留空
+			refreshScope: '',
+			callbackPath: '/auth/callback',
+			callbackPorts: [1455, 1457],
+			redirectHost: '127.0.0.1',
+			defaultModel: 'gpt-5.2',
+			maxContextTokens: 400000,
+			backendBaseUrl: 'https://api.openai.com/v1',
 			requestMethod: 'responses',
 			supportsVision: true,
 		},
@@ -121,6 +143,7 @@ export const OAUTH_PROVIDERS: Record<OAuthProviderId, OAuthProviderDefinition> =
 /** 面板展示顺序（与 Snow App 保持一致） */
 export const OAUTH_PROVIDER_ORDER: OAuthProviderId[] = [
 	'codex',
+	'chatgpt',
 	'anthropic',
 	'antigravity',
 	'xai',
@@ -129,6 +152,7 @@ export const OAUTH_PROVIDER_ORDER: OAuthProviderId[] = [
 export function isOAuthProviderId(value: unknown): value is OAuthProviderId {
 	return (
 		value === 'codex' ||
+		value === 'chatgpt' ||
 		value === 'anthropic' ||
 		value === 'antigravity' ||
 		value === 'xai'
@@ -151,6 +175,19 @@ export function codexUserAgent(): string {
 	const os = process.platform === 'win32' ? 'windows' : process.platform;
 	return `codex_cli_rs/${CODEX_CLIENT_VERSION} (${os}; ${process.arch})`;
 }
+
+// ---------------------------------------------------------------------------
+// ChatGPT（OpenAI API，动态注册客户端）专属常量
+// ---------------------------------------------------------------------------
+
+/** 授权时声明的 agent 名称（上游据此登记动态客户端） */
+export const CHATGPT_AGENT_NAME_HINT = 'Snow CLI';
+/** 授权 / 换 token / 刷新 token 时必须携带的 resource */
+export const CHATGPT_RESOURCE = 'https://api.openai.com/v1';
+/** 只有包含该 scope 才代表账号已授权 ChatGPT 套餐用量 */
+export const CHATGPT_PLAN_SCOPE = 'chatgpt.tokens.use.direct';
+/** 本地持久化 ext_agent_host_id 的文件名（位于 Snow 配置目录） */
+export const CHATGPT_HOST_ID_FILE_NAME = 'chatgpt-host.json';
 
 // ---------------------------------------------------------------------------
 // Anthropic 专属常量
