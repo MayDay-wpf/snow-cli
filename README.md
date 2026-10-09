@@ -39,6 +39,14 @@ _Agentic coding in your terminal_
   <tbody>
     <tr>
       <td align="center">
+        <a href="https://www.packyapi.ai/"><img src="docs/images/packyapi.jpg" alt="PackyCode" width="360"/></a>
+        <br/>
+        <a href="https://www.packyapi.ai/"><b>PackyCode</b></a>
+      </td>
+      <td>Access leading AI models through PackyCode with one API endpoint and one API key. Enjoy fast, reliable access with automatic failover and dedicated high-speed routes for Codex and Claude Code.<br/>Get started with $1 in free credits, a discount on your first top-up, and savings of up to 80% on eligible routes. Pay in RMB with no currency conversion markups or extra top-up fees.<br/><a href="https://www.packyapi.ai/">Sign up through the link</a> and start building today.</td>
+    </tr>
+    <tr>
+      <td align="center">
         <a href="https://go.apimart.ai/gh-snow-cli"><img src="docs/images/apimart.jpg" alt="APIMart" width="360"/></a>
         <br/>
         <a href="https://go.apimart.ai/gh-snow-cli"><b>APIMart</b></a>
