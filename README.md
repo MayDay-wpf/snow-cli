@@ -21,6 +21,10 @@ _Agentic coding in your terminal_
 
 </div>
 
+## Snow App
+
+> **Snow App** is the desktop coding client for Snow CLI. Download it here: [https://github.com/MayDay-wpf/snow-app](https://github.com/MayDay-wpf/snow-app)
+
 ## Thanks Developer
 
 <a href="https://github.com/MayDay-wpf/snow-cli/graphs/contributors">

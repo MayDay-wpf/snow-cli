@@ -21,6 +21,10 @@ _在终端中进行 Agentic 编程_
 
 </div>
 
+## Snow App 桌面客户端
+
+> **Snow App** 是 Snow CLI 的桌面编程客户端，下载地址：[https://github.com/MayDay-wpf/snow-app](https://github.com/MayDay-wpf/snow-app)
+
 ## 感谢开发者
 
 <a href="https://github.com/MayDay-wpf/snow-cli/graphs/contributors">
