@@ -125,10 +125,8 @@ jobs:
 
             ### What's New
 
-            - Web search: the headless browser now auto-recycles after being idle to reduce memory usage
-            - Compression: press ESC to abort an in-progress context compression
-            - Fix: input drafts keep paste placeholders intact so typed text stays visible after overlays are dismissed (#210)
-            - Docs: added Snow App desktop client info to the README
+            - Busy state: non-streaming waits now show animated status indicators with an elapsed-time counter
+            - Fix: restored input drafts keep typed long text visible instead of collapsing it into a paste placeholder (#212)
 
             ### Installation
             ```bash
