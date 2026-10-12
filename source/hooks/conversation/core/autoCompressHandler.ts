@@ -7,6 +7,7 @@ import {
 import {
 	shouldAutoCompress,
 	performAutoCompression,
+	isCompressionAborted,
 } from '../../../utils/core/autoCompress.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {compressionCoordinator} from '../../../utils/core/compressionCoordinator.js';
@@ -81,6 +82,13 @@ export async function handleAutoCompression(
 			onStatusUpdate,
 		);
 
+		// 用户按 ESC 中止了压缩：直接返回未压缩结果，不更新消息/上下文。
+		if (isCompressionAborted(compressionResult)) {
+			options.onCompressionStatus?.(null);
+			options.setIsAutoCompressing?.(false);
+			return {compressed: false, hookFailed: false};
+		}
+
 		// Only clear status on success/hookFailed;
 		// failed status will auto-dismiss after 5s (handled by performAutoCompression)
 		if (compressionResult) {
@@ -97,7 +105,11 @@ export async function handleAutoCompression(
 			};
 		}
 
-		if (compressionResult && options.clearSavedMessages) {
+		if (
+			compressionResult &&
+			!isCompressionAborted(compressionResult) &&
+			options.clearSavedMessages
+		) {
 			options.clearSavedMessages();
 			options.setMessages(compressionResult.uiMessages);
 			if (options.setRemountKey) {

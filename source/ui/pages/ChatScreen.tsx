@@ -738,7 +738,6 @@ export default function ChatScreen({
 						!!pendingToolConfirmation ||
 						!!bashSensitiveCommand ||
 						isExecutingTerminalCommand ||
-						isCompressing ||
 						streamingState.isStopping
 					}
 					isStopping={streamingState.isStopping}

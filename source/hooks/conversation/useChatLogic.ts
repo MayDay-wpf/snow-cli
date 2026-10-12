@@ -13,6 +13,7 @@ import {
 	clearAllSubAgentStreamEntries,
 } from './core/subAgentMessageHandler.js';
 import {goalManager} from '../../utils/task/goalManager.js';
+import {abortActiveCompression} from '../../utils/core/autoCompress.js';
 
 export type {UseChatLogicProps};
 
@@ -115,6 +116,11 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 	// Auto-send pending messages when streaming stops
 	useEffect(() => {
+		// 压缩期间不自动发送 pending：压缩会重建会话，此时发送会与压缩流程交错。
+		// 压缩结束后（isCompressing/isAutoCompressing 变回 false）本 effect 会重新触发。
+		if (isCompressing || streamingState.isAutoCompressing) {
+			return undefined;
+		}
 		if (streamingState.streamStatus === 'idle' && pendingMessages.length > 0) {
 			const timer = setTimeout(() => {
 				streamingState.setIsStreaming(true);
@@ -123,7 +129,12 @@ export function useChatLogic(props: UseChatLogicProps) {
 			return () => clearTimeout(timer);
 		}
 		return undefined;
-	}, [streamingState.streamStatus, pendingMessages.length]);
+	}, [
+		streamingState.streamStatus,
+		streamingState.isAutoCompressing,
+		isCompressing,
+		pendingMessages.length,
+	]);
 
 	// Codebase search events
 	const setCodebaseSearchStatus = streamingState.setCodebaseSearchStatus;
@@ -163,13 +174,17 @@ export function useChatLogic(props: UseChatLogicProps) {
 
 	// ESC interrupt handler
 	const handleInterrupt = useCallback(() => {
-		if (!streamingState.isStreaming || !streamingState.abortController) {
-			return false;
+		// 上下文压缩进行中（/compact 或阈值自动压缩）：ESC 中止压缩而不是流式响应。
+		// 见 issue #213 —— 压缩是唯一没有队列出口的等待态，必须可中止。
+		if (isCompressing || streamingState.isAutoCompressing) {
+			abortActiveCompression();
+			streamingState.setIsAutoCompressing(false);
+			streamingState.setCompressBlockToast(null);
+			return true;
 		}
 
-		if (streamingState.isAutoCompressing) {
-			streamingState.setCompressBlockToast(t.chatScreen.compressionBlockToast);
-			return true;
+		if (!streamingState.isStreaming || !streamingState.abortController) {
+			return false;
 		}
 
 		userInterruptedRef.current = true;
@@ -195,7 +210,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 			);
 
 		return true;
-	}, [streamingState, setMessages, setPendingMessages, t]);
+	}, [streamingState, setMessages, setPendingMessages, isCompressing, t]);
 
 	// Consolidated ESC key handler
 	const handleEscKey = useCallback(
@@ -228,19 +243,9 @@ export function useChatLogic(props: UseChatLogicProps) {
 			if (!key.escape) return false;
 
 			// Block ESC during auto-compression (including pre-message compression)
-			if (streamingState.isAutoCompressing) {
-				streamingState.setCompressBlockToast(
-					t.chatScreen.compressionBlockToast,
-				);
-				return true;
-			}
-
-			// Block ESC during /compact command compression
-			if (isCompressing) {
-				streamingState.setCompressBlockToast(
-					t.chatScreen.compressionBlockToast,
-				);
-				return true;
+			if (streamingState.isAutoCompressing || isCompressing) {
+				// 压缩期间 ESC 直接中止压缩（issue #213），不再吞掉按键。
+				return handleInterrupt();
 			}
 
 			// Handle scheduler task interruption

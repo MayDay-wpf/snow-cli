@@ -131,6 +131,7 @@ function buildGoalCompressionHint(goal: GoalRecord): string {
 export async function executeContextCompression(
 	sessionId?: string,
 	onStatusUpdate?: (status: CompressionStatus) => void,
+	abortSignal?: AbortSignal,
 ): Promise<{
 	uiMessages: Message[];
 	usage: UsageInfo;
@@ -142,6 +143,11 @@ export async function executeContextCompression(
 				step: 'skipped',
 				message: 'No active session ID available',
 			});
+			return null;
+		}
+
+		// 用户已中止（ESC）：直接跳过压缩
+		if (abortSignal?.aborted) {
 			return null;
 		}
 
@@ -332,8 +338,19 @@ export async function executeContextCompression(
 				requestMethod: apiConfig.requestMethod,
 				maxTokens: apiConfig.maxTokens,
 				onStreamStart: notifyCompressionStreamStarted,
+				abortSignal,
 			});
 			flushCompressionStreamBuffer(true);
+
+			// 用户按 ESC 中止：不创建新会话、不更新上下文。
+			if (hybridResult.aborted || abortSignal?.aborted) {
+				onStatusUpdate?.({
+					step: 'skipped',
+					message: 'Compression aborted',
+					sessionId,
+				});
+				return null;
+			}
 
 			if (!hybridResult.compressed) {
 				onStatusUpdate?.({
@@ -469,7 +486,18 @@ export async function executeContextCompression(
 				sessionManager.getProjectId(),
 				currentSession.createdAt,
 				currentSession.imageContextArchive,
+				abortSignal,
 			);
+
+			// 用户按 ESC 中止：不创建新会话、不更新上下文。
+			if (abortSignal?.aborted) {
+				onStatusUpdate?.({
+					step: 'skipped',
+					message: 'Compression aborted',
+					sessionId,
+				});
+				return null;
+			}
 
 			if (!imageResult.compressed) {
 				onStatusUpdate?.({
@@ -586,8 +614,19 @@ export async function executeContextCompression(
 		// ── Standard full compression path ──
 		const compressionResult = await compressContext(chatMessages, {
 			onStreamStart: notifyCompressionStreamStarted,
+			abortSignal,
 		});
 		flushCompressionStreamBuffer(true);
+
+		// 用户按 ESC 中止：不创建新会话、不更新上下文。
+		if (abortSignal?.aborted) {
+			onStatusUpdate?.({
+				step: 'skipped',
+				message: 'Compression aborted',
+				sessionId,
+			});
+			return null;
+		}
 
 		if (!compressionResult) {
 			onStatusUpdate?.({
@@ -916,7 +955,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setCompressionError(null);
 
 				try {
-					const {performAutoCompression} = await import(
+					const {performAutoCompression, isCompressionAborted} = await import(
 						'../../utils/core/autoCompress.js'
 					);
 
@@ -933,8 +972,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						options.setCompressionError(errorMsg);
 						return;
 					}
-
-					if (!compressionResult) {
+					// 用户按 ESC 中止了 /compact：清空压缩状态，不更新消息/上下文。
+					if (!compressionResult || isCompressionAborted(compressionResult)) {
+						options.onCompressionStatus?.(null);
 						return;
 					}
 

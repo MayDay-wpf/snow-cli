@@ -9,6 +9,7 @@ import {
 import {
 	shouldAutoCompress,
 	performAutoCompression,
+	isCompressionAborted,
 } from '../../../utils/core/autoCompress.js';
 import {
 	getSnowConfig,
@@ -98,6 +99,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 		addMultipleToAlwaysApproved,
 		setRestoreInputContent,
 		setIsCompressing,
+		isCompressing,
 		setCompressionError,
 		currentContextPercentageRef,
 		userInterruptedRef,
@@ -207,6 +209,28 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					},
 				);
 
+				// 用户按 ESC 中止了本轮前置压缩：不再继续发送消息。
+				// 若为可见的用户消息，把原文恢复回输入框，避免丢失用户输入。
+				if (isCompressionAborted(compressionResult)) {
+					props.onCompressionStatus?.(null);
+					const restoreText = displayMessage ?? message;
+					if (
+						!hideUserMessage &&
+						typeof restoreText === 'string' &&
+						restoreText.trim().length > 0
+					) {
+						setRestoreInputContent({
+							text: restoreText,
+							images: images?.map(img => ({
+								type: 'image' as const,
+								data: img.data,
+								mimeType: img.mimeType,
+							})),
+						});
+					}
+					return;
+				}
+
 				if (compressionResult && (compressionResult as any).hookFailed) {
 					const errorMsg = 'Blocked by beforeCompress hook';
 					setCompressionError(errorMsg);
@@ -221,7 +245,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					return;
 				}
 
-				if (compressionResult) {
+				if (compressionResult && !isCompressionAborted(compressionResult)) {
 					props.onCompressionStatus?.(null);
 					clearSavedMessages();
 					setMessages(compressionResult.uiMessages);
@@ -668,7 +692,11 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			message = messageWithoutTargets;
 		}
 
-		if (streamingState.streamStatus !== 'idle') {
+		if (
+			streamingState.streamStatus !== 'idle' ||
+			isCompressing ||
+			streamingState.isAutoCompressing
+		) {
 			setPendingMessages(prev => [...prev, {text: message, images}]);
 			return;
 		}

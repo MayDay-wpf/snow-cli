@@ -306,7 +306,18 @@ export async function performImageCompression(
 	projectId: string,
 	sessionCreatedAt: number,
 	existingArchive?: string,
+	abortSignal?: AbortSignal,
 ): Promise<ImageCompressionResult> {
+	// 用户已中止（ESC）：直接跳过压缩
+	if (abortSignal?.aborted) {
+		return {
+			compressed: false,
+			messages: [],
+			beforeTokensEstimate: 0,
+			afterTokensEstimate: 0,
+		};
+	}
+
 	const unarchivedMessages = messages.filter(
 		message => !message.imageContextCompressed,
 	);
@@ -336,6 +347,17 @@ export async function performImageCompression(
 	}
 
 	const imagePages = await renderArchiveToImagePages(archiveText);
+
+	// 渲染耗时较长，渲染完成后再次确认未中止
+	if (abortSignal?.aborted) {
+		return {
+			compressed: false,
+			messages: [],
+			beforeTokensEstimate,
+			afterTokensEstimate: 0,
+		};
+	}
+
 	const imagePaths = await saveArchiveImages(
 		imagePages,
 		sessionId,

@@ -106,6 +106,8 @@ export interface SubAgentCompressionResult {
 		completion_tokens: number;
 		total_tokens: number;
 	};
+	/** 用户中止（ESC）导致压缩提前结束：调用方不应据此创建新会话。 */
+	aborted?: boolean;
 }
 
 /**
@@ -381,6 +383,8 @@ interface AISummaryResult {
 		completion_tokens: number;
 		total_tokens: number;
 	};
+	/** 用户中止（ESC）：返回原始 messages 且标记 aborted，避免被误判为“压缩成功”。 */
+	aborted?: boolean;
 }
 
 interface HybridCompressionConfig {
@@ -389,6 +393,8 @@ interface HybridCompressionConfig {
 	maxTokens?: number;
 	configProfile?: string;
 	onStreamStart?: (content: string) => void;
+	/** 用户中止信号：透传到各 provider 的流式请求，ESC 时立即中断压缩。 */
+	abortSignal?: AbortSignal;
 }
 
 /**
@@ -432,12 +438,15 @@ async function aiSummaryCompress(
 	try {
 		switch (config.requestMethod) {
 			case 'gemini': {
-				for await (const chunk of createStreamingGeminiCompletion({
-					model: config.model,
-					messages: compressionMessages,
-					max_tokens: config.maxTokens || 4096,
-					configProfile: config.configProfile,
-				})) {
+				for await (const chunk of createStreamingGeminiCompletion(
+					{
+						model: config.model,
+						messages: compressionMessages,
+						max_tokens: config.maxTokens || 4096,
+						configProfile: config.configProfile,
+					},
+					config.abortSignal,
+				)) {
 					if (chunk.type === 'content' && chunk.content) {
 						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
@@ -453,13 +462,16 @@ async function aiSummaryCompress(
 				break;
 			}
 			case 'anthropic': {
-				for await (const chunk of createStreamingAnthropicCompletion({
-					model: config.model,
-					messages: compressionMessages,
-					max_tokens: config.maxTokens || 4096,
-					disableThinking: true,
-					configProfile: config.configProfile,
-				})) {
+				for await (const chunk of createStreamingAnthropicCompletion(
+					{
+						model: config.model,
+						messages: compressionMessages,
+						max_tokens: config.maxTokens || 4096,
+						disableThinking: true,
+						configProfile: config.configProfile,
+					},
+					config.abortSignal,
+				)) {
 					if (chunk.type === 'content' && chunk.content) {
 						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
@@ -475,12 +487,15 @@ async function aiSummaryCompress(
 				break;
 			}
 			case 'responses': {
-				for await (const chunk of createStreamingResponse({
-					model: config.model,
-					messages: compressionMessages,
-					max_tokens: config.maxTokens || 4096,
-					configProfile: config.configProfile,
-				})) {
+				for await (const chunk of createStreamingResponse(
+					{
+						model: config.model,
+						messages: compressionMessages,
+						max_tokens: config.maxTokens || 4096,
+						configProfile: config.configProfile,
+					},
+					config.abortSignal,
+				)) {
 					if (chunk.type === 'content' && chunk.content) {
 						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
@@ -497,13 +512,16 @@ async function aiSummaryCompress(
 			}
 			case 'chat':
 			default: {
-				for await (const chunk of createStreamingChatCompletion({
-					model: config.model,
-					messages: compressionMessages,
-					stream: true,
-					max_tokens: config.maxTokens || 4096,
-					configProfile: config.configProfile,
-				})) {
+				for await (const chunk of createStreamingChatCompletion(
+					{
+						model: config.model,
+						messages: compressionMessages,
+						stream: true,
+						max_tokens: config.maxTokens || 4096,
+						configProfile: config.configProfile,
+					},
+					config.abortSignal,
+				)) {
 					if (chunk.type === 'content' && chunk.content) {
 						config.onStreamStart?.(chunk.content);
 						summary += chunk.content;
@@ -520,6 +538,11 @@ async function aiSummaryCompress(
 			}
 		}
 	} catch (error) {
+		// 用户中止（ESC）导致请求被 abort：不是压缩失败，也不应触发截断兜底，
+		// 否则会被误判为“压缩成功”并创建新会话。
+		if (config.abortSignal?.aborted) {
+			return {messages, aborted: true};
+		}
 		console.error('[SubAgentCompressor] AI compression failed:', error);
 		return {messages};
 	}
@@ -747,11 +770,17 @@ export async function performHybridCompression(
 
 	const beforeTokens = countMessagesTokens(messages);
 
-	const {messages: compressedMessages, apiUsage} = await aiSummaryCompress(
-		messages,
-		keepRounds,
-		config,
-	);
+	const {
+		messages: compressedMessages,
+		apiUsage,
+		aborted,
+	} = await aiSummaryCompress(messages, keepRounds, config);
+
+	// 用户中止（ESC）：直接返回 aborted，绝不回退到截断兜底，
+	// 否则会被调用方误判为“压缩成功”并创建新会话。
+	if (aborted || config.abortSignal?.aborted) {
+		return {compressed: false, messages, aborted: true};
+	}
 
 	if (compressedMessages !== messages) {
 		const optimizedMessages = truncateOversizedToolResults(compressedMessages);

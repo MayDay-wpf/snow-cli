@@ -4,6 +4,7 @@ import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfir
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {performAutoCompression} from '../../../utils/core/autoCompress.js';
+import {isCompressionAborted} from '../../../utils/core/autoCompress.js';
 
 interface UseRemoteEventsHandlers {
 	handleMessageSubmit: (
@@ -321,7 +322,7 @@ export function useRemoteEvents(
 
 					const compressionResult = await performAutoCompression(
 						currentSession?.id,
-						(status) => {
+						status => {
 							props.onCompressionStatus?.(status);
 						},
 					);
@@ -335,10 +336,11 @@ export function useRemoteEvents(
 						return;
 					}
 
-					if (!compressionResult) {
+					if (!compressionResult || isCompressionAborted(compressionResult)) {
+						props.onCompressionStatus?.(null);
 						await connectionManager.notifyCompactCompleted({
 							success: false,
-							error: 'Compression failed after retries',
+							error: 'Compression aborted or failed after retries',
 						});
 						return;
 					}

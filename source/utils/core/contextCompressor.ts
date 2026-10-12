@@ -32,9 +32,10 @@ export interface CompressionResult {
 		error?: string;
 	}; // Hook error details for UI rendering
 }
-
 export interface CompressionOptions {
 	onStreamStart?: (content: string) => void;
+	/** 用户中止信号：透传到各 provider 的流式请求，ESC 时立即中断压缩。 */
+	abortSignal?: AbortSignal;
 }
 
 /**
@@ -446,12 +447,15 @@ async function compressWithChatCompletions(
 	};
 
 	// Use the existing streaming API from chat.ts (includes proxy support)
-	for await (const chunk of createStreamingChatCompletion({
-		model: modelName,
-		messages,
-		stream: true,
-		max_tokens: 4096,
-	})) {
+	for await (const chunk of createStreamingChatCompletion(
+		{
+			model: modelName,
+			messages,
+			stream: true,
+			max_tokens: 4096,
+		},
+		options?.abortSignal,
+	)) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
 			options?.onStreamStart?.(chunk.delta);
@@ -501,12 +505,15 @@ async function compressWithResponses(
 	};
 
 	// Use the existing streaming API from responses.ts (includes proxy support)
-	for await (const chunk of createStreamingResponse({
-		model: modelName,
-		messages,
-		stream: true,
-		max_tokens: 4096,
-	})) {
+	for await (const chunk of createStreamingResponse(
+		{
+			model: modelName,
+			messages,
+			stream: true,
+			max_tokens: 4096,
+		},
+		options?.abortSignal,
+	)) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
 			options?.onStreamStart?.(chunk.delta);
@@ -556,11 +563,14 @@ async function compressWithGemini(
 	};
 
 	// Use the existing streaming API from gemini.ts (includes proxy support)
-	for await (const chunk of createStreamingGeminiCompletion({
-		model: modelName,
-		messages,
-		max_tokens: 4096,
-	})) {
+	for await (const chunk of createStreamingGeminiCompletion(
+		{
+			model: modelName,
+			messages,
+			max_tokens: 4096,
+		},
+		options?.abortSignal,
+	)) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
 			options?.onStreamStart?.(chunk.delta);
@@ -610,12 +620,15 @@ async function compressWithAnthropic(
 	};
 
 	// Use the existing streaming API from anthropic.ts (includes proxy support)
-	for await (const chunk of createStreamingAnthropicCompletion({
-		model: modelName,
-		messages,
-		max_tokens: 4096,
-		disableThinking: true, // Context compression 不使用 Extended Thinking
-	})) {
+	for await (const chunk of createStreamingAnthropicCompletion(
+		{
+			model: modelName,
+			messages,
+			max_tokens: 4096,
+			disableThinking: true, // Context compression 不使用 Extended Thinking
+		},
+		options?.abortSignal,
+	)) {
 		// Collect content
 		if (chunk.type === 'reasoning_delta' && chunk.delta) {
 			options?.onStreamStart?.(chunk.delta);
@@ -730,6 +743,11 @@ export async function compressContext(
 	cleanOrphanedToolCalls(preservedMessages);
 
 	try {
+		// 用户已中止（ESC）：直接跳过压缩，不发起请求
+		if (options?.abortSignal?.aborted) {
+			return null;
+		}
+
 		// Choose compression method based on request method
 		// All methods now reuse existing API modules which include proxy support
 		let result: CompressionResult;
@@ -783,6 +801,10 @@ export async function compressContext(
 
 		return result;
 	} catch (error) {
+		// 用户中止导致的失败不作为压缩错误上报
+		if (options?.abortSignal?.aborted) {
+			return null;
+		}
 		if (error instanceof Error) {
 			throw new Error(`Context compression failed: ${error.message}`);
 		}
