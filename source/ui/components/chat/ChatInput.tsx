@@ -599,7 +599,9 @@ export default function ChatInput({
 
 		if (images.length === 0) {
 			if (text) {
-				restoreTextWithSkillPlaceholders(buffer, text);
+				restoreTextWithSkillPlaceholders(buffer, text, {
+					maskPlainChunks: false,
+				});
 			}
 		} else {
 			const imagePlaceholderPattern = /\[image #\d+\]/g;
@@ -608,7 +610,9 @@ export default function ChatInput({
 			for (let i = 0; i < parts.length; i++) {
 				const part = parts[i];
 				if (part) {
-					restoreTextWithSkillPlaceholders(buffer, part);
+					restoreTextWithSkillPlaceholders(buffer, part, {
+						maskPlainChunks: false,
+					});
 				}
 
 				if (i < images.length) {

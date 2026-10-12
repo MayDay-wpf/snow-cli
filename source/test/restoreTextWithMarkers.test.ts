@@ -85,6 +85,161 @@ test('typed-only draft of 400+ characters collapses into a placeholder', t => {
 	t.is(buffer.getFullText(), 'typed '.repeat(100));
 });
 
+test('maskPlainChunks:false keeps 400+ char typed draft as visible text', t => {
+	const buffer = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(buffer, 'typed '.repeat(100), {
+		maskPlainChunks: false,
+	});
+
+	t.false(buffer.text.startsWith('[Paste '));
+	t.true(buffer.text.includes('typed '));
+	t.is(buffer.getFullText(), 'typed '.repeat(100));
+});
+
+test('maskPlainChunks:false keeps 12+ line typed draft as visible text', t => {
+	const buffer = new TextBuffer(viewport);
+	const text = Array.from({length: 15}, (_, i) => `line ${i}`).join('\n');
+	restoreTextWithSkillPlaceholders(buffer, text, {maskPlainChunks: false});
+
+	t.false(buffer.text.includes('[Paste '));
+	t.is(buffer.getFullText(), text);
+});
+
+test('maskPlainChunks:false restores typed text plainly while paste markers still become pills', t => {
+	const typed = 'check this\n'.repeat(50);
+	const buffer = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(
+		buffer,
+		`${typed}# Paste:\n${pasteLines(30)}\n# Paste End\ntail`,
+		{maskPlainChunks: false},
+	);
+
+	t.true(buffer.text.includes('check this'));
+	t.true(buffer.text.includes('[Paste 30 lines #1]'));
+	t.false(buffer.text.startsWith('[Paste '));
+	t.is(buffer.getFullText(), `${typed}${pasteLines(30)}tail`);
+});
+
+test('maskPlainChunks:true behaves identically to the default', t => {
+	const explicit = new TextBuffer(viewport);
+	const defaulted = new TextBuffer(viewport);
+	const text = 'typed '.repeat(100);
+	restoreTextWithSkillPlaceholders(explicit, text, {maskPlainChunks: true});
+	restoreTextWithSkillPlaceholders(defaulted, text);
+
+	t.is(explicit.text, defaulted.text);
+	t.true(explicit.text.startsWith('[Paste '));
+});
+
+test('maskPlainChunks:false at 399/400-char boundary keeps both plain', t => {
+	const small = new TextBuffer(viewport);
+	const large = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(small, 'x'.repeat(399), {
+		maskPlainChunks: false,
+	});
+	restoreTextWithSkillPlaceholders(large, 'x'.repeat(400), {
+		maskPlainChunks: false,
+	});
+
+	t.is(small.text, 'x'.repeat(399));
+	t.is(large.text, 'x'.repeat(400));
+});
+
+test('fold boundary at exactly 400 chars under default options', t => {
+	const below = new TextBuffer(viewport);
+	const at = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(below, 'x'.repeat(399));
+	restoreTextWithSkillPlaceholders(at, 'x'.repeat(400));
+
+	t.is(below.text, 'x'.repeat(399));
+	t.true(at.text.startsWith('[Paste '));
+});
+
+test('fold boundary at 11 vs 12 lines under default options', t => {
+	const below = new TextBuffer(viewport);
+	const at = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(
+		below,
+		Array.from({length: 11}, (_, i) => `l${i}`).join('\n'),
+	);
+	restoreTextWithSkillPlaceholders(
+		at,
+		Array.from({length: 12}, (_, i) => `l${i}`).join('\n'),
+	);
+
+	t.false(below.text.includes('[Paste '));
+	t.true(at.text.startsWith('[Paste '));
+});
+
+test('empty options object behaves identically to no options', t => {
+	const empty = new TextBuffer(viewport);
+	const none = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(empty, 'x'.repeat(500), {});
+	restoreTextWithSkillPlaceholders(none, 'x'.repeat(500));
+
+	t.is(empty.text, none.text);
+	t.true(empty.text.startsWith('[Paste '));
+});
+
+test('maskPlainChunks:false does not disable paste marker parsing', t => {
+	const buffer = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(
+		buffer,
+		`text\n# Paste:\n${pasteLines(30)}\n# Paste End`,
+		{maskPlainChunks: false},
+	);
+
+	t.true(buffer.text.includes('[Paste 30 lines #1]'));
+	t.true(buffer.text.includes('text'));
+});
+
+test('maskPlainChunks:false keeps skill blocks as placeholders', t => {
+	const buffer = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(
+		buffer,
+		`${'a'.repeat(450)}\n# Skill: my-skill\nbody\n# Skill End`,
+		{maskPlainChunks: false},
+	);
+
+	t.false(buffer.text.startsWith('[Paste '));
+	t.true(buffer.text.includes('[Skill:my-skill]'));
+});
+
+test('double round-trip of unmasked typed draft is stable', t => {
+	const first = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(first, 'typed '.repeat(100), {
+		maskPlainChunks: false,
+	});
+	const second = new TextBuffer(viewport);
+	restoreTextWithSkillPlaceholders(
+		second,
+		first.getFullTextWithPasteMarkers(),
+		{maskPlainChunks: false},
+	);
+
+	t.is(second.text, first.text);
+	t.is(second.getFullText(), 'typed '.repeat(100));
+});
+
+test('maskPlainChunks:false with 20000-char draft stays plain', t => {
+	const buffer = new TextBuffer(viewport);
+	const huge = 'x'.repeat(20_000);
+	restoreTextWithSkillPlaceholders(buffer, huge, {maskPlainChunks: false});
+
+	t.is(buffer.text, huge);
+	t.false(buffer.text.includes('[Paste '));
+	t.is(buffer.getFullText(), huge);
+});
+
+test('maskPlainChunks:false with 500-line draft stays plain', t => {
+	const buffer = new TextBuffer(viewport);
+	const huge = Array.from({length: 500}, (_, i) => `line ${i}`).join('\n');
+	restoreTextWithSkillPlaceholders(buffer, huge, {maskPlainChunks: false});
+
+	t.is(buffer.text, huge);
+	t.false(buffer.text.includes('[Paste '));
+});
+
 test('small paste placeholder below fold thresholds restores via marker block', t => {
 	const buffer = new TextBuffer(viewport);
 	buffer.insertRestoredText('x ');
