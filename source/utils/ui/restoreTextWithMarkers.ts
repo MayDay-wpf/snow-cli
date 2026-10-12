@@ -12,17 +12,20 @@ export function restoreTextWithSkillPlaceholders(
 		insertTextPlaceholder: (c: string, p: string) => void;
 	},
 	text: string,
+	options?: {maskPlainChunks?: boolean},
 ) {
 	if (!text) return;
 
 	const lines = text.split('\n');
 	let plain = '';
 	let rollbackPasteCounter = 0;
+	const maskPlainChunks = options?.maskPlainChunks ?? true;
 
 	const insertPlainOrPastePlaceholder = (chunk: string) => {
 		if (!chunk) return;
 		const lineCount = chunk.split('\n').length;
-		const shouldMaskAsPaste = chunk.length >= 400 || lineCount >= 12;
+		const shouldMaskAsPaste =
+			maskPlainChunks && (chunk.length >= 400 || lineCount >= 12);
 		if (!shouldMaskAsPaste) {
 			buffer.insertRestoredText(chunk);
 			return;
