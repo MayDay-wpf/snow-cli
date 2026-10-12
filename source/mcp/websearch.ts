@@ -33,6 +33,22 @@ import {
 } from './engines/websearch/index.js';
 
 /**
+ * Idle lifetime for the shared headless browser (default: 5 minutes).
+ * When no web search / page fetch happens within this window the browser is
+ * closed to release memory; it is transparently relaunched on the next call.
+ * Override via the SNOW_WEBSEARCH_IDLE_CLEANUP_MS env var; set it to 0 to
+ * disable idle recycling (browser stays alive until /clear or process exit).
+ */
+const WEBSEARCH_IDLE_CLEANUP_MS = (() => {
+	const raw = process.env['SNOW_WEBSEARCH_IDLE_CLEANUP_MS'];
+	if (raw === undefined || raw === '') {
+		return 5 * 60 * 1000;
+	}
+	const parsed = Number.parseInt(raw, 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : 5 * 60 * 1000;
+})();
+
+/**
  * Web Search Service using a pluggable search engine (DuckDuckGo / Bing / ...)
  * driven by Puppeteer Core.
  *
@@ -64,9 +80,16 @@ export class WebSearchService {
 	// closeBrowserInternal() can kill it as a fallback if browser.close()
 	// fails or the CDP connection was already lost.
 	private browserProcess: ChildProcess | null = null;
+	// Idle auto-recycle: closes the shared headless browser after a period of
+	// inactivity so it does not linger for the whole CLI session. The timer is
+	// unref()'d so it never keeps the process alive, and the browser is
+	// transparently relaunched by launchBrowser() on the next call.
+	private idleCleanupTimer: NodeJS.Timeout | null = null;
+	private readonly idleCleanupMs: number;
 
 	constructor(maxResults: number = 10) {
 		this.maxResults = maxResults;
+		this.idleCleanupMs = WEBSEARCH_IDLE_CLEANUP_MS;
 		// Detect WSL environment once
 		this.isWSLMode = isWSL();
 		// Windows native mode: keep a stable profile per CLI process to avoid
@@ -80,6 +103,40 @@ export class WebSearchService {
 	}
 
 	/**
+	 * (Re)arm the idle auto-recycle timer. Called whenever the browser is used
+	 * so the shared headless browser is closed after `idleCleanupMs` of
+	 * inactivity instead of lingering for the whole CLI session.
+	 *
+	 * The timer is unref()'d so it never keeps the Node.js process alive, and
+	 * it is a no-op when `idleCleanupMs <= 0` (idle recycling disabled).
+	 */
+	private markBrowserActivity(): void {
+		if (this.idleCleanupMs <= 0) {
+			return;
+		}
+
+		this.clearIdleCleanupTimer();
+
+		this.idleCleanupTimer = setTimeout(() => {
+			this.idleCleanupTimer = null;
+			// Best-effort: idle recycling must never throw into the event loop.
+			void this.closeBrowser().catch(() => {});
+		}, this.idleCleanupMs);
+		this.idleCleanupTimer.unref?.();
+	}
+
+	/**
+	 * Cancel any pending idle auto-recycle timer. Called on explicit shutdown
+	 * (closeBrowser) so a stale timer cannot fire after the service is closed.
+	 */
+	private clearIdleCleanupTimer(): void {
+		if (this.idleCleanupTimer) {
+			clearTimeout(this.idleCleanupTimer);
+			this.idleCleanupTimer = null;
+		}
+	}
+
+	/**
 	 * Launch browser with proxy settings from config
 	 * In WSL mode, connects to Windows browser via WebSocket
 	 */
@@ -89,6 +146,7 @@ export class WebSearchService {
 		}
 
 		if (this.browser && this.browser.connected) {
+			this.markBrowserActivity();
 			return this.browser;
 		}
 
@@ -96,9 +154,14 @@ export class WebSearchService {
 			return this.browserLaunchPromise;
 		}
 
-		this.browserLaunchPromise = this.createBrowser().finally(() => {
-			this.browserLaunchPromise = null;
-		});
+		this.browserLaunchPromise = this.createBrowser()
+			.then(browser => {
+				this.markBrowserActivity();
+				return browser;
+			})
+			.finally(() => {
+				this.browserLaunchPromise = null;
+			});
 
 		return this.browserLaunchPromise;
 	}
@@ -405,6 +468,10 @@ export class WebSearchService {
 	 * Close browser instance
 	 */
 	async closeBrowser(): Promise<void> {
+		// Cancel any pending idle auto-recycle timer first so it cannot fire
+		// (and re-enter) after an explicit close.
+		this.clearIdleCleanupTimer();
+
 		if (this.browserClosePromise) {
 			return this.browserClosePromise;
 		}
@@ -512,10 +579,7 @@ export class WebSearchService {
 			const compiledPatterns = compileBlockedPatterns(
 				proxyConfig.blockedPatterns,
 			);
-			const response = this.applyBlockedRules(
-				cleanedResults,
-				compiledPatterns,
-			);
+			const response = this.applyBlockedRules(cleanedResults, compiledPatterns);
 			response.query = query;
 
 			return response;
@@ -575,12 +639,12 @@ export class WebSearchService {
 				0,
 				WebSearchService.MAX_BLOCKED_REPORT,
 			);
-			response.blockedPatterns = compiledPatterns.map(
-				regex => regex.source,
-			);
+			response.blockedPatterns = compiledPatterns.map(regex => regex.source);
 			response.blockNote =
 				`${blocked.length} of ${results.length} search results were filtered ` +
-				`out by your site blocking rules (${response.blockedPatterns.join(', ')}). ` +
+				`out by your site blocking rules (${response.blockedPatterns.join(
+					', ',
+				)}). ` +
 				`These sites are NOT fetchable while the rules are active. ` +
 				`If one of them is truly relevant despite the rule, tell the user ` +
 				`which rule should be removed in Settings, or rephrase the query ` +
