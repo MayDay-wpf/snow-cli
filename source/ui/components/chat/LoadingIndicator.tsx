@@ -1,4 +1,10 @@
-import React, {useMemo, useRef, useSyncExternalStore} from 'react';
+import React, {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from 'react';
 import {Box, Text} from 'ink';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
@@ -6,6 +12,12 @@ import ShimmerText from '../common/ShimmerText.js';
 import CodebaseSearchStatus from './CodebaseSearchStatus.js';
 import {formatElapsedTime} from '../../../utils/core/textUtils.js';
 import {buildThinkingPreviewLine} from './ThinkingStatus.js';
+import {
+	SNOWFLAKE_FRAME_INTERVAL_MS,
+	pickSnowflakeFrame,
+	pickVerb,
+	type ActiveBusyKind,
+} from './statusVerbs.js';
 import {
 	subscribeTeammateStream,
 	getTeammateStreamSnapshot,
@@ -118,6 +130,14 @@ type LoadingIndicatorProps = {
 	elapsedSeconds: number;
 	currentModel?: string | null;
 	teamMode?: boolean;
+	/**
+	 * Issue #215：非流式 busy 态分类。
+	 * 仅在无专属面板的 busy 态（后台终端、后台进程、压缩无面板时等）由上层传入，
+	 * 用于把 ❆ 行扩展为覆盖全量 busy 的常驻动画指示；空闲时为 'idle'。
+	 */
+	busyKind?: ActiveBusyKind | 'idle';
+	/** Issue #215：非流式 busy 态已持续秒数，用于常驻 elapsed 显示（确认“没卡死”）。 */
+	busyElapsedSeconds?: number;
 };
 
 export default function LoadingIndicator({
@@ -140,9 +160,29 @@ export default function LoadingIndicator({
 	elapsedSeconds,
 	currentModel,
 	teamMode,
+	busyKind = 'idle',
+	busyElapsedSeconds = 0,
 }: LoadingIndicatorProps) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
+
+	// Issue #215：多帧雪花动画。原来 ❆ 只在双色间闪烁（静态感强），
+	// 现在升级为逐帧变化的雪花字符集，获得“活物感”。
+	// 仅在需要渲染指示（流式 / stopping / 非流式 busy）时运行定时器，空闲时不空转。
+	const showIndicator = isStreaming || isStopping || busyKind !== 'idle';
+	const [snowflakeFrame, setSnowflakeFrame] = useState(0);
+	useEffect(() => {
+		if (!showIndicator) {
+			return undefined;
+		}
+
+		const interval = setInterval(() => {
+			setSnowflakeFrame(frame => frame + 1);
+		}, SNOWFLAKE_FRAME_INTERVAL_MS);
+
+		return () => clearInterval(interval);
+	}, [showIndicator]);
+	const snowflakeGlyph = pickSnowflakeFrame(snowflakeFrame);
 
 	// 思考预览：单行 + 按安全宽度预裁剪，仅替换 tips 行位置，
 	// 使「思考中 → 回答中」切换前后 footer 高度完全一致。
@@ -214,8 +254,15 @@ export default function LoadingIndicator({
 	const loadingTextColor = loadingShimmerColors.base;
 	const loadingTokenColor = loadingShimmerColors.shimmer;
 
+	// Issue #215：非流式 busy 态（无专属面板的后台终端/后台进程/压缩无面板等）
+	// 也需要常驻动画反馈，避免窗口内完全静默。
+	const isBusyActive = busyKind !== 'idle';
+	const busyVerbPool =
+		busyKind !== 'idle' ? t.chatScreen.busyVerbs[busyKind] : undefined;
+	const busyVerb = pickVerb(busyVerbPool, busyElapsedSeconds);
+
 	if (
-		(!isStreaming && !isSaving && !isStopping) ||
+		(!isStreaming && !isSaving && !isStopping && !isBusyActive) ||
 		hasPendingToolConfirmation ||
 		hasPendingUserQuestion ||
 		hasBlockingOverlay
@@ -355,7 +402,7 @@ export default function LoadingIndicator({
 	return (
 		<Box marginBottom={1} marginTop={1} paddingX={1} width={terminalWidth}>
 			<Text color={loadingIconColor} bold>
-				❆
+				{snowflakeGlyph}
 			</Text>
 			<Box marginLeft={1} flexDirection="column">
 				{isStopping ? (
@@ -468,6 +515,17 @@ export default function LoadingIndicator({
 							</Text>
 						)}
 					</>
+				) : isBusyActive ? (
+					<Text color={loadingTextColor} dimColor bold>
+						<ShimmerText
+							text={busyVerb ?? t.chatScreen.statusWorking}
+							baseColor={loadingTextColor}
+							shimmerColor={loadingTokenColor}
+						/>
+						{' ('}
+						{formatElapsedTime(busyElapsedSeconds)}
+						{')'}
+					</Text>
 				) : (
 					<Text color={theme.colors.menuSecondary} dimColor>
 						{t.chatScreen.sessionCreating}

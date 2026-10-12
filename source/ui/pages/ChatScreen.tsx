@@ -36,6 +36,8 @@ import {useChatScreenModes} from './chatScreen/useChatScreenModes.js';
 import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLifecycle.js';
 import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {useElapsedSeconds} from '../../hooks/ui/useElapsedSeconds.js';
+import type {ActiveBusyKind} from '../components/chat/statusVerbs.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
 import {useBuddyNotification} from '../../buddy/useBuddyNotification.js';
 
@@ -315,6 +317,23 @@ export default function ChatScreen({
 		(customCommandExecution?.isRunning ?? false) ||
 		schedulerExecutionState.state.isRunning ||
 		hasRunningBackgroundProcess;
+
+	// Issue #215：非流式 busy 态（无专属面板的）交给 ❆ 行做常驻动画反馈。
+	// 与专属面板“互补”而非重复：
+	// - 前台 terminal / bashMode / customCommand 已有专属面板 → 不在此列
+	// - 压缩在 CompressionStatus 面板尚未挂载的窗口内才补位
+	// - 后台终端 / 后台进程本身无专属面板 → 常驻 ❆ 行
+	const busyKind: ActiveBusyKind | 'idle' = streamingState.isStreaming
+		? 'idle'
+		: isCompressing && !compressionStatus
+		? 'compressing'
+		: backgroundTerminalCommand
+		? 'terminal'
+		: hasRunningBackgroundProcess
+		? 'background'
+		: 'idle';
+	const busyElapsedSeconds = useElapsedSeconds(busyKind !== 'idle');
+
 	const terminalTitleActive = hasPendingAction;
 
 	useEffect(() => {
@@ -815,6 +834,8 @@ export default function ChatScreen({
 					elapsedSeconds={streamingState.elapsedSeconds}
 					currentModel={streamingState.currentModel}
 					compressBlockToast={streamingState.compressBlockToast}
+					busyKind={busyKind}
+					busyElapsedSeconds={busyElapsedSeconds}
 				/>
 			)}
 		</Box>

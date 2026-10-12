@@ -1919,6 +1919,55 @@ export const en: TranslationKeys = {
 			'Use /usage to inspect token consumption and cache statistics',
 			'Use /branch to fork the current conversation before exploring another direction',
 		],
+		// Runtime busy-state verb pools (Issue #215): rotated by elapsed time,
+		// themeable and user-extensible.
+		busyVerbs: {
+			thinking: [
+				'Thinking...',
+				'Pondering...',
+				'Reasoning...',
+				'Mulling it over...',
+				'Considering...',
+				'Cogitating...',
+			],
+			deepThinking: [
+				'Deep thinking...',
+				'Deliberating...',
+				'Reflecting...',
+				'Analyzing deeply...',
+				'Ruminating...',
+			],
+			writing: [
+				'Writing...',
+				'Composing...',
+				'Drafting...',
+				'Formulating...',
+				'Typing...',
+			],
+			compressing: [
+				'Compacting conversation...',
+				'Condensing history...',
+				'Summarizing context...',
+			],
+			terminal: [
+				'Running command...',
+				'Executing command...',
+				'Processing command...',
+			],
+			customCommand: [
+				'Running custom command...',
+				'Executing task...',
+				'Working on it...',
+			],
+			background: [
+				'Background task running...',
+				'Processing in background...',
+				'Working in background...',
+			],
+			scheduler: ['Scheduled task running...', 'Waiting on schedule...'],
+			saving: ['Saving...', 'Persisting session...', 'Writing session...'],
+			stopping: ['Stopping...', 'Interrupting...', 'Winding down...'],
+		},
 		// Context
 		contextUsage: 'Context usage: {percentage}%',
 		contextPercentage: '{percentage}%',

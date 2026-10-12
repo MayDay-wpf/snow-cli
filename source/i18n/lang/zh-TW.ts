@@ -1817,6 +1817,31 @@ export const zhTW: TranslationKeys = {
 			'使用 /usage 可查看 Token 消耗和快取統計',
 			'探索另一個方向前，可用 /branch 分叉目前對話',
 		],
+		// 運行期 busy 態動詞詞庫（Issue #215）：按 elapsed 輪換取詞，支持主題化/用戶擴展
+		busyVerbs: {
+			thinking: [
+				'思考中...',
+				'斟酌中...',
+				'推理中...',
+				'醞釀中...',
+				'考量中...',
+				'構思中...',
+			],
+			deepThinking: [
+				'深度思考中...',
+				'反覆推敲中...',
+				'深入分析中...',
+				'仔細琢磨中...',
+			],
+			writing: ['輸出中...', '撰寫中...', '起草中...', '組織表達中...'],
+			compressing: ['壓縮上下文中...', '歸納對話中...', '整理歷史記錄中...'],
+			terminal: ['執行命令中...', '終端運行中...', '處理命令中...'],
+			customCommand: ['執行自訂命令中...', '處理任務中...'],
+			background: ['後台任務運行中...', '後台處理中...'],
+			scheduler: ['定時任務運行中...', '等待計劃執行...'],
+			saving: ['保存中...', '持久化會話中...'],
+			stopping: ['停止中...', '正在中斷...'],
+		},
 		// Context
 		contextUsage: '上下文使用: {percentage}%',
 		contextPercentage: '{percentage}%',

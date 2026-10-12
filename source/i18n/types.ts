@@ -1675,6 +1675,19 @@ export type TranslationKeys = {
 		pressCtrlR: string;
 		pressCtrlS: string;
 		loadingTips: string[];
+		// 运行期 busy 态动词词库（Issue #215）：按 elapsed 轮换取词，支持主题化/用户扩展
+		busyVerbs: {
+			thinking: string[];
+			deepThinking: string[];
+			writing: string[];
+			compressing: string[];
+			terminal: string[];
+			customCommand: string[];
+			background: string[];
+			scheduler: string[];
+			saving: string[];
+			stopping: string[];
+		};
 		// Context
 		contextUsage: string;
 		contextPercentage: string;

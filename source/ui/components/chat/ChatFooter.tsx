@@ -15,6 +15,7 @@ import {todoEvents} from '../../../utils/events/todoEvents.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
+import type {ActiveBusyKind} from './statusVerbs.js';
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
@@ -194,6 +195,13 @@ type ChatFooterProps = {
 	elapsedSeconds: number;
 	currentModel?: string | null;
 	compressBlockToast?: string | null;
+	/**
+	 * Issue #215：非流式 busy 态分类（无专属面板的后台终端/后台进程/压缩无面板等），
+	 * 用于把 ❆ 行扩展为覆盖全量 busy 的常驻动画指示；空闲时为 'idle'。
+	 */
+	busyKind?: ActiveBusyKind | 'idle';
+	/** Issue #215：非流式 busy 态已持续秒数，用于常驻 elapsed 显示。 */
+	busyElapsedSeconds?: number;
 };
 
 const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
@@ -358,6 +366,8 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							elapsedSeconds={props.elapsedSeconds}
 							currentModel={props.currentModel}
 							teamMode={props.teamMode}
+							busyKind={props.busyKind}
+							busyElapsedSeconds={props.busyElapsedSeconds}
 						/>
 
 						{showTodos && todos.length > 0 && (

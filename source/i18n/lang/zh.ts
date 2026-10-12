@@ -1816,6 +1816,31 @@ export const zh: TranslationKeys = {
 			'使用 /usage 可查看 Token 消耗和缓存统计',
 			'探索另一个方向前，可用 /branch 分叉当前对话',
 		],
+		// 运行期 busy 态动词词库（Issue #215）：按 elapsed 轮换取词，支持主题化/用户扩展
+		busyVerbs: {
+			thinking: [
+				'思考中...',
+				'斟酌中...',
+				'推理中...',
+				'酝酿中...',
+				'考量中...',
+				'构思中...',
+			],
+			deepThinking: [
+				'深度思考中...',
+				'反复推敲中...',
+				'深入分析中...',
+				'仔细琢磨中...',
+			],
+			writing: ['输出中...', '撰写中...', '起草中...', '组织表达中...'],
+			compressing: ['压缩上下文中...', '归纳对话中...', '整理历史记录中...'],
+			terminal: ['执行命令中...', '终端运行中...', '处理命令中...'],
+			customCommand: ['执行自定义命令中...', '处理任务中...'],
+			background: ['后台任务运行中...', '后台处理中...'],
+			scheduler: ['定时任务运行中...', '等待计划执行...'],
+			saving: ['保存中...', '持久化会话中...'],
+			stopping: ['停止中...', '正在中断...'],
+		},
 		// Context
 		contextUsage: '上下文使用: {percentage}%',
 		contextPercentage: '{percentage}%',
