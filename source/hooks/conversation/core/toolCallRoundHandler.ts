@@ -222,16 +222,36 @@ export async function handleToolCallRound(ctx: {
 					multiSelect,
 				);
 			}
-			return requestUserQuestion(
-				question,
-				opts,
-				{
-					id: 'fake-tool-call',
-					type: 'function',
-					function: {name: 'askuser', arguments: '{}'},
-				},
-				multiSelect,
-			);
+
+			if (controller.signal.aborted) {
+				return {selected: '', cancelled: true};
+			}
+
+			return Promise.race([
+				requestUserQuestion(
+					question,
+					opts,
+					{
+						id: 'fake-tool-call',
+						type: 'function',
+						function: {name: 'askuser', arguments: '{}'},
+					},
+					multiSelect,
+				),
+				new Promise<never>((_, reject) => {
+					const onAbort = () => reject(new Error('User question aborted'));
+					if (controller.signal.aborted) {
+						onAbort();
+					} else {
+						controller.signal.addEventListener('abort', onAbort, {once: true});
+					}
+				}),
+			]).catch(error => {
+				if (error.message === 'User question aborted') {
+					return {selected: '', cancelled: true};
+				}
+				throw error;
+			});
 		},
 		sessionManager.getCurrentSession()?.id,
 		process.cwd(),

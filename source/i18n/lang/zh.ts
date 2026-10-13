@@ -2113,8 +2113,10 @@ export const zh: TranslationKeys = {
 		enterResponse: '请输入您的回答:',
 		keyboardHints: "提示: 按 'Enter' 选择 | 按 'e' 编辑当前选项",
 		multiSelectHint: '多选模式',
+		singleSelectHint: '单选模式',
 		multiSelectKeyboardHints:
-			'↑↓ 移动 | Tab 切换(自定义/取消) | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑',
+			'↑↓ 移动 | 回车 勾选/取消 | 1-9 快速切换 | Tab 切换提交 | e 编辑',
+		submitOption: '确认提交',
 		optionListScrollHint: '↑↓ 滚动',
 		optionListMoreAbove: '上方还有 {count} 项',
 		optionListMoreBelow: '下方还有 {count} 项',

@@ -2264,8 +2264,10 @@ export const en: TranslationKeys = {
 		keyboardHints:
 			"Tip: Press 'Enter' to select | Press 'e' to edit selected option",
 		multiSelectHint: 'Multi-select mode',
+		singleSelectHint: 'Single-select mode',
 		multiSelectKeyboardHints:
-			'↑↓ Move | Tab Toggle (Custom/Cancel) | Space Toggle | 1-9 Quick toggle | Enter Confirm | e Edit',
+			'↑↓ Move | Enter Toggle | 1-9 Quick toggle | Tab Switch to Submit | e Edit',
+		submitOption: 'Confirm & Submit',
 		optionListScrollHint: '↑↓ to scroll',
 		optionListMoreAbove: '{count} more above',
 		optionListMoreBelow: '{count} more below',

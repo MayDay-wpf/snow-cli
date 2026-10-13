@@ -225,6 +225,7 @@ export default function ChatScreenConversationView({
 				<AskUserQuestion
 					question={pendingUserQuestion.question}
 					options={pendingUserQuestion.options}
+					multiSelect={pendingUserQuestion.multiSelect}
 					onAnswer={handleUserQuestionAnswer}
 				/>
 			)}

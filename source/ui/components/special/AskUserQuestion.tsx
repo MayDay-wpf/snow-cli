@@ -13,6 +13,7 @@ export interface AskUserQuestionResult {
 interface Props {
 	question: string;
 	options: string[];
+	multiSelect?: boolean;
 	onAnswer: (result: AskUserQuestionResult) => void;
 	onCancel?: () => void;
 }
@@ -23,31 +24,38 @@ const VISIBLE_OPTION_ROWS = 5;
 const NON_FOCUSED_OPTION_MAX_LEN = 20;
 
 /**
- * Agent提问组件 - 支持选项选择、多选和自定义输入
+ * Agent提问组件 - 支持单选、多选和自定义输入
  *
  * @description
  * 显示问题和建议选项列表，用户可以：
- * - 直接选择建议选项（回车确认单个高亮项）
- * - 按空格键切换选项勾选状态（可多选）
+ * - 单选模式：回车直接选中高亮项提交
+ * - 多选模式：回车/空格切换勾选，Tab/下方向键切换到底部「确认提交」按回车提交
  * - 按'e'键编辑当前高亮选项
  * - 选择「Custom input」从头输入
- * - 数字键快速切换选项勾选状态
+ * - 数字键快速选中/切换选项
  *
  * @param question - 要问用户的问题
  * @param options - 建议选项数组
+ * @param multiSelect - 是否允许多选，默认 false
  * @param onAnswer - 用户回答后的回调函数
  */
-export default function AskUserQuestion({question, options, onAnswer}: Props) {
+export default function AskUserQuestion({
+	question,
+	options,
+	multiSelect = false,
+	onAnswer,
+}: Props) {
 	const {theme} = useTheme();
 	const {t} = useI18n();
 	const [hasAnswered, setHasAnswered] = useState(false);
 	const [showCustomInput, setShowCustomInput] = useState(false);
 	const [customInput, setCustomInput] = useState('');
 	const [highlightedOptionIndex, setHighlightedOptionIndex] = useState(0);
-	const [cursorMode, setCursorMode] = useState<'options' | 'custom' | 'cancel'>(
-		'options',
-	);
+	const [cursorMode, setCursorMode] = useState<
+		'options' | 'submit' | 'custom' | 'cancel'
+	>('options');
 	const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
+	const [submitWarning, setSubmitWarning] = useState<string | null>(null);
 	// 动态选项列表，支持添加自定义输入
 	const [dynamicOptions, setDynamicOptions] = useState<string[]>([]);
 
@@ -123,6 +131,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 		if (cursorMode === 'custom') {
 			setShowCustomInput(true);
+			setSubmitWarning(null);
 			return;
 		}
 
@@ -135,24 +144,42 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			return;
 		}
 
-		const currentItem = optionItems[highlightedOptionIndex];
-		if (!currentItem) return;
+		if (cursorMode === 'submit') {
+			const selectedOptions = Array.from(checkedIndices)
+				.sort((a, b) => a - b)
+				.map(idx => allOptions[idx] as string)
+				.filter(Boolean);
 
-		// 始终支持多选：如果有勾选项则返回数组，否则返回当前高亮项（单个）
-		const selectedOptions = Array.from(checkedIndices)
-			.sort((a, b) => a - b)
-			.map(idx => allOptions[idx] as string)
-			.filter(Boolean);
+			if (selectedOptions.length === 0) {
+				setSubmitWarning('请至少选择一项 / Please select at least one item');
+				return;
+			}
 
-		setHasAnswered(true);
-
-		if (selectedOptions.length > 0) {
-			// 有勾选项，返回数组
+			setHasAnswered(true);
 			onAnswer({
 				selected: selectedOptions,
 			});
+			return;
+		}
+
+		const currentItem = optionItems[highlightedOptionIndex];
+		if (!currentItem) return;
+
+		if (multiSelect) {
+			// 多选模式下：在选项行按回车是切换勾选状态，不直接提交
+			setCheckedIndices(prev => {
+				const newSet = new Set(prev);
+				if (newSet.has(currentItem.index)) {
+					newSet.delete(currentItem.index);
+				} else {
+					newSet.add(currentItem.index);
+				}
+				return newSet;
+			});
+			setSubmitWarning(null);
 		} else {
-			// 没有勾选项，返回当前高亮项（单个）
+			// 单选模式：在选项行按回车立即以单值提交退出
+			setHasAnswered(true);
 			onAnswer({
 				selected: currentItem.label,
 			});
@@ -160,6 +187,7 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 	}, [
 		hasAnswered,
 		cursorMode,
+		multiSelect,
 		optionItems,
 		highlightedOptionIndex,
 		checkedIndices,
@@ -169,29 +197,28 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 
 	const handleCustomInputSubmit = useCallback(() => {
 		if (customInput.trim()) {
-			// 将自定义输入添加到动态选项列表中
 			const newOption = customInput.trim();
 			if (!allOptions.includes(newOption)) {
 				setDynamicOptions(prev => [...prev, newOption]);
 			}
-			// 回到选择页面
 			setShowCustomInput(false);
 			setCustomInput('');
-			// 高亮新添加的选项
-			const newIndex = allOptions.length; // 新选项会在下次渲染时出现在这个位置
+			const newIndex = allOptions.length;
 			setHighlightedOptionIndex(newIndex);
 			setCursorMode('options');
+			if (multiSelect) {
+				setCheckedIndices(prev => new Set(prev).add(newIndex));
+			}
+			setSubmitWarning(null);
 		}
-	}, [customInput, allOptions]);
+	}, [customInput, allOptions, multiSelect]);
 
 	const handleCustomInputCancel = useCallback(() => {
-		// 取消自定义输入，返回选择列表
 		setShowCustomInput(false);
 		setCustomInput('');
 	}, []);
 
 	const toggleCheck = useCallback((index: number) => {
-		// 不允许勾选特殊选项
 		if (index < 0) return;
 
 		setCheckedIndices(prev => {
@@ -203,20 +230,50 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 			}
 			return newSet;
 		});
+		setSubmitWarning(null);
 	}, []);
 
-	//处理键盘输入 - 选择列表模式
+	// 处理键盘输入 - 选择列表模式
 	useInput(
 		(input, key) => {
 			if (showCustomInput || hasAnswered) {
 				return;
 			}
 
-			//上下键导航
+			// 快捷快捷键：Ctrl+Enter 在多选模式下直接提交
+			if (multiSelect && key.ctrl && key.return) {
+				const selectedOptions = Array.from(checkedIndices)
+					.sort((a, b) => a - b)
+					.map(idx => allOptions[idx] as string)
+					.filter(Boolean);
+
+				if (selectedOptions.length === 0) {
+					setSubmitWarning('请至少选择一项 / Please select at least one item');
+					return;
+				}
+
+				setHasAnswered(true);
+				onAnswer({
+					selected: selectedOptions,
+				});
+				return;
+			}
+
+			// 上下键导航
 			if (key.upArrow || input === 'k') {
+				setSubmitWarning(null);
 				if (cursorMode === 'cancel') {
 					setCursorMode('custom');
 				} else if (cursorMode === 'custom') {
+					if (multiSelect) {
+						setCursorMode('submit');
+					} else if (optionItems.length > 0) {
+						setCursorMode('options');
+						setHighlightedOptionIndex(optionItems.length - 1);
+					} else {
+						setCursorMode('cancel');
+					}
+				} else if (cursorMode === 'submit') {
 					if (optionItems.length > 0) {
 						setCursorMode('options');
 						setHighlightedOptionIndex(optionItems.length - 1);
@@ -230,15 +287,19 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				}
 				return;
 			}
+
 			if (key.downArrow || input === 'j') {
+				setSubmitWarning(null);
 				if (cursorMode === 'options') {
 					if (optionItems.length === 0) {
-						setCursorMode('custom');
+						setCursorMode(multiSelect ? 'submit' : 'custom');
 					} else if (highlightedOptionIndex < optionItems.length - 1) {
 						setHighlightedOptionIndex(prev => prev + 1);
 					} else {
-						setCursorMode('custom');
+						setCursorMode(multiSelect ? 'submit' : 'custom');
 					}
+				} else if (cursorMode === 'submit') {
+					setCursorMode('custom');
 				} else if (cursorMode === 'custom') {
 					setCursorMode('cancel');
 				} else {
@@ -246,21 +307,34 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 						setCursorMode('options');
 						setHighlightedOptionIndex(0);
 					} else {
-						setCursorMode('custom');
+						setCursorMode(multiSelect ? 'submit' : 'custom');
 					}
 				}
 				return;
 			}
 
+			// Tab 键在动作按钮间跳转
 			if (key.tab) {
-				setCursorMode(prev =>
-					prev === 'custom' ? 'cancel' : 'custom',
-				);
+				setSubmitWarning(null);
+				if (multiSelect) {
+					setCursorMode(prev => {
+						if (prev === 'options') return 'submit';
+						if (prev === 'submit') return 'custom';
+						if (prev === 'custom') return 'cancel';
+						return 'options';
+					});
+				} else {
+					setCursorMode(prev => {
+						if (prev === 'custom') return 'cancel';
+						if (prev === 'cancel') return 'options';
+						return 'custom';
+					});
+				}
 				return;
 			}
 
-			//空格键切换选中（始终支持多选）
-			if (input === ' ' && cursorMode === 'options') {
+			// 空格键切换选中（多选模式）
+			if (input === ' ' && cursorMode === 'options' && multiSelect) {
 				const currentItem = optionItems[highlightedOptionIndex];
 				if (currentItem) {
 					toggleCheck(currentItem.index);
@@ -268,23 +342,34 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				return;
 			}
 
-			//数字键快速切换选项勾选状态
+			// 数字键快速选择/切换
 			const num = parseInt(input, 10);
 			if (!isNaN(num) && num >= 1 && num <= allOptions.length) {
 				const idx = num - 1;
 				setCursorMode('options');
 				setHighlightedOptionIndex(idx);
-				toggleCheck(idx);
+				if (multiSelect) {
+					toggleCheck(idx);
+				} else {
+					// 单选模式下按数字键立即选择对应项并提交
+					const targetOption = allOptions[idx];
+					if (targetOption) {
+						setHasAnswered(true);
+						onAnswer({
+							selected: targetOption,
+						});
+					}
+				}
 				return;
 			}
 
-			//回车确认
+			// 回车确认
 			if (key.return) {
 				handleSubmit();
 				return;
 			}
 
-			//ESC键取消
+			// ESC键取消
 			if (key.escape) {
 				setHasAnswered(true);
 				onAnswer({
@@ -294,11 +379,12 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				return;
 			}
 
-			//e键编辑
+			// e键编辑当前项
 			if (input === 'e' || input === 'E') {
 				setShowCustomInput(true);
+				setSubmitWarning(null);
 
-				if (cursorMode === 'custom' || cursorMode === 'cancel') {
+				if (cursorMode === 'custom' || cursorMode === 'cancel' || cursorMode === 'submit') {
 					setCustomInput('');
 				} else {
 					const currentItem = optionItems[highlightedOptionIndex];
@@ -310,14 +396,14 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		{isActive: !showCustomInput && !hasAnswered},
 	);
 
-	//处理键盘输入 - 自定义输入模式
+	// 处理键盘输入 - 自定义输入模式
 	useInput(
 		(_input, key) => {
 			if (!showCustomInput || hasAnswered) {
 				return;
 			}
 
-			//ESC键返回选择列表
+			// ESC键返回选择列表
 			if (key.escape) {
 				handleCustomInputCancel();
 				return;
@@ -325,6 +411,9 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 		},
 		{isActive: showCustomInput && !hasAnswered},
 	);
+
+	const submitLabel = t.askUser.submitOption || '确认提交';
+	const checkedCount = checkedIndices.size;
 
 	return (
 		<Box
@@ -339,7 +428,14 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 				<Text bold color={theme.colors.menuInfo}>
 					{t.askUser.header}
 				</Text>
-				<Text dimColor> ({t.askUser.multiSelectHint || '可多选'})</Text>
+				<Text dimColor>
+					{' '}
+					(
+					{multiSelect
+						? t.askUser.multiSelectHint || '多选模式'
+						: t.askUser.singleSelectHint || '单选模式'}
+					)
+				</Text>
 			</Box>
 
 			<Box marginBottom={1}>
@@ -388,16 +484,18 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 										>
 											{isHighlighted ? '▸ ' : '  '}
 										</Text>
-										<Text
-											color={
-												isChecked
-													? theme.colors.success
-													: undefined
-											}
-											dimColor={!isChecked}
-										>
-											{isChecked ? '[✓] ' : '[ ] '}
-										</Text>
+										{multiSelect && (
+											<Text
+												color={
+													isChecked
+														? theme.colors.success
+														: undefined
+												}
+												dimColor={!isChecked}
+											>
+												{isChecked ? '[✓] ' : '[ ] '}
+											</Text>
+										)}
 										<Text
 											color={
 												isHighlighted
@@ -425,7 +523,39 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 							</Text>
 						) : null}
 					</Box>
+
+					{submitWarning && (
+						<Box marginTop={1}>
+							<Text color={theme.colors.warning}>
+								⚠ {submitWarning}
+							</Text>
+						</Box>
+					)}
+
 					<Box marginTop={1} flexDirection="column">
+						{multiSelect && (
+							<Box>
+								<Text
+									color={
+										cursorMode === 'submit'
+											? theme.colors.menuInfo
+											: undefined
+									}
+								>
+									{cursorMode === 'submit' ? '▸ ' : '  '}
+								</Text>
+								<Text
+									color={
+										cursorMode === 'submit'
+											? theme.colors.menuInfo
+											: undefined
+									}
+									dimColor={cursorMode !== 'submit'}
+								>
+									[✓ {submitLabel} ({checkedCount} 项已选)]
+								</Text>
+							</Box>
+						)}
 						<Box>
 							<Text
 								color={
@@ -463,8 +593,9 @@ export default function AskUserQuestion({question, options, onAnswer}: Props) {
 					</Box>
 					<Box marginTop={1}>
 						<Text dimColor>
-							{t.askUser.multiSelectKeyboardHints ||
-								'↑↓ 移动 | Tab 切换(自定义/取消) | 空格 切换 | 1-9 快速切换 | 回车 确认 | e 编辑'}
+							{multiSelect
+								? t.askUser.multiSelectKeyboardHints
+								: t.askUser.keyboardHints}
 						</Text>
 					</Box>
 				</Box>
