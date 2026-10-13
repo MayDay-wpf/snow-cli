@@ -17,18 +17,51 @@ interface ThinkingData {
 }
 
 /**
- * Clean thinking content by removing XML-like tags
- * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
- * in the reasoning content that should be stripped
+ * Clean thinking content by removing outer XML-like tags (<think>...</think>, <thinking>...</thinking>)
+ * while strictly protecting internal Markdown code fences (``` or ~~~) and preserving indentation/newlines.
  *
  * @param content - Raw thinking content
  * @returns Cleaned thinking content
  */
-function cleanThinkingContent(content: string): string {
-	// Remove <think>, </think>, <thinking>, </thinking> tags (with surrounding whitespace/newlines)
-	return content
-		.replace(/\s*<\/?think(?:ing)?>\s*/gi, '')
-		.trim();
+export function cleanThinkingContent(content: string): string {
+	if (!content) {
+		return '';
+	}
+
+	const lines = content.split('\n');
+	const cleanedLines: string[] = [];
+	let inFence = false;
+	let fenceMarker = '';
+
+	const fenceRegex = /^\s*(`{3,}|~{3,})/;
+	// Match think tags only, with optional horizontal whitespace around them on the same line.
+	// We do NOT use \s* across lines, to protect original line breaks and code layout.
+	const tagRegex = /[ \t]*<\/?(?:think|thinking)>[ \t]*/gi;
+
+	for (const line of lines) {
+		const fenceMatch = line.match(fenceRegex);
+		if (fenceMatch && fenceMatch[1]) {
+			const marker = fenceMatch[1];
+			const char = marker[0];
+			if (!inFence) {
+				inFence = true;
+				fenceMarker = marker;
+			} else if (char === fenceMarker[0] && marker.length >= fenceMarker.length) {
+				inFence = false;
+				fenceMarker = '';
+			}
+			cleanedLines.push(line);
+			continue;
+		}
+
+		if (inFence) {
+			cleanedLines.push(line);
+		} else {
+			cleanedLines.push(line.replace(tagRegex, ''));
+		}
+	}
+
+	return cleanedLines.join('\n').trim();
 }
 
 /**
