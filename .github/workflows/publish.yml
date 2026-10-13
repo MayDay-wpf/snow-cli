@@ -125,8 +125,13 @@ jobs:
 
             ### What's New
 
-            - Busy state: non-streaming waits now show animated status indicators with an elapsed-time counter
-            - Fix: restored input drafts keep typed long text visible instead of collapsing it into a paste placeholder (#212)
+            - New Resource Manager panel (`/taskmanager`): monitor CPU and memory usage of the main process and its child processes, and terminate processes directly from the panel
+            - MCP tool discovery: two-track catalog JIT architecture removes discovery latency, keeps the LLM prompt cache intact (no more 5-minute TTL timer), and collapses concurrent probing into a single flight
+            - AskUserQuestion: restored the multi-select contract and fixed an interaction deadlock (#220)
+            - Thinking output: markdown code fences are protected and newlines are preserved when cleaning thinking content (#216)
+            - Anthropic: added a display option for the new adaptive thinking models so reasoning text is visible in streaming responses
+            - Anthropic OAuth: subscription requests now use the Claude Code beta endpoint and client headers, fixing 404 errors; model list requests no longer duplicate the /v1 path segment
+            - Developer: established the TUI component testing conventions and infrastructure (#222)
 
             ### Installation
             ```bash
