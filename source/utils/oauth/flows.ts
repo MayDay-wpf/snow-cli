@@ -583,7 +583,10 @@ async function anthropicRefreshTokens(
 
 async function anthropicFetchModels(accessToken: string): Promise<string[]> {
 	const def = providerDef('anthropic');
-	const url = `${def.backendBaseUrl.replace(/\/+$/, '')}/v1/models?limit=1000`;
+	// backendBaseUrl 已带 /v1（与 chatgpt / xai 同构），模型列表挂在同一个 /v1 下，
+	// 不能再拼一次 /v1 —— 否则请求落到 /v1/v1/models 上得到 404。
+	const base = def.backendBaseUrl.replace(/\/+$/, '');
+	const url = `${base}/models?limit=1000`;
 	const response = await fetchWithProxy(url, {
 		method: 'GET',
 		headers: {
