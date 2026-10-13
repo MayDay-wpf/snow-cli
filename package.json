@@ -164,8 +164,13 @@
 			"ts": "module",
 			"tsx": "module"
 		},
+		"timeout": "30s",
+		"environmentVariables": {
+			"TS_NODE_TRANSPILE_ONLY": "true"
+		},
 		"nodeArguments": [
-			"--loader=ts-node/esm"
+			"--loader=ts-node/esm",
+			"--loader=./scripts/test-loader.mjs"
 		]
 	},
 	"xo": {
