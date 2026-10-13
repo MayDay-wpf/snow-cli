@@ -202,3 +202,12 @@ export function showBackgroundPanel() {
 		globalSetShowPanel(true);
 	}
 }
+
+/**
+ * Read the current background process list (non-React accessor).
+ * Used by the task manager to display background processes alongside
+ * sub-agents / teammates / MCP child processes.
+ */
+export function getBackgroundProcesses(): BackgroundProcess[] {
+	return globalProcesses;
+}

@@ -39,6 +39,7 @@ export type PanelState = {
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
 	showTaskManagerPanel: boolean;
+	showResourceManagerPanel: boolean;
 	showPixelEditor: boolean;
 	showGamesPanel: boolean;
 	showAnyPanel: boolean;
@@ -66,6 +67,7 @@ export type PanelActions = {
 	setShowSkillsListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTodoListPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTaskManagerPanel: Dispatch<SetStateAction<boolean>>;
+	setShowResourceManagerPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
 	setShowGamesPanel: Dispatch<SetStateAction<boolean>>;
 	setShowAnyPanel: Dispatch<SetStateAction<boolean>>;
@@ -151,6 +153,8 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
 	const [showTaskManagerPanel, setShowTaskManagerPanel] = useState(false);
+	const [showResourceManagerPanel, setShowResourceManagerPanel] =
+		useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
 	const [showGamesPanel, setShowGamesPanel] = useState(false);
 	const [showAnyPanel, setShowAnyPanel] = useState(false);
@@ -202,6 +206,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showNewPromptPanel ||
 			showTodoListPanel ||
 			showTaskManagerPanel ||
+			showResourceManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
 			showAnyPanel ||
@@ -416,9 +421,13 @@ export function usePanelState(): PanelState & PanelActions {
 			setShowTodoListPanel(false);
 			return true;
 		}
-
 		if (showTaskManagerPanel) {
 			setShowTaskManagerPanel(false);
+			return true;
+		}
+
+		if (showResourceManagerPanel) {
+			setShowResourceManagerPanel(false);
 			return true;
 		}
 
@@ -472,6 +481,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showNewPromptPanel ||
 			showTodoListPanel ||
 			showTaskManagerPanel ||
+			showResourceManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
 			showAnyPanel ||
@@ -511,6 +521,7 @@ export function usePanelState(): PanelState & PanelActions {
 		showNewPromptPanel,
 		showTodoListPanel,
 		showTaskManagerPanel,
+		showResourceManagerPanel,
 		showPixelEditor,
 		showGamesPanel,
 		showAnyPanel,
@@ -553,6 +564,7 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
 		setShowTaskManagerPanel,
+		setShowResourceManagerPanel,
 		setShowPixelEditor,
 		setShowGamesPanel,
 		setShowAnyPanel,

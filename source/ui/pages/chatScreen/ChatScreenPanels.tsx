@@ -36,6 +36,7 @@ const ProfileEditPanel = lazy(
 	() => import('../../components/panels/ProfileEditPanel.js'),
 );
 const TaskManagerScreen = lazy(() => import('../TaskManagerScreen.js'));
+const ResourceManagerScreen = lazy(() => import('../ResourceManagerScreen.js'));
 const ModelsPanel = lazy(() =>
 	import('../../components/panels/ModelsPanel.js').then(m => ({
 		default: m.ModelsPanel,
@@ -552,6 +553,25 @@ export default function ChatScreenPanels({
 								panelState.setShowTaskManagerPanel(false);
 								onTaskResume();
 							}}
+						/>
+					</Suspense>
+				</Box>
+			)}
+
+			{panelState.showResourceManagerPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<Suspense
+						fallback={
+							<Box>
+								<Text>
+									<Spinner type="dots" /> Loading...
+								</Text>
+							</Box>
+						}
+					>
+						<ResourceManagerScreen
+							onBack={() => panelState.setShowResourceManagerPanel(false)}
+							terminalWidth={terminalWidth}
 						/>
 					</Suspense>
 				</Box>

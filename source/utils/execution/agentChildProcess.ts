@@ -119,6 +119,11 @@ interface RunAgentChildProcessOptions<T = unknown> {
 	 * shutdowns where the child simply didn't finish cleanup before SIGTERM.
 	 */
 	abortResult?: T;
+	/**
+	 * Invoked with the child process id right after `fork()`, so callers can
+	 * associate the OS process with a logical agent instance (task manager).
+	 */
+	onChildSpawned?: (pid: number) => void;
 }
 
 function buildChildPayloadWithConversationContext<T extends AgentChildPayload>(
@@ -359,6 +364,10 @@ async function runAgentChildProcess<T>(
 		execArgv: process.execArgv.filter(arg => !arg.startsWith('--inspect')),
 	});
 
+	if (child.pid && options.onChildSpawned) {
+		options.onChildSpawned(child.pid);
+	}
+
 	let stderr = '';
 	let settled = false;
 	let messagePump: NodeJS.Timeout | undefined;
@@ -500,6 +509,11 @@ export async function executeSubAgentInChildProcess(
 		addToAlwaysApproved,
 		requestUserQuestion,
 		messagePump: createSubAgentMessagePump(instanceId),
+		onChildSpawned: pid => {
+			if (instanceId) {
+				runningSubAgentTracker.setPid(instanceId, pid);
+			}
+		},
 		abortErrorMessage: 'Sub-agent execution aborted',
 	});
 }
@@ -535,6 +549,7 @@ export async function executeTeammateInChildProcess(
 		addToAlwaysApproved: options.addToAlwaysApproved,
 		requestUserQuestion: options.requestUserQuestion,
 		messagePump: createTeammateMessagePump(instanceId),
+		onChildSpawned: pid => teamTracker.setPid(instanceId, pid),
 		abortErrorMessage: 'Teammate execution aborted',
 		abortResult: {
 			success: true,

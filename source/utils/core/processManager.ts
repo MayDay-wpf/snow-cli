@@ -1,5 +1,10 @@
 import {ChildProcess, exec} from 'child_process';
 
+export interface TrackedProcessInfo {
+	pid: number;
+	command: string;
+}
+
 /**
  * Process Manager
  * Tracks and manages all child processes to ensure proper cleanup
@@ -88,6 +93,28 @@ class ProcessManager {
 	 */
 	getActiveCount(): number {
 		return this.processes.size;
+	}
+
+	/**
+	 * List tracked child processes with their pid and command line.
+	 * Used by the task manager to display per-process resource usage.
+	 */
+	list(): TrackedProcessInfo[] {
+		const result: TrackedProcessInfo[] = [];
+		for (const proc of this.processes) {
+			if (!proc.pid) {
+				continue;
+			}
+			const command = [proc.spawnfile, ...(proc.spawnargs ?? [])]
+				.filter(Boolean)
+				.join(' ')
+				.trim();
+			result.push({
+				pid: proc.pid,
+				command: command || `pid ${proc.pid}`,
+			});
+		}
+		return result;
 	}
 }
 

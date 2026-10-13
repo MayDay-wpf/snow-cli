@@ -23,6 +23,12 @@ export interface RunningTeammate {
 	prompt: string;
 	startedAt: Date;
 	currentTaskId?: string;
+	/**
+	 * OS process id of the forked child process running this teammate.
+	 * Undefined for in-process runs. Used by the task manager to sample
+	 * per-process CPU / memory usage.
+	 */
+	pid?: number;
 }
 
 export interface TeammateResult {
@@ -196,6 +202,20 @@ class TeamTracker {
 
 	isRunning(instanceId: string): boolean {
 		return this.teammates.has(instanceId);
+	}
+
+	/**
+	 * Attach the OS process id of the forked child process to a running teammate.
+	 * Called right after `fork()` so the task manager can sample resource usage.
+	 */
+	setPid(instanceId: string, pid: number): void {
+		const teammate = this.teammates.get(instanceId);
+		if (!teammate) {
+			return;
+		}
+		teammate.pid = pid;
+		this.rebuildSnapshot();
+		this.notifyListeners();
 	}
 
 	getTeammate(instanceId: string): RunningTeammate | undefined {

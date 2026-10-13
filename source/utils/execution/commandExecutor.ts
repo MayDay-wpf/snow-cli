@@ -70,6 +70,7 @@ export interface CommandResult {
 		| 'sendAsMessage'
 		| 'showNewPromptPanel'
 		| 'showTaskManager'
+		| 'showResourceManager'
 		| 'forkSession'
 		| 'btw'
 		| 'interruptAndSend'

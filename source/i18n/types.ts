@@ -841,6 +841,7 @@ export type TranslationKeys = {
 			usage: string;
 			cleanup: string;
 			backend: string;
+			taskManager: string;
 			loop: string;
 			profiles: string;
 			models: string;
@@ -1748,6 +1749,32 @@ export type TranslationKeys = {
 		approveRejectHint: string;
 		enterRejectionReason: string;
 		submitCancelHint: string;
+	};
+	resourceManager: {
+		title: string;
+		subtitle: string;
+		loading: string;
+		processCount: string;
+		columnName: string;
+		columnPid: string;
+		columnCpu: string;
+		columnMemory: string;
+		columnStatus: string;
+		kindMain: string;
+		kindSubAgent: string;
+		kindTeammate: string;
+		kindChild: string;
+		kindBackground: string;
+		statusRunning: string;
+		statusCompleted: string;
+		statusFailed: string;
+		navigationHint: string;
+		stopConfirm: string;
+		notStoppable: string;
+		stopped: string;
+		emptyHint: string;
+		moreAbove: string;
+		moreBelow: string;
 	};
 	skillsCreation: {
 		title: string;

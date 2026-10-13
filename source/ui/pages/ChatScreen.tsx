@@ -436,6 +436,7 @@ export default function ChatScreen({
 		setShowNewPromptPanel: panelState.setShowNewPromptPanel,
 		setShowTodoListPanel: panelState.setShowTodoListPanel,
 		setShowTaskManagerPanel: panelState.setShowTaskManagerPanel,
+		setShowResourceManagerPanel: panelState.setShowResourceManagerPanel,
 		setShowPixelEditor: panelState.setShowPixelEditor,
 		setShowGamesPanel: panelState.setShowGamesPanel,
 		setShowAnyPanel: panelState.setShowAnyPanel,
@@ -556,6 +557,7 @@ export default function ChatScreen({
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
 		panelState.showTaskManagerPanel ||
+		panelState.showResourceManagerPanel ||
 		panelState.showPixelEditor ||
 		panelState.showGamesPanel ||
 		panelState.showAnyPanel ||

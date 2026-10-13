@@ -29,6 +29,12 @@ export interface RunningSubAgent {
 	prompt: string;
 	/** When this sub-agent started */
 	startedAt: Date;
+	/**
+	 * OS process id of the forked child process running this sub-agent.
+	 * Undefined for in-process runs. Used by the task manager to sample
+	 * per-process CPU / memory usage.
+	 */
+	pid?: number;
 }
 
 /**
@@ -136,6 +142,20 @@ class RunningSubAgentTracker {
 	 */
 	isRunning(instanceId: string): boolean {
 		return this.agents.has(instanceId);
+	}
+
+	/**
+	 * Attach the OS process id of the forked child process to a running sub-agent.
+	 * Called right after `fork()` so the task manager can sample resource usage.
+	 */
+	setPid(instanceId: string, pid: number): void {
+		const agent = this.agents.get(instanceId);
+		if (!agent) {
+			return;
+		}
+		agent.pid = pid;
+		this.rebuildSnapshot();
+		this.notifyListeners();
 	}
 
 	/**

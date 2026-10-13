@@ -281,6 +281,16 @@ export function useCommandPanel(
 					'Schedule recurring tasks. Usage: /loop 5m <prompt> or /loop daily 09:30 <prompt>',
 			},
 			{
+				name: 'taskmanager',
+				description:
+					t.commandPanel.commands.taskManager ||
+					'Open the task manager to view Snow CLI resource usage and stop processes',
+				// 白名单：AI 处理中（streaming / 工具执行）仍可打开，方便实时观察
+				// 进程 CPU / 内存占用变化。allowDuringProcessing 会把 type 置为
+				// 'prompt'，这是 submit.ts / commandPanel.ts 放行的唯一类型。
+				allowDuringProcessing: true,
+			},
+			{
 				name: 'subagent-depth',
 				description:
 					t.commandPanel.commands.subAgentDepth ||

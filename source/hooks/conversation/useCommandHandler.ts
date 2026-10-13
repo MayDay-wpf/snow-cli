@@ -865,6 +865,7 @@ type CommandHandlerOptions = {
 	) => void;
 	setShowTodoListPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowTaskManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowResourceManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowAnyPanel: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1553,6 +1554,8 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.setMessages(prev => [...prev, commandMessage]);
 			} else if (result.success && result.action === 'showTaskManager') {
 				options.setShowTaskManagerPanel(true);
+			} else if (result.success && result.action === 'showResourceManager') {
+				options.setShowResourceManagerPanel(true);
 			} else if (result.success && result.action === 'showTodoListPanel') {
 				options.setShowTodoListPanel(true);
 			} else if (

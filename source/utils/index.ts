@@ -59,6 +59,7 @@ import './commands/worktree.js';
 import './commands/yolo.js';
 import './commands/speedometer.js';
 import './commands/interrupt.js';
+import './commands/taskmanager.js';
 
 // Export logger
 export {Logger, LogLevel, logger} from './core/logger.js';
