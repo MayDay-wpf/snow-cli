@@ -6,6 +6,8 @@
 
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 import {
+	ANTHROPIC_CLI_USER_AGENT,
+	ANTHROPIC_MESSAGES_BETA,
 	ANTHROPIC_OAUTH_BETA,
 	ANTHROPIC_TOKEN_USER_AGENT,
 	ANTHROPIC_VERSION_HEADER,
@@ -1061,7 +1063,14 @@ export function applyProviderRequestHeaders(
 		}
 		case 'anthropic': {
 			headers['anthropic-version'] = ANTHROPIC_VERSION_HEADER;
-			headers['anthropic-beta'] = ANTHROPIC_OAUTH_BETA;
+			// 订阅令牌按 Claude Code 客户端的形状请求：beta 串必须同时声明
+			// claude-code-20250219，并携带 CLI 的 User-Agent、x-app 与直接浏览器
+			// 访问声明，否则网关不把请求当作官方订阅客户端（与 Snow App /
+			// CLIProxyAPI 的上游伪装一致）。
+			headers['anthropic-beta'] = ANTHROPIC_MESSAGES_BETA;
+			headers['anthropic-dangerous-direct-browser-access'] = 'true';
+			headers['x-app'] = 'cli';
+			headers['User-Agent'] = ANTHROPIC_CLI_USER_AGENT;
 			// OAuth token 走 Authorization，不再使用 x-api-key
 			delete headers['x-api-key'];
 			return;

@@ -860,11 +860,15 @@ export async function* createStreamingAnthropicCompletion(
 						: 'https://api.anthropic.com/v1'
 				).replace(/\/+$/, '');
 
+				// 订阅（OAuth）档案必须走 Claude Code 的 beta 端点：网关按 `beta=true`
+				// 参数把请求路由到订阅可用的通道，缺失该参数会返回 404。
+				const isAnthropicOAuth = config.oauth?.provider === 'anthropic';
+
 				const url = resolveApiEndpoint(
 					baseUrl,
 					'anthropicMessages',
 					config.baseUrlMode,
-					{anthropicBeta: config.anthropicBeta},
+					{anthropicBeta: config.anthropicBeta || isAnthropicOAuth},
 				);
 
 				const fetchOptions = addProxyToFetchOptions(url, {

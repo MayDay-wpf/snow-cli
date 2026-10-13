@@ -195,6 +195,12 @@ export const CHATGPT_HOST_ID_FILE_NAME = 'chatgpt-host.json';
 
 export const ANTHROPIC_VERSION_HEADER = '2023-06-01';
 export const ANTHROPIC_OAUTH_BETA = 'oauth-2025-04-20';
+/** 订阅（OAuth）Messages 请求的 anthropic-beta 基线：Claude Code 客户端固定先声明
+ *  claude-code-20250219，紧随其后才是 oauth-2025-04-20（顺序与 Claude Code /
+ *  CLIProxyAPI 的上游请求一致），网关据此把请求识别为官方订阅客户端请求。 */
+export const ANTHROPIC_MESSAGES_BETA = `claude-code-20250219,${ANTHROPIC_OAUTH_BETA}`;
+/** Claude Code 客户端的 User-Agent 形状，订阅请求必须携带 */
+export const ANTHROPIC_CLI_USER_AGENT = 'claude-cli/2.1.280 (external, cli)';
 /** 与 Claude Code 客户端一致的 token 请求头 */
 export const ANTHROPIC_TOKEN_USER_AGENT = 'axios/1.15.2';
 
