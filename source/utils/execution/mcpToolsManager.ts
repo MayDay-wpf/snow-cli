@@ -66,6 +66,7 @@ import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 
 // ============================================================================
 // MCP Protocol 2026-07-28 - Key Changes (SEP references)
@@ -154,7 +155,6 @@ interface MCPToolsCache {
 }
 
 let toolsCache: MCPToolsCache | null = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (default; overridden by server ttlMs)
 
 // Lazy initialization of TODO service to avoid circular dependencies
 let todoService: TodoService | null = null;
@@ -233,29 +233,73 @@ export function getRegisteredServicePrefixes(): string[] {
 	}
 }
 
+// In-flight refresh promise to prevent duplicate concurrent discovery runs
+let inFlightRefreshPromise: Promise<void> | null = null;
+
+const CATALOG_FILE_PATH = path.join(os.homedir(), '.snow', 'mcp-catalog.json');
+
+interface MCPCatalogDiskFormat {
+	version: number;
+	configHash: string;
+	lastUpdate: number;
+	servicesInfo: MCPServiceTools[];
+	cacheHints?: Record<string, MCPCacheHints>;
+}
+
 /**
- * Generate a hash of the current MCP configuration and sub-agents
+ * Load persisted catalog from ~/.snow/mcp-catalog.json
+ */
+function loadDiskCatalog(expectedHash: string): MCPCatalogDiskFormat | null {
+	try {
+		if (!fs.existsSync(CATALOG_FILE_PATH)) return null;
+		const raw = fs.readFileSync(CATALOG_FILE_PATH, 'utf8');
+		const data = JSON.parse(raw) as MCPCatalogDiskFormat;
+		if (data.version === 1 && data.configHash === expectedHash && Array.isArray(data.servicesInfo)) {
+			logger.debug('[MCP] Loaded valid external MCP catalog from disk cache');
+			return data;
+		}
+	} catch (e) {
+		logger.debug('[MCP] Failed to load disk catalog:', e);
+	}
+	return null;
+}
+
+/**
+ * Save valid catalog to ~/.snow/mcp-catalog.json
+ */
+function saveDiskCatalog(catalog: MCPCatalogDiskFormat): void {
+	try {
+		const dir = path.dirname(CATALOG_FILE_PATH);
+		if (!fs.existsSync(dir)) {
+			fs.mkdirSync(dir, {recursive: true});
+		}
+		fs.writeFileSync(CATALOG_FILE_PATH, JSON.stringify(catalog, null, 2), 'utf8');
+		logger.debug('[MCP] Saved external MCP catalog to disk cache');
+	} catch (e) {
+		logger.warn('[MCP] Failed to save disk catalog:', e);
+	}
+}
+
+/**
+ * Generate a pure hash of the current MCP configuration and tool settings.
+ * Notice: sessionId and transient session flags are EXCLUDED to prevent
+ * tearing down external MCP cache during session switches or rename operations.
  */
 async function generateConfigHash(): Promise<string> {
 	try {
 		const mcpConfig = getMCPConfig();
-		const subAgents = getSubAgentTools(); // Include sub-agents in hash
+		const subAgents = getSubAgentTools();
 
-		// Include skills in hash (both project and global)
 		const projectRoot = process.cwd();
 		const skillTools = await getSkillTools(projectRoot);
 
-		// 🔥 CRITICAL: Include codebase enabled status in hash
 		const {loadCodebaseConfig} = await import('../config/codebaseConfig.js');
 		const codebaseConfig = loadCodebaseConfig();
 
 		const {getTeamMode, getUltraTodoEnabled} = await import(
 			'../config/projectSettings.js'
 		);
-		// 把当前会话的 goal 绑定状态纳入 hash：会话切换或 hasGoal 翻转时，
-		// 缓存失效 -> 重建工具列表 -> goal- 工具按需出现/消失。
-		const sessionHasGoal = !!sessionManager.getCurrentSession()?.hasGoal;
-		const sessionId = sessionManager.getCurrentSession()?.id || '';
+
 		return JSON.stringify({
 			mcpServers: mcpConfig.mcpServers,
 			subAgents: subAgents.map(t => t.name),
@@ -267,8 +311,6 @@ async function generateConfigHash(): Promise<string> {
 			optInEnabledMCPTools: getOptInEnabledMCPKeysMerged(),
 			teamMode: getTeamMode(),
 			ultraTodoEnabled: getUltraTodoEnabled(),
-			sessionHasGoal,
-			sessionId,
 		});
 	} catch {
 		return '';
@@ -276,35 +318,18 @@ async function generateConfigHash(): Promise<string> {
 }
 
 /**
- * Check if the cache is valid and not expired.
- * [MCP 2026-07-28] Respects server-provided ttlMs cache hints (SEP-2549):
- * if any service returned a ttlMs, use the minimum across all services
- * as the effective cache duration instead of the default 5 minutes.
+ * Check if the cache is valid and matches the current configuration.
+ * Time-based expiration is eliminated for ordinary conversation turns to
+ * protect LLM Prompt Cache prefix stability; cache is pinned until config changes
+ * or user explicitly requests a refresh via /mcp or UI panel.
  */
 async function isCacheValid(): Promise<boolean> {
 	if (!toolsCache) return false;
 
-	const now = Date.now();
-
-	// Determine effective cache duration from server hints
-	let effectiveDuration = CACHE_DURATION;
-	if (toolsCache.cacheHints.size > 0) {
-		const serverTtls = [...toolsCache.cacheHints.values()]
-			.map(h => h.ttlMs)
-			.filter((ttl): ttl is number => typeof ttl === 'number' && ttl > 0);
-		if (serverTtls.length > 0) {
-			effectiveDuration = Math.min(...serverTtls);
-			logger.debug(
-				`[MCP] Using server-provided cache TTL: ${effectiveDuration}ms (SEP-2549)`,
-			);
-		}
-	}
-
-	const isExpired = now - toolsCache.lastUpdate > effectiveDuration;
 	const configHash = await generateConfigHash();
 	const configChanged = toolsCache.configHash !== configHash;
 
-	return !isExpired && !configChanged;
+	return !configChanged;
 }
 
 /**
@@ -319,9 +344,27 @@ async function getCachedTools(): Promise<MCPTool[]> {
 }
 
 /**
- * Refresh the tools cache by collecting all available tools
+ * Refresh the tools cache by collecting all available tools.
+ * Protected by in-flight deduplication promise to eliminate concurrent probe storms.
  */
 async function refreshToolsCache(): Promise<void> {
+	if (inFlightRefreshPromise) {
+		logger.debug('[MCP] Joining in-flight tools cache refresh');
+		return inFlightRefreshPromise;
+	}
+
+	inFlightRefreshPromise = (async () => {
+		try {
+			await doRefreshToolsCache();
+		} finally {
+			inFlightRefreshPromise = null;
+		}
+	})();
+
+	return inFlightRefreshPromise;
+}
+
+async function doRefreshToolsCache(): Promise<void> {
 	const allTools: MCPTool[] = [];
 	const servicesInfo: MCPServiceTools[] = [];
 	// [MCP 2026-07-28] Collect per-service cache hints (SEP-2549)
@@ -594,61 +637,110 @@ async function refreshToolsCache(): Promise<void> {
 		logger.debug('Codebase search tools not available:', error);
 	}
 
-	// Add user-configured MCP server tools (probe for availability but don't maintain connections)
+	// Add user-configured MCP server tools (read disk catalog first to achieve 0ms, or probe if missing)
 	try {
 		const mcpConfig = getMCPConfig();
-		for (const [serviceName, server] of Object.entries(mcpConfig.mcpServers)) {
-			const source = getMCPServerSource(serviceName) || 'global';
+		const currentConfigHash = await generateConfigHash();
+		const diskCatalog = loadDiskCatalog(currentConfigHash);
 
-			// Skip disabled services
-			if (server.enabled === false) {
-				servicesInfo.push({
-					serviceName,
-					tools: [],
-					isBuiltIn: false,
-					connected: false,
-					error: 'Disabled by user',
-					source,
-				});
-				continue;
-			}
-
-			try {
-				const probeResult = await probeServiceTools(serviceName, server);
-				servicesInfo.push({
-					serviceName,
-					tools: probeResult.tools,
-					isBuiltIn: false,
-					connected: true,
-					source,
-				});
-
-				// [MCP 2026-07-28] Store server-provided cache hints (SEP-2549)
-				if (probeResult.cacheHints) {
-					cacheHints.set(serviceName, probeResult.cacheHints);
-				}
-
-				for (const tool of probeResult.tools) {
-					if (!isMCPToolEnabled(serviceName, tool.name)) continue;
+		if (diskCatalog) {
+			// Fast Path: Restore external MCP tools instantly from persisted catalog (0ms latency, zero sub-processes spawned)
+			for (const service of diskCatalog.servicesInfo) {
+				servicesInfo.push(service);
+				for (const tool of service.tools) {
+					if (!isMCPToolEnabled(service.serviceName, tool.name)) continue;
 					allTools.push({
 						type: 'function',
 						function: {
-							name: `${serviceName}-${tool.name}`,
+							name: `${service.serviceName}-${tool.name}`,
 							description: tool.description,
 							parameters: tool.inputSchema,
 						},
 					});
 				}
-			} catch (error) {
-				servicesInfo.push({
-					serviceName,
-					tools: [],
-					isBuiltIn: false,
-					connected: false,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					source,
-				});
 			}
+			if (diskCatalog.cacheHints) {
+				for (const [sName, hints] of Object.entries(diskCatalog.cacheHints)) {
+					cacheHints.set(sName, hints);
+				}
+			}
+		} else {
+			// Slow Path (First cold start or config changed): Probe services and persist catalog
+			const externalServicesInfo: MCPServiceTools[] = [];
+			const serverEntries = Object.entries(mcpConfig.mcpServers);
+
+			for (const [serviceName, server] of serverEntries) {
+				const source = getMCPServerSource(serviceName) || 'global';
+
+				// Skip disabled services
+				if (server.enabled === false) {
+					const disabledEntry: MCPServiceTools = {
+						serviceName,
+						tools: [],
+						isBuiltIn: false,
+						connected: false,
+						error: 'Disabled by user',
+						source,
+					};
+					servicesInfo.push(disabledEntry);
+					externalServicesInfo.push(disabledEntry);
+					continue;
+				}
+
+				try {
+					const probeResult = await probeServiceTools(serviceName, server);
+					const okEntry: MCPServiceTools = {
+						serviceName,
+						tools: probeResult.tools,
+						isBuiltIn: false,
+						connected: true,
+						source,
+					};
+					servicesInfo.push(okEntry);
+					externalServicesInfo.push(okEntry);
+
+					// [MCP 2026-07-28] Store server-provided cache hints (SEP-2549)
+					if (probeResult.cacheHints) {
+						cacheHints.set(serviceName, probeResult.cacheHints);
+					}
+
+					for (const tool of probeResult.tools) {
+						if (!isMCPToolEnabled(serviceName, tool.name)) continue;
+						allTools.push({
+							type: 'function',
+							function: {
+								name: `${serviceName}-${tool.name}`,
+								description: tool.description,
+								parameters: tool.inputSchema,
+							},
+						});
+					}
+				} catch (error) {
+					const errEntry: MCPServiceTools = {
+						serviceName,
+						tools: [],
+						isBuiltIn: false,
+						connected: false,
+						error: error instanceof Error ? error.message : 'Unknown error',
+						source,
+					};
+					servicesInfo.push(errEntry);
+					externalServicesInfo.push(errEntry);
+				}
+			}
+
+			// Persist newly discovered external tools to disk catalog
+			const diskHintsRecord: Record<string, MCPCacheHints> = {};
+			for (const [k, v] of cacheHints.entries()) {
+				diskHintsRecord[k] = v;
+			}
+			saveDiskCatalog({
+				version: 1,
+				configHash: currentConfigHash,
+				lastUpdate: Date.now(),
+				servicesInfo: externalServicesInfo,
+				cacheHints: diskHintsRecord,
+			});
 		}
 	} catch (error) {
 		logger.warn('Failed to load MCP config:', error);
@@ -1105,7 +1197,10 @@ async function connectAndGetTools(
 				env: getServerProcessEnv(server),
 				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
 			});
-			await client.connect(transport);
+			await runWithTimeout(
+				client.connect(transport),
+				`Stdio connection timeout (${timeoutMs}ms) for ${serviceName}`,
+			);
 		} else {
 			throw new Error('No URL or command specified');
 		}
@@ -2321,7 +2416,10 @@ async function executeOnExternalMCPService(
 
 		// [MCP 2026-07-28] MRTR (SEP-2322): With inputRequired.autoFulfill=true,
 		// SDK v2 handles input_required responses transparently inside callTool().
-		// The result here is always the final completed result.
+		// If server returned structured error result (isError: true), preserve content for model reasoning.
+		if ((result as any).isError) {
+			logger.warn(`MCP service ${serviceName} tool ${toolName} reported error:`, result);
+		}
 		return result.content;
 	};
 
