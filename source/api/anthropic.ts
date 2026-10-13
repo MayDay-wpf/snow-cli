@@ -801,6 +801,11 @@ export async function* createStreamingAnthropicCompletion(
 						if (config.thinking.type === 'adaptive') {
 							requestBody.thinking = {
 								type: 'adaptive',
+								// 新模型（Haiku 5.5 / Opus 4.7+ / Sonnet 5+ 等）的 display
+								// 默认为 'omitted'：只返回 thinking 文本为空的思考块
+								// （签名照常保留、token 照常计费），必须显式声明才能拿到
+								// 思维链，否则界面上看不到任何思考过程。
+								display: 'summarized',
 							};
 							requestBody.output_config = {
 								effort: config.thinking.effort || 'high',
