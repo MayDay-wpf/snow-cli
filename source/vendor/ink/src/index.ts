@@ -1,3 +1,5 @@
+/// <reference path="./global.d.ts" />
+/// <reference path="./vendor-types.d.ts" />
 export type {RenderOptions, Instance} from './render.js';
 export {default as render} from './render.js';
 export type {Props as BoxProps} from './components/Box.js';
