@@ -133,6 +133,7 @@ export function useChatScreenLocalState() {
 			question: string,
 			options: string[],
 			toolCall: any,
+			multiSelect?: boolean,
 		): Promise<PendingUserQuestionResult> => {
 			return new Promise(resolve => {
 				setPendingUserQuestion({
@@ -140,6 +141,7 @@ export function useChatScreenLocalState() {
 					options,
 					toolCall,
 					resolve,
+					multiSelect,
 				});
 			});
 		},

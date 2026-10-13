@@ -41,6 +41,7 @@ export type PendingUserQuestionState = {
 	options: string[];
 	toolCall: any;
 	resolve: (result: PendingUserQuestionResult) => void;
+	multiSelect?: boolean;
 } | null;
 
 export type CodebaseProgressState = {
