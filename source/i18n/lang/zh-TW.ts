@@ -2140,8 +2140,10 @@ export const zhTW: TranslationKeys = {
 		enterResponse: '請輸入您的回答:',
 		keyboardHints: "提示: 按 'Enter' 選擇 | 按 'e' 編輯當前選項",
 		multiSelectHint: '多選模式',
+		singleSelectHint: '單選模式',
 		multiSelectKeyboardHints:
-			'↑↓ 移動 | Tab 切換(自訂/取消) | 空格 切換 | 1-9 快速切換 | 回車 確認 | e 編輯',
+			'↑↓ 移動 | 回車 勾選/取消 | 1-9 快速切換 | Tab 切換提交 | e 編輯',
+		submitOption: '確認提交',
 		optionListScrollHint: '↑↓ 捲動',
 		optionListMoreAbove: '上方還有 {count} 項',
 		optionListMoreBelow: '下方還有 {count} 項',

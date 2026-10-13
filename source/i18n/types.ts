@@ -1974,7 +1974,9 @@ export type TranslationKeys = {
 		enterResponse: string;
 		keyboardHints: string;
 		multiSelectHint: string;
+		singleSelectHint?: string;
 		multiSelectKeyboardHints: string;
+		submitOption?: string;
 		/** 可滚动选项列表底部汇总（与 mcpInfoPanel.scrollHint / more* 一致） */
 		optionListScrollHint: string;
 		optionListMoreAbove: string;

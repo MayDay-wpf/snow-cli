@@ -60,6 +60,7 @@ export interface UseChatLogicProps {
 			customInput?: string;
 			cancelled?: boolean;
 		}) => void;
+		multiSelect?: boolean;
 	} | null;
 	setPendingUserQuestion: React.Dispatch<
 		React.SetStateAction<{
@@ -71,6 +72,7 @@ export interface UseChatLogicProps {
 				customInput?: string;
 				cancelled?: boolean;
 			}) => void;
+			multiSelect?: boolean;
 		} | null>
 	>;
 	// Session panel handlers

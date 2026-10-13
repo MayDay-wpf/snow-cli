@@ -2047,7 +2047,7 @@ export async function executeMCPTool(
 						args.question,
 						args.options,
 						'', //toolCallId will be set by executeToolCall
-						false, // multiSelect 已移除，默认支持单选和多选
+						args.multiSelect === true,
 					);
 				default:
 					throw new Error(`Unknown askuser tool: ${actualToolName}`);
