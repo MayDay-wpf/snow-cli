@@ -7,6 +7,7 @@ import {
 } from '../config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../ui/diffPreview.js';
 import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
+import {cleanThinkingContent} from '../../hooks/conversation/utils/thinkingExtractor.js';
 
 /**
  * 从后续的 tool result 消息中提取 editDiffData。
@@ -79,13 +80,6 @@ function findToolNameForToolCall(
 	return tc?.function.name;
 }
 
-/**
- * Clean thinking content by removing XML-like tags
- * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
- */
-function cleanThinkingContent(content: string): string {
-	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
-}
 
 function isValidTimestamp(timestamp: unknown): timestamp is number {
 	return typeof timestamp === 'number' && Number.isFinite(timestamp);

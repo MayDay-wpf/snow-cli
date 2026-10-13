@@ -5,14 +5,7 @@ import {createStreamingChatCompletion} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
-
-/**
- * Clean thinking content by removing XML-like tags
- * Some third-party APIs (e.g., DeepSeek R1) may include <think></think> or <thinking></thinking> tags
- */
-function cleanThinkingContent(content: string): string {
-	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
-}
+import {cleanThinkingContent} from '../../hooks/conversation/utils/thinkingExtractor.js';
 
 export interface CompressionResult {
 	summary: string;

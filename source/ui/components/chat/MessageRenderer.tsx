@@ -15,14 +15,7 @@ import {toCodePoints, visualWidth} from '../../../utils/core/textUtils.js';
 import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummaryDisplay.js';
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import {getToolStatusIcon} from '../special/toolIcons.js';
-
-/**
- * Clean thinking content by removing XML-like tags
- * Some third-party APIs may include </think> or <thinking></thinking> tags
- */
-function cleanThinkingContent(content: string): string {
-	return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '').trim();
-}
+import {cleanThinkingContent} from '../../../hooks/conversation/utils/thinkingExtractor.js';
 
 /**
  * Compact thinking content for display in compact mode.

@@ -5,6 +5,7 @@ import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {createStreamGenerator} from './streamFactory.js';
 import {tpsTracker} from './tpsTracker.js';
 import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
+import {cleanThinkingContent} from '../utils/thinkingExtractor.js';
 import type {
 	ConversationHandlerOptions,
 	ConversationUsage,
@@ -14,7 +15,6 @@ import type {
 
 const TOKEN_UPDATE_INTERVAL = 100;
 const STREAM_FLUSH_INTERVAL = 80;
-const THINKING_TAG_PATTERN = /\s*<\/?think(?:ing)?>\s*/gi;
 const LIST_ITEM_PATTERN = /^\s*\d+[.)]\s|^\s*[-*+]\s/;
 const LIST_CONTINUATION_PATTERN = /^\s{2,}/;
 
@@ -23,10 +23,6 @@ function compactBuddyProgressText(value: string, maxLength = 180): string {
 	return compacted.length > maxLength
 		? `${compacted.slice(0, maxLength - 1).trimEnd()}…`
 		: compacted;
-}
-
-function cleanThinkingContent(content: string): string {
-	return content.replace(THINKING_TAG_PATTERN, '');
 }
 
 // compact 模式下将完整思考内容缩减为摘要后推入静态区。

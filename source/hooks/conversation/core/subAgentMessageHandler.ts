@@ -6,6 +6,7 @@ import {
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
+import {cleanThinkingContent} from '../utils/thinkingExtractor.js';
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -451,7 +452,7 @@ export class SubAgentUIHandler {
 	}
 
 	private cleanThinkingContent(content: string): string {
-		return content.replace(/\s*<\/?think(?:ing)?>\s*/gi, '');
+		return cleanThinkingContent(content);
 	}
 
 	private flushThinkingBuffer(
