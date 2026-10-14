@@ -1727,6 +1727,7 @@ export const en: TranslationKeys = {
 		statusThinking: 'Thinking...',
 		statusDeepThinking: 'Deep thinking...',
 		statusWriting: 'Writing...',
+		statusAwaitingFirstToken: 'awaiting response...',
 		statusFinishing: 'Finishing...',
 		statusStreaming: 'Streaming',
 		statusWorking: 'Working',

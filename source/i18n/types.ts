@@ -1528,6 +1528,7 @@ export type TranslationKeys = {
 		statusThinking: string;
 		statusDeepThinking: string;
 		statusWriting: string;
+		statusAwaitingFirstToken: string;
 		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;

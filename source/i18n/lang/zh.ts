@@ -1623,6 +1623,7 @@ export const zh: TranslationKeys = {
 		statusThinking: '思考中...',
 		statusDeepThinking: '深度思考中...',
 		statusWriting: '输出中...',
+		statusAwaitingFirstToken: '等待首字...',
 		statusFinishing: '收尾中...',
 		statusStreaming: '流式传输中',
 		statusWorking: '工作中',
