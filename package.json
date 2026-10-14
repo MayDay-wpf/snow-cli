@@ -43,6 +43,10 @@
 		"prepublishOnly": "npm run build",
 		"postinstall": "node scripts/postinstall.cjs",
 		"test": "prettier --check . && xo && ava",
+		"test:unit": "ava source/test/unit/**/*.ts",
+		"test:integration": "ava source/test/integration/**/*.ts",
+		"test:tui": "ava source/test/tui/**/*.tsx",
+		"test:run": "ava",
 		"lint": "xo",
 		"format": "prettier --write ."
 	},

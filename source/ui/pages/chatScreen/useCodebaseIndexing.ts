@@ -69,6 +69,15 @@ export function useCodebaseIndexing(workingDirectory: string) {
 
 				const validation = validateGitignore(workingDirectory);
 				if (!validation.isValid) {
+					if (validation.isHomeOrRoot) {
+						logger.info(
+							validation.error ||
+								'Codebase indexing skipped for home or root directory',
+						);
+						setCodebaseProgress(null);
+						setWatcherEnabled(false);
+						return;
+					}
 					setCodebaseProgress({
 						totalFiles: 0,
 						processedFiles: 0,

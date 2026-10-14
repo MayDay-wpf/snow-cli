@@ -14,6 +14,7 @@ import {
 	getWorkingDirectories,
 	type SSHConfig,
 } from '../utils/config/workingDirConfig.js';
+import {isHomeOrRootDirectory} from '../utils/codebase/gitignoreValidator.js';
 // Type definitions
 import type {
 	CodeSymbol,
@@ -1219,6 +1220,10 @@ export class ACECodeSearchService {
 					args.push('-F');
 				}
 
+				if (isHomeOrRootDirectory(this.basePath)) {
+					args.push('--max-depth=3');
+				}
+
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push('--glob', `!${dir}/`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');
@@ -1227,6 +1232,9 @@ export class ACECodeSearchService {
 				}
 			} else {
 				args.push(isRegex ? '-E' : '-F');
+				if (isHomeOrRootDirectory(this.basePath)) {
+					args.push('--max-depth=3');
+				}
 				GREP_EXCLUDE_DIRS.forEach(dir => args.push(`--exclude-dir=${dir}`));
 				if (fileGlob) {
 					const normalizedGlob = fileGlob.replace(/\\/g, '/');

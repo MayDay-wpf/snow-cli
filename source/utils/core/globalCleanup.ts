@@ -1,12 +1,20 @@
 /**
- * Centralized cleanup for global/singleton resources.
- * Called by /clear command and application exit (incl. fatal crash path)
- * to reclaim memory and avoid orphaned MCP / browser / OTEL handles on Windows.
+ * Centralized cleanup for session and global/singleton resources.
+ *
+ * - cleanupSessionResources(): Called by /clear command to reset conversational state
+ *   WITHOUT dropping persistent MCP connections, flushing OTEL, or triggering blocking STW GC.
+ * - cleanupGlobalResources(): Called on application exit / fatal crash to fully reclaim
+ *   process handles, close MCP child processes, and flush telemetry.
  */
 
 import {logger} from './logger.js';
 
-export async function cleanupGlobalResources(): Promise<void> {
+/**
+ * Lightweight cleanup executed on /clear and session resets.
+ * Preserves MCP connections and tool caches to ensure zero-latency subsequent requests.
+ * Never executes synchronous global.gc() to eliminate Stop-The-World main thread freezing.
+ */
+export async function cleanupSessionResources(): Promise<void> {
 	// 1. Free the module-level tiktoken encoder in subAgentContextCompressor
 	try {
 		const {freeSubAgentEncoder} = await import(
@@ -16,6 +24,60 @@ export async function cleanupGlobalResources(): Promise<void> {
 	} catch {
 		// Module may not be loaded yet — nothing to free
 	}
+
+	// 2. Clear sub-agent stream state maps
+	try {
+		const {clearAllTeammateStreamEntries, clearAllSubAgentStreamEntries} =
+			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
+		clearAllTeammateStreamEntries();
+		clearAllSubAgentStreamEntries();
+	} catch {
+		// Not loaded
+	}
+
+	// 3. Clear runningSubAgentTracker
+	try {
+		const {runningSubAgentTracker} = await import(
+			'../execution/runningSubAgentTracker.js'
+		);
+		runningSubAgentTracker.clear();
+	} catch {
+		// Not loaded
+	}
+
+	// 4. Clear conversation context
+	try {
+		const {clearConversationContext} = await import(
+			'../codebase/conversationContext.js'
+		);
+		clearConversationContext();
+	} catch {
+		// Not loaded
+	}
+
+	// 5. Clear Ink fullStaticOutput buffer
+	try {
+		const ink = (await import('ink')) as any;
+		if (typeof ink.clearInkStaticOutput === 'function') {
+			ink.clearInkStaticOutput(process.stdout);
+		}
+	} catch {
+		// Ink module not loaded
+	}
+
+	// Note: We intentionally DO NOT call global.gc() here.
+	// Running a full STW GC on a ~1GB V8 heap freezes the event loop for 1-5 seconds.
+	// V8 idle GC handles memory reclamation naturally without blocking user interaction.
+
+	logger.info('[SessionCleanup] Session resources reset (MCP connections preserved)');
+}
+
+/**
+ * Full teardown for process exit or crash handling.
+ */
+export async function cleanupGlobalResources(): Promise<void> {
+	// 1. Run session-level cleanup
+	await cleanupSessionResources();
 
 	// 2. Close Puppeteer browser if launched by WebSearchService
 	try {
@@ -33,7 +95,7 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// ACE module not loaded
 	}
 
-	// 4. Close persistent MCP clients + drop tools cache (prevents orphaned children)
+	// 4. Close persistent MCP clients + drop tools cache (prevents orphaned children on exit)
 	try {
 		const {closeAllMCPConnections, clearMCPToolsCache} = await import(
 			'../execution/mcpToolsManager.js'
@@ -58,50 +120,6 @@ export async function cleanupGlobalResources(): Promise<void> {
 		// OTEL not started
 	}
 
-	// 6. Clear sub-agent stream state maps
-	try {
-		const {clearAllTeammateStreamEntries, clearAllSubAgentStreamEntries} =
-			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
-		clearAllTeammateStreamEntries();
-		clearAllSubAgentStreamEntries();
-	} catch {
-		// Not loaded
-	}
-
-	// 7. Clear runningSubAgentTracker
-	try {
-		const {runningSubAgentTracker} = await import(
-			'../execution/runningSubAgentTracker.js'
-		);
-		runningSubAgentTracker.clear();
-	} catch {
-		// Not loaded
-	}
-
-	// 8. Clear conversation context
-	try {
-		const {clearConversationContext} = await import(
-			'../codebase/conversationContext.js'
-		);
-		clearConversationContext();
-	} catch {
-		// Not loaded
-	}
-
-	// 9. Clear Ink fullStaticOutput buffer
-	try {
-		const ink = (await import('ink')) as any;
-		if (typeof ink.clearInkStaticOutput === 'function') {
-			ink.clearInkStaticOutput(process.stdout);
-		}
-	} catch {
-		// Ink module not loaded
-	}
-
-	// 10. Force GC if available
-	if (global.gc) {
-		global.gc();
-	}
-
-	logger.info('[GlobalCleanup] Global resources cleaned up');
+	logger.info('[GlobalCleanup] Global resources fully cleaned up for exit');
 }
+
