@@ -625,7 +625,27 @@ export const zh: TranslationKeys = {
 		confirmHint: '再次按相同键确认 • Esc: 取消',
 		// Navigation hints
 		listNavigationHint:
-			'↑↓: 导航 • 空格: 切换 • A: 添加 • D: 删除 • R: 重置 • Esc: 返回',
+			'↑↓: 导航 • 空格: 切换 • A: 添加 • D: 删除 • R: 重置 • Tab: 切换标签 • Esc: 返回',
+		// Decision model assist tab
+		assistTab: '决策模型辅助',
+		rulesTab: '命令规则',
+		assistTitle: '决策模型辅助',
+		assistInfo: '让决策模型在弹出确认提示前，对命中敏感规则的命令做出判定。',
+		assistToggle: '启用决策模型辅助',
+		assistToggleInfo: '默认关闭。关闭时敏感命令保持普通确认提示。',
+		assistModel: '决策模型',
+		assistModelInfo: '只能选择已配置的决策模型。',
+		assistModelEmpty: '尚未配置决策模型。请先到「API 配置 → 决策模型」添加。',
+		assistModelNone: '未选择',
+		assistDelegate: '由决策模型直接放行/拒绝',
+		assistDelegateInfo:
+			'开启后判定直接生效：允许则放行、拒绝则拒绝，不再显示确认提示。',
+		assistModelUnavailable: '不可用',
+		assistModelUnavailableInfo:
+			'所选决策模型已被删除；在重新选择之前辅助保持空闲。',
+		assistSaveSuccess: '已保存决策模型辅助设置。',
+		assistSaveError: '保存决策模型辅助设置失败',
+		assistTabHint: 'Tab: 切换标签 • ↑↓: 导航 • Enter/空格: 切换 • Esc: 返回',
 	},
 	themeSettings: {
 		title: '主题设置',
@@ -2171,6 +2191,21 @@ export const zh: TranslationKeys = {
 		alwaysApprove: '批准(此项目不再询问此工具)',
 		rejectWithReply: '拒绝并回复',
 		rejectEndSession: '拒绝（结束会话）',
+		decisionLabel: '决策模型判定:',
+		decisionAllow: '允许执行',
+		decisionConfirm: '建议确认',
+		decisionReason: '原因',
+		decisionModel: '判定模型: {name}',
+		decisionDelegated: '（托管生效中）',
+		decisionReasons: {
+			readOnly: '仅读取信息，不修改文件、系统或远端状态',
+			regenerable: '只涉及可再生成的内容（构建产物、缓存、临时文件、依赖）',
+			scopedChange: '改动限于工作目录内且可撤销（编辑、重命名、移动）',
+			dataLoss: '删除或覆盖无法恢复的数据',
+			systemState: '更改系统或环境状态（权限、软件包、服务、进程）',
+			externalEffect: '向本机之外发布或发送数据（git push、上传、网络写入）',
+			unclear: '目标或影响范围不明确',
+		},
 	},
 	bash: {
 		sensitiveCommandDetected: '检测到敏感命令',

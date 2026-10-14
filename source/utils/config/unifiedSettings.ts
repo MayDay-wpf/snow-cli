@@ -149,6 +149,16 @@ export interface UnifiedSettings {
 		isPreset: boolean;
 	}>;
 
+	// === 敏感命令的决策模型辅助（仅全局存放） ===
+	sensitiveCommandAssist?: {
+		/** 总开关，默认关闭；关闭时不请求决策模型 */
+		enabled?: boolean;
+		/** 参与判定的决策模型 id（decision-models.json 中已配置的条目） */
+		modelId?: string;
+		/** 托管：开启后判定直接生效，关闭时仅作为建议展示 */
+		delegate?: boolean;
+	};
+
 	// === 隐私设置 ===
 	privacy?: {
 		enabled?: boolean;

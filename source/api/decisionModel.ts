@@ -38,6 +38,72 @@ const REQUEST_TIMEOUT_MS = 30_000;
 /** 判定为「相关」的选项值；另一个选项固定为 irrelevant。 */
 const RELEVANT_OPTION = 'relevant';
 
+/** 敏感命令判定：允许命令在无需用户确认的情况下执行。 */
+const ALLOW_OPTION = 'allow';
+
+/** 敏感命令判定：命令需要用户先确认。 */
+const DENY_OPTION = 'deny';
+
+/** 敏感命令请求的问题 id；答案以相同键返回。 */
+const VERDICT_QUESTION_ID = 'verdict';
+const REASON_QUESTION_ID = 'reason';
+
+/** 答案缺失或选项未知时使用的兜底原因分类。 */
+const REASON_UNKNOWN = 'unclear';
+
+/**
+ * 敏感命令判定的原因分类。键是稳定的——由前端本地化
+ * （`sensitiveCommand.decision.reason.<key>`），模型永远不写面向用户的文本。
+ */
+export const SENSITIVE_COMMAND_REASON_CATEGORIES: ReadonlyArray<
+	readonly [string, string]
+> = [
+	[
+		'readOnly',
+		'Only reads information; files, system state and remote state stay untouched',
+	],
+	[
+		'regenerable',
+		'Touches only generated or regenerable artifacts (build output, caches, temporary files, dependencies)',
+	],
+	[
+		'scopedChange',
+		'Changes stay inside the working directory and can be undone (edit, rename, move)',
+	],
+	['dataLoss', 'Deletes or overwrites data that cannot be recovered'],
+	[
+		'systemState',
+		'Changes system or environment state (permissions, packages, services, processes)',
+	],
+	[
+		'externalEffect',
+		'Publishes or sends data outside this machine (git push, upload, network write)',
+	],
+	[REASON_UNKNOWN, 'The target or the blast radius of the command is unclear'],
+];
+
+/** 敏感命令判定的结果。 */
+export interface SensitiveCommandDecision {
+	/** 是否允许命令在无需用户确认的情况下执行。 */
+	allow: boolean;
+	/** 原因分类键（SENSITIVE_COMMAND_REASON_CATEGORIES 之一），由前端本地化。 */
+	reason: string;
+	/** 模型对判定的置信度（0-1）。 */
+	confidence: number;
+}
+
+/** 一条命令的判定上下文：命令文本 + 说明 + 实际执行目录 + 命中的敏感规则。 */
+export interface SensitiveCommandDecisionContext {
+	/** 完整命令文本。 */
+	command: string;
+	/** 模型为命令写的一行说明（terminal-execute 的 description）。 */
+	description?: string;
+	/** 命令的实际执行目录。 */
+	workingDirectory?: string;
+	/** 命中的敏感规则（模式 + 说明），仅作为「被规则命中」的证据，本身不构成风险。 */
+	matchedRules?: Array<{pattern: string; description: string}>;
+}
+
 /** 决策模型的请求配置（baseUrl / apiKey / model）。 */
 export interface DecisionModelReviewConfig {
 	baseUrl: string;
@@ -166,7 +232,7 @@ export async function evaluateRelevance(
 
 	const answers =
 		parsed && typeof parsed === 'object'
-			? ((parsed as {answers?: Record<string, unknown>}).answers ?? {})
+			? (parsed as {answers?: Record<string, unknown>}).answers ?? {}
 			: {};
 
 	const askedIndices = new Set<number>();
@@ -183,7 +249,11 @@ export async function evaluateRelevance(
 
 		// 决策模型的判定即结论：`relevant` 保留，其它选项一律视为不相关；
 		// 缺失答案时保守保留，绝不删除无法判定的结果。
-		if (verdict === undefined || verdict === null || verdict === RELEVANT_OPTION) {
+		if (
+			verdict === undefined ||
+			verdict === null ||
+			verdict === RELEVANT_OPTION
+		) {
 			relevant.push(index);
 		}
 	}
@@ -197,6 +267,116 @@ export async function evaluateRelevance(
 
 	relevant.sort((a, b) => a - b);
 	return relevant;
+}
+
+/**
+ * 让决策模型判定一条命中敏感规则的命令是否可以在无需用户确认的情况下执行，
+ * 以及原因分类。
+ *
+ * 判定是模型自己在 `allow` / `deny` 之间的 choice，依据是命令在其工作目录里的
+ * 真实效果——命中的规则只是提示，从不作为结论（规则也会因为文件名、参数、
+ * commit message 而命中）。第二个问题从固定的原因分类里选一个，调用方据此用
+ * 用户的语言解释判定。两个答案在同一次请求里返回。缺失 verdict 会抛出错误：
+ * 调用方随即保留普通确认提示，绝不基于猜测放行。
+ */
+export async function evaluateSensitiveCommand(
+	config: DecisionModelReviewConfig,
+	context: SensitiveCommandDecisionContext,
+	abortSignal?: AbortSignal,
+): Promise<SensitiveCommandDecision> {
+	const state: Record<string, unknown> = {command: context.command};
+
+	const description = (context.description ?? '').trim();
+	if (description) {
+		state['description'] = description;
+	}
+
+	const workingDirectory = (context.workingDirectory ?? '').trim();
+	if (workingDirectory) {
+		state['workingDirectory'] = workingDirectory;
+	}
+
+	state['platform'] = process.platform;
+	state['matchedRules'] = (context.matchedRules ?? []).map(rule => ({
+		pattern: rule.pattern,
+		description: rule.description,
+	}));
+
+	const reasonCriteria: Record<string, string> = {};
+	for (const [key, description] of SENSITIVE_COMMAND_REASON_CATEGORIES) {
+		reasonCriteria[key] = description;
+	}
+
+	const questions = {
+		[VERDICT_QUESTION_ID]: {
+			type: 'choice',
+			instructions:
+				"Judging the real effect of this exact command in this working directory, does it have to wait for the user's confirmation before it runs?",
+			criteria: {
+				[ALLOW_OPTION]:
+					'Low risk — it can run unattended. It only reads, or it touches generated or regenerable artifacts (build output, caches, temporary files, package or dependency directories), or its effect stays inside the working directory and is easy to undo. A matched rule is not a risk by itself: rules also fire on file names, arguments and commit messages. Typical cases: inspecting files, builds, tests, formatting, cleaning build output, installing dependencies, git status/diff/add/commit inside the project.',
+				[DENY_OPTION]:
+					'Real risk of an effect the user did not ask for and could not easily undo: deleting or overwriting source code, documents, databases or paths outside the working directory; wiping data that cannot be regenerated; changing system or environment state (permissions, packages, services, processes); publishing or sending data off this machine; or the target is unknown so the effect cannot be bounded. Typical cases: recursive deletion of unresolved paths, disk formatting, force push, dropping a database, piping local files to a remote host.',
+			},
+		},
+		[REASON_QUESTION_ID]: {
+			type: 'choice',
+			instructions: "Which of these best describes the command's effect?",
+			criteria: reasonCriteria,
+		},
+	};
+
+	const parsed = await postEvaluation(
+		config,
+		{state, model: config.model, questions},
+		abortSignal,
+	);
+
+	const answers =
+		parsed && typeof parsed === 'object'
+			? (parsed as {answers?: Record<string, unknown>}).answers ?? {}
+			: {};
+
+	const verdictAnswer = answers[VERDICT_QUESTION_ID];
+	const verdict =
+		verdictAnswer && typeof verdictAnswer === 'object'
+			? (verdictAnswer as {choice?: unknown}).choice
+			: undefined;
+
+	if (typeof verdict !== 'string') {
+		throw new Error(
+			'Decision model did not answer the sensitive command verdict',
+		);
+	}
+
+	// 未知或缺失的原因分类降级为 unclear：判定本身仍然成立，只是解释不够具体。
+	const rawReason =
+		answers[REASON_QUESTION_ID] &&
+		typeof answers[REASON_QUESTION_ID] === 'object'
+			? ((answers[REASON_QUESTION_ID] as {choice?: unknown}).choice as
+					| unknown
+					| undefined)
+			: undefined;
+	const reason =
+		typeof rawReason === 'string' &&
+		SENSITIVE_COMMAND_REASON_CATEGORIES.some(([key]) => key === rawReason)
+			? rawReason
+			: REASON_UNKNOWN;
+
+	const confidence =
+		verdictAnswer && typeof verdictAnswer === 'object'
+			? (verdictAnswer as {confidence?: unknown}).confidence
+			: undefined;
+
+	return {
+		// 除显式的 allow 外，一律保留确认提示。
+		allow: verdict === ALLOW_OPTION,
+		reason,
+		confidence:
+			typeof confidence === 'number' && Number.isFinite(confidence)
+				? Math.min(1, Math.max(0, confidence))
+				: 0,
+	};
 }
 
 /**
@@ -282,7 +462,10 @@ async function postEvaluation(
 		if (!response.ok) {
 			const errorText = await response.text();
 			throw new Error(
-				`Decision model API error (${response.status}): ${errorText.slice(0, 500)}`,
+				`Decision model API error (${response.status}): ${errorText.slice(
+					0,
+					500,
+				)}`,
 			);
 		}
 

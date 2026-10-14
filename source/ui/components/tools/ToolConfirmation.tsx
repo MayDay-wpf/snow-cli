@@ -1,8 +1,12 @@
-import React, {useState, useMemo, useEffect} from 'react';
+import React, {useState, useMemo, useEffect, useRef} from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
+import {
+	evaluateSensitiveCommandGate,
+	type SensitiveCommandGateResult,
+} from '../../../utils/execution/sensitiveCommandDecision.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/index.js';
 import {vscodeConnection} from '../../../utils/ui/vscodeConnection.js';
@@ -169,6 +173,69 @@ export default function ToolConfirmation({
 
 		return {isSensitive: false};
 	}, [toolName, toolArguments]);
+
+	// 决策模型辅助判定所需的输入（命令文本 + AI 写的说明）。
+	const sensitiveGateInput = useMemo(() => {
+		if (toolName !== 'terminal-execute' || !toolArguments) {
+			return null;
+		}
+
+		try {
+			const parsed = JSON.parse(toolArguments);
+			const command = parsed.command;
+			if (typeof command !== 'string' || !command.trim()) {
+				return null;
+			}
+			const description =
+				typeof parsed.description === 'string' ? parsed.description : '';
+			return {command, description};
+		} catch {
+			return null;
+		}
+	}, [toolName, toolArguments]);
+
+	// 决策模型辅助的判定结果；辅助未启用 / 未命中规则 / 请求失败时为 none，
+	// 此时保持原有的普通确认提示。
+	const [sensitiveDecision, setSensitiveDecision] =
+		useState<SensitiveCommandGateResult>({kind: 'none'});
+	const sensitiveDecisionHandledRef = useRef(false);
+
+	useEffect(() => {
+		if (!sensitiveCommandCheck.isSensitive || !sensitiveGateInput) {
+			setSensitiveDecision({kind: 'none'});
+			return;
+		}
+
+		let cancelled = false;
+		void evaluateSensitiveCommandGate(sensitiveGateInput.command, {
+			description: sensitiveGateInput.description,
+		}).then(result => {
+			if (!cancelled) {
+				setSensitiveDecision(result);
+			}
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [sensitiveCommandCheck.isSensitive, sensitiveGateInput]);
+
+	// 托管模式：判定直接生效（允许则放行、拒绝则拒绝），无需再弹确认。
+	useEffect(() => {
+		if (sensitiveDecision.kind !== 'decision') {
+			return;
+		}
+		if (!sensitiveDecision.delegate || hasSelected) {
+			return;
+		}
+		if (sensitiveDecisionHandledRef.current) {
+			return;
+		}
+
+		sensitiveDecisionHandledRef.current = true;
+		setHasSelected(true);
+		onConfirm(sensitiveDecision.decision.allow ? 'approve' : 'reject');
+	}, [sensitiveDecision, hasSelected, onConfirm]);
 
 	// Parse and format tool arguments for display (single tool)
 	const formattedArgs = useMemo(() => {
@@ -736,12 +803,11 @@ export default function ToolConfirmation({
 		<Box
 			flexDirection="column"
 			marginX={1}
-			marginY={1}
 			borderStyle={'round'}
 			borderColor={theme.colors.warning}
 			paddingX={1}
 		>
-			<Box marginBottom={1}>
+			<Box>
 				<Text bold color={theme.colors.warning}>
 					{t.toolConfirmation.header}
 				</Text>
@@ -750,7 +816,7 @@ export default function ToolConfirmation({
 			{/* Display single tool */}
 			{!formattedAllTools ? (
 				<>
-					<Box marginBottom={1}>
+					<Box>
 						<Text>
 							{t.toolConfirmation.tool}{' '}
 							<Text bold color={theme.colors.menuInfo}>
@@ -761,8 +827,8 @@ export default function ToolConfirmation({
 
 					{/* Display sensitive command warning */}
 					{sensitiveCommandCheck.isSensitive ? (
-						<Box flexDirection="column" marginBottom={1}>
-							<Box marginBottom={1}>
+						<Box flexDirection="column">
+							<Box>
 								<Text bold color={theme.colors.error}>
 									{t.toolConfirmation.sensitiveCommandDetected}
 								</Text>
@@ -777,7 +843,7 @@ export default function ToolConfirmation({
 								</Box>
 							</Box>
 
-							<Box marginTop={1} paddingX={1} paddingY={0}>
+							<Box paddingX={1} paddingY={0}>
 								<Text color={theme.colors.warning} italic>
 									{t.toolConfirmation.requiresConfirmation}
 								</Text>
@@ -785,9 +851,52 @@ export default function ToolConfirmation({
 						</Box>
 					) : null}
 
+					{/* 决策模型辅助的判定：仅当辅助启用并成功判定时展示 */}
+					{sensitiveDecision.kind === 'decision' ? (
+						<Box flexDirection="column">
+							<Text dimColor>{t.toolConfirmation.decisionLabel}</Text>
+							<Box paddingLeft={2} flexDirection="column">
+								<Text
+									bold
+									color={
+										sensitiveDecision.decision.allow
+											? theme.colors.success
+											: theme.colors.warning
+									}
+								>
+									{sensitiveDecision.decision.allow
+										? t.toolConfirmation.decisionAllow
+										: t.toolConfirmation.decisionConfirm}
+									{sensitiveDecision.decision.confidence > 0
+										? ` (${Math.round(
+												sensitiveDecision.decision.confidence * 100,
+										  )}%)`
+										: ''}
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.toolConfirmation.decisionReason}:{' '}
+									{t.toolConfirmation.decisionReasons[
+										sensitiveDecision.decision.reason
+									] ?? sensitiveDecision.decision.reason}
+								</Text>
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{t.toolConfirmation.decisionModel.replace(
+										'{name}',
+										sensitiveDecision.modelName,
+									)}
+								</Text>
+								{sensitiveDecision.delegate ? (
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{t.toolConfirmation.decisionDelegated}
+									</Text>
+								) : null}
+							</Box>
+						</Box>
+					) : null}
+
 					{/* Display tool arguments in tree format */}
 					{toolName !== 'terminal-execute' && formattedArgs?.length ? (
-						<Box flexDirection="column" marginBottom={1}>
+						<Box flexDirection="column">
 							<Text dimColor>{t.toolConfirmation.arguments}</Text>
 							{formattedArgs.map((arg, index) => (
 								<Box key={index} flexDirection="column">
@@ -802,7 +911,7 @@ export default function ToolConfirmation({
 
 					{/* terminal-execute: 命令解释（AI 说明这条命令要做什么） */}
 					{toolName === 'terminal-execute' && commandExplanation ? (
-						<Box flexDirection="column" marginBottom={1}>
+						<Box flexDirection="column">
 							<Text dimColor>{t.toolConfirmation.commandExplanation}</Text>
 							<Box paddingLeft={2}>
 								<Text color="white">{commandExplanation}</Text>
@@ -812,7 +921,7 @@ export default function ToolConfirmation({
 
 					{/* terminal-execute: 命令翻阅窗口（固定高度，Tab 循环翻页） */}
 					{toolName === 'terminal-execute' && commandPager ? (
-						<Box flexDirection="column" marginBottom={1}>
+						<Box flexDirection="column">
 							<Text dimColor>
 								{t.toolConfirmation.commandPagerTitle}{' '}
 								<Text color={theme.colors.menuInfo}>
@@ -838,8 +947,8 @@ export default function ToolConfirmation({
 
 			{/* Display multiple tools */}
 			{formattedAllTools && multiToolPager ? (
-				<Box flexDirection="column" marginBottom={1}>
-					<Box marginBottom={1}>
+				<Box flexDirection="column">
+					<Box>
 						<Text>
 							{t.toolConfirmation.tools}{' '}
 							<Text bold color={theme.colors.menuInfo}>
@@ -893,7 +1002,7 @@ export default function ToolConfirmation({
 				</Box>
 			) : null}
 
-			<Box marginBottom={1}>
+			<Box>
 				<Text dimColor>{t.toolConfirmation.selectAction}</Text>
 			</Box>
 

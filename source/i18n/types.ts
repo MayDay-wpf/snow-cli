@@ -605,6 +605,24 @@ export type TranslationKeys = {
 		confirmHint: string;
 		// Navigation hints
 		listNavigationHint: string;
+		// Decision model assist tab
+		assistTab: string;
+		rulesTab: string;
+		assistTitle: string;
+		assistInfo: string;
+		assistToggle: string;
+		assistToggleInfo: string;
+		assistModel: string;
+		assistModelInfo: string;
+		assistModelEmpty: string;
+		assistModelNone: string;
+		assistDelegate: string;
+		assistDelegateInfo: string;
+		assistModelUnavailable: string;
+		assistModelUnavailableInfo: string;
+		assistSaveSuccess: string;
+		assistSaveError: string;
+		assistTabHint: string;
 	};
 	themeSettings: {
 		title: string;
@@ -2005,6 +2023,23 @@ export type TranslationKeys = {
 		alwaysApprove: string;
 		rejectWithReply: string;
 		rejectEndSession: string;
+		/** 决策模型辅助：判定结果标签与原因分类 */
+		decisionLabel: string;
+		decisionAllow: string;
+		decisionConfirm: string;
+		decisionReason: string;
+		decisionModel: string;
+		decisionDelegated: string;
+		decisionReasons: {
+			readOnly: string;
+			regenerable: string;
+			scopedChange: string;
+			dataLoss: string;
+			systemState: string;
+			externalEffect: string;
+			unclear: string;
+			[key: string]: string;
+		};
 	};
 	bash: {
 		sensitiveCommandDetected: string;

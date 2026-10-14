@@ -4,6 +4,10 @@ import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
+import {
+	evaluateSensitiveCommandGate,
+	type SensitiveCommandGateResult,
+} from '../../../utils/execution/sensitiveCommandDecision.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
 import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
@@ -45,6 +49,7 @@ function truncateCommand(text: string, maxWidth: number = 100): string {
 
 export function BashCommandConfirmation({
 	command,
+	onConfirm,
 	terminalWidth,
 }: BashCommandConfirmationProps) {
 	const {t} = useI18n();
@@ -52,6 +57,46 @@ export function BashCommandConfirmation({
 
 	// Check if this is a sensitive command
 	const sensitiveCheck = isSensitiveCommand(command);
+
+	// 决策模型辅助的判定结果；辅助未启用 / 未命中规则 / 请求失败时为 none，
+	// 此时保持原有的普通确认提示。
+	const [sensitiveDecision, setSensitiveDecision] =
+		useState<SensitiveCommandGateResult>({kind: 'none'});
+	const sensitiveDecisionHandledRef = useRef(false);
+
+	useEffect(() => {
+		if (!sensitiveCheck.isSensitive) {
+			setSensitiveDecision({kind: 'none'});
+			return;
+		}
+
+		let cancelled = false;
+		void evaluateSensitiveCommandGate(command).then(result => {
+			if (!cancelled) {
+				setSensitiveDecision(result);
+			}
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [command, sensitiveCheck.isSensitive]);
+
+	// 托管模式：判定直接生效（允许则放行、拒绝则拒绝），无需再弹确认。
+	useEffect(() => {
+		if (sensitiveDecision.kind !== 'decision') {
+			return;
+		}
+		if (!sensitiveDecision.delegate) {
+			return;
+		}
+		if (sensitiveDecisionHandledRef.current) {
+			return;
+		}
+
+		sensitiveDecisionHandledRef.current = true;
+		onConfirm(sensitiveDecision.decision.allow);
+	}, [sensitiveDecision, onConfirm]);
 
 	// Trigger toolConfirmation Hook when component mounts
 	useEffect(() => {
@@ -118,6 +163,47 @@ export function BashCommandConfirmation({
 						<Text dimColor>{sensitiveCheck.matchedCommand.description}</Text>
 					</Box>
 				</>
+			)}
+			{sensitiveDecision.kind === 'decision' && (
+				<Box flexDirection="column">
+					<Text dimColor>{t.toolConfirmation.decisionLabel}</Text>
+					<Box paddingLeft={2} flexDirection="column">
+						<Text
+							bold
+							color={
+								sensitiveDecision.decision.allow
+									? theme.colors.success
+									: theme.colors.warning
+							}
+						>
+							{sensitiveDecision.decision.allow
+								? t.toolConfirmation.decisionAllow
+								: t.toolConfirmation.decisionConfirm}
+							{sensitiveDecision.decision.confidence > 0
+								? ` (${Math.round(
+										sensitiveDecision.decision.confidence * 100,
+								  )}%)`
+								: ''}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.toolConfirmation.decisionReason}:{' '}
+							{t.toolConfirmation.decisionReasons[
+								sensitiveDecision.decision.reason
+							] ?? sensitiveDecision.decision.reason}
+						</Text>
+						<Text color={theme.colors.menuSecondary} dimColor>
+							{t.toolConfirmation.decisionModel.replace(
+								'{name}',
+								sensitiveDecision.modelName,
+							)}
+						</Text>
+						{sensitiveDecision.delegate ? (
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.toolConfirmation.decisionDelegated}
+							</Text>
+						) : null}
+					</Box>
+				</Box>
 			)}
 			<Box>
 				<Text color={theme.colors.warning}>{t.bash.executeConfirm}</Text>

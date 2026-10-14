@@ -666,7 +666,31 @@ export const en: TranslationKeys = {
 		confirmHint: 'Press the same key again to confirm • Esc: Cancel',
 		// Navigation hints
 		listNavigationHint:
-			'↑↓: Navigate • Space: Toggle • A: Add • D: Delete • R: Reset • Esc: Back',
+			'↑↓: Navigate • Space: Toggle • A: Add • D: Delete • R: Reset • Tab: Switch tab • Esc: Back',
+		// Decision model assist tab
+		assistTab: 'Decision model assist',
+		rulesTab: 'Command rules',
+		assistTitle: 'Decision model assist',
+		assistInfo:
+			'Let a decision model judge a command that matched a sensitive rule before the confirmation prompt shows up.',
+		assistToggle: 'Enable decision model assist',
+		assistToggleInfo:
+			'Off by default. While off, sensitive commands keep the plain confirmation prompt.',
+		assistModel: 'Decision model',
+		assistModelInfo: 'Only configured decision models can be selected here.',
+		assistModelEmpty:
+			'No decision model configured yet. Add one in API settings → Decision models first.',
+		assistModelNone: 'Not selected',
+		assistDelegate: 'Let the decision model handle the gate',
+		assistDelegateInfo:
+			'When on, an allow verdict runs the command directly and a deny verdict rejects it, without showing the prompt.',
+		assistModelUnavailable: 'Unavailable',
+		assistModelUnavailableInfo:
+			'The selected decision model was deleted; the assist stays idle until another one is selected.',
+		assistSaveSuccess: 'Saved decision model assist settings.',
+		assistSaveError: 'Failed to save decision model assist settings',
+		assistTabHint:
+			'Tab: Switch tab • ↑↓: Navigate • Enter/Space: Toggle • Esc: Back',
 	},
 	themeSettings: {
 		title: 'Theme Settings',
@@ -2324,6 +2348,26 @@ export const en: TranslationKeys = {
 		alwaysApprove: 'Approve (this project will no longer ask about this tool)',
 		rejectWithReply: 'Reject with reply',
 		rejectEndSession: 'Reject (end session)',
+		decisionLabel: 'Decision model verdict:',
+		decisionAllow: 'Allowed to run',
+		decisionConfirm: 'Confirmation advised',
+		decisionReason: 'Reason',
+		decisionModel: 'Judged by: {name}',
+		decisionDelegated: '(delegated - applied automatically)',
+		decisionReasons: {
+			readOnly:
+				'Only reads information; files, system and remote state stay untouched',
+			regenerable:
+				'Touches only generated or regenerable artifacts (build output, caches, temporary files, dependencies)',
+			scopedChange:
+				'Changes stay inside the working directory and can be undone (edit, rename, move)',
+			dataLoss: 'Deletes or overwrites data that cannot be recovered',
+			systemState:
+				'Changes system or environment state (permissions, packages, services, processes)',
+			externalEffect:
+				'Publishes or sends data outside this machine (git push, upload, network write)',
+			unclear: 'The target or the blast radius of the command is unclear',
+		},
 	},
 	bash: {
 		sensitiveCommandDetected: 'SENSITIVE COMMAND DETECTED',
