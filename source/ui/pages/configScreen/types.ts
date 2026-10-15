@@ -50,7 +50,8 @@ export type ConfigField =
 	| 'toolResultTokenLimit'
 	| 'streamingDisplay'
 	| 'maxRetries'
-	| 'retryDelayMs';
+	| 'retryDelayMs'
+	| 'terminalShell';
 
 export const GROUP_FIELDS: ConfigField[] = [
 	'apiConnectionGroup',
@@ -149,6 +150,7 @@ export const SELECT_FIELDS: ConfigField[] = [
 	'responsesServiceTier',
 	'anthropicSpeed',
 	'chatReasoningEffort',
+	'terminalShell',
 ];
 
 export const isSelectField = (field: ConfigField) =>

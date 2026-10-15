@@ -32,6 +32,10 @@ import {getDecisionModelsConfig} from '../../../utils/config/decisionModelsConfi
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {
+	getTerminalShellPreference,
+	writeMergedSettings,
+} from '../../../utils/config/unifiedSettings.js';
+import {
 	type ConfigField,
 	type ConfigScope,
 	type ProfileMode,
@@ -141,6 +145,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 	const [streamIdleTimeoutSec, setStreamIdleTimeoutSec] = useState(180);
 	const [maxRetries, setMaxRetries] = useState(5);
 	const [retryDelayMs, setRetryDelayMs] = useState(3000);
+	const [terminalShell, setTerminalShell] = useState<string>('auto');
 
 	// UI state
 	// 当从 ProfileEditPanel 进入（提供 targetProfileName）时，profile 字段被隐藏，
@@ -289,6 +294,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			'tokenTimeoutGroup',
 			...(tokenTimeoutExpanded
 				? ([
+						'terminalShell',
 						'maxContextTokens',
 						'maxTokens',
 						'streamIdleTimeoutSec',
@@ -491,6 +497,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setStreamIdleTimeoutSec(config.streamIdleTimeoutSec || 180);
 		setMaxRetries(config.maxRetries ?? 5);
 		setRetryDelayMs(config.retryDelayMs ?? 3000);
+		setTerminalShell(getTerminalShellPreference());
 
 		const systemPromptConfig = getSystemPromptConfig();
 		setSystemPrompts(
@@ -986,6 +993,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				await updateSnowConfig(config);
 			}
 
+			writeMergedSettings({terminalShell: terminalShell as any});
+
 			try {
 				const fullConfig = {
 					snowcfg: {
@@ -1162,6 +1171,8 @@ export function useConfigState(options?: UseConfigStateOptions) {
 		setMaxRetries,
 		retryDelayMs,
 		setRetryDelayMs,
+		terminalShell,
+		setTerminalShell,
 		// UI state
 		currentField,
 		setCurrentField,

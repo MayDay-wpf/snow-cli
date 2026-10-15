@@ -86,6 +86,7 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 		toolResultTokenLimit,
 		maxRetries,
 		retryDelayMs,
+		terminalShell,
 		// Helpers
 		getSystemPromptNameById,
 		getCustomHeadersSchemeNameById,
@@ -1030,6 +1031,23 @@ export default function ConfigFieldRenderer({field, state}: Props) {
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary}>
 								{visionModel || t.configScreen.notSet}
+							</Text>
+						</Box>
+					)}
+				</Box>
+			);
+
+		case 'terminalShell':
+			return (
+				<Box key={field} flexDirection="column">
+					<Text color={activeColor}>
+						{activeIndicator}
+						{t.configScreen?.terminalShell || 'Terminal Shell:'}
+					</Text>
+					{!isCurrentlyEditing && (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>
+								{terminalShell || 'auto'}
 							</Text>
 						</Box>
 					)}

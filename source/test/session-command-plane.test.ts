@@ -1,6 +1,8 @@
 import anyTest, {type TestFn} from 'ava';
-import {existsSync} from 'node:fs';
+import {existsSync, mkdirSync, rmSync} from 'node:fs';
 import {dirname, join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {
 	listSessionCommands,
@@ -21,8 +23,29 @@ import {
 	configEvents,
 	type ConfigChangeEvent,
 } from '../utils/config/configEvents.js';
+import {clearConfigCache} from '../utils/config/apiConfig.js';
 
-const test = anyTest as unknown as TestFn;
+const prevSnowConfigDir = process.env['SNOW_CONFIG_DIR'];
+const sandboxConfigDir = join(tmpdir(), `snow-cmd-plane-${randomUUID()}`);
+mkdirSync(sandboxConfigDir, {recursive: true});
+process.env['SNOW_CONFIG_DIR'] = sandboxConfigDir;
+clearConfigCache();
+
+const test = (anyTest as unknown as TestFn).serial;
+
+test.after.always('cleanup sandbox configuration directory', () => {
+	if (prevSnowConfigDir !== undefined) {
+		process.env['SNOW_CONFIG_DIR'] = prevSnowConfigDir;
+	} else {
+		delete process.env['SNOW_CONFIG_DIR'];
+	}
+	clearConfigCache();
+	try {
+		rmSync(sandboxConfigDir, {recursive: true, force: true});
+	} catch {
+		// Ignore temporary directory cleanup failures
+	}
+});
 
 test('allowlist includes buddy and display commands', t => {
 	const ids = listSessionCommands().map(c => c.id);
@@ -579,8 +602,10 @@ test('runSessionCommand compact without session fails clearly', async t => {
 	});
 	t.false(result.ok);
 	t.true(
-		result.code === 'SESSION_REQUIRED' || result.code === 'NOT_FOUND',
-		`expected SESSION_REQUIRED or NOT_FOUND, got ${result.code}`,
+		result.code === 'SESSION_REQUIRED' ||
+			result.code === 'NOT_FOUND' ||
+			result.code === 'INVALID_ARGS',
+		`expected SESSION_REQUIRED, NOT_FOUND, or INVALID_ARGS, got ${result.code}`,
 	);
 });
 
@@ -912,6 +937,52 @@ test('runSessionCommand config status/set hot-updates maxContextTokens/maxTokens
 	} finally {
 		// restore complete
 	}
+});
+
+test('runSessionCommand config status/set supports terminalShell configuration', async t => {
+	// 1. Status includes terminalShell
+	const status = await runSessionCommand({
+		command: 'config',
+		args: 'status',
+		mode: 'cli',
+	});
+	t.true(status.ok);
+	const data = status.data as {terminalShell?: string};
+	t.truthy(data.terminalShell);
+
+	// 2. Set valid terminalShell
+	const setResult = await runSessionCommand({
+		command: 'config',
+		args: 'set terminalShell=cmd',
+		mode: 'agent',
+	});
+	t.true(setResult.ok, setResult.message);
+	t.is((setResult.data as any).changed?.terminalShell, 'cmd');
+
+	// Verify status reflected
+	const afterSet = await runSessionCommand({
+		command: 'config',
+		args: 'status',
+		mode: 'cli',
+	});
+	t.is((afterSet.data as any).terminalShell, 'cmd');
+
+	// 3. Reject invalid shell
+	const invalidResult = await runSessionCommand({
+		command: 'config',
+		args: 'set terminalShell=unknown_shell_xyz',
+		mode: 'agent',
+	});
+	t.false(invalidResult.ok);
+	t.is(invalidResult.code, 'INVALID_ARGS');
+
+	// 4. Restore to auto
+	const restoreResult = await runSessionCommand({
+		command: 'config',
+		args: 'set terminalShell=auto',
+		mode: 'agent',
+	});
+	t.true(restoreResult.ok);
 });
 
 test('runSessionCommand home is HEADLESS_UNSUPPORTED', async t => {

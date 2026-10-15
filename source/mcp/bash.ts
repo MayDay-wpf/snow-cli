@@ -1,4 +1,4 @@
-import {exec, spawn, spawnSync} from 'child_process';
+import {spawn, spawnSync} from 'child_process';
 // Type definitions
 import type {CommandExecutionResult} from './types/bash.types.js';
 // Utility functions
@@ -26,6 +26,7 @@ import {bashOutputSummaryAgent} from '../agents/bashOutputSummaryAgent.js';
 import {getDisableBashAiSummary} from '../utils/config/projectSettings.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
 import {buildSessionIdentityEnv} from '../utils/execution/sessionIdentityEnv.js';
+import {getTerminalShellPreference} from '../utils/config/unifiedSettings.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
@@ -201,14 +202,17 @@ export class TerminalCommandService {
 		shell: 'pwsh' | 'powershell' | 'cmd';
 		isPowerShell: boolean;
 	} {
-		const candidates: Array<'pwsh' | 'powershell' | 'cmd'> = [];
-		if (preferred === 'pwsh') {
-			candidates.push('pwsh', 'powershell', 'cmd');
-		} else if (preferred === 'powershell') {
-			candidates.push('powershell', 'pwsh', 'cmd');
-		} else {
-			candidates.push('powershell', 'pwsh', 'cmd');
-		}
+		const userPref = getTerminalShellPreference(this.workingDirectory).toLowerCase();
+		const primary: 'pwsh' | 'powershell' | 'cmd' =
+			userPref === 'cmd' || userPref === 'pwsh' || userPref === 'powershell'
+				? userPref
+				: (preferred === 'pwsh' ? 'pwsh' : 'powershell');
+
+		const fallbacks: Array<'pwsh' | 'powershell' | 'cmd'> = ['pwsh', 'powershell', 'cmd'];
+		const candidates: Array<'pwsh' | 'powershell' | 'cmd'> = [
+			primary,
+			...fallbacks.filter(s => s !== primary),
+		];
 
 		for (const candidate of candidates) {
 			try {
@@ -368,7 +372,6 @@ export class TerminalCommandService {
 
 			// Setup abort signal handler if provided
 			let abortHandler: (() => void) | undefined;
-			let killTimeout: NodeJS.Timeout | null = null;
 			if (abortSignal) {
 				abortHandler = () => {
 					// CRITICAL: Set abort flag first to stop data processing immediately
@@ -385,34 +388,8 @@ export class TerminalCommandService {
 					childProcess.stderr?.pause();
 
 					if (childProcess.pid && !childProcess.killed) {
-						// Kill the process immediately when abort signal is triggered
-						try {
-							if (process.platform === 'win32') {
-								// Windows: Use taskkill to kill entire process tree
-								exec(`taskkill /PID ${childProcess.pid} /T /F 2>NUL`, {
-									windowsHide: true,
-								});
-							} else {
-								// Unix: Send SIGTERM first, then SIGKILL immediately as fallback
-								// For commands like 'find' that produce massive output,
-								// we need immediate termination
-								childProcess.kill('SIGTERM');
-
-								// Force SIGKILL after a very short delay (100ms) to ensure termination
-								// This is necessary because SIGTERM may be ignored or delayed
-								killTimeout = setTimeout(() => {
-									if (!childProcess.killed) {
-										try {
-											childProcess.kill('SIGKILL');
-										} catch {
-											// Ignore errors
-										}
-									}
-								}, 100);
-							}
-						} catch {
-							// Ignore errors if process already dead
-						}
+						// Kill the process and its entire process tree via processManager
+						processManager.killProcess(childProcess);
 					}
 				};
 				abortSignal.addEventListener('abort', abortHandler);
@@ -454,17 +431,7 @@ export class TerminalCommandService {
 
 					// Kill the underlying process tree so we don't keep waiting on streams.
 					if (childProcess.pid && !childProcess.killed) {
-						try {
-							if (process.platform === 'win32') {
-								exec(`taskkill /PID ${childProcess.pid} /T /F 2>NUL`, {
-									windowsHide: true,
-								});
-							} else {
-								childProcess.kill('SIGTERM');
-							}
-						} catch {
-							// Ignore.
-						}
+						processManager.killProcess(childProcess);
 					}
 
 					const timeoutError: any = new Error(
@@ -646,11 +613,6 @@ export class TerminalCommandService {
 
 				childProcess.on('close', (code, signal) => {
 					safeClearTimeout();
-					// Clean up kill timeout to prevent memory leaks
-					if (killTimeout) {
-						clearTimeout(killTimeout);
-						killTimeout = null;
-					}
 					clearInterval(backgroundCheckInterval);
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);

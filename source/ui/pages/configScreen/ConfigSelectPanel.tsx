@@ -48,6 +48,8 @@ export default function ConfigSelectPanel({state}: Props) {
 		getCustomHeadersSchemeSelectItems,
 		getCustomHeadersSchemeSelectedValue,
 		applyCustomHeadersSchemeSelectValue,
+		terminalShell,
+		setTerminalShell,
 	} = state;
 
 	const getFieldLabel = () => {
@@ -86,6 +88,8 @@ export default function ConfigSelectPanel({state}: Props) {
 				return t.configScreen.anthropicSpeed.replace(':', '');
 			case 'chatReasoningEffort':
 				return t.configScreen.chatReasoningEffort.replace(':', '');
+			case 'terminalShell':
+				return t.configScreen?.terminalShell?.replace(':', '') || 'Terminal Shell';
 			case 'systemPromptId':
 				return t.configScreen.systemPrompt;
 			case 'customHeadersSchemeId':
@@ -130,6 +134,28 @@ export default function ConfigSelectPanel({state}: Props) {
 						isFocused={true}
 						onSelect={item => {
 							setBaseUrlMode(item.value as BaseUrlMode);
+							setIsEditing(false);
+						}}
+					/>
+				)}
+				{currentField === 'terminalShell' && (
+					<ScrollableSelectInput
+						items={[
+							{label: 'auto (Default / Detected)', value: 'auto'},
+							{label: 'pwsh (PowerShell 7+)', value: 'pwsh'},
+							{label: 'powershell (Windows PowerShell 5.1)', value: 'powershell'},
+							{label: 'cmd (Command Prompt)', value: 'cmd'},
+							{label: 'git-bash (Git Bash / MSYS)', value: 'git-bash'},
+						]}
+						initialIndex={Math.max(
+							0,
+							['auto', 'pwsh', 'powershell', 'cmd', 'git-bash'].indexOf(
+								terminalShell,
+							),
+						)}
+						isFocused={true}
+						onSelect={item => {
+							setTerminalShell(item.value);
 							setIsEditing(false);
 						}}
 					/>

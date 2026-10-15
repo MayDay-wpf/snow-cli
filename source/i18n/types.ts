@@ -349,6 +349,7 @@ export type TranslationKeys = {
 		streamIdleTimeoutSec: string;
 		maxRetries: string;
 		retryDelayMs: string;
+		terminalShell: string;
 		toolResultTokenLimit: string;
 		toolResultTokenLimitHint: string;
 		toolResultTokenLimitDesc: string;
@@ -720,25 +721,6 @@ export type TranslationKeys = {
 		userMessagePreview: string;
 		userMessageSample: string;
 		colorHint: string;
-		studioMode: string;
-		expertMode: string;
-		modeToggleHint: string;
-		keyNavHint: string;
-		apcaRatingPass: string;
-		apcaRatingWeak: string;
-		apcaLabel: string;
-		fieldHue: string;
-		fieldChroma: string;
-		fieldMood: string;
-		fieldLuminanceBias: string;
-		fieldDiffHarmony: string;
-		fieldDiffIntensity: string;
-		diffHarmonyAdaptive: string;
-		diffHarmonyClassic: string;
-		diffHarmonyAccessible: string;
-		sampleCodeFilename: string;
-		sampleOldCode: string;
-		sampleNewCode: string;
 	};
 	helpPanel: {
 		title: string;
@@ -1547,7 +1529,6 @@ export type TranslationKeys = {
 		statusThinking: string;
 		statusDeepThinking: string;
 		statusWriting: string;
-		statusAwaitingFirstToken: string;
 		statusFinishing: string;
 		statusStreaming: string;
 		statusWorking: string;
