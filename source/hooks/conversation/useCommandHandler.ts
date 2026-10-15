@@ -1048,7 +1048,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.currentContextPercentageRef.current = 0;
 
 				import('../../utils/core/globalCleanup.js')
-					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+					.then(({cleanupSessionResources}) => cleanupSessionResources())
 					.catch(() => {});
 
 				const commandMessage: Message = {
@@ -1119,9 +1119,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
 
-						// Clean up global singleton resources to reclaim memory
+						// Clean up session-level singleton resources to reclaim memory without dropping MCP
 						import('../../utils/core/globalCleanup.js')
-							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.then(({cleanupSessionResources}) => cleanupSessionResources())
 							.catch(() => {});
 
 						// Add command message
@@ -1155,9 +1155,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
 
-						// Clean up global singleton resources to reclaim memory
+						// Clean up session-level singleton resources to reclaim memory without dropping MCP
 						import('../../utils/core/globalCleanup.js')
-							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
+							.then(({cleanupSessionResources}) => cleanupSessionResources())
 							.catch(() => {});
 
 						const commandMessage: Message = {
