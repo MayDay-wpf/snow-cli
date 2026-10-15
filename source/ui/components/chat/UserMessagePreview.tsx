@@ -1,30 +1,23 @@
-import React, {useMemo} from 'react';
-import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
-import MessageRenderer from './MessageRenderer.js';
-import {type Message} from './MessageList.js';
+import React from 'react';
+import {Box, Text} from 'ink';
+import {useTheme} from '../../contexts/ThemeContext.js';
 
 type Props = {
 	content: string;
 };
 
 export default function UserMessagePreview({content}: Props) {
-	const {columns: terminalWidth} = useTerminalSize();
-
-	const message = useMemo<Message>(
-		() => ({
-			role: 'user',
-			content,
-		}),
-		[content],
-	);
+	const {theme} = useTheme();
 
 	return (
-		<MessageRenderer
-			message={message}
-			terminalWidth={terminalWidth}
-			isFirstInGroup={false}
-			isLastInGroup={false}
-			showThinking={false}
-		/>
+		<Box marginY={0} paddingX={1}>
+			<Text
+				color={theme.colors.userMessageText}
+				backgroundColor={theme.colors.userMessageBackground}
+			>
+				{`  ${content}  `}
+			</Text>
+		</Box>
 	);
 }
+

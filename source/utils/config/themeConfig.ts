@@ -4,8 +4,13 @@ import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
 import type {ThemeType, ThemeColors} from '../../ui/themes/index.js';
 import {configEvents} from './configEvents.js';
 
-const CONFIG_DIR = join(homedir(), '.snow');
-const THEME_CONFIG_FILE = join(CONFIG_DIR, 'theme.json');
+export function getThemeConfigDir(): string {
+	return process.env['SNOW_CONFIG_DIR'] || join(homedir(), '.snow');
+}
+
+export function getThemeConfigFile(): string {
+	return join(getThemeConfigDir(), 'theme.json');
+}
 
 /** Status keys for tool-call title prefixes. */
 export type ToolStatusIconKey =
@@ -83,8 +88,9 @@ const DEFAULT_CONFIG: ThemeConfig = {
 };
 
 function ensureConfigDirectory(): void {
-	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, {recursive: true});
+	const dir = getThemeConfigDir();
+	if (!existsSync(dir)) {
+		mkdirSync(dir, {recursive: true});
 	}
 }
 
@@ -93,14 +99,15 @@ function ensureConfigDirectory(): void {
  */
 export function loadThemeConfig(): ThemeConfig {
 	ensureConfigDirectory();
+	const configFile = getThemeConfigFile();
 
-	if (!existsSync(THEME_CONFIG_FILE)) {
+	if (!existsSync(configFile)) {
 		saveThemeConfig(DEFAULT_CONFIG);
 		return DEFAULT_CONFIG;
 	}
 
 	try {
-		const configData = readFileSync(THEME_CONFIG_FILE, 'utf-8');
+		const configData = readFileSync(configFile, 'utf-8');
 		const config = JSON.parse(configData);
 		return {
 			...DEFAULT_CONFIG,
@@ -117,10 +124,11 @@ export function loadThemeConfig(): ThemeConfig {
  */
 export function saveThemeConfig(config: ThemeConfig): void {
 	ensureConfigDirectory();
+	const configFile = getThemeConfigFile();
 
 	try {
 		const configData = JSON.stringify(config, null, 2);
-		writeFileSync(THEME_CONFIG_FILE, configData, 'utf-8');
+		writeFileSync(configFile, configData, 'utf-8');
 	} catch (error) {
 		console.error('Failed to save theme config:', error);
 	}
