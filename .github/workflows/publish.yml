@@ -125,7 +125,11 @@ jobs:
 
             ### What's New
 
-            - Sensitive command decision model assist: a configured decision model can pre-evaluate a sensitive command before the confirmation prompt. Enable it and pick a model in the sensitive command settings screen; the verdict and reason are shown in the confirmation dialog. Optional delegate mode makes the verdict take effect directly (allow or deny), otherwise it is advisory only. Any failure falls back to the normal confirmation prompt and never auto-allows
+            - Perceptual theme engine: a new zero-dependency OKLCH color engine with bisection gamut mapping and W3C APCA readability gates powers the custom theme screen, adding 7 built-in presets (Dracula, Monokai, Solarized, Catppuccin, Gruvbox, Nord, Neon) and an APCA-driven dynamic contrast boost in DiffViewer for accessible syntax diffing
+            - Lively token awaiting indicator: the frozen "0 tokens" placeholder shown while waiting for the first streamed token (TTFT) is replaced with a dynamic awaiting state, falling back to a compact "···" on terminals narrower than 60 columns
+            - Session resume and compression fixes: context summary prefixes are filtered out when resolving the initial user prompt so compression summaries are no longer hijacked by the ancient root prompt, and genuinely completed tool calls no longer leave ghost pending cards when a session is resumed
+            - Core robustness fixes: background codebase indexing is skipped when the workspace is the home directory, a root drive, or a multi-user root (with grep/rg depth safeguards and broader system directory excludes), and /clear no longer blocks on Stop-The-World GC while preserving persistent MCP connections and tool caches
+            - Clean terminal exit: focus reporting is disabled on all exit paths (exit, SIGINT, SIGTERM, uncaughtException) so no ^[[I/^[[O bracketed garbage leaks into the shell, and cursor visibility and default shape are restored
 
             ### Installation
             ```bash
