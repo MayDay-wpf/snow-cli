@@ -229,21 +229,27 @@ export function resolveSnowConfigDir(): string {
 	return override ? override : join(homedir(), '.snow');
 }
 
-const CONFIG_DIR = resolveSnowConfigDir();
-const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
+export function getSnowConfigDir(): string {
+	return resolveSnowConfigDir();
+}
 
-const SYSTEM_PROMPT_FILE = join(CONFIG_DIR, 'system-prompt.txt'); // 旧版本，保留用于迁移
-const SYSTEM_PROMPT_JSON_FILE = join(CONFIG_DIR, 'system-prompt.json'); // 新版本
-const CUSTOM_HEADERS_FILE = join(CONFIG_DIR, 'custom-headers.json');
-export const STATUSLINE_HOOKS_DIR = join(CONFIG_DIR, 'plugin', 'statusline');
-export const SEARCH_ENGINES_DIR = join(CONFIG_DIR, 'plugin', 'search_engines');
+export function getSnowConfigFilePath(): string {
+	return join(resolveSnowConfigDir(), 'config.json');
+}
+
+const SYSTEM_PROMPT_FILE = join(resolveSnowConfigDir(), 'system-prompt.txt');
+const SYSTEM_PROMPT_JSON_FILE = join(resolveSnowConfigDir(), 'system-prompt.json');
+const CUSTOM_HEADERS_FILE = join(resolveSnowConfigDir(), 'custom-headers.json');
+
+export const STATUSLINE_HOOKS_DIR = join(resolveSnowConfigDir(), 'plugin', 'statusline');
+export const SEARCH_ENGINES_DIR = join(resolveSnowConfigDir(), 'plugin', 'search_engines');
 export const CUSTOM_HEADERS_PLUGIN_DIR = join(
-	CONFIG_DIR,
+	resolveSnowConfigDir(),
 	'plugin',
 	'custom_headers',
 );
-export const GAMES_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'games');
-export const ANYPANEL_PLUGIN_DIR = join(CONFIG_DIR, 'plugin', 'anypanel');
+export const GAMES_PLUGIN_DIR = join(resolveSnowConfigDir(), 'plugin', 'games');
+export const ANYPANEL_PLUGIN_DIR = join(resolveSnowConfigDir(), 'plugin', 'anypanel');
 
 export type MCPConfigScope = 'global' | 'project';
 
@@ -252,7 +258,7 @@ export type MCPConfigScope = 'global' | 'project';
  * `mcpServers` inside this file (previously a standalone `~/.snow/mcp-config.json`).
  */
 export function getGlobalMCPConfigFilePath(): string {
-	return join(CONFIG_DIR, 'settings.json');
+	return join(resolveSnowConfigDir(), 'settings.json');
 }
 
 /**
@@ -260,18 +266,18 @@ export function getGlobalMCPConfigFilePath(): string {
  */
 function migrateProxyConfigToNewFile(legacyProxy: any): void {
 	try {
-		if (!existsSync(PROXY_CONFIG_FILE)) {
+		const proxyConfigFile = join(resolveSnowConfigDir(), 'proxy-config.json');
+		if (!existsSync(proxyConfigFile)) {
 			const proxyConfig = {
 				enabled: legacyProxy.enabled ?? false,
 				port: legacyProxy.port ?? 7890,
 				browserPath: legacyProxy.browserPath,
 			};
 			writeFileSync(
-				PROXY_CONFIG_FILE,
+				proxyConfigFile,
 				JSON.stringify(proxyConfig, null, 2),
 				'utf8',
 			);
-			//console.log('✅ Migrated proxy config to proxy-config.json');
 		}
 	} catch (error) {
 		console.error('Failed to migrate proxy config:', error);
@@ -314,11 +320,10 @@ export function normalizeResponsesServiceTier(
 	return undefined;
 }
 
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-
 function ensureConfigDirectory(): void {
-	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, {recursive: true});
+	const dir = resolveSnowConfigDir();
+	if (!existsSync(dir)) {
+		mkdirSync(dir, {recursive: true});
 	}
 }
 
@@ -339,14 +344,15 @@ export function loadConfig(): AppConfig {
 
 	ensureConfigDirectory();
 
-	if (!existsSync(CONFIG_FILE)) {
+	const configFilePath = getSnowConfigFilePath();
+	if (!existsSync(configFilePath)) {
 		saveConfig(DEFAULT_CONFIG);
 		configCache = DEFAULT_CONFIG;
 		return DEFAULT_CONFIG;
 	}
 
 	try {
-		const configData = readFileSync(CONFIG_FILE, 'utf8');
+		const configData = readFileSync(configFilePath, 'utf8');
 		const parsedConfig = JSON.parse(configData) as Partial<AppConfig> & {
 			mcp?: unknown;
 			proxy?: unknown;
@@ -443,7 +449,7 @@ export function saveConfig(config: AppConfig): void {
 
 	try {
 		const configData = JSON.stringify(config, null, 2);
-		writeFileSync(CONFIG_FILE, configData, 'utf8');
+		writeFileSync(getSnowConfigFilePath(), configData, 'utf8');
 		// 清除缓存，下次加载时会重新读取
 		configCache = null;
 	} catch (error) {

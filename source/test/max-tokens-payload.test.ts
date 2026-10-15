@@ -1,5 +1,5 @@
 import anyTest, {type TestFn} from 'ava';
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -26,48 +26,56 @@ test.serial('maxTokens 映射到各请求方式的正确字段', t => {
 		'child.mjs',
 	);
 
-	const child = spawnSync(
-		process.execPath,
-		['--loader=ts-node/esm', childPath, sandboxDir],
-		{
-			cwd: process.cwd(),
-			encoding: 'utf8',
-			env: {...process.env},
-		},
-	);
+	try {
+		const child = spawnSync(
+			process.execPath,
+			['--loader=ts-node/esm', childPath, sandboxDir],
+			{
+				cwd: process.cwd(),
+				encoding: 'utf8',
+				env: {...process.env},
+			},
+		);
 
-	t.is(
-		child.status,
-		0,
-		`fixture 子进程异常退出:\nstdout: ${child.stdout}\nstderr: ${child.stderr}`,
-	);
+		t.is(
+			child.status,
+			0,
+			`fixture 子进程异常退出:\nstdout: ${child.stdout}\nstderr: ${child.stderr}`,
+		);
 
-	const marker = child.stdout
-		.split('\n')
-		.find(line => line.startsWith('FIXTURE_RESULT '));
-	t.truthy(marker, `未找到 FIXTURE_RESULT: ${child.stdout}`);
-	const result = JSON.parse(marker!.slice('FIXTURE_RESULT '.length));
+		const marker = child.stdout
+			.split('\n')
+			.find(line => line.startsWith('FIXTURE_RESULT '));
+		t.truthy(marker, `未找到 FIXTURE_RESULT: ${child.stdout}`);
+		const result = JSON.parse(marker!.slice('FIXTURE_RESULT '.length));
 
-	t.is(result.requestCount, 7);
+		t.is(result.requestCount, 7);
 
-	// chat -> max_tokens
-	t.is(result.chat.max_tokens, 12345);
-	t.true(result.chat.url.endsWith('/chat/completions'));
+		// chat -> max_tokens
+		t.is(result.chat.max_tokens, 12345);
+		t.true(result.chat.url.endsWith('/chat/completions'));
 
-	// responses -> max_output_tokens
-	t.is(result.responses.max_output_tokens, 12345);
-	t.true(result.responses.url.endsWith('/responses'));
+		// responses -> max_output_tokens
+		t.is(result.responses.max_output_tokens, 12345);
+		t.true(result.responses.url.endsWith('/responses'));
 
-	// gemini -> generationConfig.maxOutputTokens
-	t.is(result.gemini.generationConfig.maxOutputTokens, 12345);
-	t.true(result.gemini.url.includes(':streamGenerateContent'));
+		// gemini -> generationConfig.maxOutputTokens
+		t.is(result.gemini.generationConfig.maxOutputTokens, 12345);
+		t.true(result.gemini.url.includes(':streamGenerateContent'));
 
-	// 未配置 maxTokens 时三个字段都不发送
-	t.is(result.unset.chat, undefined);
-	t.is(result.unset.responses, undefined);
-	t.is(result.unset.gemini, undefined);
+		// 未配置 maxTokens 时三个字段都不发送
+		t.is(result.unset.chat, undefined);
+		t.is(result.unset.responses, undefined);
+		t.is(result.unset.gemini, undefined);
 
-	// gemini 思考配置与 maxOutputTokens 共存
-	t.is(result.geminiWithThinking.maxOutputTokens, 12345);
-	t.is(result.geminiWithThinking.thinkingConfig.thinkingLevel, 'low');
+		// gemini 思考配置与 maxOutputTokens 共存
+		t.is(result.geminiWithThinking.maxOutputTokens, 12345);
+		t.is(result.geminiWithThinking.thinkingConfig.thinkingLevel, 'low');
+	} finally {
+		try {
+			rmSync(sandboxDir, {recursive: true, force: true});
+		} catch {
+			// ignore cleanup error
+		}
+	}
 });
