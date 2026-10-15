@@ -136,6 +136,7 @@ process.on('uncaughtException', (err: Error) => {
 		runFatalExitCleanup(err, 1);
 		return;
 	}
+	emitTerminalExitSequence();
 	console.error('Uncaught Exception:', err);
 	process.exit(1);
 });
@@ -185,6 +186,7 @@ import {join} from 'path';
 import {fileURLToPath} from 'url';
 import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
 import {shutdownTelemetry} from './utils/telemetry/otel.js';
+import {emitTerminalExitSequence} from './utils/execution/terminal.js';
 
 if (args.includes('--snow-agent-child-worker')) {
 	const {runAgentChildProcessWorker} = await import(
@@ -799,9 +801,7 @@ let cleanupPromise: Promise<void> | null = null;
 
 // Synchronous cleanup for 'exit' event (cannot be async)
 const cleanupSync = () => {
-	process.stdout.write('\x1b[?2004l');
-	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
-	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
+	emitTerminalExitSequence();
 	// If async cleanup is already running/done, skip deps to avoid double-close of
 	// libuv handles (causes UV_HANDLE_CLOSING assertion failure on Windows)
 	if (!isCleaningUp) {
@@ -853,9 +853,7 @@ const cleanupAsync = async () => {
 	// pending uv_close callbacks (stdin reader, chokidar IOCP) can complete.
 	await new Promise(resolve => setTimeout(resolve, 50));
 
-	process.stdout.write('\x1b[?2004l');
-	process.stdout.write('\x1b[?25h'); // Restore cursor visibility on exit
-	process.stdout.write('\x1b[0 q'); // Restore cursor shape to terminal default (DECSCUSR)
+	emitTerminalExitSequence();
 
 	// Import and cleanup command usage manager with timeout
 	const {commandUsageManager} = await import(
@@ -932,6 +930,9 @@ process.on('SIGTERM', async () => {
 // Wire fatal uncaughtException to the same graceful path as SIGINT (MCP/browser/OTEL/Ink).
 // Defined here so cleanupAsync is in scope; early crashes still use the simple exit path.
 runFatalExitCleanup = (err: unknown, code: number) => {
+	// Disable terminal focus reporting & restore cursor immediately on fatal exit
+	emitTerminalExitSequence();
+
 	const message =
 		err instanceof Error
 			? err.stack || err.message

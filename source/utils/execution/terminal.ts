@@ -54,3 +54,27 @@ export function resetTerminal(stream?: WritableStreamLike): void {
 		})
 		.catch(() => {});
 }
+
+/**
+ * Standard terminal sequences to restore terminal state on process termination:
+ * - \x1b[?1004l : Disable terminal focus reporting events (prevents stray ^[[I / ^[[O bracketed garbage)
+ * - \x1b[?2004l : Disable bracketed paste mode
+ * - \x1b[?25h   : Restore cursor visibility
+ * - \x1b[0 q    : Restore cursor shape to terminal default (DECSCUSR 0)
+ */
+export const TERMINAL_EXIT_SEQUENCES =
+	'\x1b[?1004l\x1b[?2004l\x1b[?25h\x1b[0 q';
+
+/**
+ * Write exit cleanup sequences to the target stream safely.
+ */
+export function emitTerminalExitSequence(stream?: WritableStreamLike): void {
+	const target = stream ?? process.stdout;
+	if (target && typeof target.write === 'function') {
+		try {
+			target.write(TERMINAL_EXIT_SEQUENCES);
+		} catch {
+			// Best-effort during process teardown
+		}
+	}
+}

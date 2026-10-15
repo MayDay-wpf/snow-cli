@@ -3,10 +3,9 @@ import React, {
 	useCallback,
 	useState,
 	useEffect,
-	Suspense,
 } from 'react';
 import {Box, Text, useInput, useStdout} from 'ink';
-import {Alert, Spinner} from '@inkjs/ui';
+import {Alert} from '@inkjs/ui';
 import Menu from '../components/common/Menu.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
 import UserMessagePreview from '../components/chat/UserMessagePreview.js';
@@ -15,8 +14,7 @@ import {ThemeType} from '../themes/index.js';
 import {useI18n} from '../../i18n/index.js';
 import {getSimpleMode, setSimpleMode} from '../../utils/config/themeConfig.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
-
-const CustomThemeScreen = React.lazy(() => import('./CustomThemeScreen.js'));
+import CustomThemeScreen from './CustomThemeScreen.js';
 
 type Props = {
 	onBack: () => void;
@@ -180,12 +178,7 @@ export default function ThemeSettingsScreen({
 						? `✓ ${t.themeSettings?.custom || 'Custom'}`
 						: t.themeSettings?.custom || 'Custom',
 				value: 'custom',
-				infoText: t.themeSettings?.customInfo || 'Use your own custom colors',
-			},
-			{
-				label: t.themeSettings?.editCustom || 'Edit Custom Theme...',
-				value: 'edit-custom',
-				infoText: t.themeSettings?.editCustomInfo || 'Customize theme colors',
+				infoText: t.themeSettings?.customInfo || '自定义主题配色方案 (按回车进入调色)',
 			},
 			{
 				label: t.themeSettings.back,
@@ -211,6 +204,11 @@ export default function ThemeSettingsScreen({
 			} else if (value === 'edit-custom') {
 				// Go to custom theme editor
 				setScreen('custom');
+			} else if (value === 'custom') {
+				// Select custom and open editor directly
+				setSelectedTheme('custom');
+				setThemeType('custom');
+				setScreen('custom');
 			} else {
 				// Confirm and apply the theme (Enter pressed)
 				const newTheme = value as ThemeType;
@@ -233,7 +231,6 @@ export default function ThemeSettingsScreen({
 			// Preview theme on selection change (navigation)
 			if (
 				value === 'back' ||
-				value === 'edit-custom' ||
 				value === 'simple-mode' ||
 				value === 'diff-opacity'
 			) {
@@ -266,11 +263,7 @@ export default function ThemeSettingsScreen({
 	);
 
 	if (screen === 'custom') {
-		return (
-			<Suspense fallback={<Spinner label="Loading..." />}>
-				<CustomThemeScreen onBack={handleBackFromCustom} />
-			</Suspense>
-		);
+		return <CustomThemeScreen onBack={handleBackFromCustom} />;
 	}
 
 	return (

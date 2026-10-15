@@ -81,6 +81,21 @@ function findToolNameForToolCall(
 }
 
 
+function hasSubsequentToolResult(
+	sessionMessages: ChatMessage[],
+	startIndex: number,
+	toolCallId: string,
+): boolean {
+	for (let j = startIndex + 1; j < sessionMessages.length; j++) {
+		const nextMsg = sessionMessages[j];
+		if (!nextMsg) continue;
+		if (nextMsg.role === 'tool' && nextMsg.tool_call_id === toolCallId) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function isValidTimestamp(timestamp: unknown): timestamp is number {
 	return typeof timestamp === 'number' && Number.isFinite(timestamp);
 }
@@ -175,8 +190,14 @@ export function convertSessionMessagesToUI(
 				tc => !isToolNeedTwoStepDisplay(tc.function.name),
 			);
 
-			// Display time-consuming tools individually
+			// Display time-consuming tools individually (only if not yet completed)
 			for (const toolCall of timeConsumingTools) {
+				const hasResult = hasSubsequentToolResult(sessionMessages, i, toolCall.id);
+				if (hasResult) {
+					processedToolCalls.add(toolCall.id);
+					continue;
+				}
+
 				const toolDisplay = formatToolCallMessage(toolCall as any);
 				let toolArgs;
 				try {
@@ -196,8 +217,6 @@ export function convertSessionMessagesToUI(
 					paramDisplay = ` (${params})`;
 				}
 
-				// Prefer saved editDiffData from the subsequent tool result
-				// (same rationale as the non-subagent path above).
 				const subAgentSavedDiffData = findToolResultDiffData(
 					sessionMessages,
 					i,
@@ -474,15 +493,13 @@ export function convertSessionMessagesToUI(
 					toolArgs = {};
 				}
 
-				// Only add "in progress" message for tools that need two-step display
+				// Only add "in progress" message for tools that need two-step display AND have not completed yet
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
-				if (needTwoSteps) {
-					// When resuming a session, the file on disk has already been
-					// edited, so enrichPendingEditArgs (which reads the current
-					// file) cannot compute a correct diff. Instead, prefer the
-					// editDiffData saved in the subsequent tool result message —
-					// it contains the original oldContent/newContent captured at
-					// execution time.
+				const hasResult = hasSubsequentToolResult(sessionMessages, i, toolCall.id);
+				if (needTwoSteps && !hasResult) {
+					// When resuming a session, only genuinely unfinished tool calls (interrupted
+					// before result) should show pending diffs. Completed tools are rendered by
+					// their subsequent tool result messages to prevent all historical diffs from unfolding.
 					const savedDiffData = findToolResultDiffData(
 						sessionMessages,
 						i,
@@ -491,8 +508,6 @@ export function convertSessionMessagesToUI(
 					const enrichedArgs = savedDiffData
 						? {...toolArgs, ...savedDiffData}
 						: enrichPendingEditArgs(toolCall.function.name, toolArgs);
-					// Rebuild the historical pending step with the current marker config;
-					// the following persisted tool result restores success or error.
 					uiMessages.push({
 						role: 'assistant',
 						content: formatToolTitleLine(toolCall.function.name, 'pending'),

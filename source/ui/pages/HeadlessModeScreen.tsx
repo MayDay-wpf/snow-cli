@@ -471,14 +471,17 @@ export default function HeadlessModeScreen({
 					);
 				}
 			} else {
-				// Show normal thinking status with colors
 				const thinkingText = streamingState.isReasoning
 					? 'Deep thinking...'
 					: streamingState.streamTokenCount > 0
 					? 'Writing...'
 					: 'Thinking...';
+				const tokenText =
+					streamingState.streamTokenCount > 0
+						? `↓ ${streamingState.streamTokenCount} tokens`
+						: t.chatScreen.statusAwaitingFirstToken || '···';
 				process.stdout.write(
-					`\r\x1b[96m❆\x1b[90m ${thinkingText} \x1b[33m${streamingState.elapsedSeconds}s\x1b[37m · \x1b[32m↓ ${streamingState.streamTokenCount} tokens\x1b[0m`,
+					`\r\x1b[96m❆\x1b[90m ${thinkingText} \x1b[33m${streamingState.elapsedSeconds}s\x1b[37m · \x1b[32m${tokenText}\x1b[0m`,
 				);
 			}
 		}

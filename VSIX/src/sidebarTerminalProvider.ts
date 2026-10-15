@@ -48,6 +48,7 @@ type TerminalConfig = {
 	fontWeight: string;
 	lineHeight: number;
 	backgroundColor: string;
+	followTheme: boolean;
 };
 
 type NormalizedFontConfig = Omit<TerminalConfig, 'shellProfile'>;
@@ -137,6 +138,7 @@ type ExtensionToWebviewMessage =
 			fontWeight: string;
 			lineHeight: number;
 			backgroundColor: string;
+			followTheme: boolean;
 	  }
 	| ({type: 'updateBell'} & BellConfig)
 	| {type: 'exit'; tabId: string; code: number};
@@ -595,6 +597,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 			fontWeight: cfg.get<string>('fontWeight', 'normal'),
 			lineHeight: cfg.get<number>('lineHeight', 1.0),
 			backgroundColor: cfg.get<string>('backgroundColor', '#181818'),
+			followTheme: cfg.get<boolean>('followTheme', true),
 		};
 	}
 
@@ -609,6 +612,7 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 				LINE_HEIGHT_MAX,
 			),
 			backgroundColor: config.backgroundColor || '#181818',
+			followTheme: Boolean(config.followTheme),
 		};
 	}
 
@@ -623,6 +627,17 @@ export class SidebarTerminalProvider implements vscode.WebviewViewProvider {
 	private sendFontConfig(): void {
 		const normalized = this.normalizeFontConfig(this.getTerminalConfig());
 		this.postWebviewMessage({type: 'updateFont', ...normalized});
+	}
+
+	/**
+	 * Hot-reload the terminal appearance (font + background / followTheme)
+	 * without restarting the PTY sessions.
+	 */
+	public refreshTerminalAppearance(): void {
+		if (!this.isWebviewOperational()) {
+			return;
+		}
+		this.sendFontConfig();
 	}
 
 	private getBellConfig(): BellConfig {

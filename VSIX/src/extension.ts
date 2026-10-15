@@ -411,7 +411,21 @@ export function activate(context: vscode.ExtensionContext) {
 				e.affectsConfiguration('snow-cli.terminal') ||
 				terminalProxyFallbackChanged
 			) {
-				sidebarProvider?.restartTerminal({reason: 'configChange'});
+				const terminalRestartRequired =
+					e.affectsConfiguration('snow-cli.terminal.shellType') ||
+					e.affectsConfiguration('snow-cli.terminal.proxyUrl') ||
+					e.affectsConfiguration('snow-cli.terminal.fontFamily') ||
+					e.affectsConfiguration('snow-cli.terminal.fontSize') ||
+					e.affectsConfiguration('snow-cli.terminal.fontWeight') ||
+					e.affectsConfiguration('snow-cli.terminal.lineHeight') ||
+					e.affectsConfiguration('snow-cli.terminal.backgroundColor') ||
+					terminalProxyFallbackChanged;
+				if (terminalRestartRequired) {
+					sidebarProvider?.restartTerminal({reason: 'configChange'});
+				} else {
+					// followTheme only affects rendering; hot-reload without restart.
+					sidebarProvider?.refreshTerminalAppearance();
+				}
 			}
 
 			// Bell settings hot-reload — does not require terminal restart.
