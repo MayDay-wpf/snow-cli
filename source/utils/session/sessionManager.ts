@@ -517,14 +517,25 @@ class SessionManager {
 			);
 		}
 
-		for (const historicalSession of sessionChain.reverse()) {
+		// Search from the current session towards parent, NOT from the ancient root downwards.
+		// Reverse traversal caused the first-ever question in the entire session tree
+		// (e.g. "what skills are there?") to perpetually hijack every subsequent compression.
+		for (const historicalSession of sessionChain) {
 			const storedPrompt = historicalSession.initialUserPrompt?.trim();
-			if (storedPrompt) {
+			if (
+				storedPrompt &&
+				!storedPrompt.startsWith('[Context Summary') &&
+				!storedPrompt.startsWith('[INITIAL USER REQUEST')
+			) {
 				return storedPrompt;
 			}
 
 			const firstUserMessage = historicalSession.messages.find(
-				message => message.role === 'user' && Boolean(message.content?.trim()),
+				message =>
+					message.role === 'user' &&
+					Boolean(message.content?.trim()) &&
+					!message.content.startsWith('[Context Summary') &&
+					!message.content.startsWith('[INITIAL USER REQUEST'),
 			);
 			const prompt = firstUserMessage?.content?.trim();
 			if (prompt) {
