@@ -947,6 +947,16 @@ function getServerProcessEnv(server: MCPServer): Record<string, string> {
 		}
 	});
 
+	// [Stealth Shield] 注入底层全域无头与离屏环境变量，严防外部 MCP 衍生子进程（如 Playwright/Chromium/WebView）弹出挂起白框
+	Object.assign(processEnv, {
+		HEADLESS: 'new',
+		PUPPETEER_HEADLESS: 'true',
+		PLAYWRIGHT_HEADLESS: '1',
+		QT_QPA_PLATFORM: 'offscreen',
+		ELECTRON_RUN_AS_NODE: '1',
+		PYTHONUNBUFFERED: '1',
+	});
+
 	if (server.env) {
 		Object.assign(processEnv, server.env);
 	}
@@ -2302,6 +2312,7 @@ export async function executeMCPTool(
 				server,
 				actualToolName,
 				args,
+				abortSignal,
 			);
 		}
 	} catch (error) {
@@ -2385,6 +2396,7 @@ async function executeOnExternalMCPService(
 	server: MCPServer,
 	toolName: string,
 	args: any,
+	abortSignal?: AbortSignal,
 ): Promise<any> {
 	// Always use persistent connection for external MCP services
 	// MCP protocol supports multiple calls - no need to reconnect each time
@@ -2397,8 +2409,21 @@ async function executeOnExternalMCPService(
 			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 		);
 
-		// 获取 timeout 配置，默认 20 分钟
-		const timeout = server.timeout ?? 1200000;
+		// 获取 timeout 配置：外部服务默认 20 秒安全超时（防止海外网络死等卡死主循环）
+		const timeout = server.timeout ?? 20000;
+
+		const callOptions: {
+			timeout: number;
+			resetTimeoutOnProgress: boolean;
+			signal?: AbortSignal;
+		} = {
+			timeout,
+			resetTimeoutOnProgress: true,
+		};
+
+		if (abortSignal) {
+			callOptions.signal = abortSignal;
+		}
 
 		// Execute the tool with the original tool name (not prefixed)
 		// [MCP 2026-07-28] SDK v2 callTool: 2-arg signature (params, options)
@@ -2407,10 +2432,7 @@ async function executeOnExternalMCPService(
 				name: toolName,
 				arguments: args,
 			},
-			{
-				timeout,
-				resetTimeoutOnProgress: true,
-			},
+			callOptions,
 		);
 		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
 
@@ -2444,6 +2466,30 @@ async function executeOnExternalMCPService(
 			}
 			return await attemptCall();
 		}
+
+		// 自适应状态机降级：如果是超时或中断，就地封装为友好结构化结果，防止拖垮 Promise.all 阻断整轮会话
+		const isTimeout = error instanceof Error && (
+			error.name === 'TimeoutError' ||
+			error.message.toLowerCase().includes('timeout') ||
+			error.message.toLowerCase().includes('timed out')
+		);
+		const isAborted = abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError');
+
+		if (isTimeout || isAborted) {
+			logger.warn(
+				`MCP service ${serviceName} tool ${toolName} ${isAborted ? 'aborted' : 'timed out'}:`,
+				error,
+			);
+			return [
+				{
+					type: 'text',
+					text: `[MCP Service Notice] Tool "${toolName}" on service "${serviceName}" ${
+						isAborted ? 'was cancelled by user.' : 'did not respond within 20s (network timeout).'
+					} Please continue with other available context or try an alternative tool.`,
+				},
+			];
+		}
+
 		throw error;
 	}
 }

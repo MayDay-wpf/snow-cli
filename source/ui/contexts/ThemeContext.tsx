@@ -7,14 +7,13 @@ import React, {
 	ReactNode,
 } from 'react';
 import {existsSync, watch as watchFile, type FSWatcher} from 'fs';
-import {homedir} from 'os';
-import {join} from 'path';
 import {ThemeType, themes, Theme, getCustomTheme} from '../themes/index.js';
 import {
 	getCurrentTheme,
 	getDiffOpacity,
 	setCurrentTheme,
 	setDiffOpacity,
+	getThemeConfigFile,
 } from '../../utils/config/themeConfig.js';
 import {configEvents} from '../../utils/config/configEvents.js';
 
@@ -34,8 +33,6 @@ export const ThemeContext = createContext<ThemeContextType | undefined>(
 interface ThemeProviderProps {
 	children: ReactNode;
 }
-
-const THEME_CONFIG_PATH = join(homedir(), '.snow', 'theme.json');
 
 export function ThemeProvider({children}: ThemeProviderProps) {
 	const [themeType, setThemeTypeState] = useState<ThemeType>(() => {
@@ -116,9 +113,10 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 
 		const startWatch = () => {
 			if (disposed || watcher) return;
-			if (!existsSync(THEME_CONFIG_PATH)) return;
+			const themeConfigFile = getThemeConfigFile();
+			if (!existsSync(themeConfigFile)) return;
 			try {
-				watcher = watchFile(THEME_CONFIG_PATH, {persistent: false}, () => {
+				watcher = watchFile(themeConfigFile, {persistent: false}, () => {
 					scheduleReload();
 				});
 				watcher.on('error', () => {

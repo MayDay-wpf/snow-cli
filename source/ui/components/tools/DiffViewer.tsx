@@ -122,15 +122,164 @@ function inferLanguageFromFilename(filename?: string): string | undefined {
 	return LANGUAGE_BY_EXTENSION[extension] ?? extension;
 }
 
-function highlightCodeContent(content: string, language?: string): string {
+function hexToRgb(hex: string): {r: number; g: number; b: number} | null {
+	const normalized = normalizeHexColor(hex.trim());
+	if (!normalized) return null;
+	const num = parseInt(normalized, 16);
+	return {
+		r: (num >> 16) & 255,
+		g: (num >> 8) & 255,
+		b: num & 255,
+	};
+}
+
+function hexToTrueColorFg(hex: string): (text: string) => string {
+	const rgb = hexToRgb(hex);
+	if (!rgb) {
+		return text => chalk.white(text);
+	}
+	return (text: string) => `\u001b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[39m`;
+}
+
+function hexToTrueColorBg(hex: string): (text: string) => string {
+	const rgb = hexToRgb(hex);
+	if (!rgb) {
+		return text => text;
+	}
+	return (text: string) => `\u001b[48;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[49m`;
+}
+
+function sRgbToRelativeLuminance(hex: string): number {
+	const rgb = hexToRgb(hex);
+	if (!rgb) return 0;
+	const toLinear = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : Math.pow((c / 255 + 0.055) / 1.055, 2.4));
+	return 0.2126729 * toLinear(rgb.r) + 0.7151522 * toLinear(rgb.g) + 0.072175 * toLinear(rgb.b);
+}
+
+function boostContrastToTarget(hexColor: string, isLightBg: boolean): string {
+	const rgb = hexToRgb(hexColor);
+	if (!rgb) return hexColor;
+	const lum = sRgbToRelativeLuminance(hexColor);
+	if (isLightBg) {
+		// 浅底：如果字不够暗，向纯黑拉暗
+		if (lum > 0.25) {
+			const r = Math.floor(rgb.r * 0.5);
+			const g = Math.floor(rgb.g * 0.5);
+			const b = Math.floor(rgb.b * 0.5);
+			return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+		}
+	} else {
+		// 暗底：如果字不够亮（相对明度 < 0.35），向高光方向线性提升，避免低对比度死角
+		if (lum < 0.35) {
+			const r = Math.min(255, Math.floor(rgb.r + (255 - rgb.r) * 0.45));
+			const g = Math.min(255, Math.floor(rgb.g + (255 - rgb.g) * 0.45));
+			const b = Math.min(255, Math.floor(rgb.b + (255 - rgb.b) * 0.45));
+			return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+		}
+	}
+	return hexColor;
+}
+
+function highlightCodeContent(
+	content: string,
+	language?: string,
+	themeColors?: {
+		background: string;
+		cyan: string;
+		diffModified: string;
+		diffAddedForeground: string;
+		diffRemovedForeground: string;
+		lineNumber: string;
+		text: string;
+	},
+): string {
 	if (!language || content.trim() === '' || !supportsLanguage(language)) {
 		return content;
 	}
 
 	try {
+		// [Perceptual Syntax Polarizer]
+		// 严禁依赖终端默认颜色（防止 cli-highlight 回退到 \x1b[34m 深蓝）
+		// 根据当前主题背景的明度自动选择极性，100% 保护现有浅色主题 (Light, Tiffany, Macaron)
+		const isLightTheme = themeColors ? sRgbToRelativeLuminance(themeColors.background) > 0.45 : false;
+
+		const rawKeyword = isLightTheme ? '#0969da' : (themeColors?.cyan ?? '#38bdf8');
+		const rawType = isLightTheme ? '#953800' : (themeColors?.diffModified ?? '#f59e0b');
+		const rawLiteral = isLightTheme ? '#0550ae' : (themeColors?.diffModified ?? '#fbbf24');
+		const rawNumber = isLightTheme ? '#116329' : (themeColors?.diffAddedForeground ?? '#4ade80');
+		const rawString = isLightTheme ? '#0a3069' : (themeColors?.diffAddedForeground ?? '#34d399');
+		const rawComment = isLightTheme ? '#6e7781' : (themeColors?.lineNumber ?? '#94a3b8');
+		const rawTitle = isLightTheme ? '#24292f' : (themeColors?.text ?? '#f8fafc');
+		const rawParams = isLightTheme ? '#57606a' : (themeColors?.text ?? '#e2e8f0');
+
+		const keywordHex = boostContrastToTarget(rawKeyword, isLightTheme);
+		const typeHex = boostContrastToTarget(rawType, isLightTheme);
+		const literalHex = boostContrastToTarget(rawLiteral, isLightTheme);
+		const numberHex = boostContrastToTarget(rawNumber, isLightTheme);
+		const stringHex = boostContrastToTarget(rawString, isLightTheme);
+		const commentHex = boostContrastToTarget(rawComment, isLightTheme);
+		const titleHex = boostContrastToTarget(rawTitle, isLightTheme);
+		const paramsHex = boostContrastToTarget(rawParams, isLightTheme);
+
+		const keywordFg = hexToTrueColorFg(keywordHex);
+		const typeFg = hexToTrueColorFg(typeHex);
+		const literalFg = hexToTrueColorFg(literalHex);
+		const numberFg = hexToTrueColorFg(numberHex);
+		const stringFg = hexToTrueColorFg(stringHex);
+		const commentFg = hexToTrueColorFg(commentHex);
+		const titleFg = hexToTrueColorFg(titleHex);
+		const paramsFg = hexToTrueColorFg(paramsHex);
+
+		// 全量覆盖 cli-highlight 的所有已知 token，杜绝任何 token 漏到默认深蓝
+		const syntaxTheme = {
+			keyword: keywordFg,
+			built_in: keywordFg,
+			type: typeFg,
+			literal: literalFg,
+			number: numberFg,
+			regexp: literalFg,
+			string: stringFg,
+			subst: titleFg,
+			symbol: literalFg,
+			class: keywordFg,
+			function: keywordFg,
+			title: titleFg,
+			params: paramsFg,
+			comment: commentFg,
+			doctag: commentFg,
+			meta: keywordFg,
+			'meta-keyword': keywordFg,
+			'meta-string': stringFg,
+			section: titleFg,
+			tag: keywordFg,
+			name: keywordFg,
+			'builtin-name': keywordFg,
+			attr: keywordFg,
+			attribute: typeFg,
+			variable: titleFg,
+			bullet: literalFg,
+			code: stringFg,
+			emphasis: titleFg,
+			strong: titleFg,
+			formula: typeFg,
+			link: keywordFg,
+			quote: commentFg,
+			'selector-tag': keywordFg,
+			'selector-id': typeFg,
+			'selector-class': typeFg,
+			'selector-attr': keywordFg,
+			'selector-pseudo': literalFg,
+			'template-tag': keywordFg,
+			'template-variable': literalFg,
+			addition: numberFg,
+			deletion: literalFg,
+			default: (s: string) => s,
+		};
+
 		return highlight(content, {
 			language,
 			ignoreIllegals: true,
+			theme: syntaxTheme,
 		});
 	} catch {
 		return content;
@@ -188,7 +337,7 @@ const INK_FOREGROUND_STYLES: Record<string, (text: string) => string> = {
 function applyThemeBackground(text: string, color: string): string {
 	const normalizedHex = normalizeHexColor(color.trim());
 	if (normalizedHex) {
-		return chalk.bgHex(`#${normalizedHex}`)(text);
+		return hexToTrueColorBg(`#${normalizedHex}`)(text);
 	}
 
 	return INK_BACKGROUND_STYLES[color.trim().toLowerCase()]?.(text) ?? text;
@@ -197,7 +346,7 @@ function applyThemeBackground(text: string, color: string): string {
 function applyThemeForeground(text: string, color: string): string {
 	const normalizedHex = normalizeHexColor(color.trim());
 	if (normalizedHex) {
-		return chalk.hex(`#${normalizedHex}`)(text);
+		return hexToTrueColorFg(`#${normalizedHex}`)(text);
 	}
 
 	return INK_FOREGROUND_STYLES[color.trim().toLowerCase()]?.(text) ?? text;
@@ -360,7 +509,11 @@ export default function DiffViewer({
 
 	const renderedOutput = useMemo(() => {
 		const hl = (content: string) =>
-			highlightCodeContent(expandTabsForDisplay(content), codeLanguage);
+			highlightCodeContent(
+				expandTabsForDisplay(content),
+				codeLanguage,
+				theme.colors,
+			);
 		const cleanContent = (c: string) => c.replace(/[\r\n]/g, '');
 		const formatHeaderTitle = (fallback: string) => {
 			const title = showFilenameInHeader ? filename ?? fallback : undefined;
@@ -455,9 +608,13 @@ export default function DiffViewer({
 		const modeLabel = useSideBySide
 			? chalk.dim('side-by-side')
 			: chalk.dim('unified');
+		const modifiedBadge = applyThemeForeground(
+			chalk.bold('modified'),
+			theme.colors.diffModified,
+		);
 		const header = `${chalk.dim('╭─')} ${formatHeaderTitle(
 			'File Modified',
-		)}${chalk.yellow.bold('modified')} ${modeLabel} ${addedTextStyle(
+		)}${modifiedBadge} ${modeLabel} ${addedTextStyle(
 			`+${addedCount}`,
 		)} ${removedTextStyle(`-${removedCount}`)}`;
 
@@ -505,6 +662,9 @@ export default function DiffViewer({
 		theme.colors.diffAddedForeground,
 		theme.colors.diffRemovedForeground,
 		theme.colors.lineNumber,
+		theme.colors.cyan,
+		theme.colors.text,
+		theme.colors.background,
 	]);
 
 	return (
