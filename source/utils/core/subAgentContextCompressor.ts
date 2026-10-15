@@ -185,58 +185,55 @@ function getAdaptiveKeepRounds(percentage: number): number {
 
 /**
  * Find the start index of the "recent rounds" to preserve.
- * Counts backwards from the end, counting N complete tool-call rounds
- * (assistant with tool_calls + corresponding tool results = 1 round).
+ * Supports both multi-turn conversation rounds (user -> assistant) and
+ * autonomous tool loops (assistant with tool_calls -> tool results).
+ * Ensures at least 1 older round is compressed when history permits.
  */
 function findRecentRoundsStartIndex(
 	messages: ChatMessage[],
 	keepRounds: number,
 ): number {
-	let roundCount = 0;
-	let i = messages.length - 1;
+	if (messages.length === 0) return 0;
 
-	// Only count main-agent rounds. subAgentInternal messages are nested inside a
-	// main-agent tool call (subagent-agent_*) and must NOT be counted as separate
-	// rounds — otherwise the cut may land in the middle of a sub-agent block and
-	// orphan the parent main-agent tool_calls/tool results.
-	while (i >= 0 && roundCount < keepRounds) {
+	// Collect the start index of every interaction round
+	const roundStarts: number[] = [0];
+
+	for (let i = 1; i < messages.length; i++) {
 		const msg = messages[i];
-		if (!msg) {
-			i--;
-			continue;
-		}
+		if (!msg) continue;
 
-		// Skip sub-agent internal messages entirely (they belong to a wrapping main round)
-		if ((msg as any).subAgentInternal) {
-			i--;
-			continue;
-		}
+		// Skip sub-agent internal messages (they belong to their parent tool round)
+		if ((msg as any).subAgentInternal) continue;
 
-		if (msg.role === 'tool') {
-			// Skip all consecutive tool messages (they belong to the same round).
-			// Tolerate interleaved subAgentInternal messages.
-			while (
-				i >= 0 &&
-				(messages[i]?.role === 'tool' || (messages[i] as any)?.subAgentInternal)
-			) {
-				i--;
-			}
-			// Now i should point to the main-agent assistant message with tool_calls
-			if (
-				i >= 0 &&
-				messages[i]?.role === 'assistant' &&
-				messages[i]?.tool_calls?.length &&
-				!(messages[i] as any).subAgentInternal
-			) {
-				roundCount++;
-				i--;
-			}
-		} else {
-			i--;
+		// A new round starts when:
+		// 1) A new user prompt is encountered
+		if (msg.role === 'user') {
+			roundStarts.push(i);
+		} else if (
+			// 2) An assistant initiates a tool call following previous tool results
+			msg.role === 'assistant' &&
+			msg.tool_calls &&
+			msg.tool_calls.length > 0 &&
+			messages[i - 1]?.role === 'tool'
+		) {
+			roundStarts.push(i);
 		}
 	}
 
-	let cut = Math.max(0, i + 1);
+	const totalRounds = roundStarts.length;
+
+	// If there's only 1 round, there is no older history to compress
+	if (totalRounds <= 1) {
+		return 0;
+	}
+
+	// Never preserve all rounds when compression is requested:
+	// ensure at least 1 older round is compressed
+	const maxPreserve = Math.max(1, totalRounds - 1);
+	const preserveCount = Math.min(keepRounds, maxPreserve);
+	const preservedRoundIndex = totalRounds - preserveCount;
+
+	let cut = roundStarts[preservedRoundIndex] ?? 0;
 
 	// Defensive: never cut into the middle of an orphaned tool / subAgentInternal block.
 	// Advance forward past leading tool / subAgentInternal messages that have no

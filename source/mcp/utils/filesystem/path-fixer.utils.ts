@@ -1,61 +1,58 @@
 import {promises as fs} from 'node:fs';
 import {resolve} from 'node:path';
+import {splitCanonicalPath} from '../../../utils/core/canonicalPath.js';
 
 /**
  * Attempt to fix common path issues when file is not found
- * @param originalPath - The original path that failed
- * @param basePath - Base path for resolving relative paths
- * @returns Fixed path or null if cannot be fixed
+ * Resolves AI hallucinations (e.g. redundant 'utils' segment, deep path errors)
+ * using canonical path nodes without corrupting Windows drive letters.
  */
 export async function tryFixPath(
 	originalPath: string,
 	basePath: string,
 ): Promise<string | null> {
 	try {
-		// Common pattern: "source/mcp/utils/filesystem.ts" should be "source/mcp/filesystem.ts"
-		// Remove unnecessary intermediate directories
-		const segments = originalPath.split('/');
+		const {root, segments, isAbsolute} = splitCanonicalPath(originalPath);
+		if (segments.length === 0) {
+			return null;
+		}
 
-		// Try removing 'utils' directory if present
+		const fileName = segments[segments.length - 1];
+
+		// 1. Try removing 'utils' directory if present
 		if (segments.includes('utils')) {
 			const withoutUtils = segments.filter(s => s !== 'utils').join('/');
-			const fixedPath = resolve(basePath, withoutUtils);
+			const candidatePath = isAbsolute ? `${root}${withoutUtils}` : withoutUtils;
+			const fixedPath = isAbsolute ? resolve(candidatePath) : resolve(basePath, candidatePath);
 			try {
 				await fs.access(fixedPath);
-				return withoutUtils;
-			} catch {
-				// Continue to next attempt
-			}
+				return candidatePath;
+			} catch {}
 		}
 
-		// Try parent directories
+		// 2. Try parent directories reduction (only on relative segments, keeping root intact)
 		for (let i = 0; i < segments.length - 1; i++) {
-			const reducedPath = [
+			const reducedSegments = [
 				...segments.slice(0, i),
-				segments[segments.length - 1],
+				fileName,
 			].join('/');
-			const fixedPath = resolve(basePath, reducedPath);
+			const candidatePath = isAbsolute ? `${root}${reducedSegments}` : reducedSegments;
+			const fixedPath = isAbsolute ? resolve(candidatePath) : resolve(basePath, candidatePath);
 			try {
 				await fs.access(fixedPath);
-				return reducedPath;
-			} catch {
-				// Continue to next attempt
-			}
+				return candidatePath;
+			} catch {}
 		}
 
-		// Try searching for the file by name in common directories
-		const fileName = segments[segments.length - 1];
+		// 3. Try searching for the file by name in common source roots
 		const commonDirs = ['source', 'src', 'lib', 'dist'];
-
 		for (const dir of commonDirs) {
 			const searchPath = `${dir}/${fileName}`;
 			const fixedPath = resolve(basePath, searchPath);
 			try {
 				await fs.access(fixedPath);
 				return searchPath;
-			} catch {
-				// Continue to next attempt
-			}
+			} catch {}
 		}
 
 		return null;
@@ -63,3 +60,4 @@ export async function tryFixPath(
 		return null;
 	}
 }
+
