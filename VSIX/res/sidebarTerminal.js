@@ -235,16 +235,166 @@
 		}
 	};
 
-	const applyTerminalBackground = (term, color) => {
-		if (typeof color !== 'string' || !color.trim()) {
-			return;
+	const DEFAULT_TERMINAL_THEME = {
+		background: '#181818',
+		foreground: '#d4d4d4',
+		cursor: '#aeafad',
+		cursorAccent: '#000000',
+		selectionBackground: '#264f78',
+		black: '#000000',
+		red: '#cd3131',
+		green: '#0dbc79',
+		yellow: '#e5e510',
+		blue: '#2472c8',
+		magenta: '#bc3fbc',
+		cyan: '#11a8cd',
+		white: '#e5e5e5',
+		brightBlack: '#666666',
+		brightRed: '#f14c4c',
+		brightGreen: '#23d18b',
+		brightYellow: '#f5f543',
+		brightBlue: '#3b8eea',
+		brightMagenta: '#d670d6',
+		brightCyan: '#29b8db',
+		brightWhite: '#e5e5e5',
+	};
+
+	// VS Code injects theme colors into webviews as CSS variables. The terminal
+	// specific variables only exist when the user customizes workbench colors,
+	// so fall back to the generic editor/sidebar colors.
+	const THEME_BACKGROUND_VARIABLES = [
+		'--vscode-terminal-background',
+		'--vscode-panel-background',
+		'--vscode-editor-background',
+		'--vscode-sideBar-background',
+	];
+	const THEME_FOREGROUND_VARIABLES = [
+		'--vscode-terminal-foreground',
+		'--vscode-editor-foreground',
+	];
+
+	const readThemeVariable = variableName => {
+		const value = getComputedStyle(document.body).getPropertyValue(
+			variableName,
+		);
+		return typeof value === 'string' ? value.trim() : '';
+	};
+
+	const readFirstThemeVariable = variableNames => {
+		for (const variableName of variableNames) {
+			const value = readThemeVariable(variableName);
+			if (value) {
+				return value;
+			}
 		}
-		const normalized = color.trim();
-		document.documentElement.style.setProperty('--terminal-bg', normalized);
+		return '';
+	};
+
+	const applyTerminalAppearance = (term, options) => {
+		const followTheme = Boolean(options && options.followTheme);
+		let background =
+			options &&
+			typeof options.backgroundColor === 'string' &&
+			options.backgroundColor.trim()
+				? options.backgroundColor.trim()
+				: DEFAULT_TERMINAL_THEME.background;
+		let foreground = DEFAULT_TERMINAL_THEME.foreground;
+
+		if (followTheme) {
+			const themeBackground = readFirstThemeVariable(
+				THEME_BACKGROUND_VARIABLES,
+			);
+			const themeForeground = readFirstThemeVariable(
+				THEME_FOREGROUND_VARIABLES,
+			);
+			if (themeBackground) {
+				background = themeBackground;
+			}
+			if (themeForeground) {
+				foreground = themeForeground;
+			}
+		}
+
+		// Guard against feedback loops: writing --terminal-bg mutates the <html>
+		// style attribute that the theme observer watches.
+		if (
+			document.documentElement.style.getPropertyValue('--terminal-bg') !==
+			background
+		) {
+			document.documentElement.style.setProperty('--terminal-bg', background);
+		}
 		term.options.theme = {
 			...(term.options.theme || {}),
-			background: normalized,
+			background,
+			foreground,
 		};
+	};
+
+	const createThemeChangeController = onChange => {
+		const observers = [];
+		let mediaQueryList = null;
+		let disposed = false;
+
+		const notify = () => {
+			if (!disposed) {
+				onChange();
+			}
+		};
+
+		// VS Code switches webview themes by toggling `vscode-light` / `vscode-dark`
+		// classes and the `data-vscode-theme-kind` attribute on <body>, and by
+		// rewriting the injected theme style tag. Observe both elements so any of
+		// those signals triggers a re-apply.
+		const observeTarget = target => {
+			if (typeof MutationObserver !== 'function' || !target) {
+				return;
+			}
+			const observer = new MutationObserver(notify);
+			observer.observe(target, {
+				attributes: true,
+				attributeFilter: [
+					'class',
+					'style',
+					'data-vscode-theme-kind',
+					'data-vscode-theme-name',
+				],
+			});
+			observers.push(observer);
+		};
+
+		const start = () => {
+			if (disposed || observers.length > 0) {
+				return;
+			}
+			observeTarget(document.documentElement);
+			observeTarget(document.body);
+			if (typeof window.matchMedia === 'function') {
+				mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+				if (typeof mediaQueryList.addEventListener === 'function') {
+					mediaQueryList.addEventListener('change', notify);
+				} else if (typeof mediaQueryList.addListener === 'function') {
+					mediaQueryList.addListener(notify);
+				}
+			}
+		};
+
+		const dispose = () => {
+			disposed = true;
+			for (const observer of observers) {
+				observer.disconnect();
+			}
+			observers.length = 0;
+			if (mediaQueryList) {
+				if (typeof mediaQueryList.removeEventListener === 'function') {
+					mediaQueryList.removeEventListener('change', notify);
+				} else if (typeof mediaQueryList.removeListener === 'function') {
+					mediaQueryList.removeListener(notify);
+				}
+				mediaQueryList = null;
+			}
+		};
+
+		return {start, dispose};
 	};
 
 	const createTimerRegistry = () => {
@@ -1539,29 +1689,7 @@
 				maximizeWin: false,
 				fullscreenWin: false,
 			},
-			theme: {
-				background: '#181818',
-				foreground: '#d4d4d4',
-				cursor: '#aeafad',
-				cursorAccent: '#000000',
-				selectionBackground: '#264f78',
-				black: '#000000',
-				red: '#cd3131',
-				green: '#0dbc79',
-				yellow: '#e5e510',
-				blue: '#2472c8',
-				magenta: '#bc3fbc',
-				cyan: '#11a8cd',
-				white: '#e5e5e5',
-				brightBlack: '#666666',
-				brightRed: '#f14c4c',
-				brightGreen: '#23d18b',
-				brightYellow: '#f5f543',
-				brightBlue: '#3b8eea',
-				brightMagenta: '#d670d6',
-				brightCyan: '#29b8db',
-				brightWhite: '#e5e5e5',
-			},
+			theme: {...DEFAULT_TERMINAL_THEME},
 		});
 
 		const fitAddon = new FitAddonCtor();
@@ -2315,6 +2443,21 @@
 			clearRendererStallWriteGrace();
 		};
 
+		// Latest appearance config pushed from the extension host. The theme change
+		// controller re-applies it whenever VS Code switches between light/dark.
+		const appearanceState = {
+			backgroundColor: undefined,
+			followTheme: true,
+		};
+
+		const applyAppearance = () => {
+			applyTerminalAppearance(term, appearanceState);
+		};
+
+		const themeChangeController = createThemeChangeController(applyAppearance);
+		themeChangeController.start();
+		registerCleanup(themeChangeController.dispose);
+
 		const messageHandlers = {
 			syncTabs: payload => {
 				applyTabs(payload.tabs);
@@ -2389,7 +2532,9 @@
 				applyTermOption(term.options, 'fontSize', payload.fontSize);
 				applyTermOption(term.options, 'fontWeight', payload.fontWeight);
 				applyTermOption(term.options, 'lineHeight', payload.lineHeight);
-				applyTerminalBackground(term, payload.backgroundColor);
+				appearanceState.backgroundColor = payload.backgroundColor;
+				appearanceState.followTheme = Boolean(payload.followTheme);
+				applyAppearance();
 				fitTerminal();
 				scheduleFocusRecovery();
 			},

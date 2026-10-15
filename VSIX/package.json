@@ -2,7 +2,7 @@
 	"name": "snow-cli",
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
-	"version": "0.4.34",
+	"version": "0.4.35",
 	"publisher": "mufasa",
 	"icon": "snow.png",
 	"repository": {
@@ -111,6 +111,12 @@
 						"type": "string",
 						"default": "#181818",
 						"description": "%config.terminal.backgroundColor.description%"
+					},
+					"snow-cli.terminal.followTheme": {
+						"order": 8,
+						"type": "boolean",
+						"default": true,
+						"description": "%config.terminal.followTheme.description%"
 					}
 				}
 			},
