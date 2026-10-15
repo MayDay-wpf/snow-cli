@@ -309,6 +309,33 @@ export default function LoadingIndicator({
 		);
 	};
 
+	/**
+	 * 首字到达前活跃指示：当 streamTokenCount === 0 时，杜绝死板的 "↓ 0 tokens"，
+	 * 渲染带微光波动的等待首字/连接指示，让用户明确感知链路正常活跃；
+	 * 一旦首个 Token 到达，无缝切入实时递增的 Token 计数。
+	 */
+	const renderStreamTokenStatus = () => {
+		if (streamTokenCount > 0) {
+			return (
+				<Text color={loadingTokenColor}>
+					↓ {formatTokens(streamTokenCount)} tokens
+				</Text>
+			);
+		}
+
+		return (
+			<ShimmerText
+				text={
+					terminalWidth < 60
+						? '···'
+						: t.chatScreen.statusAwaitingFirstToken || '等待首字...'
+				}
+				baseColor={loadingTextColor}
+				shimmerColor={loadingTokenColor}
+			/>
+		);
+	};
+
 	const renderAgentEntry = (
 		tm: {
 			agentId: string;
@@ -466,9 +493,7 @@ export default function LoadingIndicator({
 									)}
 									{formatElapsedTime(elapsedSeconds)}
 									{' · '}
-									<Text color={loadingTokenColor}>
-										↓ {formatTokens(streamTokenCount)} tokens
-									</Text>
+									{renderStreamTokenStatus()}
 									{')'}
 								</Text>
 								{teammateStream.map((tm, idx) =>
@@ -502,9 +527,7 @@ export default function LoadingIndicator({
 								)}
 								{formatElapsedTime(elapsedSeconds)}
 								{' · '}
-								<Text color={loadingTokenColor}>
-									↓ {formatTokens(streamTokenCount)} tokens
-								</Text>
+								{renderStreamTokenStatus()}
 								{')'}
 							</Text>
 						)}

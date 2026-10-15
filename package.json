@@ -43,6 +43,10 @@
 		"prepublishOnly": "npm run build",
 		"postinstall": "node scripts/postinstall.cjs",
 		"test": "prettier --check . && xo && ava",
+		"test:unit": "node node_modules/ava/entrypoints/cli.mjs source/test/unit/**/*.ts",
+		"test:integration": "node node_modules/ava/entrypoints/cli.mjs source/test/integration/**/*.ts",
+		"test:tui": "node node_modules/ava/entrypoints/cli.mjs source/test/tui/**/*.tsx",
+		"test:run": "node node_modules/ava/entrypoints/cli.mjs",
 		"lint": "xo",
 		"format": "prettier --write ."
 	},
