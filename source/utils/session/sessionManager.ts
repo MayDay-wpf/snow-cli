@@ -22,12 +22,103 @@ export interface ChatMessage extends APIChatMessage {
 
 export function buildInitialUserPromptBlock(initialUserPrompt: string): string {
 	return [
-		'[INITIAL USER REQUEST - VERBATIM, MUST NOT BE PARAPHRASED]',
+		'[INITIAL USER REQUEST - VERBATIM]',
 		'',
 		initialUserPrompt,
 		'',
-		"The exact text above is the user's initial request and remains authoritative throughout this conversation. Do NOT rephrase it. If later summaries conflict with it, the verbatim request wins.",
+		"The text above is the user's initial request. Refer to it as authoritative intent for this conversation.",
 	].join('\n');
+}
+
+export function buildActiveAndInitialUserPromptBlock(
+	activePrompt?: string | null,
+	initialPrompt?: string | null,
+): string {
+	const cleanActive = activePrompt?.trim();
+	const cleanInitial = initialPrompt?.trim();
+
+	if (!cleanActive && !cleanInitial) {
+		return '';
+	}
+
+	if (cleanActive && (!cleanInitial || cleanActive === cleanInitial)) {
+		return [
+			'[CURRENT ACTIVE USER REQUEST - IN PROGRESS]',
+			'',
+			cleanActive,
+			'',
+			"The text above is the user's active objective for the current turn. Tools have been executed for this requirement. Your immediate focus is to fulfill this specific task.",
+		].join('\n');
+	}
+
+	if (cleanActive && cleanInitial && cleanActive !== cleanInitial) {
+		return [
+			'[CURRENT ACTIVE USER REQUEST - HIGHEST PRIORITY]',
+			'',
+			cleanActive,
+			'',
+			"CRITICAL: The text above is the user's current active task in progress. Tools were called specifically for this task. You MUST prioritize fulfilling this active task over earlier conversation history.",
+			'',
+			'[CONVERSATION ORIGIN / BACKGROUND CONTEXT]',
+			cleanInitial,
+		].join('\n');
+	}
+
+	return buildInitialUserPromptBlock(cleanInitial!);
+}
+
+/**
+ * 提取当前会话中用户最新的真实活跃提问（排除内部注入指令与标签块）。
+ */
+export function getActiveUserPrompt(session: Session): string | null {
+	if (!session || !session.messages || session.messages.length === 0) {
+		return null;
+	}
+
+	for (let i = session.messages.length - 1; i >= 0; i--) {
+		const msg = session.messages[i];
+		if (
+			msg &&
+			msg.role === 'user' &&
+			!msg.subAgentInternal &&
+			typeof msg.content === 'string' &&
+			msg.content.trim()
+		) {
+			const text = msg.content.trim();
+			if (
+				text.startsWith('[COMPRESSION PRIORITY') ||
+				text.startsWith('[GOAL OBJECTIVE') ||
+				text.startsWith('[INITIAL USER REQUEST') ||
+				text.startsWith('[CURRENT ACTIVE USER REQUEST')
+			) {
+				continue;
+			}
+			return text;
+		}
+	}
+
+	return null;
+}
+
+/**
+ * 清洗提示词文本，剥离外层可能嵌套的内部系统标签块。
+ */
+export function cleanPromptBlock(text: string): string {
+	if (!text) return '';
+	let clean = text.trim();
+	const matchActive = clean.match(
+		/\[CURRENT ACTIVE USER REQUEST[^\]]*\]\s*\n+([\s\S]*?)(?:\n+(?:The text above|CRITICAL:)|\n*$)/,
+	);
+	if (matchActive && matchActive[1]?.trim()) {
+		return matchActive[1].trim();
+	}
+	const matchInitial = clean.match(
+		/\[INITIAL USER REQUEST[^\]]*\]\s*\n+([\s\S]*?)(?:\n+(?:The exact text|The text above)|\n*$)/,
+	);
+	if (matchInitial && matchInitial[1]?.trim()) {
+		return matchInitial[1].trim();
+	}
+	return clean;
 }
 
 export function buildSessionStartHookContext(
@@ -97,7 +188,11 @@ export interface PaginatedSessionList {
 }
 
 class SessionManager {
-	private readonly sessionsDir: string;
+	private get sessionsDir(): string {
+		const override = process.env['SNOW_CONFIG_DIR']?.trim();
+		const baseSnowDir = override ? override : path.join(os.homedir(), '.snow');
+		return path.join(baseSnowDir, 'sessions');
+	}
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
 	private readonly currentProjectPath: string;
@@ -112,7 +207,6 @@ class SessionManager {
 	private messagesChangedListeners: Array<() => void> = [];
 
 	constructor() {
-		this.sessionsDir = path.join(os.homedir(), '.snow', 'sessions');
 		const identity = resolveProjectIdentity();
 		this.currentProjectId = identity.projectId;
 		this.currentProjectPath = identity.projectPath;
@@ -517,29 +611,28 @@ class SessionManager {
 			);
 		}
 
-		// Search from the current session towards parent, NOT from the ancient root downwards.
-		// Reverse traversal caused the first-ever question in the entire session tree
-		// (e.g. "what skills are there?") to perpetually hijack every subsequent compression.
+		// 从当前会话向历史祖先顺序寻找（当前阶段优先，绝不反转到最古老祖先）
 		for (const historicalSession of sessionChain) {
 			const storedPrompt = historicalSession.initialUserPrompt?.trim();
-			if (
-				storedPrompt &&
-				!storedPrompt.startsWith('[Context Summary') &&
-				!storedPrompt.startsWith('[INITIAL USER REQUEST')
-			) {
-				return storedPrompt;
+			if (storedPrompt) {
+				const cleaned = cleanPromptBlock(storedPrompt);
+				if (cleaned) {
+					return cleaned;
+				}
 			}
 
 			const firstUserMessage = historicalSession.messages.find(
 				message =>
 					message.role === 'user' &&
-					Boolean(message.content?.trim()) &&
-					!message.content.startsWith('[Context Summary') &&
-					!message.content.startsWith('[INITIAL USER REQUEST'),
+					!message.subAgentInternal &&
+					Boolean(message.content?.trim()),
 			);
 			const prompt = firstUserMessage?.content?.trim();
 			if (prompt) {
-				return prompt;
+				const cleaned = cleanPromptBlock(prompt);
+				if (cleaned) {
+					return cleaned;
+				}
 			}
 		}
 

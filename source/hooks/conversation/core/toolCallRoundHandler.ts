@@ -10,7 +10,6 @@ import {resolveToolConfirmations} from './toolConfirmationFlow.js';
 import {handleAutoCompression} from './autoCompressHandler.js';
 import {buildToolResultMessages} from './toolResultDisplay.js';
 import {SubAgentUIHandler} from './subAgentMessageHandler.js';
-import {handlePendingMessages} from './pendingMessagesHandler.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import type {
 	ConversationHandlerOptions,
@@ -455,34 +454,10 @@ export async function handleToolCallRound(ctx: {
 		console.error('Failed to process spawned agent results:', error);
 	}
 
-	const pendingResult = await handlePendingMessages({
-		getPendingMessages: options.getPendingMessages,
-		clearPendingMessages: options.clearPendingMessages,
-		conversationMessages,
-		saveMessage,
-		setMessages,
-		autoCompressOptions: autoCompressOpts,
-		abortSignal: controller.signal,
-	});
-
-	if (pendingResult.hookFailed) {
-		setMessages(prev => [
-			...prev,
-			{
-				role: 'assistant',
-				content: '',
-				streaming: false,
-				hookError: pendingResult.hookErrorDetails,
-			},
-		]);
-		options.setIsStreaming?.(false);
-		freeEncoder();
-		return {type: 'break'};
-	}
-
-	if (pendingResult.accumulatedUsage) {
-		accumulatedUsage = pendingResult.accumulatedUsage;
-	}
-
+	// Turn Closure Atomicity:
+	// Do NOT drain or inject pending user messages in the middle of a tool round.
+	// Allow the model to cleanly receive the tool results and generate its textual explanation.
+	// Once the streaming turn naturally completes (streamStatus === 'idle'), useChatLogic
+	// will safely pop and dispatch pending messages as a distinct, sequential user turn.
 	return {type: 'continue', accumulatedUsage};
 }
