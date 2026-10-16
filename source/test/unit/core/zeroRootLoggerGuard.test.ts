@@ -22,9 +22,9 @@ test('ZeroRootLoggerGuard: enforces absolute zero direct root logger calls acros
 
 	for (const file of files) {
 		const normalized = file.replace(/\\/g, '/');
-		// 豁免测试套件、微内核本体 logger.ts 以及极简入口 cli.tsx
+		// 仅豁免测试套件和微内核本体 logger.ts；cli.tsx 也已全面纳入 const log = logger.child('cli:main') 标准化！
 		if (normalized.includes('/test/') || normalized.includes('.test.')) continue;
-		if (normalized.endsWith('source/utils/core/logger.ts') || normalized.endsWith('source/cli.tsx')) continue;
+		if (normalized.endsWith('source/utils/core/logger.ts')) continue;
 
 		const content = fs.readFileSync(file, 'utf-8');
 		const lines = content.split('\n');

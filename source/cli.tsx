@@ -189,6 +189,8 @@ import {shutdownTelemetry} from './utils/telemetry/otel.js';
 import {emitTerminalExitSequence} from './utils/execution/terminal.js';
 import {logger} from './utils/core/logger.js';
 
+const log = logger.child('cli:main');
+
 if (args.includes('--snow-agent-child-worker')) {
 	const {runAgentChildProcessWorker} = await import(
 		'./utils/execution/agentChildProcessWorker.js'
@@ -203,7 +205,7 @@ try {
 	runLegacyConfigMigration();
 } catch (error) {
 	// Migration failures should never block startup.
-	logger.debug('Legacy config migration failed during startup', {error});
+	log.debug('Legacy config migration failed during startup', {error});
 }
 
 // Read version from package.json
@@ -279,7 +281,7 @@ async function checkForUpdates(currentVersion: string): Promise<void> {
 		}
 	} catch (error) {
 		// Silently fail - don't interrupt user experience
-		logger.debug('Check for updates failed', {error});
+		log.debug('Check for updates failed', {error});
 		setUpdateNotice(null);
 	}
 }
@@ -714,7 +716,7 @@ const Startup = ({
 			try {
 				deps.initializeProfiles();
 			} catch (error) {
-				logger.debug('Failed to initialize profiles', {error});
+				log.debug('Failed to initialize profiles', {error});
 			}
 
 			// Handle dev mode
@@ -839,7 +841,7 @@ const cleanupAsync = async () => {
 		}
 	} catch (error) {
 		// Ignore codebase watcher close errors
-		logger.debug('Codebase watcher close error during exit', {error});
+		log.debug('Codebase watcher close error during exit', {error});
 	}
 
 	// Unmount Ink so React effects cleanup (timers, stdin listeners, raw mode)
@@ -848,7 +850,7 @@ const cleanupAsync = async () => {
 		mainInk?.unmount();
 	} catch (error) {
 		// Ignore unmount errors - already unmounted or in bad state
-		logger.debug('Main ink unmount error during exit', {error});
+		log.debug('Main ink unmount error during exit', {error});
 	}
 
 	// On Windows, Ink unmount restores stdin raw mode and releases TTY handles.
@@ -877,7 +879,7 @@ const cleanupAsync = async () => {
 		]);
 	} catch (error) {
 		// Ignore telemetry shutdown errors during exit
-		logger.debug('Telemetry shutdown error during exit', {error});
+		log.debug('Telemetry shutdown error during exit', {error});
 	}
 
 	// Cleanup global singleton resources (close browser, free encoders, etc.)
@@ -891,7 +893,7 @@ const cleanupAsync = async () => {
 		]);
 	} catch (error) {
 		// Ignore cleanup errors during exit
-		logger.debug('Global resources cleanup error during exit', {error});
+		log.debug('Global resources cleanup error during exit', {error});
 	}
 
 	const deps = (global as any).__deps;
@@ -904,7 +906,7 @@ const cleanupAsync = async () => {
 			]);
 		} catch (error) {
 			// Ignore MCP close errors
-			logger.debug('MCP close error during exit', {error});
+			log.debug('MCP close error during exit', {error});
 		}
 		// Then kill remaining processes
 		deps.processManager.killAll();
@@ -953,7 +955,7 @@ runFatalExitCleanup = (err: unknown, code: number) => {
 	if (!cleanupPromise) {
 		cleanupPromise = cleanupAsync().catch(error => {
 			// best-effort
-			logger.debug('Cleanup async error during uncaught exception handling', {error});
+			log.debug('Cleanup async error during uncaught exception handling', {error});
 		});
 	}
 	void cleanupPromise.finally(() => {
