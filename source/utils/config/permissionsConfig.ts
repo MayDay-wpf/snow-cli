@@ -1,5 +1,8 @@
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.permissions');
 
 const SNOW_DIR = '.snow';
 const PERMISSIONS_FILE = 'permissions.json';
@@ -58,7 +61,7 @@ export function loadPermissionsConfig(
 				: [],
 		};
 	} catch (error) {
-		console.error('Failed to load permissions config:', error);
+		configLogger.error('Failed to load permissions config', error);
 		return {...DEFAULT_CONFIG};
 	}
 }
@@ -77,7 +80,7 @@ export function savePermissionsConfig(
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(configPath, configData, 'utf-8');
 	} catch (error) {
-		console.error('Failed to save permissions config:', error);
+		configLogger.error('Failed to save permissions config', error);
 		throw error;
 	}
 }

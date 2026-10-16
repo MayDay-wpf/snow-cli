@@ -1,6 +1,9 @@
 import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.proxy');
 
 /**
  * Supported search engine identifiers. Keep in sync with
@@ -87,7 +90,7 @@ export function loadProxyConfig(): ProxyConfig {
 
 		return mergedConfig;
 	} catch (error) {
-		console.error('Failed to load proxy config:', error);
+		configLogger.error('Failed to load proxy config', error);
 		return DEFAULT_PROXY_CONFIG;
 	}
 }

@@ -8,6 +8,9 @@ import {
 	readdirSync,
 	unlinkSync,
 } from 'fs';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.hooks');
 
 /**
  * Hook 类型
@@ -209,7 +212,7 @@ export function loadHookConfig(
 
 		return [];
 	} catch (error) {
-		console.error(`Failed to load hook config for ${hookType}:`, error);
+		configLogger.error(`Failed to load hook config for ${hookType}`, error);
 		return [];
 	}
 }

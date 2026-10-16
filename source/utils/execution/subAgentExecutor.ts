@@ -27,6 +27,9 @@ import {checkAndApproveTools, executeMcpTools} from './subAgentToolApproval.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {withAgentSpan} from '../telemetry/otel.js';
+import {logger} from '../core/logger.js';
+
+const subAgentLogger = logger.child('execution.subAgent');
 import type {
 	SubAgentExecutionContext,
 	SubAgentMessage,
@@ -132,7 +135,7 @@ export async function executeSubAgent(
 					}
 				} catch (error) {
 					// fail-open: keep original prompt
-					console.warn('beforeSubAgentStart hook failed:', error);
+					subAgentLogger.warn('beforeSubAgentStart hook failed', error);
 				}
 
 				// 3. Build initial messages.
@@ -363,8 +366,8 @@ async function resolveConfig(
 				return {config, model: config.advancedModel || 'gpt-5'};
 			}
 		} catch (error) {
-			console.warn(
-				`Failed to load profile ${agent.configProfile} for sub-agent, using main config:`,
+			subAgentLogger.warn(
+				`Failed to load profile ${agent.configProfile} for sub-agent, using main config`,
 				error,
 			);
 		}
@@ -458,7 +461,7 @@ async function handleCompletionHooks(
 
 		return interpreted.shouldContinueConversation || false;
 	} catch (error) {
-		console.error('onSubAgentComplete hook execution failed:', error);
+		subAgentLogger.error('onSubAgentComplete hook execution failed', error);
 		return false;
 	}
 }

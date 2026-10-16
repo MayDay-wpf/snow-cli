@@ -3,6 +3,9 @@ import {join} from 'path';
 import {homedir} from 'os';
 import {getAllBuiltinAgentDefinitions} from '../execution/subagents/index.js';
 import {loadGlobalAgents, loadProjectAgents} from './projectAgents.js';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.subAgent');
 
 export interface SubAgent {
 	id: string;
@@ -64,7 +67,7 @@ export function getUserSubAgents(): SubAgent[] {
 		const config = JSON.parse(configData) as SubAgentsConfig;
 		return config.agents || [];
 	} catch (error) {
-		console.error('Failed to load sub-agents:', error);
+		configLogger.error('Failed to load sub-agents', error);
 		return [];
 	}
 }

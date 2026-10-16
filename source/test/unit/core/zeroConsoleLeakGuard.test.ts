@@ -9,6 +9,7 @@ const ALLOWED_CONSOLE_STANDALONE = new Set([
   path.normalize('source/utils/core/doctor.ts'),
   path.normalize('source/utils/core/runUpdate.ts'),
   path.normalize('source/utils/core/updateCheck.ts'),
+  path.normalize('source/utils/execution/sessionCommandPlane.ts'),
 ]);
 
 // Helper to recursively collect files
@@ -51,6 +52,37 @@ test('zeroConsoleLeakGuard: core logger and test helpers have zero console leaks
   }
 });
 
+test('zeroConsoleLeakGuard: sanitized domains (config, session) maintain absolute zero console leaks', (t) => {
+  const targetDirs = [
+    path.resolve('source/utils/config'),
+    path.resolve('source/utils/session'),
+  ];
+
+  const leaks: string[] = [];
+  for (const dir of targetDirs) {
+    const files = collectSourceFiles(dir);
+    for (const file of files) {
+      const relativePath = path.normalize(path.relative(process.cwd(), file));
+      const content = fs.readFileSync(file, 'utf8');
+      const lines = content.split('\n');
+      lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (/console\.(log|error|warn|info|debug)\(/.test(line)) {
+          leaks.push(`${relativePath}:${idx + 1}: ${trimmed}`);
+        }
+      });
+    }
+  }
+
+  t.deepEqual(
+    leaks,
+    [],
+    `Critical domains (config, session) must maintain absolute zero console leaks. Found ${leaks.length} violations:\n` +
+      leaks.join('\n'),
+  );
+});
+
 test('zeroConsoleLeakGuard: ratchet baseline prevents new console leaks in source tree', (t) => {
   const rootDir = path.resolve('source');
   const allFiles = collectSourceFiles(rootDir);
@@ -74,10 +106,10 @@ test('zeroConsoleLeakGuard: ratchet baseline prevents new console leaks in sourc
     });
   }
 
-  // The total violations must not exceed the ratchet baseline of 252,
+  // The total violations must not exceed the ratchet baseline of 205,
   // preventing any new accidental console leaks across the codebase.
   t.true(
-    violations.length <= 252,
+    violations.length <= 205,
     `Console call count exceeded ratchet threshold (found ${violations.length}):\n` +
       violations.slice(0, 10).join('\n'),
   );

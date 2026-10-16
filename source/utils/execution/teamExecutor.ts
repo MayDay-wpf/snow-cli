@@ -18,6 +18,9 @@ import {interpretHookResult} from './hookResultInterpreter.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
+import {logger} from '../core/logger.js';
+
+const teamLogger = logger.child('execution.teamExecutor');
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -655,7 +658,7 @@ ${role ? `Your role: ${role}` : ''}
 											},
 										});
 									}
-									console.warn(
+									teamLogger.warn(
 										`[Teammate:${memberName}] Compression failed, retrying (${
 											retryAttempt + 1
 										}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
@@ -689,14 +692,19 @@ ${role ? `Your role: ${role}` : ''}
 								});
 							}
 
-							console.log(
+							teamLogger.info(
 								`[Teammate:${memberName}] Context compressed: ` +
 									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+								{
+									memberName,
+									beforeTokens: compressionResult.beforeTokens,
+									afterTokens: compressionResult.afterTokensEstimate,
+								},
 							);
 						}
 					} catch (compressError) {
-						console.error(
-							`[Teammate:${memberName}] Context compression failed after retries:`,
+						teamLogger.error(
+							`[Teammate:${memberName}] Context compression failed after retries`,
 							compressError,
 						);
 					} finally {

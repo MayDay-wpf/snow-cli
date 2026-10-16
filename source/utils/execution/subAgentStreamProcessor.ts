@@ -13,6 +13,9 @@ import type {SubAgentExecutionContext} from './subAgentTypes.js';
 import type {ChatMessage} from '../../api/chat.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
+import {logger} from '../core/logger.js';
+
+const streamLogger = logger.child('execution.subAgentStream');
 
 export interface StreamProcessResult {
 	currentContent: string;
@@ -307,7 +310,7 @@ export async function handleContextCompression(
 								? retryError.message
 								: String(retryError),
 					});
-					console.warn(
+					streamLogger.warn(
 						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${
 							retryAttempt + 1
 						}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
@@ -334,16 +337,21 @@ export async function handleContextCompression(
 				afterTokensEstimate: compressionResult.afterTokensEstimate,
 			});
 
-			console.log(
+			streamLogger.info(
 				`[SubAgent:${ctx.agent.name}] Context compressed: ` +
 					`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+				{
+					agentName: ctx.agent.name,
+					beforeTokens: compressionResult.beforeTokens,
+					afterTokens: compressionResult.afterTokensEstimate,
+				},
 			);
 
 			return true;
 		}
 	} catch (compressError) {
-		console.error(
-			`[SubAgent:${ctx.agent.name}] Context compression failed after retries:`,
+		streamLogger.error(
+			`[SubAgent:${ctx.agent.name}] Context compression failed after retries`,
 			compressError,
 		);
 	} finally {

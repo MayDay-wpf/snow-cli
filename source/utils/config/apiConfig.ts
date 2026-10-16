@@ -9,6 +9,10 @@ import {
 } from 'fs';
 import {readSettings, updateSettings} from './unifiedSettings.js';
 import type {OAuthProfileMetadata} from '../oauth/types.js';
+import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+
+const configLogger = logger.child('config.api');
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
@@ -225,8 +229,7 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
  * 默认 ~/.snow；若设置了 SNOW_CONFIG_DIR（测试/多环境隔离用）则以其为准。
  */
 export function resolveSnowConfigDir(): string {
-	const override = process.env['SNOW_CONFIG_DIR']?.trim();
-	return override ? override : join(homedir(), '.snow');
+	return getGlobalSnowDir().native;
 }
 
 export function getSnowConfigDir(): string {
@@ -280,7 +283,7 @@ function migrateProxyConfigToNewFile(legacyProxy: any): void {
 			);
 		}
 	} catch (error) {
-		console.error('Failed to migrate proxy config:', error);
+		configLogger.error('Failed to migrate proxy config', error);
 	}
 }
 
@@ -779,10 +782,8 @@ function migrateSystemPromptFromTxt(): void {
 
 		// 删除旧文件
 		unlinkSync(SYSTEM_PROMPT_FILE);
-
-		// console.log('✅ Migrated system prompt from txt to json format.');
 	} catch (error) {
-		console.error('Failed to migrate system prompt:', error);
+		configLogger.error('Failed to migrate system prompt', error);
 	}
 }
 
@@ -819,7 +820,7 @@ export function getSystemPromptConfig(): SystemPromptConfig | undefined {
 
 		return config;
 	} catch (error) {
-		console.error('Failed to read system prompt config:', error);
+		configLogger.error('Failed to read system prompt config', error);
 		return undefined;
 	}
 }
@@ -837,7 +838,7 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
 			'utf8',
 		);
 	} catch (error) {
-		console.error('Failed to save system prompt config:', error);
+		configLogger.error('Failed to save system prompt config', error);
 		throw error;
 	}
 }

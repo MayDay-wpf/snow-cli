@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import {logger} from '../core/logger.js';
+
+const checkpointLogger = logger.child('session.checkpoint');
 
 /**
  * File checkpoint data structure
@@ -160,11 +163,18 @@ class CheckpointManager {
 					try {
 						await fs.unlink(snapshot.path);
 					} catch (error) {
-						// File may already be deleted, ignore
+						// File may already be deleted, trace safely
+						checkpointLogger.debug('File to unlink already deleted or missing', {
+							path: snapshot.path,
+							error,
+						});
 					}
 				}
 			} catch (error) {
-				console.error(`Failed to rollback file ${snapshot.path}:`, error);
+				checkpointLogger.error(`Failed to rollback file ${snapshot.path}`, {
+					path: snapshot.path,
+					error,
+				});
 			}
 		}
 

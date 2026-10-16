@@ -320,9 +320,9 @@ const onStopStrategy: HookStrategy = {
 		for (const result of hookResult.results) {
 			if (result.type === 'command' && !result.success) {
 				if (result.exitCode === 1) {
-					console.log(
-						'[WARN] onStop hook warning:',
-						result.error || result.output || '',
+					logger.warn(
+						'onStop hook warning',
+						{message: result.error || result.output || ''},
 					);
 				} else if (result.exitCode >= 2) {
 					injectedMessages.push({

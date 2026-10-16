@@ -6,6 +6,10 @@
  * on agents/* or execution/* and breaking circular dependency chains (Cycles #1 - #8).
  */
 
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.cacheRegistry');
+
 type CacheClearer = () => void;
 
 const clearers = new Set<CacheClearer>();
@@ -31,7 +35,7 @@ export function clearAllRegisteredCaches(): void {
 		try {
 			clearer();
 		} catch (error) {
-			console.debug('Failed to clear cache handler:', error);
+			configLogger.debug('Failed to clear cache handler', error);
 		}
 	}
 }

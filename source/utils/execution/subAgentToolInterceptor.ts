@@ -14,6 +14,9 @@ import {interpretHookResult} from './hookResultInterpreter.js';
 import {connectionManager} from '../connection/ConnectionManager.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import type {SubAgentExecutionContext, ChatMessage} from './subAgentTypes.js';
+import {logger} from '../core/logger.js';
+
+const subAgentLogger = logger.child('execution.subAgentInterceptor');
 
 export interface InterceptResult {
 	remainingToolCalls: any[];
@@ -115,8 +118,8 @@ export async function interceptSendMessage(
 					targetInstanceId = args.target_instance_id;
 					msgContent = args.message || '';
 				} catch (error) {
-					console.error(
-						'Failed to parse send_message_to_agent arguments:',
+					subAgentLogger.error(
+						'Failed to parse send_message_to_agent arguments',
 						error,
 					);
 				}
@@ -297,7 +300,7 @@ export async function interceptSpawnSubAgent(
 					spawnAgentId = args.agent_id || '';
 					spawnPrompt = args.prompt || '';
 				} catch (error) {
-					console.error('Failed to parse spawn_sub_agent arguments:', error);
+					subAgentLogger.error('Failed to parse spawn_sub_agent arguments', error);
 				}
 
 				if (!spawnAgentId || !spawnPrompt) {
@@ -478,7 +481,7 @@ export async function interceptAskUser(
 					multiSelect = true;
 				}
 			} catch (error) {
-				console.error('Failed to parse askuser tool arguments:', error);
+				subAgentLogger.error('Failed to parse askuser tool arguments', error);
 			}
 
 			// Execute beforeToolCall hook inside the askuser tool span.
@@ -516,8 +519,8 @@ export async function interceptAskUser(
 					return {result: undefined, outputContent: content};
 				}
 			} catch (hookError) {
-				console.warn(
-					'Failed to execute beforeToolCall hook for askuser in sub-agent:',
+				subAgentLogger.warn(
+					'Failed to execute beforeToolCall hook for askuser in sub-agent',
 					hookError,
 				);
 			}
@@ -578,8 +581,8 @@ export async function interceptAskUser(
 					error: null,
 				});
 			} catch (hookError) {
-				console.warn(
-					'Failed to execute afterToolCall hook for askuser in sub-agent:',
+				subAgentLogger.warn(
+					'Failed to execute afterToolCall hook for askuser in sub-agent',
 					hookError,
 				);
 			}

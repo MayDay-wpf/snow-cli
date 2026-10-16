@@ -23,6 +23,9 @@ import {
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.manager');
 import {bashOutputSummaryAgent} from '../../agents/bashOutputSummaryAgent.js';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 
@@ -156,7 +159,7 @@ function migrateLegacyConfig(): void {
 			setActiveProfileName('default');
 		} catch (error) {
 			// If migration fails, we'll create a default profile later
-			console.error('Failed to migrate legacy config:', error);
+			configLogger.error('Failed to migrate legacy config', error);
 		}
 	}
 }
@@ -352,8 +355,8 @@ export function switchProfile(profileName: string): void {
 			// Also resave the profile without proxy
 			saveProfile(profileName, profileConfig);
 		} catch (error) {
-			console.error(
-				'Failed to migrate proxy config during profile switch:',
+			configLogger.error(
+				'Failed to migrate proxy config during profile switch',
 				error,
 			);
 		}

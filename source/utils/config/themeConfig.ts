@@ -3,6 +3,9 @@ import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
 import type {ThemeType, ThemeColors} from '../../ui/themes/index.js';
 import {configEvents} from './configEvents.js';
+import {logger} from '../core/logger.js';
+
+const configLogger = logger.child('config.theme');
 
 export function getThemeConfigDir(): string {
 	return process.env['SNOW_CONFIG_DIR'] || join(homedir(), '.snow');
@@ -130,7 +133,7 @@ export function saveThemeConfig(config: ThemeConfig): void {
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(configFile, configData, 'utf-8');
 	} catch (error) {
-		console.error('Failed to save theme config:', error);
+		configLogger.error('Failed to save theme config', error);
 	}
 }
 
