@@ -56,7 +56,8 @@ status: normative
      - 拦截对全局单例 `logger.` 的跨级直调；
      - 拦截无任何线索的静默 `catch {}` 或 `catch (e) {}`；
      - 拦截任何非法 `console.log` / `console.error`；
-     - 拦截绕过 `snowContext` 的硬编码 `homedir()/.snow`。
+     - 拦截绕过 `snowContext` 的硬编码 `homedir()/.snow`；
+     - 拦截任何非字面量的非法动态 import 拼接与变量插值（`import(a + b)` / `import(`${x}`)`）。
   2. **Phase 2: 暂存区 Biome 增量格式化与 Lint 校验（< 80ms）**
      - 运行 `npx @biomejs/biome check --staged` 确保提交的代码风格与静态规则零违规。
 
