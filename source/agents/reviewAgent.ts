@@ -4,6 +4,8 @@ import {
 } from '../utils/config/apiConfig.js';
 import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:reviewAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -150,8 +152,11 @@ export class ReviewAgent {
 					stdio: 'pipe',
 				});
 				stagedFileCount = stagedFiles.trim().split('\n').filter(Boolean).length;
-			} catch {
-				// Ignore errors
+			} catch (e) {
+				log.debug('Failed to get staged file count via git diff', {
+					gitRoot,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		}
 
@@ -173,8 +178,11 @@ export class ReviewAgent {
 					.trim()
 					.split('\n')
 					.filter(Boolean).length;
-			} catch {
-				// Ignore errors
+			} catch (e) {
+				log.debug('Failed to get unstaged file count via git diff', {
+					gitRoot,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		}
 

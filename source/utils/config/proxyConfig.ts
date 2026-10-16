@@ -141,8 +141,8 @@ export async function updateProxyConfig(
 				saveProfile(activeProfileName, profileConfig);
 			}
 		}
-	} catch {
-		// Profiles system not available yet (during initialization), skip sync
+	} catch (error) {
+		configLogger.debug('Profiles system not available yet, skipped sync', {error});
 	}
 }
 
@@ -184,8 +184,8 @@ export function compileBlockedPatterns(
 
 		try {
 			compiled.push(new RegExp(trimmed, 'i'));
-		} catch {
-			// Ignore invalid regex patterns
+		} catch (error) {
+			configLogger.debug('Ignored invalid regex pattern in blocked patterns', {pattern: trimmed, error});
 		}
 	}
 
@@ -210,8 +210,8 @@ export function isUrlBlocked(
 	const candidates = [url];
 	try {
 		candidates.push(new URL(url).host);
-	} catch {
-		// 非标准 URL 直接匹配原文
+	} catch (error) {
+		configLogger.debug('URL host extraction fallback to raw text matching', {url, error});
 	}
 
 	return compiledPatterns.some(regex =>

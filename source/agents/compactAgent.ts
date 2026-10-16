@@ -1,5 +1,7 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:compactAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -170,11 +172,16 @@ export class CompactAgent {
 				const {encoding_for_model} = await import('tiktoken');
 				try {
 					encoder = encoding_for_model('gpt-5');
-				} catch {
+				} catch (modelErr) {
+					log.debug('Model gpt-5 not in tiktoken, falling back to gpt-3.5-turbo', {
+						error: modelErr instanceof Error ? modelErr.message : String(modelErr),
+					});
 					encoder = encoding_for_model('gpt-3.5-turbo');
 				}
 			} catch (e) {
-				// tiktoken unavailable, token counting will be skipped
+				log.debug('tiktoken unavailable, token counting will be skipped', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 
 			try {
@@ -196,7 +203,9 @@ export class CompactAgent {
 								const tokens = encoder.encode(completeContent);
 								onTokenUpdate(tokens.length);
 							} catch (e) {
-								// Ignore encoding errors
+								log.debug('Token encoding error in streaming progress', {
+									error: e instanceof Error ? e.message : String(e),
+								});
 							}
 						}
 					}

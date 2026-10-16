@@ -4,6 +4,9 @@ import {
 	cleanTerminalTitle,
 	setTerminalTitle,
 } from '../../utils/ui/terminalTitle.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:useTerminalTitle');
 
 /**
  * 设置终端窗口/标签标题，组件卸载时自动清空。
@@ -39,8 +42,8 @@ export function useTerminalTitle(title: string): void {
 		let previousProcessTitle: string | undefined;
 		try {
 			previousProcessTitle = process.title;
-		} catch {
-			// 某些受限环境读取 process.title 可能抛错，忽略即可
+		} catch (error) {
+			log.debug('Failed to read process.title in restricted environment', {error});
 		}
 
 		// 1. process.title + 2. OSC 序列：所有支持 ANSI 的终端
@@ -51,14 +54,14 @@ export function useTerminalTitle(title: string): void {
 			if (previousProcessTitle !== undefined) {
 				try {
 					process.title = previousProcessTitle;
-				} catch {
-					// 同上，忽略恢复失败
+				} catch (error) {
+					log.debug('Failed to restore process.title', {error});
 				}
 			}
 			try {
 				stdout.write('\x1b]0;\x07');
-			} catch {
-				// 卸载阶段 stdout 可能已关闭，忽略
+			} catch (error) {
+				log.debug('Failed to clear terminal title on unmount', {error});
 			}
 		};
 	}, [stdout, title]);

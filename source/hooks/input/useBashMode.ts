@@ -3,6 +3,9 @@ import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.
 import {isSelfDestructiveCommand} from '../../mcp/utils/bash/security.utils.js';
 import {getConversationContext} from '../../utils/codebase/conversationContext.js';
 import {buildSessionIdentityEnv} from '../../utils/execution/sessionIdentityEnv.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('hooks:useBashMode');
 
 export interface BashCommand {
 	id: string;
@@ -296,8 +299,8 @@ export function useBashMode() {
 							} else {
 								child.kill('SIGTERM');
 							}
-						} catch {
-							// Ignore.
+						} catch (error) {
+							log.debug('Failed to kill bash mode child process tree', {pid: child.pid, error});
 						}
 					};
 
