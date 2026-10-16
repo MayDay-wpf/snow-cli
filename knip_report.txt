@@ -1,0 +1,475 @@
+
+> snow-ai@0.9.7 deadcode
+> knip
+
+Unused files (7)
+source/buddy/index.ts                         
+source/hooks/picker/useProfilePicker.ts       
+source/hooks/session/useSessionManagement.ts  
+source/hooks/ui/useCursorHide.ts              
+source/ui/components/chat/PendingToolCalls.tsx
+source/utils/execution/hookResultCore.ts      
+source/utils/execution/mcp/catalogStore.ts    
+Unused dependencies (7)
+@modelcontextprotocol/node  package.json:69:4
+@vscode/ripgrep             package.json:70:4
+abort-controller            package.json:71:4
+eventsource                 package.json:72:4
+fetch-cookie                package.json:73:4
+node-fetch                  package.json:74:4
+tough-cookie                package.json:76:4
+Unused devDependencies (7)
+@types/diff          package.json:101:4
+@types/pdf-parse     package.json:104:4
+@types/sharp         package.json:107:4
+@vercel/ncc          package.json:112:4
+esbuild-plugin-copy  package.json:126:4
+pptx-parser          package.json:150:4
+xo                   package.json:170:4
+Unlisted dependencies (3)
+fs-extra  source/utils/config/workingDirConfig.ts:1:16      
+tar       source/utils/skills/githubSkillInstaller.ts:341:48
+fs-extra  source/utils/ssh/sshClient.ts:2:16                
+Unlisted binaries (9)
+where        source/mcp/utils/aceCodeSearch/search.utils.ts     
+rg           source/test/rg-spawn-repro/rg-spawn-repro-fixed.mjs
+rg           source/test/rg-spawn-repro/rg-spawn-repro.mjs      
+where        source/ui/pages/MCPConfigScreen.tsx                
+where        source/ui/pages/SystemPromptConfigScreen.tsx       
+pgrep        source/utils/core/processManager.ts                
+wmic         source/utils/core/processResourceMonitor.ts        
+snow         source/utils/core/runUpdate.ts                     
+notepad.exe  source/utils/ui/externalEditor.ts                  
+Unused exports (268)
+BashOutputSummaryAgent                  class     source/agents/bashOutputSummaryAgent.ts:17:14                     
+CodebaseReviewAgent                     class     source/agents/codebaseReviewAgent.ts:46:14                        
+CompactAgent                            class     source/agents/compactAgent.ts:31:14                               
+FileSearchAgent                         class     source/agents/fileSearchAgent.ts:105:14                           
+ReviewAgent                             class     source/agents/reviewAgent.ts:18:14                                
+SummaryAgent                            class     source/agents/summaryAgent.ts:26:14                               
+VisionAgent                             class     source/agents/visionAgent.ts:113:14                               
+validateChatOptions                     function  source/api/chat.ts:1027:17                                        
+resolveOllamaEmbeddingsEndpoint         function  source/api/embedding.ts:80:17                                     
+maskPrivacyText                         function  source/api/privacyMask.ts:739:23                                  
+toWebSocketEndpoint                     function  source/api/responsesWebSocket.ts:50:17                            
+getCompanionBuiltInPrompt               function  source/buddy/buddyAi.ts:98:17                                     
+companionUserId                         function  source/buddy/companion.ts:316:17                                  
+getStoredCompanion                      function  source/buddy/companion.ts:357:17                                  
+saveCompanion                           function  source/buddy/companion.ts:384:17                                  
+companionReservedColumns                function  source/buddy/CompanionSprite.tsx:121:17                           
+CompanionFloatingBubble                 function  source/buddy/CompanionSprite.tsx:274:17                           
+companionIntroText                      function  source/buddy/prompt.ts:4:17                                       
+speciesColor                            function  source/buddy/sprites.ts:42:17                                     
+isBuddyTeaserWindow                     function  source/buddy/useBuddyNotification.tsx:11:17                       
+isBuddyLive                             function  source/buddy/useBuddyNotification.tsx:15:17                       
+findBuddyTriggerPositions               function  source/buddy/useBuddyNotification.tsx:19:17                       
+setSchedulerExecutionState              function  source/hooks/execution/useSchedulerExecutionState.ts:101:17       
+getSchedulerState                       function  source/hooks/execution/useSchedulerExecutionState.ts:173:17       
+createContext                           function  source/hooks/input/keyboard/context.ts:70:17                      
+NAVIGATION_EVENT                                  source/hooks/integration/useGlobalNavigation.ts:8:14              
+COMMAND_ARGS_HINTS                                source/hooks/ui/useCommandPanel.ts:52:14                          
+COMMAND_ARGS_OPTIONS                              source/hooks/ui/useCommandPanel.ts:84:14                          
+DEFAULT_SEARCH_ENGINE                             source/mcp/engines/websearch/index.ts:41:14                       
+reloadSearchEngines                     function  source/mcp/engines/websearch/index.ts:253:23                      
+HybridCodeSearchService                 class     source/mcp/lsp/HybridCodeSearchService.ts:11:14                   
+DEFAULT_LSP_SERVERS                               source/mcp/lsp/LSPServerRegistry.ts:28:14                         
+LSP_SERVERS                                       source/mcp/lsp/LSPServerRegistry.ts:73:14                         
+SubAgentService                         class     source/mcp/subagent.ts:58:14                                      
+TeamService                             class     source/mcp/team.ts:70:14                                          
+MAX_FILE_CACHE_SIZE                               source/mcp/utils/aceCodeSearch/constants.utils.ts:139:14          
+isGitRepository                         function  source/mcp/utils/aceCodeSearch/filesystem.utils.ts:334:23         
+isSSHPath                               function  source/mcp/utils/aceCodeSearch/pathRemote.utils.ts:16:17          
+posixJoin                               function  source/mcp/utils/aceCodeSearch/pathRemote.utils.ts:58:17          
+relativeRemotePath                      function  source/mcp/utils/aceCodeSearch/pathRemote.utils.ts:100:17         
+REMOTE_CACHE_TTL_MS                               source/mcp/utils/aceCodeSearch/remote.utils.ts:27:14              
+REMOTE_EXCLUDE_DIRS                               source/mcp/utils/aceCodeSearch/remote.utils.ts:30:14              
+REMOTE_SOURCE_EXTENSIONS                          source/mcp/utils/aceCodeSearch/remote.utils.ts:49:14              
+invalidateRemoteCache                   function  source/mcp/utils/aceCodeSearch/remote.utils.ts:106:17             
+escapeShellArg                          function  source/mcp/utils/aceCodeSearch/remote.utils.ts:119:17             
+buildRemoteFindCommand                  function  source/mcp/utils/aceCodeSearch/remote.utils.ts:179:17             
+buildRemoteCtagsListCommand             function  source/mcp/utils/aceCodeSearch/remote.utils.ts:351:17             
+globToRegex                             function  source/mcp/utils/aceCodeSearch/search.utils.ts:94:17              
+calculateFuzzyScore                     function  source/mcp/utils/aceCodeSearch/search.utils.ts:120:17             
+globPatternToRegex                      function  source/mcp/utils/aceCodeSearch/search.utils.ts:184:17             
+calculateRegexComplexity                function  source/mcp/utils/aceCodeSearch/search.utils.ts:213:17             
+createTimeoutPromise                    function  source/mcp/utils/aceCodeSearch/search.utils.ts:319:17             
+sortResultsByRecency                    function  source/mcp/utils/aceCodeSearch/search.utils.ts:336:23             
+DANGEROUS_PATTERNS                                source/mcp/utils/bash/security.utils.ts:8:14                      
+parseFilePathParameter                  function  source/mcp/utils/filesystem/batch-operations.utils.ts:15:17       
+extractFilePath                         function  source/mcp/utils/filesystem/batch-operations.utils.ts:27:17       
+lineHash                                function  source/mcp/utils/filesystem/hashline.utils.ts:15:17               
+parseAnchor                             function  source/mcp/utils/filesystem/hashline.utils.ts:62:17               
+buildHashMap                            function  source/mcp/utils/filesystem/hashline.utils.ts:100:17              
+parseWordDocument                       function  source/mcp/utils/filesystem/office-parser.utils.ts:21:23          
+parsePDFDocument                        function  source/mcp/utils/filesystem/office-parser.utils.ts:50:23          
+parseExcelDocument                      function  source/mcp/utils/filesystem/office-parser.utils.ts:89:23          
+parsePowerPointDocument                 function  source/mcp/utils/filesystem/office-parser.utils.ts:133:23         
+getOfficeFileType                       function  source/mcp/utils/filesystem/office-parser.utils.ts:165:17         
+levenshteinDistanceAsync                function  source/mcp/utils/filesystem/similarity.utils.ts:103:23            
+calculateSimilarityAsync                function  source/mcp/utils/filesystem/similarity.utils.ts:205:23            
+normalizeLineWithMapping                function  source/mcp/utils/filesystem/similarity.utils.ts:238:17            
+getTodoSnapshotsToRollback              function  source/mcp/utils/todo/rollback.utils.ts:84:17                     
+formatSearchResults                     function  source/mcp/utils/websearch/text.utils.ts:29:17                    
+WebSearchService                        class     source/mcp/websearch.ts:67:14                                     
+getSystemPrompt                         function  source/prompt/systemPrompt.ts:411:17                              
+default                                 function  source/ui/components/bash/CustomCommandExecutionDisplay.tsx:178:16
+calculateContextPercentage              function  source/ui/components/chat/ChatInput.tsx:51:17                     
+default                                 variable  source/ui/components/chat/MessageList.tsx:458:16                  
+SNOWFLAKE_FRAMES                                  source/ui/components/chat/statusVerbs.ts:33:14                    
+VERB_ROTATE_SECONDS                               source/ui/components/chat/statusVerbs.ts:48:14                    
+usePickerWindow                         function  source/ui/components/common/PickerList.tsx:13:17                  
+isBuiltinStatusLineId                   function  source/ui/components/common/statusline/builtinIds.ts:42:17        
+default                                 variable  source/ui/components/common/statusline/gitBranch.ts:45:16         
+default                                 function  source/ui/components/compression/CompressionStatus.tsx:333:16     
+BtwPanel                                          source/ui/components/panels/BtwPanel.tsx:55:14                    
+default                                 variable  source/ui/components/panels/ConnectionPanel.tsx:576:16            
+NewPromptPanel                                    source/ui/components/panels/NewPromptPanel.tsx:21:14              
+TelemetryPanel                                    source/ui/components/panels/TelemetryPanel.tsx:83:14              
+HOOK_FALLBACK_ICON                                source/ui/components/special/hookIcons.ts:10:14                   
+HOOK_TYPE_ICONS                                   source/ui/components/special/hookIcons.ts:13:14                   
+default                                 variable  source/ui/components/special/HookStatusDisplay.tsx:104:16         
+TOOL_STATUS_ICONS                                 source/ui/components/special/toolIcons.ts:24:14                   
+TOOL_FALLBACK_ICON                                source/ui/components/special/toolIcons.ts:27:14                   
+TOOL_NAME_ICONS                                   source/ui/components/special/toolIcons.ts:33:14                   
+TOOL_PREFIX_ICONS                                 source/ui/components/special/toolIcons.ts:70:14                   
+getToolIcon                             function  source/ui/components/special/toolIcons.ts:102:17                  
+GROUP_FIELDS                                      source/ui/pages/configScreen/types.ts:56:14                       
+SELECT_FIELDS                                     source/ui/pages/configScreen/types.ts:133:14                      
+TOGGLE_FIELDS                                     source/ui/pages/configScreen/types.ts:170:14                      
+rgbToHex                                function  source/utils/color-science/oklch.ts:91:17                         
+default                                           source/utils/commands/buddy.ts:692:16                             
+default                                           source/utils/commands/clear.ts:14:16                              
+connectionManager                                 source/utils/commands/connect.ts:57:9                             
+default                                           source/utils/commands/connect.ts:58:16                            
+default                                           source/utils/commands/continue.ts:23:16                           
+default                                           source/utils/commands/copyLast.ts:13:16                           
+default                                           source/utils/commands/diff.ts:13:16                               
+default                                           source/utils/commands/goal.ts:290:16                              
+default                                           source/utils/commands/pause.ts:23:16                              
+default                                           source/utils/commands/resume.ts:30:16                             
+default                                           source/utils/commands/simple.ts:84:16                             
+default                                           source/utils/commands/skillsPicker.ts:14:16                       
+default                                           source/utils/commands/vulnerability-hunting.ts:14:16              
+getSnowConfigDir                        function  source/utils/config/apiConfig.ts:234:17                           
+getSnowConfigFilePath                   function  source/utils/config/apiConfig.ts:238:17                           
+getGlobalMCPConfigFilePath              function  source/utils/config/apiConfig.ts:262:17                           
+saveCustomHeaders                       function  source/utils/config/apiConfig.ts:938:17                           
+clearAllRegisteredCaches                function  source/utils/config/cacheRegistry.ts:33:17                        
+toggleCodebaseEnabled                             source/utils/config/codebaseConfig.ts:195:14                      
+getConfigManagerExportData              function  source/utils/config/configExporter.ts:254:23                      
+serializeConfigManagerExportToYaml      function  source/utils/config/configExporter.ts:294:23                      
+getNextProfileName                      function  source/utils/config/configManager.ts:382:17                       
+initializeProfiles                      function  source/utils/config/configManager.ts:500:17                       
+getActiveDecisionModel                  function  source/utils/config/decisionModelsConfig.ts:118:17                
+getDisabledMCPToolsByScope              function  source/utils/config/disabledMCPTools.ts:87:17                     
+KNOWN_ENV_KEYS                                    source/utils/config/envConfig.ts:16:14                            
+getHooksDir                             function  source/utils/config/hooksConfig.ts:164:17                         
+hasEnabledHookActionsInRules            function  source/utils/config/hooksConfig.ts:240:17                         
+savePermissionsConfig                   function  source/utils/config/permissionsConfig.ts:72:17                    
+getPermissionsConfigFilePath            function  source/utils/config/permissionsConfig.ts:150:17                   
+getProjectAgentsDir                     function  source/utils/config/projectAgents.ts:122:17                       
+getGlobalAgentsDir                      function  source/utils/config/projectAgents.ts:126:17                       
+DEFAULT_SUB_AGENT_MAX_SPAWN_DEPTH                 source/utils/config/projectSettings.ts:40:14                      
+getTelemetryTracesExporter              function  source/utils/config/projectSettings.ts:250:17                     
+setTelemetryTracesExporter              function  source/utils/config/projectSettings.ts:254:17                     
+getTelemetryMetricsExporter             function  source/utils/config/projectSettings.ts:261:17                     
+setTelemetryMetricsExporter             function  source/utils/config/projectSettings.ts:265:17                     
+getTelemetryLogsExporter                function  source/utils/config/projectSettings.ts:272:17                     
+setTelemetryLogsExporter                function  source/utils/config/projectSettings.ts:276:17                     
+getTelemetryOtlpProtocol                function  source/utils/config/projectSettings.ts:283:17                     
+setTelemetryOtlpProtocol                function  source/utils/config/projectSettings.ts:287:17                     
+getTelemetryOtlpEndpoint                function  source/utils/config/projectSettings.ts:294:17                     
+setTelemetryOtlpEndpoint                function  source/utils/config/projectSettings.ts:298:17                     
+getTelemetryOtlpHeaders                 function  source/utils/config/projectSettings.ts:302:17                     
+setTelemetryOtlpHeaders                 function  source/utils/config/projectSettings.ts:306:17                     
+getTelemetryInjectSessionIdHeader       function  source/utils/config/projectSettings.ts:310:17                     
+setTelemetryInjectSessionIdHeader       function  source/utils/config/projectSettings.ts:314:17                     
+loadProxyConfig                         function  source/utils/config/proxyConfig.ts:74:17                          
+DEFAULT_SENSITIVE_COMMAND_ASSIST                  source/utils/config/sensitiveCommandAssistConfig.ts:21:14         
+getThemeConfigDir                       function  source/utils/config/themeConfig.ts:10:17                          
+setToolIconsConfig                      function  source/utils/config/themeConfig.ts:419:17                         
+TWO_STEP_DISPLAY_TOOL_NAMES                       source/utils/config/toolDisplayConfig.ts:42:14                    
+isToolOnlyShowCompleted                 function  source/utils/config/toolDisplayConfig.ts:69:17                    
+readMergedSettings                      function  source/utils/config/unifiedSettings.ts:288:17                     
+loadWorkingDirConfig                    function  source/utils/config/workingDirConfig.ts:72:17                     
+saveWorkingDirConfig                    function  source/utils/config/workingDirConfig.ts:80:17                     
+default                                 variable  source/utils/connection/ConnectionManager.ts:735:16               
+getGlobalTokenUsage                     function  source/utils/connection/contextManager.ts:20:17                   
+signalR                                           source/utils/connection/types.ts:133:9                            
+CLEANUP_CATEGORIES                                source/utils/core/cleanupService.ts:46:14                         
+getSnowRootDir                          function  source/utils/core/cleanupService.ts:119:17                        
+scanOlderThan                           function  source/utils/core/cleanupService.ts:597:17                        
+enableDevMode                           function  source/utils/core/devMode.ts:60:17                                
+getNotebookStats                        function  source/utils/core/notebookManager.ts:377:17                       
+getNotebookOpsToRollback                function  source/utils/core/notebookManager.ts:526:17                       
+getMainProcessHeapUsedBytes             function  source/utils/core/processResourceMonitor.ts:55:17                 
+createProxyAgent                        function  source/utils/core/proxyUtils.ts:144:17                            
+isOverloadedResponse                    function  source/utils/core/retryUtils.ts:90:17                             
+createOverloadedApiError                function  source/utils/core/retryUtils.ts:107:17                            
+USAGE_PERIOD_WINDOWS                              source/utils/core/usageHistory.ts:52:14                           
+DEFAULT_USAGE_PERIOD                              source/utils/core/usageHistory.ts:59:14                           
+isUsagePeriod                           function  source/utils/core/usageHistory.ts:85:17                           
+getUsageRootDir                         function  source/utils/core/usageHistory.ts:113:17                          
+filterByGranularity                     function  source/utils/core/usageHistory.ts:225:17                          
+getUsageHistorySnapshot                 function  source/utils/core/usageHistory.ts:323:23                          
+mcpCircuitBreaker                                 source/utils/execution/mcp/circuitBreaker.ts:184:14               
+resolveSessionCommandMeta                         source/utils/execution/sessionCommandPlane.ts:32:2                
+createSendMessageTool                   function  source/utils/execution/subAgentBuiltinTools.ts:9:17               
+createQueryAgentsStatusTool             function  source/utils/execution/subAgentBuiltinTools.ts:41:17              
+createSpawnSubAgentTool                 function  source/utils/execution/subAgentBuiltinTools.ts:57:17              
+buildPeerAgentsContext                  function  source/utils/execution/subAgentBuiltinTools.ts:108:17             
+warnUnknownAgentTools                   function  source/utils/execution/subAgentResolver.ts:77:17                  
+exploreAgent                                      source/utils/execution/subagents/index.ts:3:9                     
+planAgent                                         source/utils/execution/subagents/index.ts:4:9                     
+generalAgent                                      source/utils/execution/subagents/index.ts:5:9                     
+analyzeAgent                                      source/utils/execution/subagents/index.ts:6:9                     
+qaAgent                                           source/utils/execution/subagents/index.ts:7:9                     
+debugAgent                                        source/utils/execution/subagents/index.ts:8:9                     
+BUILTIN_AGENT_IDS                                 source/utils/execution/subagents/index.ts:132:14                  
+getBuiltinAgentDefinition               function  source/utils/execution/subagents/index.ts:134:17                  
+getToolResultTokenLimit                 function  source/utils/execution/tokenLimiter.ts:21:17                      
+validateTokenLimit                      function  source/utils/execution/tokenLimiter.ts:100:23                     
+stripFilesystemDiffPayload              function  source/utils/execution/tokenLimiter.ts:212:17                     
+isMultimodalContent                     function  source/utils/execution/toolResultNormalizer.ts:4:17               
+isOAuthProviderId                       function  source/utils/oauth/constants.ts:152:17                            
+parseOAuthProviderId                    function  source/utils/oauth/constants.ts:162:17                            
+ANTIGRAVITY_CLI_VERSION                           source/utils/oauth/constants.ts:211:14                            
+ANTIGRAVITY_CLI_CLIENT_NAME                       source/utils/oauth/constants.ts:212:14                            
+antigravityUserAgent                              source/utils/oauth/flows.ts:1096:9                                
+codexUserAgent                                    source/utils/oauth/flows.ts:1096:31                               
+parseOAuthProviderId                              source/utils/oauth/index.ts:8:2                                   
+isOAuthProviderId                                 source/utils/oauth/index.ts:9:2                                   
+disposeOAuthSessions                              source/utils/oauth/index.ts:25:2                                  
+getActiveOAuthSessionCount                        source/utils/oauth/index.ts:26:2                                  
+parseCallbackInput                                source/utils/oauth/index.ts:28:2                                  
+applyOAuthProviderHeaders                         source/utils/oauth/index.ts:34:2                                  
+isOAuthConfig                                     source/utils/oauth/index.ts:35:2                                  
+refreshOAuthTokenIfNeeded                         source/utils/oauth/index.ts:36:2                                  
+TOKEN_REFRESH_LEEWAY_SECS                         source/utils/oauth/index.ts:37:2                                  
+parseCallbackInput                      function  source/utils/oauth/loginManager.ts:255:17                         
+getActiveOAuthSessionCount              function  source/utils/oauth/loginManager.ts:433:17                         
+disposeOAuthSessions                    function  source/utils/oauth/loginManager.ts:438:17                         
+buildWindowsStartCommand                function  source/utils/oauth/openBrowser.ts:19:17                           
+TOKEN_REFRESH_LEEWAY_SECS                         source/utils/oauth/profileStore.ts:38:14                          
+isOAuthConfig                           function  source/utils/oauth/profileStore.ts:40:17                          
+randomBase64Url                         function  source/utils/oauth/utils.ts:9:17                                  
+getAgentTurnCompletionChannels          function  source/utils/platform/notification.ts:48:17                       
+truncate                                function  source/utils/platform/notification.ts:56:17                       
+cleanNotificationText                   function  source/utils/platform/notification.ts:72:17                       
+escapePowerShellSingleQuotedString      function  source/utils/platform/notification.ts:87:17                       
+escapePowerShellDoubleQuotedString      function  source/utils/platform/notification.ts:91:17                       
+escapeAppleScriptString                 function  source/utils/platform/notification.ts:98:17                       
+formatTaskNotification                  function  source/utils/platform/notification.ts:108:17                      
+buildTerminalNotificationSequences      function  source/utils/platform/notification.ts:159:17                      
+buildWindowsNotificationLauncherScript  function  source/utils/platform/notification.ts:247:17                      
+buildMacOsNotificationArguments         function  source/utils/platform/notification.ts:268:17                      
+buildLinuxNotificationArguments         function  source/utils/platform/notification.ts:278:17                      
+ensureCustomHeaderPluginsLoaded         function  source/utils/plugins/customHeaders/index.ts:210:17                
+reloadCustomHeaderPlugins               function  source/utils/plugins/customHeaders/index.ts:230:23                
+listCustomHeaderPlugins                 function  source/utils/plugins/customHeaders/index.ts:264:17                
+extractPlaceholders                     function  source/utils/plugins/customHeaders/index.ts:276:17                
+SNAKE_TICK_INTERVAL_MS                            source/utils/plugins/games/builtin/snake.ts:294:14                
+snakeGamePlugin                                   source/utils/plugins/games/index.ts:30:9                          
+SNAKE_TICK_INTERVAL_MS                            source/utils/plugins/games/index.ts:31:9                          
+formatSessionAsHtml                     function  source/utils/session/chatExporter.ts:446:17                       
+renderSession                           function  source/utils/session/chatExporter.ts:586:17                       
+getProjectPath                          function  source/utils/session/projectUtils.ts:97:17                        
+loadInstalledSkills                     function  source/utils/skills/githubSkillInstaller.ts:169:23                
+uninstallGithubSkill                    function  source/utils/skills/githubSkillInstaller.ts:842:23                
+listGithubSkills                        function  source/utils/skills/githubSkillInstaller.ts:873:23                
+getDefaultSSHKeyPath                    function  source/utils/ssh/sshClient.ts:536:17                              
+isSSHAgentAvailable                     function  source/utils/ssh/sshClient.ts:543:17                              
+getActiveTeam                           function  source/utils/team/teamConfig.ts:86:17                             
+updateTeam                              function  source/utils/team/teamConfig.ts:105:17                            
+removeMember                            function  source/utils/team/teamConfig.ts:158:17                            
+getMember                               function  source/utils/team/teamConfig.ts:170:17                            
+getActiveMembers                        function  source/utils/team/teamConfig.ts:176:17                            
+deleteTeamData                          function  source/utils/team/teamConfig.ts:200:17                            
+getTeamEventsToRollback                 function  source/utils/team/teamSnapshot.ts:101:17                          
+hasTeamToRollback                       function  source/utils/team/teamSnapshot.ts:132:17                          
+getClaimableTasks                       function  source/utils/team/teamTaskList.ts:185:17                          
+getTask                                 function  source/utils/team/teamTaskList.ts:198:17                          
+getTasksByAssignee                      function  source/utils/team/teamTaskList.ts:203:17                          
+clearTasks                              function  source/utils/team/teamTaskList.ts:208:17                          
+getWorktreeBase                         function  source/utils/team/teamWorktree.ts:31:17                           
+getWorktreePath                         function  source/utils/team/teamWorktree.ts:35:17                           
+removeTeamWorktree                      function  source/utils/team/teamWorktree.ts:98:23                           
+removeWorktreeBranch                    function  source/utils/team/teamWorktree.ts:119:23                          
+listTeamWorktrees                       function  source/utils/team/teamWorktree.ts:162:17                          
+getTeammateBranchName                   function  source/utils/team/teamWorktree.ts:180:17                          
+hasUncommittedChanges                   function  source/utils/team/teamWorktree.ts:192:17                          
+initializeTelemetry                     function  source/utils/telemetry/otel.ts:425:17                             
+getCompressionSummaryKind               function  source/utils/ui/compressionSummaryDisplay.ts:26:17                
+readOriginalFile                        function  source/utils/ui/diffPreview.ts:11:17                              
+computeHashlinePreview                  function  source/utils/ui/diffPreview.ts:28:17                              
+computeReplaceEditPreview               function  source/utils/ui/diffPreview.ts:89:17                              
+unescapeString                          function  source/utils/ui/escapeHandler.ts:26:17                            
+countOccurrences                        function  source/utils/ui/escapeHandler.ts:89:17                            
+truncatePath                            function  source/utils/ui/messageFormatter.ts:27:17                         
+wrapWithFileLink                        function  source/utils/ui/messageFormatter.ts:75:17                         
+terminalTitleSpinnerFrames                        source/utils/ui/terminal-title-formatter.ts:7:14                  
+terminalTitleFrameCount                           source/utils/ui/terminal-title-formatter.ts:19:14                 
+Unused exported types (151)
+FileSearchEvent               type       source/agents/fileSearchAgent.ts:42:13                        
+VisionFallbackSource          type       source/agents/visionAgent.ts:15:13                            
+VisionProcessOptions          interface  source/agents/visionAgent.ts:17:18                            
+VisionProcessResult           interface  source/agents/visionAgent.ts:22:18                            
+AnthropicTool                 interface  source/api/anthropic.ts:87:18                                 
+AnthropicMessageParam         interface  source/api/anthropic.ts:94:18                                 
+ChatCompletionTool            type       source/api/chat.ts:44:2                                       
+ToolCall                      type       source/api/chat.ts:45:2                                       
+ImageContent                  type       source/api/chat.ts:47:2                                       
+ChatCompletionChunk           interface  source/api/chat.ts:77:18                                      
+ChatCompletionMessageParam    interface  source/api/chat.ts:101:18                                     
+ModelsResponse                interface  source/api/models.ts:20:18                                    
+PrivacyMaskMode               type       source/api/privacyMask.ts:31:13                               
+PrivacyMaskConfig             interface  source/api/privacyMask.ts:33:18                               
+RerankResult                  interface  source/api/rerank.ts:18:18                                    
+SSEEventType                  type       source/api/sse-server.ts:10:13                                
+BuddyInProgressStage          type       source/buddy/buddyAi.ts:437:13                                
+CompanionEventPayload         interface  source/buddy/companionEvents.ts:3:18                          
+CompanionNamedColor           type       source/buddy/types.ts:129:13                                  
+CompanionSoul                 interface  source/buddy/types.ts:142:18                                  
+TeammateCtxUsage              interface  source/hooks/conversation/core/subAgentMessageHandler.ts:16:18
+UseChatLogicReturn            type       source/hooks/conversation/useChatLogic.ts:348:13              
+Language                      type       source/i18n/index.ts:2:14                                     
+TranslationKeys               type       source/i18n/index.ts:2:24                                     
+Translations                  type       source/i18n/index.ts:2:41                                     
+AskUserQuestionResult         interface  source/mcp/askUserQuestion.ts:9:18                            
+SearchEngineId                type       source/mcp/engines/websearch/index.ts:314:28                  
+LSPConfigFile                 interface  source/mcp/lsp/LSPServerRegistry.ts:20:18                     
+SchedulerTaskArgs             interface  source/mcp/scheduler.ts:3:18                                  
+SchedulerTaskResult           interface  source/mcp/scheduler.ts:14:18                                 
+SubAgentToolExecutionOptions  interface  source/mcp/subagent.ts:15:18                                  
+TeamToolExecutionOptions      interface  source/mcp/team.ts:51:18                                      
+ReferenceType                 type       source/mcp/types/aceCodeSearch.types.ts:40:13                 
+ASTNode                       interface  source/mcp/types/aceCodeSearch.types.ts:68:18                 
+IndexStats                    interface  source/mcp/types/aceCodeSearch.types.ts:106:18                
+MCPContentType                type       source/mcp/types/filesystem.types.ts:10:13                    
+TextContent                   interface  source/mcp/types/filesystem.types.ts:15:18                    
+FileReadConfig                interface  source/mcp/types/filesystem.types.ts:104:18                   
+HashlineOperationType         type       source/mcp/types/filesystem.types.ts:165:13                   
+SingleFileEditResult          interface  source/mcp/types/filesystem.types.ts:200:18                   
+ParsedAnchor                  interface  source/mcp/utils/filesystem/hashline.utils.ts:53:18           
+NativeDirectoryEntry          type       source/mcp/utils/filesystem/native-edit.utils.ts:21:13        
+TodoSnapshotOperation         interface  source/mcp/utils/todo/rollback.utils.ts:10:18                 
+SnowConfig                    interface  source/types/index.ts:1:18                                    
+AppState                      interface  source/types/index.ts:13:18                                   
+CodebaseSearchStatusData      type       source/ui/components/chat/CodebaseSearchStatus.tsx:5:13       
+BusyKind                      type       source/ui/components/chat/statusVerbs.ts:13:13                
+BuiltinStatusLineId           type       source/ui/components/common/statusline/builtinIds.ts:35:13    
+StatusLineLabels              interface  source/ui/components/common/statusline/types.ts:24:18         
+StatusLineSystemState         interface  source/ui/components/common/statusline/types.ts:81:18         
+CompressionStep               type       source/ui/components/compression/CompressionStatus.tsx:7:13   
+ProfileItem                   interface  source/ui/components/panels/ProfilePanel.tsx:7:18             
+SkillsPickerFocus             type       source/ui/components/panels/SkillsPickerPanel.tsx:7:13        
+SkillsPickerItem              type       source/ui/components/panels/SkillsPickerPanel.tsx:9:13        
+PixelColor                    type       source/ui/components/pixel-editor/index.ts:2:14               
+PixelGrid                     type       source/ui/components/pixel-editor/index.ts:2:26               
+PixelEditorProps              type       source/ui/components/pixel-editor/index.ts:2:37               
+PixelColor                    type       source/ui/components/pixel-editor/types.ts:1:13               
+PixelEditorProps              interface  source/ui/components/pixel-editor/types.ts:5:18               
+HookStatusEvent               type       source/ui/components/special/HookStatusDisplay.tsx:14:14      
+InputImage                    type       source/ui/pages/chatScreen/types.ts:6:13                      
+CodebaseSearchEvent           type       source/utils/codebase/codebaseSearchEvents.ts:3:13            
+ConnectionConfig              type       source/utils/commands/connect.ts:57:33                        
+GeminiThinkingLevel           type       source/utils/config/apiConfig.ts:24:13                        
+GeminiThinkingConfig          interface  source/utils/config/apiConfig.ts:26:18                        
+ResponsesReasoningConfig      interface  source/utils/config/apiConfig.ts:35:18                        
+ChatReasoningEffort           type       source/utils/config/apiConfig.ts:41:13                        
+ChatThinkingConfig            interface  source/utils/config/apiConfig.ts:43:18                        
+KnownEnvKey                   type       source/utils/config/envConfig.ts:34:13                        
+HookConfig                    interface  source/utils/config/hooksConfig.ts:59:18                      
+OnUserMessageContext          interface  source/utils/config/hooksConfig.ts:66:18                      
+BeforeToolCallContext         interface  source/utils/config/hooksConfig.ts:76:18                      
+AfterToolCallContext          interface  source/utils/config/hooksConfig.ts:81:18                      
+ToolConfirmationContext       interface  source/utils/config/hooksConfig.ts:88:18                      
+OnSubAgentCompleteContext     interface  source/utils/config/hooksConfig.ts:97:18                      
+BeforeCompressContext         interface  source/utils/config/hooksConfig.ts:105:18                     
+OnSessionStartContext         interface  source/utils/config/hooksConfig.ts:109:18                     
+OnStopContext                 interface  source/utils/config/hooksConfig.ts:118:18                     
+BeforeSubAgentStartContext    interface  source/utils/config/hooksConfig.ts:122:18                     
+ProjectSettings               interface  source/utils/config/projectSettings.ts:8:18                   
+SubAgentsConfig               interface  source/utils/config/subAgentConfig.ts:25:18                   
+ToolIconsConfig               type       source/utils/config/themeConfig.ts:46:13                      
+NormalizedToolStatusConfig    type       source/utils/config/themeConfig.ts:238:13                     
+NormalizedToolIconsConfig     type       source/utils/config/themeConfig.ts:243:13                     
+WorkingDirConfig              interface  source/utils/config/workingDirConfig.ts:34:18                 
+ConnectionState               type       source/utils/connection/ConnectionManager.ts:23:2             
+PendingToolConfirmation       type       source/utils/connection/ConnectionManager.ts:24:2             
+PendingQuestion               type       source/utils/connection/ConnectionManager.ts:25:2             
+PendingRollbackConfirmation   type       source/utils/connection/ConnectionManager.ts:26:2             
+InFlightState                 type       source/utils/connection/ConnectionManager.ts:27:2             
+SessionListItem               interface  source/utils/connection/projectData.ts:4:18                   
+SignalRMessageHandlers        interface  source/utils/connection/types.ts:57:18                        
+TrackedProcessInfo            interface  source/utils/core/processManager.ts:6:18                      
+ModelStats                    interface  source/utils/core/usageHistory.ts:22:18                       
+UsageWindow                   type       source/utils/core/usageHistory.ts:39:13                       
+UsageHistoryModelRow          interface  source/utils/core/usageHistory.ts:261:18                      
+ChildProcessResultMessage     interface  source/utils/execution/agentChildProcess.ts:46:18             
+ChildProcessErrorMessage      interface  source/utils/execution/agentChildProcess.ts:51:18             
+InterAgentMessage             type       source/utils/execution/agentChildProcess.ts:565:14            
+TeammateMessage               type       source/utils/execution/agentChildProcess.ts:565:33            
+HookError                     interface  source/utils/execution/mcpToolsManager.ts:104:18              
+RunningSubAgent               interface  source/utils/execution/runningSubAgentTracker.ts:25:18        
+SpawnedAgentResult            interface  source/utils/execution/runningSubAgentTracker.ts:48:18        
+InterAgentMessageEvent        interface  source/utils/execution/runningSubAgentTracker.ts:67:18        
+SessionCommandErrorCode       type       source/utils/execution/sessionCommandPlane.ts:22:2            
+SessionCommandMode            type       source/utils/execution/sessionCommandPlane.ts:23:2            
+SessionCommandRisk            type       source/utils/execution/sessionCommandPlane.ts:26:2            
+SessionCommandMeta            type       source/utils/execution/sessionCommandPlane.ts:27:2            
+SubAgentSessionStatus         type       source/utils/execution/subAgentSessionStore.ts:18:13          
+SubAgentSessionRecord         interface  source/utils/execution/subAgentSessionStore.ts:24:18          
+TeammateResult                interface  source/utils/execution/teamTracker.ts:38:18                   
+PlanApprovalRequest           interface  source/utils/execution/teamTracker.ts:48:18                   
+TeammateMessageEvent          interface  source/utils/execution/teamTracker.ts:58:18                   
+TokenLimitResult              interface  source/utils/execution/tokenLimiter.ts:43:18                  
+HookContext                   interface  source/utils/execution/unifiedHooksExecutor.ts:106:18         
+OAuthProviderDefinition       type       source/utils/oauth/index.ts:11:14                             
+OAuthClaims                   type       source/utils/oauth/index.ts:13:2                              
+OAuthLoginStatus              type       source/utils/oauth/index.ts:16:2                              
+OAuthProfileDraft             type       source/utils/oauth/index.ts:18:2                              
+OAuthProfileMetadata          type       source/utils/oauth/index.ts:19:2                              
+OAuthTokenSet                 type       source/utils/oauth/index.ts:21:2                              
+OAuthTokenSet                 type       source/utils/oauth/loginManager.ts:445:14                     
+TaskNotificationStatus        type       source/utils/platform/notification.ts:18:13                   
+AnyPanelRenderResult          type       source/utils/plugins/anypanel/types.ts:90:13                  
+AnyPanelStatus                type       source/utils/plugins/anypanel/types.ts:97:13                  
+AnyPanelReactResult           type       source/utils/plugins/anypanel/types.ts:156:13                 
+CustomHeaderPlugin            type       source/utils/plugins/customHeaders/index.ts:37:14             
+GameGameState                 type       source/utils/plugins/games/index.ts:7:2                       
+GameRenderResult              type       source/utils/plugins/games/index.ts:11:2                      
+GameRenderLine                type       source/utils/plugins/games/index.ts:12:2                      
+GamePluginModule              type       source/utils/plugins/games/index.ts:14:2                      
+GameStatus                    type       source/utils/plugins/games/index.ts:15:2                      
+GameGameState                 type       source/utils/plugins/games/types.ts:24:13                     
+GameRenderLine                type       source/utils/plugins/games/types.ts:84:13                     
+FileCheckpoint                interface  source/utils/session/checkpointManager.ts:11:18               
+ConversationCheckpoint        interface  source/utils/session/checkpointManager.ts:21:18               
+CommandUsageData              interface  source/utils/session/commandUsageManager.ts:11:18             
+HistoryData                   interface  source/utils/session/historyManager.ts:14:18                  
+InstalledSkillRecord          interface  source/utils/skills/githubSkillInstaller.ts:37:18             
+SkillInstallResult            type       source/utils/skills/githubSkillInstaller.ts:56:13             
+SkillUninstallResult          type       source/utils/skills/githubSkillInstaller.ts:73:13             
+GoalStatus                    type       source/utils/task/goalManager.ts:28:13                        
+GoalStatusUpdate              interface  source/utils/task/goalManager.ts:50:18                        
+LoopMode                      type       source/utils/task/loopManager.ts:32:13                        
+LoopScheduleKind              type       source/utils/task/loopManager.ts:33:13                        
+LoopDailyTime                 interface  source/utils/task/loopManager.ts:35:18                        
+TeamMemberStatus              type       source/utils/team/teamConfig.ts:9:13                          
+TeamStatus                    type       source/utils/team/teamConfig.ts:10:13                         
+TeamSnapshotEvent             type       source/utils/team/teamSnapshot.ts:19:13                       
+CompressionSummaryKind        type       source/utils/ui/compressionSummaryDisplay.ts:12:13            
+UserInteractionResponse       interface  source/utils/ui/userInteractionError.ts:21:18                 
+Duplicate exports (11)
+DEFAULT_LSP_SERVERS|LSP_SERVERS        source/mcp/lsp/LSPServerRegistry.ts                        
+CustomCommandExecutionDisplay|default  source/ui/components/bash/CustomCommandExecutionDisplay.tsx
+gitBranchStatusLineHook|default        source/ui/components/common/statusline/gitBranch.ts        
+CompressionStatus|default              source/ui/components/compression/CompressionStatus.tsx     
+BtwPanel|default                       source/ui/components/panels/BtwPanel.tsx                   
+ConnectionPanel|default                source/ui/components/panels/ConnectionPanel.tsx            
+ModelsPanel|default                    source/ui/components/panels/ModelsPanel.tsx                
+NewPromptPanel|default                 source/ui/components/panels/NewPromptPanel.tsx             
+TelemetryPanel|default                 source/ui/components/panels/TelemetryPanel.tsx             
+HookStatusDisplay|default              source/ui/components/special/HookStatusDisplay.tsx         
+connectionManager|default              source/utils/connection/ConnectionManager.ts               

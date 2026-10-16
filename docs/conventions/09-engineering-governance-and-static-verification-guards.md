@@ -86,6 +86,16 @@ status: normative
   - `export` 出去但全仓 0 次消费的僵尸类型、函数与常量；
   - `package.json` 中占坑但未被源码引用的冗余依赖包。
 
+> [!WARNING] **静态 AST 扫描图与动态反射调度的本质局限（Static vs. Dynamic Boundary Notice）**
+> 1. **静态工具的视界盲区**：Knip / AST 解析器仅能沿着静态 `import ... from '...'` 进行有向图可达性遍历（Reachability Analysis）。
+> 2. **动态调度的伪死代码误报（False Positive Trap）**：
+>    - **反射与注册表模式**：系统中的 Subagents（如 `BashOutputSummaryAgent`、`ReviewAgent`）通过 `agentResolver` / `AgentRegistry` 在运行期根据 LLM 决策或意图动态加载实例化，静态图误判为 0 引用；
+>    - **CLI 命令动态路由器**：所有 `/goal`、`/diff` 命令遵循 `default: Command` 导出契约，由运行时 Slash 调度器按用户输入派发；
+>    - **跨进程通信与存储契约**：大量导出的 `interface / type`（如 `OAuthClaims`、`HookErrorDetails`）是落盘序列化、OTel APM 追踪与外部 IDE 扩展对齐的契约资产，内部源码无强静态调用。
+> 3. **治理金科玉律（Engineering Invariant）**：
+>    - **严禁机械化一键批量删除！** Tier 4 的扫描报告**绝对不可作为自动化删除的自动执行流水线**，只能作为“架构审视雷达”与重构参考线索；
+>    - **动静结合四步确认法**：在清理任何被报告为“Unused”的类/导出前，必须经过：（1）全局字符串正则全仓复核；（2）动态注册表溯源；（3）跨进程/JSON落盘契约确认；（4）单测覆盖反消融断言。
+
 ---
 
 ## 三、启发式、消融性与反向消融推演 (3D Audit Analysis)
