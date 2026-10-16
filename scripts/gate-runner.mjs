@@ -41,7 +41,14 @@ const PROFILES = {
 		'source/test/integration/config/legacyConfigMigration.test.ts',
 		'source/test/integration/codebase/hashBasedSnapshotReversible.test.ts',
 		'source/test/unit/config/envFabricAndSnowContext.test.ts',
+		// === 五维零容忍物理门禁 (Zero-Tolerance Guard Mesh) ===
 		'source/test/unit/core/zeroLeakStorageGuard.test.ts',
+		'source/test/unit/core/zeroSilentCatchGuard.test.ts',
+		'source/test/unit/core/zeroRootLoggerGuard.test.ts',
+		'source/test/unit/core/zeroLoggerNameGuard.test.ts',
+		'source/test/unit/core/zeroConsoleLeakGuard.test.ts',
+		'source/test/unit/core/architectureCycleGuard.test.ts',
+		// ====================================================
 		'source/test/unit/mcp/mcpCircuitBreaker.test.ts',
 		'source/test/unit/theme/colorScienceEngine.test.ts',
 		'source/test/unit/core/loggerTest.test.ts',
