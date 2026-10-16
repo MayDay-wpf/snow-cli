@@ -18,6 +18,9 @@ import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {ChatMessage} from '../../api/types.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 import {cleanOrphanedToolCalls} from './contextCompressor.js';
+import {logger} from './logger.js';
+
+const compressorLog = logger.child('core.subAgentContextCompressor');
 
 /** Threshold percentage to trigger compression */
 const COMPRESS_THRESHOLD = 80;
@@ -139,7 +142,7 @@ export function countMessagesTokens(messages: ChatMessage[]): number {
 		}
 		return total;
 	} catch (error) {
-		console.error('[SubAgentCompressor] tiktoken counting failed:', error);
+		compressorLog.error('tiktoken counting failed, falling back to char estimate', error);
 		// Rough fallback: ~4 chars per token
 		const totalChars = messages.reduce(
 			(sum, m) => sum + (m.content?.length || 0),
@@ -540,12 +543,12 @@ async function aiSummaryCompress(
 		if (config.abortSignal?.aborted) {
 			return {messages, aborted: true};
 		}
-		console.error('[SubAgentCompressor] AI compression failed:', error);
+		compressorLog.error('AI compression failed', error);
 		return {messages};
 	}
 
 	if (!summary) {
-		console.warn('[SubAgentCompressor] AI compression returned empty summary');
+		compressorLog.warn('AI compression returned empty summary');
 		return {messages};
 	}
 
@@ -724,8 +727,8 @@ export async function compressSubAgentContext(
 
 	// Fallback: AI compression returned original messages (failed or nothing to compress).
 	// Try smart truncation as a last resort to free some context space.
-	console.warn(
-		`[SubAgentCompressor] AI compression ineffective, falling back to truncation`,
+	compressorLog.warn(
+		'AI compression ineffective, falling back to truncation',
 	);
 	const truncatedMessages = truncateToolResults(messages, keepRounds);
 	const afterTokens = countMessagesTokens(truncatedMessages);

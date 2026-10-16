@@ -52,10 +52,11 @@ test('zeroConsoleLeakGuard: core logger and test helpers have zero console leaks
   }
 });
 
-test('zeroConsoleLeakGuard: sanitized domains (config, session) maintain absolute zero console leaks', (t) => {
+test('zeroConsoleLeakGuard: sanitized domains (config, session, core) maintain absolute zero console leaks', (t) => {
   const targetDirs = [
     path.resolve('source/utils/config'),
     path.resolve('source/utils/session'),
+    path.resolve('source/utils/core'),
   ];
 
   const leaks: string[] = [];
@@ -63,6 +64,9 @@ test('zeroConsoleLeakGuard: sanitized domains (config, session) maintain absolut
     const files = collectSourceFiles(dir);
     for (const file of files) {
       const relativePath = path.normalize(path.relative(process.cwd(), file));
+      if (ALLOWED_CONSOLE_STANDALONE.has(relativePath)) {
+        continue;
+      }
       const content = fs.readFileSync(file, 'utf8');
       const lines = content.split('\n');
       lines.forEach((line, idx) => {
@@ -78,7 +82,7 @@ test('zeroConsoleLeakGuard: sanitized domains (config, session) maintain absolut
   t.deepEqual(
     leaks,
     [],
-    `Critical domains (config, session) must maintain absolute zero console leaks. Found ${leaks.length} violations:\n` +
+    `Critical domains (config, session, core) must maintain absolute zero console leaks. Found ${leaks.length} violations:\n` +
       leaks.join('\n'),
   );
 });
@@ -106,10 +110,10 @@ test('zeroConsoleLeakGuard: ratchet baseline prevents new console leaks in sourc
     });
   }
 
-  // The total violations must not exceed the ratchet baseline of 205,
+  // The total violations must not exceed the ratchet baseline of 187,
   // preventing any new accidental console leaks across the codebase.
   t.true(
-    violations.length <= 205,
+    violations.length <= 187,
     `Console call count exceeded ratchet threshold (found ${violations.length}):\n` +
       violations.slice(0, 10).join('\n'),
   );

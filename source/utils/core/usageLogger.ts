@@ -1,6 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import {getGlobalSnowDir} from './snowContext.js';
+import {logger} from './logger.js';
+
+const usageLog = logger.child('core.usageLogger');
 
 interface UsageLogEntry {
 	model: string;
@@ -19,9 +23,9 @@ let writeQueue = Promise.resolve();
 
 async function getActiveProfile(): Promise<string> {
 	try {
-		const homeDir = os.homedir();
-		const jsonPath = path.join(homeDir, '.snow', 'active-profile.json');
-		const legacyPath = path.join(homeDir, '.snow', 'active-profile.txt');
+		const snowDir = getGlobalSnowDir().native;
+		const jsonPath = path.join(snowDir, 'active-profile.json');
+		const legacyPath = path.join(snowDir, 'active-profile.txt');
 
 		// Try JSON format first
 		try {
@@ -43,8 +47,7 @@ async function getActiveProfile(): Promise<string> {
 }
 
 async function getUsageDir(): Promise<string> {
-	const homeDir = os.homedir();
-	const snowDir = path.join(homeDir, '.snow', 'usage');
+	const snowDir = path.join(getGlobalSnowDir().native, 'usage');
 	const today = new Date().toISOString().split('T')[0] || ''; // YYYY-MM-DD
 	const dateDir = path.join(snowDir, today);
 
@@ -141,10 +144,10 @@ export function saveUsageToFile(
 				const line = JSON.stringify(record) + '\n';
 				await fs.appendFile(logFile, line, 'utf-8');
 			} catch (error) {
-				console.error('Failed to save usage data:', error);
+				usageLog.error('Failed to save usage data', error);
 			}
 		})
 		.catch(error => {
-			console.error('Usage persistence queue error:', error);
+			usageLog.error('Usage persistence queue error', error);
 		});
 }

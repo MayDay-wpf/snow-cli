@@ -8,6 +8,9 @@ import os from 'os';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {readSettings} from '../../utils/config/unifiedSettings.js';
 import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
+import {logger} from '../../utils/core/logger.js';
+
+const promptLog = logger.child('prompt.helpers');
 
 /**
  * Get the system prompt with ROLE.md content if it exists
@@ -78,7 +81,7 @@ export function getSystemPromptWithRole(
 			}
 		}
 	} catch (error) {
-		console.error('Failed to read ROLE configuration:', error);
+		promptLog.error('Failed to read ROLE configuration', error);
 	}
 
 	return basePrompt;
@@ -271,7 +274,7 @@ export function getOverrideRoleContent(): string | null {
 			if (content) return content;
 		}
 	} catch (error) {
-		console.error('Failed to read override ROLE configuration:', error);
+		promptLog.error('Failed to read override ROLE configuration', error);
 	}
 
 	return null;

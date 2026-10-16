@@ -1,5 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {logger} from './logger.js';
+
+const notebookLog = logger.child('core.notebookManager');
 
 /**
  * 备忘录条目接口
@@ -57,7 +60,7 @@ function readNotebookData(): NotebookData {
 		const content = fs.readFileSync(filePath, 'utf-8');
 		return JSON.parse(content) as NotebookData;
 	} catch (error) {
-		console.error('Failed to read notebook data:', error);
+		notebookLog.error('Failed to read notebook data', error);
 		return {};
 	}
 }
@@ -71,7 +74,7 @@ function saveNotebookData(data: NotebookData): void {
 	try {
 		fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 	} catch (error) {
-		console.error('Failed to save notebook data:', error);
+		notebookLog.error('Failed to save notebook data', error);
 		throw error;
 	}
 }
@@ -449,7 +452,7 @@ function saveNotebookSnapshotData(data: NotebookSnapshotData): void {
 	try {
 		fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 	} catch (error) {
-		console.error('Failed to save notebook snapshot data:', error);
+		notebookLog.error('Failed to save notebook snapshot data', error);
 	}
 }
 
@@ -593,7 +596,7 @@ export function rollbackNotebooks(
 				}
 			}
 		} catch (error) {
-			console.error(`Failed to rollback notebook operation:`, error);
+			notebookLog.error('Failed to rollback notebook operation', error);
 		}
 	}
 
