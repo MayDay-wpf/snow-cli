@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
 import {
 	readSettings,
 	writeSettings,
@@ -63,8 +64,9 @@ function safeUnlink(filePath: string): void {
 		if (fs.existsSync(filePath)) {
 			fs.unlinkSync(filePath);
 		}
-	} catch {
+	} catch (error) {
 		// ignore
+		logger.debug('safeUnlink failed to unlink legacy file', {error, filePath});
 	}
 }
 

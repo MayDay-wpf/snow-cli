@@ -9,6 +9,7 @@ import {
 	isToolNeedTwoStepDisplay,
 } from '../../../utils/config/toolDisplayConfig.js';
 import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
+import {logger} from '../../../utils/core/logger.js';
 
 /**
  * Build UI messages for tool execution results.
@@ -36,8 +37,9 @@ export function buildToolResultMessages(
 				try {
 					const subAgentResult = JSON.parse(result.content);
 					usage = subAgentResult.usage;
-				} catch {
+				} catch (error) {
 					// Ignore parsing errors
+					logger.debug('Failed to parse subagent result content as JSON', {error});
 				}
 			}
 
@@ -112,14 +114,16 @@ function extractEditDiffData(
 					if (typeof callArgs.filePath === 'string') {
 						fromParsed['filename'] = callArgs.filePath;
 					}
-				} catch {
+				} catch (error) {
 					// ignore
+					logger.debug('Failed to parse toolCall arguments for filename fallback', {error});
 				}
 			}
 			return fromParsed;
 		}
-	} catch {
+	} catch (error) {
 		// If parsing fails, show regular result
+		logger.debug('Failed to parse raw tool result content as JSON for diff extraction', {error});
 	}
 
 	// For filesystem-create single file: the result is a plain string message,
@@ -136,8 +140,9 @@ function extractEditDiffData(
 					path: callArgs.filePath,
 				};
 			}
-		} catch {
+		} catch (error) {
 			// ignore
+			logger.debug('Failed to parse filesystem-create arguments', {error});
 		}
 	}
 

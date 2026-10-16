@@ -9,6 +9,7 @@ import {
 import {CodebaseIndexAgent} from '../../agents/codebaseIndexAgent.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
+import {logger} from '../core/logger.js';
 
 // Get translated messages
 function getMessages() {
@@ -55,7 +56,8 @@ registerCommand('codebase', {
 						.replace('{count}', String(fileCount))
 						.replace('{fileWord}', fileWord),
 				};
-			} catch {
+			} catch (error) {
+				logger.debug('Failed to count codebase files for status', {error});
 				return {
 					success: true,
 					message: messages.status.replace('{status}', statusLabel),

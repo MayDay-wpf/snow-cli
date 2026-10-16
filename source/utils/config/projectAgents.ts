@@ -79,8 +79,9 @@ export function parseAgentMarkdownFile(filePath: string): SubAgent | null {
 		let mtime: string | undefined;
 		try {
 			mtime = statSync(filePath).mtime.toISOString();
-		} catch {
+		} catch (error) {
 			// ignore
+			logger.debug('parseAgentFile statSync failed to read mtime', {error, filePath});
 		}
 
 		return {

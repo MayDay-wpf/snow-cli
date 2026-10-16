@@ -1,6 +1,7 @@
 import {readFileSync} from 'fs';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
+import {logger} from './logger.js';
 
 let cachedVersion: string = '';
 
@@ -29,8 +30,9 @@ export function getPackageVersion(): string {
 					cachedVersion = packageJson.version;
 					return cachedVersion;
 				}
-			} catch {
+			} catch (error) {
 				// try next candidate
+				logger.debug('getPackageVersion candidate read skipped', {error, path: p});
 			}
 		}
 		cachedVersion = '1.0.0';

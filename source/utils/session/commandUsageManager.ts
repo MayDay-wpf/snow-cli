@@ -41,8 +41,9 @@ class CommandUsageManager {
 		try {
 			const snowDir = path.dirname(this.usageFile);
 			await fs.mkdir(snowDir, {recursive: true});
-		} catch {
+		} catch (error) {
 			// 目录已存在或其他错误
+			logger.debug('ensureSnowDir mkdir failed or already exists', {error, usageFile: this.usageFile});
 		}
 	}
 

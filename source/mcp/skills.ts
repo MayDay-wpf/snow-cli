@@ -383,8 +383,12 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 							`${connector}  ${subPrefix} ${fileType} ${subEntry.name}`,
 						);
 					}
-				} catch {
+				} catch (error) {
 					// Ignore subdirectory read errors
+					skillsLog.debug('Failed to read skill subdirectory tree', {
+						subPath,
+						error,
+					});
 				}
 			} else {
 				const fileType = entry.name === 'SKILL.md' ? '[MAIN]' : '[FILE]';
@@ -394,6 +398,10 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 
 		return lines.join('\n');
 	} catch (error) {
+		skillsLog.debug('Failed to generate skill directory tree', {
+			skillPath,
+			error,
+		});
 		return '(Unable to generate directory tree)';
 	}
 }

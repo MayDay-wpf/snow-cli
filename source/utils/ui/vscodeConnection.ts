@@ -2,6 +2,7 @@ import {WebSocket} from 'ws';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import {logger} from '../core/logger.js';
 
 interface EditorContext {
 	activeFile?: string;
@@ -124,8 +125,9 @@ class VSCodeConnectionManager {
 							if (this.shouldHandleMessage(data)) {
 								this.handleMessage(data);
 							}
-						} catch {
+						} catch (error) {
 							// Ignore invalid JSON
+							logger.debug('Failed to parse WebSocket message JSON', {error});
 						}
 					});
 
@@ -142,7 +144,8 @@ class VSCodeConnectionManager {
 							setTimeout(() => tryNextPort(), 50);
 						}
 					});
-				} catch {
+				} catch (error) {
+					logger.debug('Failed to connect to VSCode port', {port, error});
 					if (!isSettled) {
 						setTimeout(() => tryNextPort(), 50);
 					}
@@ -188,6 +191,7 @@ class VSCodeConnectionManager {
 				}
 			} catch (error) {
 				// Ignore errors during cleanup
+				logger.debug('Error closing WebSocket client during cleanup', {error});
 			}
 			this.client = null;
 		}
@@ -287,6 +291,7 @@ class VSCodeConnectionManager {
 			}
 		} catch (error) {
 			// Ignore errors; fall back to path-based matching.
+			logger.debug('Failed to query workspace folders from VSCode', {error});
 			this.connectedWorkspaceFolders.clear();
 			this.connectedPortHasCwdMatch = false;
 		}
@@ -312,8 +317,9 @@ class VSCodeConnectionManager {
 		);
 
 		this.reconnectTimer = setTimeout(() => {
-			this.start().catch(() => {
+			this.start().catch(error => {
 				// Silently handle reconnection failures
+				logger.debug('VSCode reconnection attempt failed', {error});
 			});
 		}, delay);
 	}
@@ -339,6 +345,7 @@ class VSCodeConnectionManager {
 				this.client.close();
 			} catch (error) {
 				// Ignore errors during cleanup
+				logger.debug('Error closing WebSocket client during stop', {error});
 			}
 			this.client = null;
 		}
@@ -438,6 +445,7 @@ class VSCodeConnectionManager {
 					}
 				} catch (error) {
 					// Ignore invalid JSON
+					logger.debug('Failed to parse diagnostics response JSON', {error});
 				}
 			};
 
@@ -461,6 +469,7 @@ class VSCodeConnectionManager {
 					}),
 				);
 			} catch (error) {
+				logger.debug('Failed to send getDiagnostics request', {filePath, error});
 				cleanup();
 				resolve([]); // If send fails, return empty array
 			}
@@ -538,8 +547,9 @@ class VSCodeConnectionManager {
 					unmatched.push(info);
 				}
 			}
-		} catch {
+		} catch (error) {
 			// Ignore errors reading port file
+			logger.debug('Failed to read IDE port file', {error});
 		}
 
 		return {matched, unmatched};
@@ -577,8 +587,9 @@ class VSCodeConnectionManager {
 						if (this.shouldHandleMessage(data)) {
 							this.handleMessage(data);
 						}
-					} catch {
+					} catch (error) {
 						// Ignore invalid JSON
+						logger.debug('Failed to parse message JSON on port connection', {targetPort, error});
 					}
 				});
 

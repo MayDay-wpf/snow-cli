@@ -7,6 +7,9 @@ import {createInterface} from 'readline';
 import {type FzfResultItem, Fzf} from 'fzf';
 import {processManager} from '../utils/core/processManager.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:aceCodeSearch');
+
 // SSH support for remote file operations
 import {parseSSHUrl} from '../utils/ssh/sshClient.js';
 import {sshConnectionPool} from '../utils/ssh/sshConnectionPool.js';
@@ -593,12 +596,20 @@ export class ACECodeSearchService {
 							}
 
 							this.allIndexedFiles.add(fullPath);
-						} catch {
+						} catch (error) {
 							// If we can't stat the file, skip it
+							log.debug('Failed to stat file during index build', {
+								path: fullPath,
+								error,
+							});
 						}
 					}
-				} catch {
+				} catch (error) {
 					// Skip directories that cannot be accessed
+					log.debug('Failed to access directory during index build', {
+						path: dirPath,
+						error,
+					});
 				}
 			};
 
@@ -1020,12 +1031,20 @@ export class ACECodeSearchService {
 								}
 							} catch (error) {
 								// Skip files that cannot be read
+								log.debug('Failed to read file while searching references', {
+									path: fullPath,
+									error,
+								});
 							}
 						}
 					}
 				}
 			} catch (error) {
 				// Skip directories that cannot be accessed
+				log.debug('Failed to access directory while searching references', {
+					path: dirPath,
+					error,
+				});
 			}
 		};
 
@@ -1476,6 +1495,10 @@ export class ACECodeSearchService {
 				}
 			} catch (error) {
 				// Skip directories that cannot be accessed
+				log.debug('Failed to access directory during text search', {
+					path: dirPath,
+					error,
+				});
 			}
 		};
 
@@ -1529,6 +1552,10 @@ export class ACECodeSearchService {
 				}
 			} catch (error) {
 				// Skip files that cannot be read (binary, permissions, etc.)
+				log.debug('Failed to read file during text search', {
+					path: fileInfo.fullPath,
+					error,
+				});
 			}
 		};
 
@@ -1760,6 +1787,11 @@ export class ACECodeSearchService {
 				}
 			} catch (error) {
 				// Fall through to next strategy
+				log.debug('git grep search failed, falling back to next strategy', {
+					pattern,
+					fileGlob,
+					error,
+				});
 			}
 		}
 

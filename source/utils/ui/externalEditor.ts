@@ -3,6 +3,7 @@ import {promises as fs} from 'fs';
 import {tmpdir} from 'os';
 import {join} from 'path';
 import {readFileWithEncoding} from '../../mcp/utils/filesystem/encoding.utils.js';
+import {logger} from '../core/logger.js';
 
 type StdinLike = NodeJS.ReadStream & {
 	isRaw?: boolean;
@@ -27,8 +28,9 @@ function pauseStdinForExternalEditor(): () => void {
 		if (typeof stdin.setRawMode === 'function') {
 			try {
 				stdin.setRawMode(wasRaw ?? true);
-			} catch {
+			} catch (error) {
 				// 恢复 raw mode 失败时不应影响主流程
+				logger.debug('Failed to restore stdin rawMode after external editor', {error});
 			}
 		}
 	};

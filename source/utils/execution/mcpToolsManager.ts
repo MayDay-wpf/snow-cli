@@ -65,7 +65,6 @@ import {resourceMonitor} from '../core/resourceMonitor.js';
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 
-import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
@@ -229,7 +228,8 @@ export function getRegisteredServicePrefixes(): string[] {
 			name => `${name}-`,
 		);
 		return [...builtInPrefixes, ...externalPrefixes];
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to get external MCP prefixes from config', {error});
 		return builtInPrefixes;
 	}
 }
@@ -321,7 +321,8 @@ async function generateConfigHash(): Promise<string> {
 			teamMode: getTeamMode(),
 			ultraTodoEnabled: getUltraTodoEnabled(),
 		});
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to generate config hash for MCP tools cache', {error});
 		return '';
 	}
 }
@@ -1167,7 +1168,12 @@ async function connectAndGetTools(
 
 				try {
 					await client.close();
-				} catch {}
+				} catch (closeError) {
+					logger.debug('Failed to close client on StreamableHTTP error', {
+						serviceName,
+						error: closeError,
+					});
+				}
 
 				if (connectionAborted) {
 					throw new Error('Connection aborted due to timeout');
@@ -1312,7 +1318,12 @@ async function getPersistentClient(
 
 				try {
 					await client.close();
-				} catch {}
+				} catch (closeError) {
+					logger.debug('Failed to close client before SSE fallback', {
+						serviceName,
+						error: closeError,
+					});
+				}
 
 				if (!shouldFallbackToSSE(httpError)) {
 					throw httpError;
@@ -1356,7 +1367,12 @@ async function getPersistentClient(
 	} catch (error) {
 		try {
 			await client.close();
-		} catch {}
+		} catch (closeError) {
+			logger.debug('Failed to close client on MCP connection error', {
+				serviceName,
+				error: closeError,
+			});
+		}
 
 		resourceMonitor.trackMCPConnectionClosed(serviceName);
 		throw error;
@@ -1467,7 +1483,11 @@ export async function executeMCPTool(
 						) {
 							args[key] = parsed;
 						}
-					} catch {
+					} catch (parseError) {
+						logger.debug(
+							'Failed to parse string argument as JSON in MCP tool call',
+							{toolName, key, error: parseError},
+						);
 						// Keep original value if parsing fails
 					}
 				}
@@ -1557,7 +1577,11 @@ export async function executeMCPTool(
 						break;
 					}
 				}
-			} catch {
+			} catch (configError) {
+				logger.debug(
+					'Failed to match tool against configured MCP servers',
+					{toolName, error: configError},
+				);
 				// Ignore config errors, will handle below
 			}
 		}
@@ -2477,7 +2501,11 @@ async function executeOnExternalMCPService(
 			if (clientInfo) {
 				try {
 					await clientInfo.client.close();
-				} catch {
+				} catch (closeError) {
+					logger.debug(
+						'Failed to close stale client before reconnect retry',
+						{serviceName, error: closeError},
+					);
 					// Ignore close errors on stale client
 				}
 				resourceMonitor.trackMCPConnectionClosed(serviceName);

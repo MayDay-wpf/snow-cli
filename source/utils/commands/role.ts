@@ -13,6 +13,7 @@ import {
 	type SettingsScope,
 	type UnifiedSettings,
 } from '../config/unifiedSettings.js';
+import {logger} from '../core/logger.js';
 
 // Role location type
 export type RoleLocation = 'global' | 'project';
@@ -255,8 +256,9 @@ export function listRoles(
 				path: path.join(dir, item.filename),
 			});
 		}
-	} catch {
+	} catch (error) {
 		// Directory read error, return empty
+		logger.debug('Failed to read roles directory', {dir, location, error});
 	}
 
 	// Sort by filename only to keep list stable when switching active role

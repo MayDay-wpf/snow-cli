@@ -101,6 +101,27 @@ test('logger CircularBufferMemorySink: caps memory buffer and prevents unbounded
 	t.is(entries[2]?.message, 'Msg 5');
 });
 
+test('logger CircularBufferMemorySink: respects SNOW_LOG_BUFFER_SIZE environment override', async t => {
+	const {CircularBufferMemorySink} = await import('../../../utils/core/logger.js');
+	const prev = process.env['SNOW_LOG_BUFFER_SIZE'];
+	process.env['SNOW_LOG_BUFFER_SIZE'] = '2';
+	try {
+		const envSink = new CircularBufferMemorySink();
+		envSink.write({timestamp: new Date().toISOString(), level: 'INFO', namespace: 't', message: '1'});
+		envSink.write({timestamp: new Date().toISOString(), level: 'INFO', namespace: 't', message: '2'});
+		envSink.write({timestamp: new Date().toISOString(), level: 'INFO', namespace: 't', message: '3'});
+		t.is(envSink.getEntries().length, 2);
+		t.is(envSink.getEntries()[0]?.message, '2');
+		t.is(envSink.getEntries()[1]?.message, '3');
+	} finally {
+		if (prev !== undefined) {
+			process.env['SNOW_LOG_BUFFER_SIZE'] = prev;
+		} else {
+			delete process.env['SNOW_LOG_BUFFER_SIZE'];
+		}
+	}
+});
+
 test('logger startTimer: measures performance latency and propagates durationMs and spanId', async t => {
 	const sink = new MemoryLogSink();
 	logger.setSink(sink);

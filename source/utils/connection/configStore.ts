@@ -3,6 +3,7 @@ import {
 	updateSettings,
 } from '../config/unifiedSettings.js';
 import type {ConnectionConfig} from './types.js';
+import {logger} from '../core/logger.js';
 
 /**
  * Connection config storage.
@@ -17,8 +18,9 @@ export class ConfigStore {
 			updateSettings('project', settings => {
 				settings.connection = config;
 			});
-		} catch {
+		} catch (error) {
 			// Ignore save errors
+			logger.debug('Failed to save connection config', {error});
 		}
 	}
 
@@ -35,7 +37,8 @@ export class ConfigStore {
 				return conn;
 			}
 			return null;
-		} catch {
+		} catch (error) {
+			logger.debug('Failed to load connection config', {error});
 			return null;
 		}
 	}
@@ -44,7 +47,8 @@ export class ConfigStore {
 	hasSavedConfig(): boolean {
 		try {
 			return this.load() !== null;
-		} catch {
+		} catch (error) {
+			logger.debug('Failed to check if connection config exists', {error});
 			return false;
 		}
 	}
@@ -55,8 +59,9 @@ export class ConfigStore {
 			updateSettings('project', settings => {
 				delete settings.connection;
 			});
-		} catch {
+		} catch (error) {
 			// Ignore clear errors
+			logger.debug('Failed to clear connection config', {error});
 		}
 	}
 }

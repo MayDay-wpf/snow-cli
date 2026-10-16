@@ -2,6 +2,7 @@ import {execSync} from 'child_process';
 import {existsSync} from 'fs';
 import {join, resolve, relative, isAbsolute, sep} from 'path';
 import {mkdirSync, rmSync} from 'fs';
+import {logger} from '../core/logger.js';
 
 const WORKTREE_BASE = join(process.cwd(), '.snow', 'worktrees');
 
@@ -100,14 +101,15 @@ export async function removeTeamWorktree(worktreePath: string): Promise<void> {
 			stdio: 'pipe',
 			encoding: 'utf8',
 		});
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to remove worktree via git, attempting manual cleanup', {worktreePath, error});
 		// If git worktree remove fails, try manual cleanup
 		try {
 			rmSync(worktreePath, {recursive: true, force: true});
 			// Prune stale worktree entries
 			execSync('git worktree prune', {stdio: 'pipe'});
-		} catch {
-			// Best effort
+		} catch (cleanupError) {
+			logger.debug('Manual cleanup of worktree failed', {worktreePath, error: cleanupError});
 		}
 	}
 }
@@ -124,8 +126,8 @@ export async function removeWorktreeBranch(
 			stdio: 'pipe',
 			encoding: 'utf8',
 		});
-	} catch {
-		// Branch may not exist
+	} catch (error) {
+		logger.debug('Failed to delete worktree branch', {branchName, error});
 	}
 }
 
@@ -150,8 +152,8 @@ export async function cleanupTeamWorktrees(teamName: string): Promise<void> {
 
 		// Prune any stale worktree references
 		execSync('git worktree prune', {stdio: 'pipe'});
-	} catch {
-		// Best effort cleanup
+	} catch (error) {
+		logger.debug('Failed to cleanup team worktrees', {teamName, error});
 	}
 }
 
@@ -165,7 +167,8 @@ export function listTeamWorktrees(teamName: string): string[] {
 		return entries
 			.filter((e: any) => e.isDirectory())
 			.map((e: any) => join(teamDir, e.name));
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to list team worktrees', {teamName, error});
 		return [];
 	}
 }
@@ -192,7 +195,8 @@ export function hasUncommittedChanges(worktreePath: string): boolean {
 			stdio: 'pipe',
 		});
 		return status.trim().length > 0;
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to check git status in worktree', {worktreePath, error});
 		return false;
 	}
 }
@@ -213,7 +217,8 @@ export function autoCommitWorktreeChanges(
 			encoding: 'utf8',
 		});
 		return true;
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to auto-commit worktree changes', {worktreePath, memberName, error});
 		return false;
 	}
 }
@@ -255,7 +260,8 @@ export function getTeammateDiffSummary(
 			: 0;
 
 		return {commitCount, filesChanged, diffStat};
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to get teammate diff summary', {teamName, memberName, error});
 		return null;
 	}
 }
@@ -299,8 +305,9 @@ export function mergeTeammateBranch(
 					.trim()
 					.split('\n')
 					.filter(l => l.trim()).length;
-			} catch {
+			} catch (error) {
 				/* best effort */
+				logger.debug('Failed to get filesChanged stat after merge', {error});
 			}
 
 			return {success: true, merged: true, commitCount, filesChanged};
@@ -323,8 +330,9 @@ export function mergeTeammateBranch(
 			if (strategy !== 'manual' || conflictFiles.length === 0) {
 				try {
 					execSync('git merge --abort', {stdio: 'pipe'});
-				} catch {
+				} catch (abortError) {
 					/* noop */
+					logger.debug('Failed to abort merge after conflict', {error: abortError});
 				}
 				return {
 					success: false,
@@ -374,7 +382,8 @@ export function isInMergeState(): boolean {
 			encoding: 'utf8',
 		});
 		return true;
-	} catch {
+	} catch (error) {
+		logger.debug('Not in merge state or git rev-parse failed', {error});
 		return false;
 	}
 }
@@ -389,7 +398,8 @@ export function getConflictedFiles(): string[] {
 			.trim()
 			.split('\n')
 			.filter(f => f);
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to get conflicted files', {error});
 		return [];
 	}
 }
@@ -450,7 +460,8 @@ export function isGitRepo(): boolean {
 			encoding: 'utf8',
 		});
 		return true;
-	} catch {
+	} catch (error) {
+		logger.debug('Not inside a git work tree', {error});
 		return false;
 	}
 }

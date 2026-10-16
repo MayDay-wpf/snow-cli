@@ -202,13 +202,18 @@ function ensurePluginWatcher(): void {
 			pluginWatcher.on('error', () => {
 				try {
 					pluginWatcher?.close();
-				} catch {
+				} catch (error) {
 					// ignore
+					websearchLog.debug('Failed to close pluginWatcher on error', {error});
 				}
 				pluginWatcher = null;
 				setTimeout(startWatch, 300);
 			});
-		} catch {
+		} catch (error) {
+			websearchLog.debug('Failed to start watching search engines directory', {
+				dir: SEARCH_ENGINES_DIR,
+				error,
+			});
 			setTimeout(startWatch, 400);
 		}
 	};

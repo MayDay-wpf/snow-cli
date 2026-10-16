@@ -132,18 +132,21 @@ export function createIdleTimeoutGuard({
 
 			// 尝试取消 reader 以减少延迟消息(同步/异步异常都应吞掉)
 			try {
-				reader?.cancel().catch(() => {
+				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
+					logger.debug('streamGuards reader.cancel async rejection ignored', {error: err});
 				});
-			} catch {
+			} catch (error) {
 				// 忽略取消失败
+				logger.debug('streamGuards reader.cancel sync error ignored', {error});
 			}
 
 			// 日志写入可能同步抛错,必须捕获,避免定时器回调触发 uncaughtException
 			try {
 				logger.warn(`Stream idle timeout detected after ${idleTimeoutMs}ms`);
-			} catch {
-				// 忽略日志写入失败
+			} catch (error) {
+				// 忽略日志写入失败，避免死循环
+				void error;
 			}
 
 			// 允许调用方在超时时构造更具体的错误,但必须捕获并通过 getTimeoutError 传递
@@ -163,11 +166,13 @@ export function createIdleTimeoutGuard({
 					error instanceof Error ? error : new Error(String(error));
 			}
 			try {
-				reader?.cancel().catch(() => {
+				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
+					logger.debug('streamGuards reader.cancel async rejection in catch block ignored', {error: err});
 				});
-			} catch {
+			} catch (cancelError) {
 				// 忽略取消失败
+				logger.debug('streamGuards reader.cancel sync error in catch block ignored', {error: cancelError});
 			}
 		}
 	}, Math.min(5000, Math.max(10, Math.floor(idleTimeoutMs / 2))));
@@ -176,11 +181,13 @@ export function createIdleTimeoutGuard({
 		abandon: () => {
 			isAbandoned = true;
 			try {
-				reader?.cancel().catch(() => {
+				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
+					logger.debug('streamGuards abandon reader.cancel async rejection ignored', {error: err});
 				});
-			} catch {
+			} catch (error) {
 				// 忽略取消失败
+				logger.debug('streamGuards abandon reader.cancel sync error ignored', {error});
 			}
 		},
 

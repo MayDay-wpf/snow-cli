@@ -498,8 +498,12 @@ export class FilesystemMCPService {
 					if (Array.isArray(parsed)) {
 						filePath = parsed;
 					}
-				} catch {
+				} catch (error) {
 					// If parsing fails, treat as a regular string path
+					fsLog.debug('Failed to parse filePath as JSON array, treating as regular string', {
+						filePath,
+						error,
+					});
 				}
 			}
 
@@ -532,16 +536,25 @@ export class FilesystemMCPService {
 				if (fixedPath && fixedPath !== filePath) {
 					// Verify the fixed path actually exists before suggesting
 					const fixedFullPath = this.resolvePath(fixedPath);
+					let fixedExists = false;
 					try {
 						await fs.access(fixedFullPath);
+						fixedExists = true;
+					} catch (accessErr) {
+						// Fixed path also doesn't work, just throw original error
+						fsLog.debug('Fixed path candidate does not exist, keeping original ENOENT', {
+							filePath,
+							fixedPath,
+							error: accessErr,
+						});
+					}
+					if (fixedExists) {
 						// File exists, provide helpful suggestion to AI
 						throw new Error(
 							`Failed to read file ${filePath}: ${
 								error instanceof Error ? error.message : 'Unknown error'
 							}\n💡 Tip: File not found. Did you mean "${fixedPath}"? Please use the correct path.`,
 						);
-					} catch {
-						// Fixed path also doesn't work, just throw original error
 					}
 				}
 			}
@@ -690,8 +703,12 @@ export class FilesystemMCPService {
 				if (diagnostics.length > 0) {
 					message = appendDiagnosticsSummary(message, filePath, diagnostics);
 				}
-			} catch {
+			} catch (error) {
 				// Optional diagnostics retrieval, do not block create success
+				fsLog.debug('Failed to get fresh diagnostics after file create/overwrite', {
+					filePath: fullPath,
+					error,
+				});
 			}
 
 			return {message, filePath, content};

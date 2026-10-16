@@ -45,6 +45,7 @@ class CheckpointManager {
 			await fs.mkdir(this.checkpointsDir, { recursive: true });
 		} catch (error) {
 			// Directory already exists or other error
+			checkpointLogger.debug('ensureCheckpointsDir mkdir failed or already exists', {error, dir: this.checkpointsDir});
 		}
 	}
 
@@ -193,6 +194,7 @@ class CheckpointManager {
 			await fs.unlink(checkpointPath);
 		} catch (error) {
 			// Checkpoint may not exist, ignore
+			checkpointLogger.debug('clearCheckpoint unlink failed or not found', {error, sessionId});
 		}
 
 		if (this.activeCheckpoint?.sessionId === sessionId) {

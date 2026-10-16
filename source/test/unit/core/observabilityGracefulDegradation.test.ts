@@ -83,3 +83,31 @@ test.serial('Graceful Degradation with Observability: SessionManager handles cor
 		logger.setSink(null);
 	}
 });
+
+test.serial('Ablation & Anti-Ablation: UnifiedSettings getLoggingConfig correctly merges env, settings, and defaults', async t => {
+	const {getLoggingConfig} = await import('../../../utils/config/unifiedSettings.js');
+
+	// 1. 基线默认值验证
+	const defaultConfig = getLoggingConfig();
+	t.is(defaultConfig.bufferSize, 1000);
+	t.is(defaultConfig.diskArchive, true);
+	t.is(defaultConfig.maxFileSize, 10 * 1024 * 1024);
+
+	// 2. 环境变量消融/注入测试 (Ablation)
+	const prevBuffer = process.env['SNOW_LOG_BUFFER_SIZE'];
+	const prevDisk = process.env['SNOW_LOG_DISK_ARCHIVE'];
+	try {
+		process.env['SNOW_LOG_BUFFER_SIZE'] = '420';
+		process.env['SNOW_LOG_DISK_ARCHIVE'] = 'false';
+
+		const ablatedConfig = getLoggingConfig();
+		t.is(ablatedConfig.bufferSize, 420, 'SNOW_LOG_BUFFER_SIZE must override default bufferSize');
+		t.is(ablatedConfig.diskArchive, false, 'SNOW_LOG_DISK_ARCHIVE=false must disable disk archiving');
+	} finally {
+		if (prevBuffer !== undefined) process.env['SNOW_LOG_BUFFER_SIZE'] = prevBuffer;
+		else delete process.env['SNOW_LOG_BUFFER_SIZE'];
+
+		if (prevDisk !== undefined) process.env['SNOW_LOG_DISK_ARCHIVE'] = prevDisk;
+		else delete process.env['SNOW_LOG_DISK_ARCHIVE'];
+	}
+});

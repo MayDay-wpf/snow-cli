@@ -20,10 +20,10 @@ import {
 	type AppConfig,
 	type RequestMethod,
 } from './apiConfig.js';
+import {logger} from '../core/logger.js';
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
-import {logger} from '../core/logger.js';
 
 const configLogger = logger.child('config.manager');
 import {bashOutputSummaryAgent} from '../../agents/bashOutputSummaryAgent.js';
@@ -89,8 +89,9 @@ export function getActiveProfileName(): string {
 			// Delete old .txt file
 			unlinkSync(LEGACY_ACTIVE_PROFILE_FILE);
 			return profileName;
-		} catch {
+		} catch (error) {
 			// If migration fails, continue with default
+			logger.debug('getActiveProfileName legacy profile migration failed', {error});
 		}
 	}
 
@@ -301,8 +302,9 @@ export function getAllProfiles(): ConfigProfile[] {
 				}
 			}
 		}
-	} catch {
+	} catch (error) {
 		// If reading fails, return empty array
+		logger.debug('getAllProfiles readDir or profile load failed', {error});
 	}
 
 	// Ensure at least a default profile exists

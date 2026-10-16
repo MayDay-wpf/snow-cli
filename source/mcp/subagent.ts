@@ -7,6 +7,10 @@ import type {ChatMessage} from '../api/chat.js';
 import type {SubAgentMessage} from '../utils/execution/subAgentTypes.js';
 import type {ToolCall} from '../utils/execution/toolExecutor.js';
 import type {ConfirmationResult} from '../ui/components/tools/ToolConfirmation.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:subagent');
+
 
 export interface SubAgentToolExecutionOptions {
 	agentId: string;
@@ -471,7 +475,8 @@ function getCurrentSessionId(): string | undefined {
 			sessionManager.getCurrentSession()?.id ??
 			getConversationContext()?.sessionId
 		);
-	} catch {
+	} catch (error) {
+		log.debug('Failed to get current session id in subagent helper', {error});
 		return undefined;
 	}
 }
@@ -480,8 +485,12 @@ function resolveAgentName(agentId: string): string {
 	try {
 		const agent = getUserSubAgents().find(a => a.id === agentId);
 		if (agent) return agent.name;
-	} catch {
+	} catch (error) {
 		/* fall through to built-in names */
+		log.debug('Failed to resolve custom agent name from config', {
+			agentId,
+			error,
+		});
 	}
 	const builtinNames: Record<string, string> = {
 		agent_explore: 'Explore Agent',

@@ -179,6 +179,16 @@ export interface UnifiedSettings {
 		/** 默认 token 预算，单位 M（百万）。例如 2 表示 2,000,000 tokens。 */
 		defaultTokenBudgetM?: number;
 	};
+
+	// === 日志与可观测性体系配置 ===
+	logging?: {
+		/** 内存环形缓冲区上限容量（默认 1000 条） */
+		bufferSize?: number;
+		/** 是否开启磁盘结构化日志归档（默认 true） */
+		diskArchive?: boolean;
+		/** 单个日志文件最大轮转大小（字节，默认 10MB） */
+		maxFileSize?: number;
+	};
 }
 
 export type SettingsScope = 'project' | 'global';
@@ -318,4 +328,40 @@ export function getTerminalShellPreference(workingDirectory?: string): string {
 		process.env['SHELL'] ||
 		'auto'
 	);
+}
+
+const DEFAULT_LOG_BUFFER_SIZE = 1000;
+const DEFAULT_LOG_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+/**
+ * 读取日志体系归一化配置：
+ * 优先级：环境变量 > unifiedSettings (项目 > 全局) > 默认值
+ */
+export function getLoggingConfig(workingDirectory?: string): {
+	bufferSize: number;
+	diskArchive: boolean;
+	maxFileSize: number;
+} {
+	const merged = readMergedSettings(workingDirectory);
+	const envBufferSize = process.env['SNOW_LOG_BUFFER_SIZE']
+		? parseInt(process.env['SNOW_LOG_BUFFER_SIZE'], 10)
+		: NaN;
+	const bufferSize =
+		!Number.isNaN(envBufferSize) && envBufferSize > 0
+			? envBufferSize
+			: merged.logging?.bufferSize && merged.logging.bufferSize > 0
+				? merged.logging.bufferSize
+				: DEFAULT_LOG_BUFFER_SIZE;
+
+	const diskArchive =
+		process.env['SNOW_LOG_DISK_ARCHIVE'] !== undefined
+			? process.env['SNOW_LOG_DISK_ARCHIVE'] !== 'false' && process.env['SNOW_LOG_DISK_ARCHIVE'] !== '0'
+			: merged.logging?.diskArchive ?? true;
+
+	const maxFileSize =
+		merged.logging?.maxFileSize && merged.logging.maxFileSize > 0
+			? merged.logging.maxFileSize
+			: DEFAULT_LOG_MAX_FILE_SIZE;
+
+	return {bufferSize, diskArchive, maxFileSize};
 }

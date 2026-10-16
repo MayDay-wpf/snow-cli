@@ -1,6 +1,7 @@
 import {createHash} from 'crypto';
 import {existsSync, mkdirSync, appendFileSync} from 'fs';
 import {join} from 'path';
+import {logger} from '../core/logger.js';
 import type {HookType} from '../config/hooksConfig.js';
 
 export type HookInjectDebugEntry = {
@@ -90,11 +91,11 @@ export function recordHookInjectDebug(entry: HookInjectDebugEntry): void {
 		const line = JSON.stringify(summary);
 		appendFileSync(
 			join(logDir, 'hooks-inject.txt'),
-			`${line}
-`,
+			`${line}\n`,
 			'utf8',
 		);
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to write hooks-inject.txt log', {error});
 		// fail-open: never block hook flow for debug logging
 	}
 }

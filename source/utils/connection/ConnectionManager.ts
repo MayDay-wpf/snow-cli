@@ -12,6 +12,7 @@ import {ConfigStore} from './configStore.js';
 import {ContextManager} from './contextManager.js';
 import {InteractionManager} from './interactionManager.js';
 import {ProjectDataManager} from './projectData.js';
+import {logger} from '../core/logger.js';
 
 // Re-export types for backward compatibility
 export type {
@@ -405,13 +406,15 @@ class ConnectionManager {
 					requestId,
 					JSON.stringify(files),
 				);
-			} catch {
+			} catch (error) {
+				logger.debug('Failed to get file list or send result', {requestId, error});
 				await this.connection!.invoke(
 					'SendFileListResult',
 					requestId,
 					JSON.stringify([]),
-				).catch(() => {
+				).catch(sendError => {
 					// Silently fail
+					logger.debug('Failed to send empty file list result fallback', {requestId, error: sendError});
 				});
 			}
 		});
@@ -436,13 +439,15 @@ class ConnectionManager {
 						requestId,
 						JSON.stringify(result),
 					);
-				} catch {
+				} catch (error) {
+					logger.debug('Failed to get session list or send result', {requestId, error});
 					await this.connection!.invoke(
 						'SendSessionListResult',
 						requestId,
 						JSON.stringify({sessions: [], total: 0, hasMore: false}),
-					).catch(() => {
+					).catch(sendError => {
 						// Silently fail
+						logger.debug('Failed to send empty session list result fallback', {requestId, error: sendError});
 					});
 				}
 			},
@@ -535,8 +540,9 @@ class ConnectionManager {
 		try {
 			const contextInfo = await this.contextManager.getContextInfo();
 			await this.connection.invoke('SendContextInfo', contextInfo);
-		} catch {
+		} catch (error) {
 			// Silently fail - don't spam errors for push failures
+			logger.debug('Failed to push context info to server', {error});
 		}
 	}
 
@@ -554,8 +560,9 @@ class ConnectionManager {
 		if (this.connection) {
 			try {
 				await this.connection.stop();
-			} catch {
+			} catch (error) {
 				// Ignore disconnection errors
+				logger.debug('Error stopping connection during disconnect', {error});
 			}
 			this.connection = null;
 			this.interactionManager.setConnection(null);
@@ -694,8 +701,9 @@ class ConnectionManager {
 		}
 		try {
 			await this.connection.invoke('NotifyCompactStarted');
-		} catch {
+		} catch (error) {
 			// Silently fail
+			logger.debug('Failed to invoke NotifyCompactStarted', {error});
 		}
 	}
 
@@ -713,8 +721,9 @@ class ConnectionManager {
 				'NotifyCompactCompleted',
 				JSON.stringify(result),
 			);
-		} catch {
+		} catch (error) {
 			// Silently fail
+			logger.debug('Failed to invoke NotifyCompactCompleted', {result, error});
 		}
 	}
 }

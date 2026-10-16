@@ -1,4 +1,5 @@
 import {execFile} from 'node:child_process';
+import {logger} from './logger.js';
 
 /**
  * Process Resource Monitor
@@ -366,8 +367,9 @@ export function killProcessTree(pid: number): void {
 			// signal 0 用于探测进程是否仍存活
 			process.kill(pid, 0);
 			process.kill(pid, 'SIGKILL');
-		} catch {
+		} catch (error) {
 			// 进程已退出
+			logger.debug('processResourceMonitor process kill 0/SIGKILL skipped (process exited)', {error, pid});
 		}
 	}, 800);
 

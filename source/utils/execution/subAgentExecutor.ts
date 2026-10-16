@@ -308,7 +308,11 @@ export async function executeSubAgent(
 		if (ctx) {
 			try {
 				emitSubAgentMessage(ctx, {type: 'done'});
-			} catch {
+			} catch (error) {
+				subAgentLogger.debug(
+					'Failed to emit final done message for sub-agent',
+					{instanceId: ctx.instanceId, error},
+				);
 				/* noop */
 			}
 		}

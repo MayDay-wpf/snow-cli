@@ -5,6 +5,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import {logger} from './logger.js';
 
 export interface UsageLogEntry {
 	model: string;
@@ -175,8 +176,9 @@ export async function loadUsageData(
 							}),
 							timestamp: entry.timestamp,
 						});
-					} catch {
+					} catch (error) {
 						// Skip invalid lines
+						logger.debug('loadUsageLogs skipped invalid jsonl line', {error, line});
 					}
 				}
 			}

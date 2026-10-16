@@ -187,6 +187,7 @@ import {fileURLToPath} from 'url';
 import {runLegacyConfigMigration} from './utils/config/legacyConfigMigration.js';
 import {shutdownTelemetry} from './utils/telemetry/otel.js';
 import {emitTerminalExitSequence} from './utils/execution/terminal.js';
+import {logger} from './utils/core/logger.js';
 
 if (args.includes('--snow-agent-child-worker')) {
 	const {runAgentChildProcessWorker} = await import(
@@ -200,8 +201,9 @@ if (args.includes('--snow-agent-child-worker')) {
 // anything else touches config. Safe no-op when nothing legacy is present.
 try {
 	runLegacyConfigMigration();
-} catch {
+} catch (error) {
 	// Migration failures should never block startup.
+	logger.debug('Legacy config migration failed during startup', {error});
 }
 
 // Read version from package.json
@@ -275,8 +277,9 @@ async function checkForUpdates(currentVersion: string): Promise<void> {
 		} else {
 			setUpdateNotice(null);
 		}
-	} catch {
+	} catch (error) {
 		// Silently fail - don't interrupt user experience
+		logger.debug('Check for updates failed', {error});
 		setUpdateNotice(null);
 	}
 }
@@ -711,7 +714,7 @@ const Startup = ({
 			try {
 				deps.initializeProfiles();
 			} catch (error) {
-				console.error('Failed to initialize profiles:', error);
+				logger.debug('Failed to initialize profiles', {error});
 			}
 
 			// Handle dev mode
@@ -834,16 +837,18 @@ const cleanupAsync = async () => {
 				new Promise(resolve => setTimeout(resolve, 1000)),
 			]);
 		}
-	} catch {
+	} catch (error) {
 		// Ignore codebase watcher close errors
+		logger.debug('Codebase watcher close error during exit', {error});
 	}
 
 	// Unmount Ink so React effects cleanup (timers, stdin listeners, raw mode)
 	// can release libuv handles before we start closing deps.
 	try {
 		mainInk?.unmount();
-	} catch {
+	} catch (error) {
 		// Ignore unmount errors - already unmounted or in bad state
+		logger.debug('Main ink unmount error during exit', {error});
 	}
 
 	// On Windows, Ink unmount restores stdin raw mode and releases TTY handles.
@@ -870,8 +875,9 @@ const cleanupAsync = async () => {
 			shutdownTelemetry(),
 			new Promise(resolve => setTimeout(resolve, 5000)),
 		]);
-	} catch {
+	} catch (error) {
 		// Ignore telemetry shutdown errors during exit
+		logger.debug('Telemetry shutdown error during exit', {error});
 	}
 
 	// Cleanup global singleton resources (close browser, free encoders, etc.)
@@ -883,8 +889,9 @@ const cleanupAsync = async () => {
 			cleanupGlobalResources(),
 			new Promise(resolve => setTimeout(resolve, 2000)),
 		]);
-	} catch {
+	} catch (error) {
 		// Ignore cleanup errors during exit
+		logger.debug('Global resources cleanup error during exit', {error});
 	}
 
 	const deps = (global as any).__deps;
@@ -895,8 +902,9 @@ const cleanupAsync = async () => {
 				deps.closeAllMCPConnections?.(),
 				new Promise(resolve => setTimeout(resolve, 2000)), // 2s timeout
 			]);
-		} catch {
+		} catch (error) {
 			// Ignore MCP close errors
+			logger.debug('MCP close error during exit', {error});
 		}
 		// Then kill remaining processes
 		deps.processManager.killAll();
@@ -943,8 +951,9 @@ runFatalExitCleanup = (err: unknown, code: number) => {
 
 	// Reuse cleanupPromise so concurrent fatals / signals share one teardown.
 	if (!cleanupPromise) {
-		cleanupPromise = cleanupAsync().catch(() => {
+		cleanupPromise = cleanupAsync().catch(error => {
 			// best-effort
+			logger.debug('Cleanup async error during uncaught exception handling', {error});
 		});
 	}
 	void cleanupPromise.finally(() => {

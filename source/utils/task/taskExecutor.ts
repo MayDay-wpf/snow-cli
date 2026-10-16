@@ -27,6 +27,7 @@ function writeLog(taskId: string, message: string) {
 		appendFileSync(logPath, `[${timestamp}] ${message}\n`, 'utf-8');
 	} catch (error) {
 		// Fail silently - don't break task execution
+		taskLog.debug('taskExecutor writeLog appendFileSync failed', {error, taskId});
 	}
 }
 
@@ -45,8 +46,9 @@ async function notifyTaskExitFromParent(taskId: string): Promise<void> {
 			},
 			{toast: false},
 		);
-	} catch {
+	} catch (error) {
 		// Parent-side terminal fallback is best-effort.
+		taskLog.debug('notifyTaskExitFromParent failed', {error, taskId});
 	}
 }
 

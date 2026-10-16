@@ -3,6 +3,7 @@ import {existsSync} from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {logger} from './logger.js';
 
 /**
  * Snapcompact 风格的图片上下文压缩。
@@ -210,8 +211,9 @@ async function renderArchiveToImagePages(
 	let sharp: typeof import('sharp') | undefined;
 	try {
 		sharp = (await import('sharp')).default;
-	} catch {
+	} catch (error) {
 		// sharp 是可选依赖；不可用时保留无损 PNG。
+		logger.debug('sharp optional dependency unavailable, using PNG fallback', {error});
 	}
 
 	for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {

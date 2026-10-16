@@ -46,7 +46,11 @@ export async function checkAndApproveTools(
 		let args: any;
 		try {
 			args = JSON.parse(toolCall.function.arguments);
-		} catch {
+		} catch (error) {
+			subAgentLogger.debug(
+				'Failed to parse sub-agent tool call arguments JSON for approval check',
+				{toolName, error},
+			);
 			args = {};
 		}
 

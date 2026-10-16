@@ -56,6 +56,7 @@ async function getUsageDir(): Promise<string> {
 		await fs.mkdir(dateDir, {recursive: true});
 	} catch (error) {
 		// 目录可能已存在，忽略错误
+		usageLog.debug('getUsageDir mkdir failed or already exists', {error, dateDir});
 	}
 
 	return dateDir;

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import {calculateSimilarity} from '../../mcp/utils/filesystem/similarity.utils.js';
+import {logger} from '../core/logger.js';
 
 /**
  * Read the original content of a file, returning null if the file
@@ -9,7 +10,8 @@ export function readOriginalFile(filePath: string): string | null {
 	try {
 		if (!filePath || !fs.existsSync(filePath)) return null;
 		return fs.readFileSync(filePath, 'utf-8');
-	} catch {
+	} catch (error) {
+		logger.debug('Failed to read original file for diff preview', {filePath, error});
 		return null;
 	}
 }
@@ -316,8 +318,9 @@ export function collectDiffPreviewEntries(
 		) {
 			try {
 				parsed.filePath = JSON.parse(parsed.filePath);
-			} catch {
+			} catch (error) {
 				// Not valid JSON — leave as-is (single file path string)
+				logger.debug('Failed to parse filePath JSON in computePendingDiffPreviewEntries', {error});
 			}
 		}
 
@@ -473,8 +476,9 @@ export function collectDiffPreviewEntries(
 				}
 			}
 		}
-	} catch {
+	} catch (error) {
 		// Ignore parse errors
+		logger.debug('Failed to parse copy segments in computeCopySegmentPreviewEntries', {error});
 	}
 	return entries;
 }
@@ -513,8 +517,9 @@ export function enrichPendingEditArgs(
 	) {
 		try {
 			toolArgs = {...toolArgs, filePath: JSON.parse(rawFilePath)};
-		} catch {
+		} catch (error) {
 			// Not valid JSON — leave as-is (single file path string)
+			logger.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {error});
 		}
 	}
 

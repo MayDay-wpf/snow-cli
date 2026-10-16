@@ -750,7 +750,7 @@ class SessionManager {
 				}
 			}
 		} catch (error) {
-			logger.debug('findSessionInDateFolders failed to read project directory', {projectDir, error});
+			logger.debug('findSessionInDateFolders failed to read sessions directory', {sessionsDir: this.sessionsDir, error});
 		}
 
 		return null;

@@ -42,8 +42,18 @@ export interface LoggerSink {
  */
 export class CircularBufferMemorySink implements LoggerSink {
 	private readonly buffer: StructuredLogEntry[] = [];
+	private readonly bufferSize: number;
 
-	constructor(private readonly bufferSize: number = 1000) {}
+	constructor(bufferSize?: number) {
+		if (typeof bufferSize === 'number' && bufferSize > 0) {
+			this.bufferSize = bufferSize;
+		} else {
+			const envVal = process.env['SNOW_LOG_BUFFER_SIZE']
+				? parseInt(process.env['SNOW_LOG_BUFFER_SIZE'], 10)
+				: NaN;
+			this.bufferSize = !Number.isNaN(envVal) && envVal > 0 ? envVal : 1000;
+		}
+	}
 
 	write(entry: StructuredLogEntry): void {
 		if (this.buffer.length >= this.bufferSize) {
@@ -106,8 +116,9 @@ export class Logger {
 				if (!fs.existsSync(this.logDir)) {
 					fs.mkdirSync(this.logDir, {recursive: true});
 				}
-			} catch {
+			} catch (error) {
 				// Best-effort in restricted environments
+				void error;
 			}
 		}
 	}
@@ -149,8 +160,9 @@ export class Logger {
 			const dirname = path.dirname(filePath);
 			const rotatedPath = path.join(dirname, `${basename}-${timestamp}${ext}`);
 			fs.renameSync(filePath, rotatedPath);
-		} catch {
+		} catch (error) {
 			// Best-effort rotation
+			void error;
 		}
 	}
 
@@ -222,8 +234,8 @@ export class Logger {
 		}
 
 		let durationMs: number | undefined;
-		if (metaObj && typeof metaObj.durationMs === 'number') {
-			durationMs = metaObj.durationMs;
+		if (metaObj && typeof metaObj['durationMs'] === 'number') {
+			durationMs = metaObj['durationMs'];
 			const {durationMs: _, ...rest} = metaObj;
 			metaObj = Object.keys(rest).length > 0 ? rest : undefined;
 		}
@@ -258,8 +270,9 @@ export class Logger {
 			}
 
 			fs.appendFileSync(filePath, logLine, 'utf8');
-		} catch {
+		} catch (error) {
 			// Best-effort file sink without throwing unhandled exceptions
+			void error;
 		}
 	}
 

@@ -22,8 +22,12 @@ export class LSPManager {
 			// Client is dead or not initialized, clean it up before recreating
 			try {
 				await client.shutdown();
-			} catch {
+			} catch (error) {
 				// Ignore cleanup errors for dead clients
+				lspLog.debug('Failed to shutdown dead LSP client during recreation', {
+					language,
+					error,
+				});
 			}
 			this.clients.delete(language);
 		}

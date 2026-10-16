@@ -92,8 +92,9 @@ export function freeSubAgentEncoder(): void {
 	if (_encoder) {
 		try {
 			_encoder.free();
-		} catch {
+		} catch (error) {
 			// already freed or unavailable
+			compressorLog.debug('freeSubAgentEncoder free() failed or already freed', {error});
 		}
 		_encoder = null;
 	}

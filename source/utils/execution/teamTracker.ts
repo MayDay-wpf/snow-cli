@@ -5,6 +5,8 @@
  * and task status integration.
  */
 
+import {logger} from '../core/logger.js';
+
 export interface TeammateMessage {
 	fromInstanceId: string;
 	fromMemberId: string;
@@ -155,7 +157,8 @@ class TeamTracker {
 		for (const controller of this.teammateAbortControllers.values()) {
 			try {
 				controller.abort();
-			} catch {
+			} catch (error) {
+				logger.debug('Failed to abort teammate controller', {error});
 				/* noop */
 			}
 		}
@@ -548,7 +551,8 @@ class TeamTracker {
 		for (const listener of this.listeners) {
 			try {
 				listener();
-			} catch {
+			} catch (error) {
+				logger.debug('Error in teamTracker listener callback', {error});
 				// Ignore listener errors
 			}
 		}
@@ -558,7 +562,11 @@ class TeamTracker {
 		for (const listener of this.messageListeners) {
 			try {
 				listener(event);
-			} catch {
+			} catch (error) {
+				logger.debug('Error in teamTracker messageListener callback', {
+					event,
+					error,
+				});
 				// Ignore listener errors
 			}
 		}

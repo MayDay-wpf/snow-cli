@@ -3,6 +3,7 @@ import {
 	type CommandResult,
 } from '../execution/commandExecutor.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {logger} from '../core/logger.js';
 import {translations} from '../../i18n/translations.js';
 import type {CompanionStat, Species} from '../../buddy/types.js';
 import {COMPANION_NAMED_COLORS, COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
@@ -474,7 +475,9 @@ registerCommand('buddy', {
 					companionPetAt();
 					companionReaction(reply);
 				})
-				.catch(() => {});
+				.catch(error => {
+					logger.debug('Failed to generate buddy pet reply', {error});
+				});
 
 			return {
 				success: true,

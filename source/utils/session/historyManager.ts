@@ -50,6 +50,7 @@ class HistoryManager {
 			await fs.mkdir(snowDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists or other error
+			logger.debug('ensureSnowDir mkdir failed or already exists', {error, historyFile: this.historyFile});
 		}
 	}
 

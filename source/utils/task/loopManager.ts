@@ -10,6 +10,7 @@ import {
 } from 'fs';
 import {join} from 'path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
 import {taskManager} from './taskManager.js';
 import {executeTaskInBackground} from './taskExecutor.js';
 
@@ -116,10 +117,13 @@ function readLoopDaemonState(filePath: string): LoopDaemonState | null {
 			...state,
 			scheduleKind: state.scheduleKind ?? 'interval',
 		};
-	} catch {
+	} catch (error) {
+		logger.debug('readLoopDaemonState failed to read state', {error, filePath});
 		try {
 			unlinkSync(filePath);
-		} catch {}
+		} catch (unlinkError) {
+			logger.debug('readLoopDaemonState failed to unlink invalid file', {error: unlinkError, filePath});
+		}
 
 		return null;
 	}
@@ -138,7 +142,9 @@ function writeLoopDaemonLog(loopId: string, message: string): void {
 		writeFileSync(getLoopDaemonLogPath(loopId), `[${timestamp}] ${message}\n`, {
 			flag: 'a',
 		});
-	} catch {}
+	} catch (error) {
+		logger.debug('writeLoopDaemonLog failed to write log', {error, loopId});
+	}
 }
 
 function clampPositiveInteger(value: number): number {
@@ -462,7 +468,9 @@ class LoopManager {
 			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGTERM.');
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
-			} catch {}
+			} catch (error) {
+				logger.debug('SIGTERM failed to unlink daemon file', {error, loopId: loop.id});
+			}
 
 			process.exit(0);
 		});
@@ -471,7 +479,9 @@ class LoopManager {
 			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGINT.');
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
-			} catch {}
+			} catch (error) {
+				logger.debug('SIGINT failed to unlink daemon file', {error, loopId: loop.id});
+			}
 
 			process.exit(0);
 		});
@@ -607,7 +617,9 @@ class LoopManager {
 
 		try {
 			unlinkSync(filePath);
-		} catch {}
+		} catch (error) {
+			logger.debug('stopDaemonLoop failed to unlink daemon file', {error, filePath});
+		}
 
 		return state;
 	}

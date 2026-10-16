@@ -1,4 +1,5 @@
 import {ChildProcess, exec, execSync, spawnSync} from 'child_process';
+import {logger} from './logger.js';
 
 export interface TrackedProcessInfo {
 	pid: number;
@@ -25,7 +26,9 @@ function getChildPidsUnix(parentPid: number): number[] {
 				.map(Number)
 				.filter(p => Number.isInteger(p) && p > 0);
 		}
-	} catch {}
+	} catch (error) {
+		logger.debug('getChildPidsUnix pgrep failed', {error, parentPid});
+	}
 
 	try {
 		const result = spawnSync('ps', ['-o', 'pid=', '--ppid', pidStr], {
@@ -39,7 +42,9 @@ function getChildPidsUnix(parentPid: number): number[] {
 				.map(Number)
 				.filter(p => Number.isInteger(p) && p > 0);
 		}
-	} catch {}
+	} catch (error) {
+		logger.debug('getChildPidsUnix ps failed', {error, parentPid});
+	}
 
 	return [];
 }
@@ -114,18 +119,24 @@ class ProcessManager {
 			for (const childPid of descendants.reverse()) {
 				try {
 					process.kill(childPid, 'SIGKILL');
-				} catch {}
+				} catch (error) {
+					logger.debug('killPidTree child kill failed', {error, childPid});
+				}
 			}
 
 			// Try process group kill in case child process was spawned as detached group leader
 			try {
 				process.kill(-pid, 'SIGKILL');
-			} catch {}
+			} catch (error) {
+				logger.debug('killPidTree process group kill failed', {error, pid});
+			}
 
 			// Final direct kill
 			try {
 				process.kill(pid, 'SIGKILL');
-			} catch {}
+			} catch (error) {
+				logger.debug('killPidTree direct kill failed', {error, pid});
+			}
 		}
 	}
 
@@ -142,24 +153,31 @@ class ProcessManager {
 					windowsHide: true,
 					stdio: 'ignore',
 				});
-			} catch {
+			} catch (error) {
 				// Ignore errors - process already terminated
+				logger.debug('killPidTreeSync taskkill failed', {error, pid});
 			}
 		} else {
 			const descendants = getAllDescendantPidsUnix(pid);
 			for (const childPid of descendants.reverse()) {
 				try {
 					process.kill(childPid, 'SIGKILL');
-				} catch {}
+				} catch (error) {
+					logger.debug('killPidTreeSync child kill failed', {error, childPid});
+				}
 			}
 
 			try {
 				process.kill(-pid, 'SIGKILL');
-			} catch {}
+			} catch (error) {
+				logger.debug('killPidTreeSync process group kill failed', {error, pid});
+			}
 
 			try {
 				process.kill(pid, 'SIGKILL');
-			} catch {}
+			} catch (error) {
+				logger.debug('killPidTreeSync direct kill failed', {error, pid});
+			}
 		}
 	}
 

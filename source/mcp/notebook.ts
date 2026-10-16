@@ -13,6 +13,10 @@ import {
 	recordNotebookDeletion,
 } from '../utils/core/notebookManager.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:notebook');
+
 
 /**
  * Notebook MCP 工具定义
@@ -167,8 +171,12 @@ export async function executeNotebookTool(
 						if (Array.isArray(parsed)) {
 							parsedNote = parsed;
 						}
-					} catch {
+					} catch (error) {
 						// 保持原字符串
+						log.debug('Failed to parse note as JSON array, keeping original string', {
+							note,
+							error,
+						});
 					}
 				}
 
@@ -186,8 +194,12 @@ export async function executeNotebookTool(
 								);
 							}
 						}
-					} catch {
+					} catch (error) {
 						// 不影响主流程
+						log.debug('Failed to record notebook batch additions in context', {
+							filePath,
+							error,
+						});
 					}
 
 					return {
@@ -226,8 +238,13 @@ export async function executeNotebookTool(
 							entry.id,
 						);
 					}
-				} catch {
+				} catch (error) {
 					// 不影响主流程
+					log.debug('Failed to record notebook addition in context', {
+						filePath,
+						entryId: entry.id,
+						error,
+					});
 				}
 
 				return {
@@ -347,8 +364,12 @@ export async function executeNotebookTool(
 							previousNote,
 						);
 					}
-				} catch {
+				} catch (error) {
 					// 不影响主流程
+					log.debug('Failed to record notebook update in context', {
+						notebookId,
+						error,
+					});
 				}
 
 				return {
@@ -420,8 +441,12 @@ export async function executeNotebookTool(
 							}
 						}
 					}
-				} catch {
+				} catch (error) {
 					// 不影响主流程
+					log.debug('Failed to record notebook deletion in context', {
+						deletedIds: result.deleted,
+						error,
+					});
 				}
 
 				if (result.deleted.length === 0) {

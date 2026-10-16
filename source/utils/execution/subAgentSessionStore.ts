@@ -84,7 +84,11 @@ class SubAgentSessionStore {
 				if (typeof record.key !== 'string') continue;
 				this.records.set(record.key, this.normalize(record));
 			}
-		} catch {
+		} catch (error) {
+			logger.debug('Failed to read or parse sub-agent session file', {
+				filePath,
+				error,
+			});
 			// 文件损坏：视为无记录，忽略
 		}
 	}
@@ -100,14 +104,22 @@ class SubAgentSessionStore {
 		if (filePath) {
 			try {
 				await fs.unlink(filePath);
-			} catch {
+			} catch (error) {
+				logger.debug('Failed to unlink sub-agent session file', {
+					filePath,
+					error,
+				});
 				// 文件不存在则忽略
 			}
 		}
 		// 删除旧版路径文件（兼容历史版本写盘的数据）
 		try {
 			await fs.unlink(this.getLegacySessionFilePath(sessionId));
-		} catch {
+		} catch (error) {
+			logger.debug('Failed to unlink legacy sub-agent session file', {
+				sessionId,
+				error,
+			});
 			// 文件不存在则忽略
 		}
 	}
@@ -165,7 +177,8 @@ class SubAgentSessionStore {
 		try {
 			const {sessionManager} = await import('../session/sessionManager.js');
 			return sessionManager.getSubAgentSessionsDir();
-		} catch {
+		} catch (error) {
+			logger.debug('Failed to resolve sub-agent sessions directory', {error});
 			return undefined;
 		}
 	}
@@ -199,7 +212,11 @@ class SubAgentSessionStore {
 					);
 					if (await this.exists(candidate)) return candidate;
 				}
-			} catch {
+			} catch (error) {
+				logger.debug(
+					'Failed to read project directory for sub-agent sessions',
+					{projectDir, error},
+				);
 				// 项目目录不存在
 			}
 		}
@@ -213,7 +230,11 @@ class SubAgentSessionStore {
 		try {
 			await fs.access(filePath);
 			return true;
-		} catch {
+		} catch (error) {
+			logger.debug('Sub-agent session file does not exist', {
+				filePath,
+				error,
+			});
 			return false;
 		}
 	}
@@ -222,7 +243,13 @@ class SubAgentSessionStore {
 	private persist(sessionId: string): Promise<void> {
 		const previous = this.persistQueues.get(sessionId) ?? Promise.resolve();
 		const next = previous
-			.catch(() => undefined)
+			.catch(error => {
+				logger.debug('Previous sub-agent persist queue task failed', {
+					sessionId,
+					error,
+				});
+				return undefined;
+			})
 			.then(async () => {
 				const sessionRecords = Array.from(this.records.values()).filter(
 					r => r.sessionId === sessionId,

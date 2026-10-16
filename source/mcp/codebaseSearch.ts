@@ -2,6 +2,9 @@ import {CodebaseDatabase} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbedding} from '../api/embedding.js';
 import {rerankDocuments} from '../api/rerank.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:codebaseSearch');
+
 import {codebaseReviewAgent} from '../agents/codebaseReviewAgent.js';
 import {codebaseSearchEvents} from '../utils/codebase/codebaseSearchEvents.js';
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
@@ -468,7 +471,11 @@ class CodebaseSearchService {
 
 			throw error;
 		} finally {
-			try { db.close(); } catch { /* ignore close errors */ }
+			try {
+				db.close();
+			} catch (error) {
+				log.debug('Failed to close codebase database', {error});
+			}
 		}
 	}
 }

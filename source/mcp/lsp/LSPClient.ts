@@ -104,8 +104,9 @@ export class LSPClient {
 		if (this.connection) {
 			try {
 				this.connection.dispose();
-			} catch {
+			} catch (error) {
 				// Connection may already be disposed
+				lspLog.debug('Failed to dispose LSP connection during stream teardown', {error});
 			}
 		}
 	}
@@ -372,8 +373,9 @@ export class LSPClient {
 				if (!this.process.killed) {
 					this.process.kill();
 				}
-			} catch {
+			} catch (error) {
 				// Process may already be dead
+				lspLog.debug('Failed to kill LSP process during stop', {error});
 			}
 			this.process = undefined;
 		}

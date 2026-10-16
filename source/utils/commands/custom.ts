@@ -111,7 +111,8 @@ async function listJsonCommandsRecursively(
 	let entries: Array<import('fs').Dirent> = [];
 	try {
 		entries = await readdir(dir, {withFileTypes: true});
-	} catch {
+	} catch (error) {
+		customCmdLog.debug('Failed to read custom commands directory', {dir, error});
 		return [];
 	}
 
@@ -318,7 +319,8 @@ export function checkCommandExists(
 	try {
 		const filePath = getCommandJsonFilePath(dir, name);
 		return existsSync(filePath);
-	} catch {
+	} catch (error) {
+		customCmdLog.debug('Failed to check if custom command exists', {name, dir, error});
 		return false;
 	}
 }

@@ -39,6 +39,9 @@ const homedirLeaksDetails = [];
 let emptyCatchCount = 0;
 const emptyCatchByFile = {};
 
+let rootLoggerCallsCount = 0;
+const rootLoggerByFile = {};
+
 for (const file of sourceFiles) {
   const rel = path.normalize(path.relative(process.cwd(), file));
   const content = fs.readFileSync(file, 'utf8');
@@ -82,6 +85,19 @@ for (const file of sourceFiles) {
       emptyCatchByFile[rel] = (emptyCatchByFile[rel] || 0) + 1;
     }
   }
+
+  // 4. Root Logger Direct Calls (calling logger.debug/info directly instead of derived child logger)
+  if (!rel.endsWith('source' + path.sep + 'utils' + path.sep + 'core' + path.sep + 'logger.ts') &&
+      !rel.endsWith('source' + path.sep + 'cli.tsx')) {
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+      if (/\blogger\.(debug|info|warn|error)\(/.test(trimmed)) {
+        rootLoggerCallsCount++;
+        rootLoggerByFile[rel] = (rootLoggerByFile[rel] || 0) + 1;
+      }
+    });
+  }
 }
 
 console.log(JSON.stringify({
@@ -100,5 +116,10 @@ console.log(JSON.stringify({
     totalCompletelySilent: emptyCatchCount,
     filesCount: Object.keys(emptyCatchByFile).length,
     topFiles: Object.entries(emptyCatchByFile).sort((a,b) => b[1] - a[1]).slice(0, 20)
+  },
+  loggerHierarchy: {
+    totalDirectRootLoggerCalls: rootLoggerCallsCount,
+    filesCount: Object.keys(rootLoggerByFile).length,
+    topFiles: Object.entries(rootLoggerByFile).sort((a,b) => b[1] - a[1]).slice(0, 15)
   }
 }, null, 2));

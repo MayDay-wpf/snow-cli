@@ -1,5 +1,5 @@
 import type {UnifiedHookExecutionResult, HookActionResult, CommandHookResult} from './unifiedHooksExecutor.js';
-import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
+import {logger} from '../core/logger.js';
 
 /**
  * Hook 错误详情（结构化数据，供 UI 组件渲染）
@@ -116,7 +116,10 @@ export function parseAdditionalContextOutput(rawOutput: string): {
 			...(display ? {display} : {}),
 			...(prompt ? {prompt} : {}),
 		};
-	} catch {
+	} catch (error) {
+		logger.debug('Hook stdout is not JSON, ignoring for context extraction', {
+			error,
+		});
 		// Non-JSON output — do not treat stdout as context
 		return null;
 	}

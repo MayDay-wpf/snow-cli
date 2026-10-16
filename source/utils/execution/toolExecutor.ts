@@ -28,6 +28,10 @@ function safeParseToolArguments(argsString: string): Record<string, any> {
 	try {
 		return JSON.parse(argsString);
 	} catch (error) {
+		toolLogger.debug(
+			'Failed to parse full tool arguments JSON, attempting partial extraction',
+			{error, argsString},
+		);
 		//尝试只解析第一个完整的JSON对象
 		//这处理了多个工具调用参数被错误拼接的情况
 		const firstBraceIndex = argsString.indexOf('{');
@@ -70,7 +74,11 @@ function safeParseToolArguments(argsString: string): Record<string, any> {
 						);
 						try {
 							return JSON.parse(firstJsonObject);
-						} catch {
+						} catch (firstObjError) {
+							toolLogger.debug(
+								'Failed to parse extracted JSON object from tool arguments',
+								{error: firstObjError, firstJsonObject},
+							);
 							return {};
 						}
 					}
@@ -215,7 +223,11 @@ function extractHookProvidedAnswer(
 			) {
 				return {selected: parsed};
 			}
-		} catch {
+		} catch (error) {
+			toolLogger.debug(
+				'Failed to parse selected option JSON, treating as raw string',
+				{error, rawOutput},
+			);
 			// 不是有效的 JSON，按纯文本处理
 			return {selected: rawOutput};
 		}
@@ -409,7 +421,11 @@ export async function executeToolCall(
 					if (agentConfig) {
 						agentName = agentConfig.name;
 					}
-				} catch {
+				} catch (error) {
+					toolLogger.debug(
+						'Failed to resolve sub-agent configuration',
+						{error, agentId},
+					);
 					// Fallback to agentId if lookup fails
 				}
 
@@ -788,7 +804,11 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 			if (args?.['action'] === 'get') {
 				return `independent:${toolCall.id}`;
 			}
-		} catch {
+		} catch (error) {
+			toolLogger.debug(
+				'Failed to parse todo tool arguments for resource identifier',
+				{error, toolCallId: toolCall.id},
+			);
 			// fall through to serialized todo-state
 		}
 		return 'todo-state';
@@ -801,7 +821,11 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 			if (args?.['action'] === 'query' || args?.['action'] === 'list') {
 				return `independent:${toolCall.id}`;
 			}
-		} catch {
+		} catch (error) {
+			toolLogger.debug(
+				'Failed to parse notebook tool arguments for resource identifier',
+				{error, toolCallId: toolCall.id},
+			);
 			// fall through to serialized notebook-state
 		}
 		return 'notebook-state';
@@ -832,7 +856,11 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				// For batch operations, treat as independent (already handling multiple files)
 				return `filesystem-batch:${toolCall.id}`;
 			}
-		} catch {
+		} catch (error) {
+			toolLogger.debug(
+				'Failed to parse filesystem tool arguments for resource identifier',
+				{error, toolCallId: toolCall.id},
+			);
 			// Parsing error, treat as independent
 		}
 	}

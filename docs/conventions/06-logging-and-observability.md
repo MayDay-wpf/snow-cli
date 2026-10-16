@@ -69,8 +69,29 @@ flowchart TD
 
 ## 四、日志门禁与基于图的覆盖审计 (Logging Gates)
 
-1. **静态调用门禁 (`LoggingDisciplineGuard`)**：
-   - AST 扫描业务代码，对非 CLI 顶级交互入口的未授权 `console.log` / `console.error` 进行阻断并报错。
-2. **基于依赖图拓扑的高入度节点审计 (Graph-based Coverage)**：
-   - 依赖图入度（In-degree）高的核心枢纽模块（如 `sessionManager`, `toolExecutor`, `api/chat`）必须 100% 接入 Logger；
-   - 重点检查 `catch` 异常分支，严禁“静默吞错”导致调试黑洞。
+1. **静态调用门禁 (`zeroConsoleLeakGuard`)**：
+   - AST 扫描业务代码，对非 CLI 顶级交互入口的未授权 `console.log` / `console.error` 进行阻断并报错，保持业务域 100% 绝对零泄漏。
+2. **盲目吞错门禁 (`zeroSilentCatchGuard`)**：
+   - 检测所有无日志或未抛出的盲目空 `catch {}` 块，执行“可观测安全降级（Graceful Degradation with Observability）”，通过单向棘轮门控持续下锁。
+3. **沙箱存储泄漏门禁 (`zeroLeakStorageGuard`)**：
+   - 严禁任何业务模块绕过 `snowContext` 直接硬编码 `homedir()/.snow`，违规数严格清零。
+
+---
+
+## 五、命名空间派生与分级合规规范 (Namespace & Hierarchy Discipline)
+
+1. **杜绝根命名空间直调（Root Namespace Contamination Defense）**：
+   - 严禁在除应用顶级启动入口（如 `cli.tsx`）之外的业务模块中直接调用全局单例 `logger.info()` / `logger.debug()`；
+   - 所有业务模块必须显式声明并派生专属命名空间的子 Logger：
+     ```ts
+     // ✅ 标准合规写法：具备清晰二级/三级层级
+     import {logger} from '../core/logger.js';
+     const log = logger.child('mcp:aceCodeSearch');
+     const log = logger.child('execution.teamExecutor');
+     ```
+2. **命名空间格式统一**：
+   - 顶层域建议使用冒号或点分隔：`mcp:<toolName>`、`execution.<module>`、`session.<submodule>`、`ui:<component>`；
+   - 保证日志过滤时可精准执行 `grep "mcp:"` 或按 TraceId/SpanId 过滤。
+3. **环形缓冲区与归一化配置 (Unified Logging Settings)**：
+   - 内存环形缓冲区默认上限为 1000 条，可通过环境变量 `SNOW_LOG_BUFFER_SIZE` 或 `settings.json` 中 `logging.bufferSize` 进行归一化动态配置；
+   - 归一化读取接口收拢于 `getLoggingConfig()`。

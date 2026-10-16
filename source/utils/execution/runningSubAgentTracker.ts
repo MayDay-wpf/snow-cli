@@ -5,6 +5,8 @@
  * and a per-instance message queue for injecting user messages into running sub-agents.
  */
 
+import {logger} from '../core/logger.js';
+
 export interface InterAgentMessage {
 	/** Instance ID of the sender sub-agent */
 	fromInstanceId: string;
@@ -399,7 +401,12 @@ class RunningSubAgentTracker {
 					to: targetAgent,
 					message,
 				});
-			} catch {
+			} catch (error) {
+				logger.debug('Error in interAgentListener callback', {
+					fromAgent,
+					targetAgent,
+					error,
+				});
 				// Ignore listener errors
 			}
 		}
@@ -471,7 +478,10 @@ class RunningSubAgentTracker {
 		for (const listener of this.listeners) {
 			try {
 				listener();
-			} catch {
+			} catch (error) {
+				logger.debug('Error in runningSubAgentTracker listener callback', {
+					error,
+				});
 				// Ignore listener errors
 			}
 		}

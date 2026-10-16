@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import {getGlobalSnowDir} from './snowContext.js';
 import {isProjectFolder} from '../session/projectUtils.js';
+import {logger} from './logger.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -580,8 +581,9 @@ function deleteOlderThanInPath(
 		if (fs.readdirSync(targetPath).length === 0) {
 			fs.rmdirSync(targetPath);
 		}
-	} catch {
+	} catch (error) {
 		// 目录非空或已被并发移除时忽略
+		logger.debug('deleteOlderThanInPath rmdirSync skipped', {error, targetPath});
 	}
 }
 

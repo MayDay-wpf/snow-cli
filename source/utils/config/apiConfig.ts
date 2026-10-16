@@ -523,8 +523,9 @@ export async function updateSnowConfig(
 		if (activeProfileName) {
 			activeProfileConfig = loadProfile(activeProfileName);
 		}
-	} catch {
+	} catch (error) {
 		// Profiles system not available yet (during initialization), skip sync
+		configLogger.debug('updateSnowConfig profiles system not available, skipping sync', {error});
 	}
 
 	const currentConfig = activeProfileConfig ?? loadConfig();
@@ -543,8 +544,9 @@ export async function updateSnowConfig(
 			saveProfile(activeProfileName, updatedConfig);
 			// Clear all agent caches to ensure they reload with new configuration
 			clearAllAgentCaches();
-		} catch {
+		} catch (error) {
 			// Profiles system not available yet (during initialization), skip sync
+			configLogger.debug('updateSnowConfig profile save failed, skipping sync', {error, activeProfileName});
 		}
 	}
 }

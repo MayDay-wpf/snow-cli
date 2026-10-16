@@ -335,7 +335,11 @@ export async function interceptSpawnSubAgent(
 					if (agentConfig) {
 						spawnAgentName = agentConfig.name;
 					}
-				} catch {
+				} catch (error) {
+					subAgentLogger.debug(
+						'Failed to resolve sub-agent configuration for spawn, falling back to builtin name',
+						{spawnAgentId, error},
+					);
 					const builtinNames: Record<string, string> = {
 						agent_explore: 'Explore Agent',
 						agent_plan: 'Plan Agent',

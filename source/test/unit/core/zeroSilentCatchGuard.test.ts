@@ -67,9 +67,9 @@ test('ZeroSilentCatchGuard: enforces ratchet threshold on blind silent catch {} 
 	}
 
 	// 基线棘轮机制：原先全量为 307 处
-	// 随着 sessionManager(-14)、teamExecutor(-11)、todo(-10) 治理完成，门限下锁至 272 处
+	// 历经四大子代理并行清理（MCP、Execution、Core/Task、UI/Hooks），空 catch 已从 307 骤降至 95 处
 	// 伴随治理持续下锁，只降不升，严禁新增任何盲目吞错代码！
-	const CURRENT_MAX_SILENT_CATCH_RATCHET = 272;
+	const CURRENT_MAX_SILENT_CATCH_RATCHET = 95;
 
 	t.true(
 		allViolations.length <= CURRENT_MAX_SILENT_CATCH_RATCHET,

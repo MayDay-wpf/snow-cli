@@ -15,6 +15,9 @@ import {
 	flushOutputBuffer,
 } from '../hooks/execution/useTerminalExecutionState.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:bash');
+
 // SSH support
 import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
 import {
@@ -239,8 +242,12 @@ export class TerminalCommandService {
 				if (!probe.error) {
 					return {shell: candidate, isPowerShell: true};
 				}
-			} catch {
+			} catch (error) {
 				// Ignore probe errors and continue fallback.
+				log.debug('Failed to probe PowerShell candidate shell', {
+					candidate,
+					error,
+				});
 			}
 		}
 

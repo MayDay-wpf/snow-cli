@@ -6,6 +6,10 @@ import {execSync, spawn, type ChildProcess} from 'node:child_process';
 import {existsSync, readFileSync} from 'node:fs';
 import {platform} from 'node:os';
 import {request} from 'node:http';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:websearch:browser');
+
 
 /**
  * Check if running inside WSL (Windows Subsystem for Linux)
@@ -22,8 +26,9 @@ export function isWSL(): boolean {
 		if (process.env['WSL_DISTRO_NAME'] || process.env['WSL_INTEROP']) {
 			return true;
 		}
-	} catch {
+	} catch (error) {
 		// Ignore errors
+		log.debug('Failed to check WSL environment', {error});
 	}
 	return false;
 }
@@ -85,8 +90,12 @@ export function findPowerShellInWSL(): string | null {
 				cachedPowerShellPath = candidate;
 				return candidate;
 			}
-		} catch {
+		} catch (error) {
 			// Ignore permission/IO errors on individual candidates
+			log.debug('Failed to check candidate PowerShell path in WSL', {
+				candidate,
+				error,
+			});
 		}
 	}
 
@@ -101,8 +110,12 @@ export function findPowerShellInWSL(): string | null {
 				cachedPowerShellPath = resolved;
 				return resolved;
 			}
-		} catch {
+		} catch (error) {
 			// Not in PATH, try next candidate
+			log.debug('PowerShell binary not found in PATH via which', {
+				bin,
+				error,
+			});
 		}
 	}
 
@@ -336,8 +349,12 @@ export function findBrowserExecutable(): string | null {
 				if (path) {
 					return path;
 				}
-			} catch {
+			} catch (error) {
 				// Continue to next binary
+				log.debug('Browser binary not found in PATH via which', {
+					bin,
+					error,
+				});
 			}
 		}
 	}
