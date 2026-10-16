@@ -125,11 +125,11 @@ jobs:
 
             ### What's New
 
-            - Perceptual theme engine: a new zero-dependency OKLCH color engine with bisection gamut mapping and W3C APCA readability gates powers the custom theme screen, adding 7 built-in presets (Dracula, Monokai, Solarized, Catppuccin, Gruvbox, Nord, Neon) and an APCA-driven dynamic contrast boost in DiffViewer for accessible syntax diffing
-            - Lively token awaiting indicator: the frozen "0 tokens" placeholder shown while waiting for the first streamed token (TTFT) is replaced with a dynamic awaiting state, falling back to a compact "···" on terminals narrower than 60 columns
-            - Session resume and compression fixes: context summary prefixes are filtered out when resolving the initial user prompt so compression summaries are no longer hijacked by the ancient root prompt, and genuinely completed tool calls no longer leave ghost pending cards when a session is resumed
-            - Core robustness fixes: background codebase indexing is skipped when the workspace is the home directory, a root drive, or a multi-user root (with grep/rg depth safeguards and broader system directory excludes), and /clear no longer blocks on Stop-The-World GC while preserving persistent MCP connections and tool caches
-            - Clean terminal exit: focus reporting is disabled on all exit paths (exit, SIGINT, SIGTERM, uncaughtException) so no ^[[I/^[[O bracketed garbage leaks into the shell, and cursor visibility and default shape are restored
+            - Terminal shell preference: a new terminalShell setting (auto, pwsh, powershell, cmd, git-bash) is exposed through an interactive config selector, and Windows shell resolution now honors the chosen shell with automatic fallback so commands run in the shell you expect
+            - MCP resilience and process hygiene: a two-tier MCP tool catalog disk cache with config-hash validation and hit/miss statistics, a circuit breaker that fast-fails dead or unreachable MCP servers after 2 consecutive failures and recovers via a single canary probe after a 2-minute cooldown, and unified cross-platform process-tree termination (recursive POSIX descendant reaping plus process-group kill, Windows taskkill /T) so aborted or timed-out commands no longer leave orphaned children
+            - Pending message delivery: user messages queued while a tool call is running are now injected reliably at the end of the tool round, guarded by a timing signal that never interleaves them into an unclosed tool_call turn
+            - Session compression and resume fixes: compression now resolves and injects the current active user request instead of falling back to the ancient root prompt, and a new canonical path utility normalizes separators for consistent cross-platform path handling
+            - Config plane and i18n: a SNOW_CONFIG_DIR environment override for the global config directory, plus restoration of i18n keys and the awaiting-first-token label that were lost during recent merges
 
             ### Installation
             ```bash
