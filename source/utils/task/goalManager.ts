@@ -24,6 +24,8 @@ import {getDefaultGoalTokenBudget} from '../config/unifiedSettings.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('task:goalManager');
+
 export type GoalStatus =
 	| 'pursuing'
 	| 'paused'
@@ -82,7 +84,7 @@ class GoalManager {
 			await fs.mkdir(this.getGoalDir(), {recursive: true});
 		} catch (error) {
 			// 忽略已存在错误
-			logger.debug('goalManager ensureDir failed or already exists', {error, dir: this.getGoalDir()});
+			log.debug('goalManager ensureDir failed or already exists', {error, dir: this.getGoalDir()});
 		}
 	}
 
@@ -99,7 +101,7 @@ class GoalManager {
 				cb(goal);
 			} catch (error) {
 				// 忽略监听器异常，避免拖累主流程
-				logger.debug('goalManager notify listener threw error', {error});
+				log.debug('goalManager notify listener threw error', {error});
 			}
 		}
 	}
@@ -122,7 +124,7 @@ class GoalManager {
 			}
 		} catch (error) {
 			// 文件不存在或损坏，视为没有目标
-			logger.debug('goalManager loadCurrentGoal failed to read file', {error, sessionId});
+			log.debug('goalManager loadCurrentGoal failed to read file', {error, sessionId});
 		}
 		return null;
 	}
@@ -204,7 +206,7 @@ class GoalManager {
 			clearMCPToolsCache();
 		} catch (error) {
 			// ignore: 仅性能优化，下一次缓存校验会自动重建
-			logger.debug('createGoal clearMCPToolsCache skipped', {error});
+			log.debug('createGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -241,7 +243,7 @@ class GoalManager {
 			await fs.unlink(goalPath);
 		} catch (error) {
 			// 文件可能不存在，忽略
-			logger.debug('clearGoal failed to unlink goal file', {error, goalPath});
+			log.debug('clearGoal failed to unlink goal file', {error, goalPath});
 		}
 		this.cache.delete(session.id);
 		this.notify(null);
@@ -254,7 +256,7 @@ class GoalManager {
 			clearMCPToolsCache();
 		} catch (error) {
 			// ignore
-			logger.debug('clearGoal clearMCPToolsCache skipped', {error});
+			log.debug('clearGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -294,7 +296,7 @@ class GoalManager {
 			clearMCPToolsCache();
 		} catch (error) {
 			// ignore
-			logger.debug('modelUpdateGoal clearMCPToolsCache skipped', {error});
+			log.debug('modelUpdateGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -315,7 +317,7 @@ class GoalManager {
 			}
 		} catch (error) {
 			// 文件不存在或损坏
-			logger.debug('goalManager loadGoalForSession failed to read file', {error, sessionId});
+			log.debug('goalManager loadGoalForSession failed to read file', {error, sessionId});
 		}
 		return null;
 	}
@@ -349,7 +351,7 @@ class GoalManager {
 			clearMCPToolsCache();
 		} catch (error) {
 			// ignore
-			logger.debug('resumeGoalForSession clearMCPToolsCache skipped', {error});
+			log.debug('resumeGoalForSession clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}

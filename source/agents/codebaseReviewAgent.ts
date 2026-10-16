@@ -1,6 +1,8 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:codebaseReview');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -102,11 +104,11 @@ export class CodebaseReviewAgent {
 			const config = getSnowConfig();
 
 			if (!config.basicModel) {
-				logger.warn(
+				log.warn(
 					'Codebase review agent: Basic model not configured, using advanced model as fallback',
 				);
 				if (!config.advancedModel) {
-					logger.warn('Codebase review agent: No model configured');
+					log.warn('Codebase review agent: No model configured');
 					return false;
 				}
 				this.modelName = config.advancedModel;
@@ -119,7 +121,7 @@ export class CodebaseReviewAgent {
 
 			return true;
 		} catch (error) {
-			logger.warn('Codebase review agent: Failed to initialize:', error);
+			log.warn('Codebase review agent: Failed to initialize:', error);
 			return false;
 		}
 	}
@@ -234,7 +236,7 @@ export class CodebaseReviewAgent {
 				}
 			}
 		} catch (streamError) {
-			logger.error('Codebase review agent: Streaming error:', streamError);
+			log.error('Codebase review agent: Streaming error:', streamError);
 			throw streamError;
 		}
 
@@ -259,7 +261,7 @@ export class CodebaseReviewAgent {
 
 			// Validate structure
 			if (!Array.isArray(parsed.relevantIndices)) {
-				logger.warn(
+				log.warn(
 					'Codebase review agent: Invalid JSON structure - missing relevantIndices array',
 				);
 				return null;
@@ -267,7 +269,7 @@ export class CodebaseReviewAgent {
 
 			return parsed;
 		} catch (error) {
-			logger.warn('Codebase review agent: JSON parse error:', error);
+			log.warn('Codebase review agent: JSON parse error:', error);
 			return null;
 		}
 	}
@@ -338,7 +340,7 @@ Guidelines:
 		// Retry loop
 		for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
 			try {
-				logger.info(
+				log.info(
 					`Codebase review agent: Attempt ${attempt}/${this.MAX_RETRIES}`,
 				);
 
@@ -350,7 +352,7 @@ Guidelines:
 					(!response.content &&
 						(!response.tool_calls || response.tool_calls.length === 0))
 				) {
-					logger.warn(
+					log.warn(
 						`Codebase review agent: Empty response on attempt ${attempt}`,
 					);
 					if (attempt < this.MAX_RETRIES) {
@@ -372,7 +374,7 @@ Guidelines:
 
 							// Validate structure
 							if (!Array.isArray(parsed.relevantIndices)) {
-								logger.warn(
+								log.warn(
 									`Codebase review agent: Tool call returned invalid structure on attempt ${attempt}`,
 								);
 								if (attempt < this.MAX_RETRIES) {
@@ -382,13 +384,13 @@ Guidelines:
 								return null;
 							}
 
-							logger.info(
+							log.info(
 								`Codebase review agent: Successfully parsed from tool call on attempt ${attempt}`,
 							);
 							return {parsed, attempt};
 						}
 					} catch (toolError) {
-						logger.warn(
+						log.warn(
 							'Codebase review agent: Tool call parse error:',
 							toolError,
 						);
@@ -400,7 +402,7 @@ Guidelines:
 				if (response.content) {
 					const parsed = this.tryParseJSON(response.content);
 					if (parsed) {
-						logger.info(
+						log.info(
 							`Codebase review agent: Successfully parsed from content on attempt ${attempt}`,
 						);
 						return {parsed, attempt};
@@ -409,7 +411,7 @@ Guidelines:
 
 				// If parse failed and we have retries left
 				if (attempt < this.MAX_RETRIES) {
-					logger.warn(
+					log.warn(
 						`Codebase review agent: Parse failed on attempt ${attempt}, retrying...`,
 					);
 					await this.sleep(500 * attempt); // Exponential backoff
@@ -418,7 +420,7 @@ Guidelines:
 
 				return null;
 			} catch (error) {
-				logger.error(
+				log.error(
 					`Codebase review agent: Error on attempt ${attempt}:`,
 					error,
 				);
@@ -458,7 +460,7 @@ Guidelines:
 			const models = getDecisionModelsConfig();
 			const item = models?.models.find(model => model.id === modelId);
 			if (!item) {
-				logger.warn(
+				log.warn(
 					`Codebase review agent: Decision model "${modelId}" not found, using LLM review`,
 				);
 				return undefined;
@@ -466,7 +468,7 @@ Guidelines:
 
 			const resolved = resolveDecisionModelReviewConfig(item);
 			if (!resolved) {
-				logger.warn(
+				log.warn(
 					`Codebase review agent: Decision model "${modelId}" is missing API key or model, using LLM review`,
 				);
 				return undefined;
@@ -474,7 +476,7 @@ Guidelines:
 
 			return resolved;
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'Codebase review agent: Failed to resolve the decision model, using LLM review:',
 				error,
 			);
@@ -526,7 +528,7 @@ Guidelines:
 				);
 			}
 
-			logger.info('Codebase review agent: Decision model review completed', {
+			log.info('Codebase review agent: Decision model review completed', {
 				originalCount: results.length,
 				filteredCount: filteredResults.length,
 				removedCount,
@@ -540,7 +542,7 @@ Guidelines:
 				reviewFailed: false,
 			};
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'Codebase review agent: Decision model review failed, falling back to LLM review:',
 				error,
 			);
@@ -591,7 +593,7 @@ Guidelines:
 
 			return refined;
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'Codebase review agent: Failed to generate a refined query, keeping the decision verdict:',
 				error,
 			);
@@ -646,7 +648,7 @@ Guidelines:
 		const available = await this.isAvailable();
 
 		if (!available) {
-			logger.warn(
+			log.warn(
 				'Codebase review agent: Not available, returning original results',
 			);
 			return {
@@ -666,7 +668,7 @@ Guidelines:
 
 		// If all retries failed, gracefully degrade
 		if (!reviewResult) {
-			logger.warn(
+			log.warn(
 				'Codebase review agent: All retry attempts failed, returning original results',
 			);
 			return {
@@ -685,7 +687,7 @@ Guidelines:
 
 		const removedCount = results.length - filteredResults.length;
 
-		logger.info('Codebase review agent: Review completed', {
+		log.info('Codebase review agent: Review completed', {
 			originalCount: results.length,
 			filteredCount: filteredResults.length,
 			removedCount,

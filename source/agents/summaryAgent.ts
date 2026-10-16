@@ -1,6 +1,8 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:summary');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -43,7 +45,7 @@ export class SummaryAgent {
 			} else if (advancedModel) {
 				this.modelName = advancedModel;
 			} else {
-				logger.warn('Summary agent: No model configured');
+				log.warn('Summary agent: No model configured');
 				return false;
 			}
 
@@ -52,7 +54,7 @@ export class SummaryAgent {
 
 			return true;
 		} catch (error) {
-			logger.warn('Summary agent: Failed to initialize:', error);
+			log.warn('Summary agent: Failed to initialize:', error);
 			return false;
 		}
 	}
@@ -163,7 +165,7 @@ export class SummaryAgent {
 				}
 			}
 		} catch (streamError) {
-			logger.error('Summary agent: Streaming error:', streamError);
+			log.error('Summary agent: Streaming error:', streamError);
 			throw streamError;
 		}
 
@@ -208,7 +210,7 @@ export class SummaryAgent {
 	): Promise<{title: string; summary: string} | null> {
 		const available = await this.isAvailable();
 		if (!available) {
-			logger.warn('Summary agent: Not available, using fallback summary');
+			log.warn('Summary agent: Not available, using fallback summary');
 			return this.generateFallbackSummary(userMessage, assistantMessage);
 		}
 
@@ -246,7 +248,7 @@ Output in the following JSON format (JSON only, no other content):
 			const response = await this.callModel(messages, abortSignal);
 
 			if (!response || response.trim().length === 0) {
-				logger.warn('Summary agent: Empty response, using fallback');
+				log.warn('Summary agent: Empty response, using fallback');
 				return this.generateFallbackSummary(userMessage, assistantMessage);
 			}
 
@@ -262,7 +264,7 @@ Output in the following JSON format (JSON only, no other content):
 				const parsed = JSON.parse(jsonStr);
 
 				if (!parsed.title || !parsed.summary) {
-					logger.warn('Summary agent: Invalid JSON structure, using fallback');
+					log.warn('Summary agent: Invalid JSON structure, using fallback');
 					return this.generateFallbackSummary(userMessage, assistantMessage);
 				}
 
@@ -270,21 +272,21 @@ Output in the following JSON format (JSON only, no other content):
 				const title = this.truncateString(parsed.title, 50);
 				const summary = this.truncateString(parsed.summary, 150);
 
-				logger.info('Summary agent: Successfully generated summary', {
+				log.info('Summary agent: Successfully generated summary', {
 					title,
 					summary,
 				});
 
 				return {title, summary};
 			} catch (parseError) {
-				logger.warn(
+				log.warn(
 					'Summary agent: Failed to parse JSON response, using fallback',
 					parseError,
 				);
 				return this.generateFallbackSummary(userMessage, assistantMessage);
 			}
 		} catch (error) {
-			logger.error('Summary agent: Failed to generate summary', error);
+			log.error('Summary agent: Failed to generate summary', error);
 			return this.generateFallbackSummary(userMessage, assistantMessage);
 		}
 	}

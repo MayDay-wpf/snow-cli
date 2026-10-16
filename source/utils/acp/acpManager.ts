@@ -31,6 +31,8 @@ import {
 } from '@agentclientprotocol/sdk';
 import {Readable, Writable} from 'stream';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('acp:acpManager');
 import {sessionManager} from '../session/sessionManager.js';
 import {
 	loadPermissionsConfig,
@@ -161,7 +163,7 @@ class AcpManager {
 					try {
 						process.chdir(req.cwd);
 					} catch (error) {
-						logger.debug(
+						log.debug(
 							'Failed to change directory for new ACP session',
 							{cwd: req.cwd, sessionId, error},
 						);
@@ -207,7 +209,7 @@ class AcpManager {
 					try {
 						process.chdir(req.cwd);
 					} catch (error) {
-						logger.debug(
+						log.debug(
 							'Failed to change directory for loaded ACP session',
 							{cwd: req.cwd, sessionId, error},
 						);
@@ -356,7 +358,7 @@ class AcpManager {
 					} as SessionUpdate,
 				})
 				.catch(error => {
-					logger.debug(
+					log.debug(
 						'Failed to send agent_message_chunk sessionUpdate',
 						{error},
 					);
@@ -384,7 +386,7 @@ class AcpManager {
 					} as SessionUpdate,
 				})
 				.catch(error => {
-					logger.debug(
+					log.debug(
 						'Failed to send agent_thought_chunk sessionUpdate',
 						{error},
 					);
@@ -436,7 +438,7 @@ class AcpManager {
 							} as SessionUpdate,
 						})
 						.catch(error => {
-							logger.debug('Failed to send tool_call sessionUpdate', {
+							log.debug('Failed to send tool_call sessionUpdate', {
 								toolCallId: tc.id,
 								error,
 							});
@@ -699,7 +701,7 @@ class AcpManager {
 				update,
 			})
 			.catch(error => {
-				logger.debug('Failed to send tool_call_update sessionUpdate', {
+				log.debug('Failed to send tool_call_update sessionUpdate', {
 					toolCallId: toolCall.id,
 					error,
 				});
@@ -729,7 +731,7 @@ class AcpManager {
 					isSensitive = result.isSensitive;
 				}
 			} catch (error) {
-				logger.debug(
+				log.debug(
 					'Failed to parse terminal arguments for sensitivity check',
 					{toolCallId: toolCall.id, error},
 				);
@@ -786,7 +788,7 @@ class AcpManager {
 				return false;
 			}
 		} catch (error) {
-			logger.debug(
+			log.debug(
 				'Failed to execute toolConfirmation hook in ACP permission check',
 				{toolCallId: toolCall.id, error},
 			);
@@ -822,7 +824,7 @@ class AcpManager {
 
 			return approved;
 		} catch (error) {
-			logger.debug(
+			log.debug(
 				'Failed to request tool permission via ACP connection',
 				{toolCallId: toolCall.id, error},
 			);
@@ -839,7 +841,7 @@ class AcpManager {
 			const packageJson = require('../../../package.json');
 			return packageJson.version || '0.0.0';
 		} catch (error) {
-			logger.debug('Failed to read package version in ACP manager', {error});
+			log.debug('Failed to read package version in ACP manager', {error});
 			return '0.0.0';
 		}
 	}

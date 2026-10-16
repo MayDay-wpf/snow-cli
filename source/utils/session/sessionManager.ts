@@ -6,6 +6,8 @@ import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 import type {UsageInfo} from '../../api/types.js';
 import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('session:manager');
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
 import {
@@ -249,7 +251,7 @@ class SessionManager {
 				await fs.mkdir(sessionDir, {recursive: true});
 			}
 		} catch (error) {
-			logger.debug('ensureSessionsDir directory creation suppressed error', {error, date});
+			log.debug('ensureSessionsDir directory creation suppressed error', {error, date});
 		}
 	}
 
@@ -342,7 +344,7 @@ class SessionManager {
 			await todoService.createEmptyTodo(sessionId);
 		} catch (error) {
 			// TODO创建失败不应该影响会话创建，记录日志即可
-			logger.warn('Failed to create empty TODO for session:', {
+			log.warn('Failed to create empty TODO for session:', {
 				sessionId,
 				error: error instanceof Error ? error.message : String(error),
 			});
@@ -425,7 +427,7 @@ class SessionManager {
 
 		if (hasIncompleteToolCalls) {
 			// 存在未完成的 tool_calls，需要删除该 assistant 消息及其之后的所有消息
-			logger.warn('Detected incomplete tool_calls, cleaning up session', {
+			log.warn('Detected incomplete tool_calls, cleaning up session', {
 				sessionId: session.id,
 				removingFromIndex: lastAssistantWithToolCallsIndex,
 				totalMessages: session.messages.length,
@@ -520,14 +522,14 @@ class SessionManager {
 			const session: Session = JSON.parse(data);
 			return session;
 		} catch (error) {
-			logger.debug('loadSessionFromDisk legacy path missed, searching date folders', {sessionId, error});
+			log.debug('loadSessionFromDisk legacy path missed, searching date folders', {sessionId, error});
 		}
 
 		// 在日期文件夹中查找会话
 		try {
 			return await this.findSessionInDateFolders(sessionId);
 		} catch (error) {
-			logger.debug('loadSessionFromDisk search in date folders failed', {sessionId, error});
+			log.debug('loadSessionFromDisk search in date folders failed', {sessionId, error});
 		}
 
 		return null;
@@ -744,13 +746,13 @@ class SessionManager {
 						const session: Session = JSON.parse(data);
 						return session;
 					} catch (error) {
-						logger.debug('findSessionInDateFolders file read skipped', {sessionPath, error});
+						log.debug('findSessionInDateFolders file read skipped', {sessionPath, error});
 						continue;
 					}
 				}
 			}
 		} catch (error) {
-			logger.debug('findSessionInDateFolders failed to read sessions directory', {sessionsDir: this.sessionsDir, error});
+			log.debug('findSessionInDateFolders failed to read sessions directory', {sessionsDir: this.sessionsDir, error});
 		}
 
 		return null;
@@ -779,12 +781,12 @@ class SessionManager {
 					const session: Session = JSON.parse(data);
 					return session;
 				} catch (error) {
-					logger.debug('findSessionInProjectDir file read skipped', {sessionPath, error});
+					log.debug('findSessionInProjectDir file read skipped', {sessionPath, error});
 					continue;
 				}
 			}
 		} catch (error) {
-			logger.debug('findSessionInProjectDir failed to read project directory', {projectDir, error});
+			log.debug('findSessionInProjectDir failed to read project directory', {projectDir, error});
 		}
 
 		return null;
@@ -810,7 +812,7 @@ class SessionManager {
 						await this.readSessionsFromDir(datePath, sessions, seenIds);
 					}
 				} catch (error) {
-					logger.debug('listSessions project directory not present or unreadable, continuing', {dir, error});
+					log.debug('listSessions project directory not present or unreadable, continuing', {dir, error});
 				}
 			}
 
@@ -837,7 +839,7 @@ class SessionManager {
 					}
 				}
 			} catch (error) {
-				logger.debug('listSessions fallback legacy read encountered error', {sessionsDir: this.sessionsDir, error});
+				log.debug('listSessions fallback legacy read encountered error', {sessionsDir: this.sessionsDir, error});
 			}
 
 			// Sort by updatedAt (newest first)
@@ -849,7 +851,7 @@ class SessionManager {
 
 			return sorted;
 		} catch (error) {
-			logger.debug('listSessions root error, returning empty list', {error});
+			log.debug('listSessions root error, returning empty list', {error});
 			return [];
 		}
 	}
@@ -870,7 +872,7 @@ class SessionManager {
 				await this.readLegacySessionFile(filePath, sessions, seenIds);
 			}
 		} catch (error) {
-			logger.debug('readLegacySessionsFromDir skipped inaccessible directory', {dirPath, error});
+			log.debug('readLegacySessionsFromDir skipped inaccessible directory', {dirPath, error});
 		}
 	}
 
@@ -887,7 +889,7 @@ class SessionManager {
 			const session: Session = JSON.parse(data);
 			this.addSessionListItem(sessions, seenIds, session);
 		} catch (error) {
-			logger.debug('readLegacySessionFile skipped invalid session file', {filePath, error});
+			log.debug('readLegacySessionFile skipped invalid session file', {filePath, error});
 		}
 	}
 
@@ -966,7 +968,7 @@ class SessionManager {
 				}
 			}
 		} catch (error) {
-			logger.debug('readSessionsFromDir skipped directory read failure', {dirPath, error});
+			log.debug('readSessionsFromDir skipped directory read failure', {dirPath, error});
 		}
 	}
 
@@ -1056,7 +1058,7 @@ class SessionManager {
 		) {
 			// Run summary generation in background without blocking
 			this.generateAndUpdateSummary().catch(error => {
-				logger.error('Failed to generate conversation summary:', error);
+				log.error('Failed to generate conversation summary:', error);
 			});
 		}
 
@@ -1087,7 +1089,7 @@ class SessionManager {
 			);
 
 			if (!firstUserMessage || !firstAssistantMessage) {
-				logger.warn(
+				log.warn(
 					'Summary agent: Could not find first user/assistant messages',
 				);
 				return;
@@ -1111,7 +1113,7 @@ class SessionManager {
 					targetSession.summary = result.summary;
 					await this.saveSession(targetSession);
 
-					logger.info('Summary agent: Updated detached session summary', {
+					log.info('Summary agent: Updated detached session summary', {
 						sessionId: targetSessionId,
 						title: result.title,
 						summary: result.summary,
@@ -1124,14 +1126,14 @@ class SessionManager {
 				await this.saveSession(targetSession);
 				this.notifyMessagesChanged();
 
-				logger.info('Summary agent: Successfully updated session summary', {
+				log.info('Summary agent: Successfully updated session summary', {
 					sessionId: targetSessionId,
 					title: result.title,
 					summary: result.summary,
 				});
 			}
 		} catch (error) {
-			logger.error('Summary agent: Failed to generate summary', error);
+			log.error('Summary agent: Failed to generate summary', error);
 		}
 	}
 
@@ -1217,7 +1219,7 @@ class SessionManager {
 			session.hasGoal = hasGoal;
 			await this.saveSession(session);
 		} catch (error) {
-			logger.warn('Failed to persist hasGoal flag:', {
+			log.warn('Failed to persist hasGoal flag:', {
 				sessionId,
 				hasGoal,
 				error: error instanceof Error ? error.message : String(error),
@@ -1264,7 +1266,7 @@ class SessionManager {
 					goalTokenBudget: goal.tokenBudget,
 				});
 			} catch (error) {
-				logger.debug('listSessionsWithGoals single goal read failed, continuing', {sessionId: item.id, error});
+				log.debug('listSessionsWithGoals single goal read failed, continuing', {sessionId: item.id, error});
 			}
 		}
 		return result;
@@ -1304,7 +1306,7 @@ class SessionManager {
 			try {
 				listener(message);
 			} catch (error) {
-				logger.error('Error in message listener:', error);
+				log.error('Error in message listener:', error);
 			}
 		}
 	}
@@ -1317,7 +1319,7 @@ class SessionManager {
 			try {
 				listener();
 			} catch (error) {
-				logger.error('Error in messages changed listener:', error);
+				log.error('Error in messages changed listener:', error);
 			}
 		}
 	}
@@ -1334,7 +1336,7 @@ class SessionManager {
 			// Find the session first
 			const session = await this.findSessionInDateFolders(sessionId);
 			if (!session) {
-				logger.warn('Session not found for title update:', {sessionId});
+				log.warn('Session not found for title update:', {sessionId});
 				return false;
 			}
 
@@ -1351,14 +1353,14 @@ class SessionManager {
 				this.currentSession.updatedAt = session.updatedAt;
 			}
 
-			logger.info('Session title updated:', {
+			log.info('Session title updated:', {
 				sessionId,
 				newTitle: session.title,
 			});
 
 			return true;
 		} catch (error) {
-			logger.error('Failed to update session title:', {
+			log.error('Failed to update session title:', {
 				sessionId,
 				error: error instanceof Error ? error.message : String(error),
 			});
@@ -1375,7 +1377,7 @@ class SessionManager {
 			await fs.unlink(oldSessionPath);
 			sessionDeleted = true;
 		} catch (error) {
-			logger.debug('deleteSession legacy unlink missed, checking directories', {sessionId, error});
+			log.debug('deleteSession legacy unlink missed, checking directories', {sessionId, error});
 		}
 
 		// 2. 优先删除稳定项目目录和旧路径别名目录
@@ -1421,13 +1423,13 @@ class SessionManager {
 							sessionDeleted = true;
 							break;
 						} catch (error) {
-							logger.debug('deleteSession date folder unlink skipped', {sessionPath, error});
+							log.debug('deleteSession date folder unlink skipped', {sessionPath, error});
 							continue;
 						}
 					}
 				}
 			} catch (error) {
-				logger.debug('deleteSession directory scan failed', {sessionsDir: this.sessionsDir, error});
+				log.debug('deleteSession directory scan failed', {sessionsDir: this.sessionsDir, error});
 			}
 		}
 
@@ -1446,7 +1448,7 @@ class SessionManager {
 				await todoService.deleteTodoList(sessionId);
 			} catch (error) {
 				// TODO删除失败不影响会话删除结果
-				logger.warn(
+				log.warn(
 					`Failed to delete TODO list for session ${sessionId}:`,
 					error,
 				);
@@ -1458,7 +1460,7 @@ class SessionManager {
 				);
 				await subAgentSessionStore.deleteForSession(sessionId);
 			} catch (error) {
-				logger.warn('Failed to delete sub-agent sessions:', {
+				log.warn('Failed to delete sub-agent sessions:', {
 					sessionId,
 					error: error instanceof Error ? error.message : String(error),
 				});
@@ -1490,12 +1492,12 @@ class SessionManager {
 					await fs.unlink(sessionPath);
 					return true;
 				} catch (error) {
-					logger.debug('deleteSessionFromProjectDir unlink skipped', {sessionPath, error});
+					log.debug('deleteSessionFromProjectDir unlink skipped', {sessionPath, error});
 					continue;
 				}
 			}
 		} catch (error) {
-			logger.debug('deleteSessionFromProjectDir failed to read directory', {projectDir, error});
+			log.debug('deleteSessionFromProjectDir failed to read directory', {projectDir, error});
 		}
 
 		return false;
@@ -1536,7 +1538,7 @@ class SessionManager {
 			);
 			const interpreted = interpretHookResult('onSessionStart', hookResult);
 			if (interpreted.action === 'warn') {
-				logger.warn(interpreted.warningMessage || '');
+				log.warn(interpreted.warningMessage || '');
 				return {
 					shouldContinue: true,
 					warningMessage: interpreted.warningMessage,
@@ -1545,7 +1547,7 @@ class SessionManager {
 				};
 			}
 			if (interpreted.action === 'block') {
-				logger.error(
+				log.error(
 					`onSessionStart hook failed: ${JSON.stringify(
 						interpreted.errorDetails,
 					)}`,
@@ -1558,7 +1560,7 @@ class SessionManager {
 				displayMessage: interpreted.displayMessage,
 			};
 		} catch (error) {
-			logger.error('Failed to execute onSessionStart hook:', error);
+			log.error('Failed to execute onSessionStart hook:', error);
 			return {shouldContinue: true};
 		}
 	}

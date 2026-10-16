@@ -157,7 +157,7 @@ export class ACECodeSearchService {
 
 	private markIndexTruncated(message: string): void {
 		if (!this.isIndexTruncated) {
-			logger.warn(message);
+			log.warn(message);
 		}
 
 		this.isIndexTruncated = true;
@@ -183,7 +183,7 @@ export class ACECodeSearchService {
 				return;
 			}
 
-			logger.debug(
+			log.debug(
 				`ACECodeSearchService idle cleanup triggered for ${this.basePath}`,
 			);
 			this.clearCaches({preserveExclusions: true, preserveCommandCache: true});
@@ -244,7 +244,7 @@ export class ACECodeSearchService {
 
 		const rss = process.memoryUsage.rss();
 		if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES) {
-			logger.warn(
+			log.warn(
 				`ACE memory pressure detected (RSS: ${Math.round(
 					rss / 1024 / 1024,
 				)}MB), triggering aggressive cleanup`,
@@ -253,7 +253,7 @@ export class ACECodeSearchService {
 			this.fileStatCache.clear();
 
 			if (rss > MEMORY_PRESSURE_THRESHOLD_BYTES * 1.5) {
-				logger.warn(
+				log.warn(
 					'ACE critical memory pressure, clearing all transient caches',
 				);
 				this.clearCaches({
@@ -474,7 +474,7 @@ export class ACECodeSearchService {
 			const rgPath = typeof ripgrep.rgPath === 'string' ? ripgrep.rgPath : '';
 			this.bundledRipgrepPath = rgPath.length > 0 ? rgPath : null;
 		} catch (error) {
-			logger.debug(
+			log.debug(
 				'Bundled ripgrep unavailable, falling back to system search tools',
 				error,
 			);
@@ -772,7 +772,7 @@ export class ACECodeSearchService {
 				});
 			} catch (error) {
 				// Fall back to manual scoring if fzf fails
-				logger.info(
+				log.info(
 					`fzf search failed, falling back to manual scoring: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
@@ -1173,7 +1173,7 @@ export class ACECodeSearchService {
 
 			const timeoutId = setTimeout(() => {
 				finalize(() => {
-					logger.warn(
+					log.warn(
 						`git grep timed out after ${timeoutMs}ms, killing process`,
 					);
 					reject(new Error(`git grep timed out after ${timeoutMs}ms`));
@@ -1300,7 +1300,7 @@ export class ACECodeSearchService {
 
 			const timeoutId = setTimeout(() => {
 				finalize(() => {
-					logger.warn(
+					log.warn(
 						`${displayCommand} timed out after ${timeoutMs}ms, killing process`,
 					);
 					reject(new Error(`${displayCommand} timed out after ${timeoutMs}ms`));
@@ -1408,7 +1408,7 @@ export class ACECodeSearchService {
 		const checkTimeout = (): void => {
 			if (Date.now() - startTime > TEXT_SEARCH_TIMEOUT_MS) {
 				isAborted = true;
-				logger.warn(`Text search timeout after ${TEXT_SEARCH_TIMEOUT_MS}ms`);
+				log.warn(`Text search timeout after ${TEXT_SEARCH_TIMEOUT_MS}ms`);
 			}
 		};
 
@@ -1539,7 +1539,7 @@ export class ACECodeSearchService {
 					}
 				} else {
 					// Large file: use streaming to control memory
-					logger.info(
+					log.info(
 						`Streaming large file (${stats.size} bytes): ${fileInfo.relativePath}`,
 					);
 					await this.searchInLargeFile(
@@ -1567,7 +1567,7 @@ export class ACECodeSearchService {
 		);
 
 		if (isAborted) {
-			logger.warn(
+			log.warn(
 				`Text search aborted after ${Date.now() - startTime}ms, returning ${
 					results.length
 				} partial results`,
@@ -1644,14 +1644,14 @@ export class ACECodeSearchService {
 
 			rl.once('close', finalize);
 			rl.once('error', (err: Error) => {
-				logger.info(
+				log.info(
 					`Error reading large file ${fileInfo.relativePath}: ${err.message}`,
 				);
 				finalize();
 			});
 
 			stream.once('error', (err: Error) => {
-				logger.info(
+				log.info(
 					`Stream error for ${fileInfo.relativePath}: ${err.message}`,
 				);
 				finalize();
@@ -1742,7 +1742,7 @@ export class ACECodeSearchService {
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
-				logger.info('Bundled ripgrep failed, trying next strategy');
+				log.info('Bundled ripgrep failed, trying next strategy');
 				// Fall through to system tools or JavaScript fallback
 			}
 		}
@@ -1768,7 +1768,7 @@ export class ACECodeSearchService {
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
-				logger.info('System ripgrep failed, trying next strategy');
+				log.info('System ripgrep failed, trying next strategy');
 				// Fall through to git grep, system grep or JavaScript fallback
 			}
 		}
@@ -1807,13 +1807,13 @@ export class ACECodeSearchService {
 				);
 				return await this.sortResultsByRecency(results);
 			} catch (error) {
-				logger.info('System grep failed, falling back to JavaScript search');
+				log.info('System grep failed, falling back to JavaScript search');
 				// Fall through to JavaScript fallback
 			}
 		}
 
 		// Strategy 5: JavaScript fallback (always works)
-		logger.info('Using JavaScript fallback for text search');
+		log.info('Using JavaScript fallback for text search');
 		const results = await this.jsTextSearch(
 			pattern,
 			fileGlob,
@@ -2152,7 +2152,7 @@ export class ACECodeSearchService {
 			// surface so the caller knows something went wrong (but don't throw to
 			// avoid breaking the agent loop — return an empty array instead).
 			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
-				logger.warn(
+				log.warn(
 					`Remote ${built.tool} exited with code ${
 						exec.code
 					}: ${exec.stderr?.slice(0, 200)}`,
@@ -2194,7 +2194,7 @@ export class ACECodeSearchService {
 				timeout: TEXT_SEARCH_TIMEOUT_MS,
 			});
 			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
-				logger.warn(
+				log.warn(
 					`Remote find_references grep exited with code ${
 						exec.code
 					}: ${exec.stderr?.slice(0, 200)}`,
@@ -2271,7 +2271,7 @@ export class ACECodeSearchService {
 						};
 					}
 				} catch (err) {
-					logger.warn(
+					log.warn(
 						'remoteFindDefinition: ctags failed, falling back to grep',
 						err,
 					);
@@ -2294,7 +2294,7 @@ export class ACECodeSearchService {
 				timeout: TEXT_SEARCH_TIMEOUT_MS,
 			});
 			if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
-				logger.warn(
+				log.warn(
 					`Remote find_definition grep exited with code ${
 						exec.code
 					}: ${exec.stderr?.slice(0, 200)}`,
@@ -2350,7 +2350,7 @@ export class ACECodeSearchService {
 							maxSymbols: MAX_FZF_SYMBOL_NAMES,
 						});
 					} catch (err) {
-						logger.warn(
+						log.warn(
 							'remoteSemanticSearch: ctags failed, falling back to grep heuristic',
 							err,
 						);
@@ -2382,7 +2382,7 @@ export class ACECodeSearchService {
 					timeout: TEXT_SEARCH_TIMEOUT_MS,
 				});
 				if (!exec.stdout && exec.code !== 0 && exec.code !== 1) {
-					logger.warn(
+					log.warn(
 						`Remote semantic_search grep fallback exited with code ${
 							exec.code
 						}: ${exec.stderr?.slice(0, 200)}`,
@@ -2433,7 +2433,7 @@ export class ACECodeSearchService {
 			const matched = fzf.find(query);
 			matchedSet = new Set(matched.map((r: FzfResultItem<string>) => r.item));
 		} catch (err) {
-			logger.info(
+			log.info(
 				`Remote semantic_search FZF failed (${
 					err instanceof Error ? err.message : String(err)
 				}), falling back to substring match`,
@@ -2479,7 +2479,7 @@ export class ACECodeSearchService {
 					const refs = await this.remoteFindReferences(sym.name, maxResults);
 					references.push(...refs);
 				} catch (err) {
-					logger.warn(
+					log.warn(
 						`remoteSemanticSearch: gathering references for "${sym.name}" failed`,
 						err,
 					);
