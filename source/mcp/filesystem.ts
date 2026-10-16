@@ -49,6 +49,9 @@ import {
 	readFileWithEncoding,
 	writeFileWithEncoding,
 } from './utils/filesystem/encoding.utils.js';
+import {logger} from '../utils/core/logger.js';
+
+const fsLog = logger.child('mcp:filesystem');
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -332,7 +335,7 @@ export class FilesystemMCPService {
 				mimeType,
 			};
 		} catch (error) {
-			console.error(`Failed to read image ${fullPath}:`, error);
+			fsLog.error(`Failed to read image ${fullPath}:`, {error, fullPath});
 			return null;
 		}
 	}

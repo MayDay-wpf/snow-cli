@@ -5,6 +5,9 @@ import {homedir} from 'os';
 import matter from 'gray-matter';
 import {getDisabledSkills} from '../utils/config/disabledSkills.js';
 import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
+import {logger} from '../utils/core/logger.js';
+
+const skillsLog = logger.child('mcp:skills');
 
 export interface SkillMetadata {
 	name: string;
@@ -85,7 +88,7 @@ async function readSkillFile(skillPath: string): Promise<{
 			content,
 		};
 	} catch (error) {
-		console.error(`Failed to read skill at ${skillPath}:`, error);
+		skillsLog.error(`Failed to read skill at ${skillPath}:`, {error, skillPath});
 		return null;
 	}
 }
@@ -171,7 +174,7 @@ async function loadSkillsFromDirectory(
 			}
 		}
 	} catch (error) {
-		console.error(`Failed to load ${location} skills:`, error);
+		skillsLog.error(`Failed to load ${location} skills:`, {error, location});
 	}
 }
 

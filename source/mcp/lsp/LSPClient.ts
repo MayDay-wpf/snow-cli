@@ -25,7 +25,10 @@ import type {
 	CompletionParams,
 } from 'vscode-languageserver-protocol';
 import {processManager} from '../../utils/core/processManager.js';
+import {logger} from '../../utils/core/logger.js';
 import type {LSPServerConfig} from './LSPServerRegistry.js';
+
+const lspLog = logger.child('mcp:lsp-client');
 
 export interface LSPClientConfig extends LSPServerConfig {
 	language: string;
@@ -158,8 +161,9 @@ export class LSPClient {
 						// Pass absolute path to avoid ambiguity; csharp-ls accepts absolute.
 						args.push('-s', slnPath);
 					} else {
-						console.log(
+						lspLog.info(
 							`[LSP:csharp] No .sln found under rootPath=${this.config.rootPath}; skip -s and rely on fallback.`,
+							{rootPath: this.config.rootPath},
 						);
 					}
 				}
@@ -213,7 +217,7 @@ export class LSPClient {
 					return;
 				}
 
-				console.debug('LSP connection error:', error?.message || error);
+				lspLog.debug('LSP connection error:', {error: error?.message || error});
 			});
 			this.connection.onClose(() => {
 				this.markTransportClosed();
@@ -347,7 +351,7 @@ export class LSPClient {
 				}
 			}
 		} catch (error) {
-			console.debug('Error during LSP shutdown:', error);
+			lspLog.debug('Error during LSP shutdown:', {error});
 		} finally {
 			await this.cleanup();
 		}
@@ -357,8 +361,8 @@ export class LSPClient {
 		if (this.connection) {
 			try {
 				this.connection.dispose();
-			} catch {
-				// Connection may already be disposed or broken
+			} catch (disposeErr) {
+				lspLog.debug('Suppressed error during connection disposal:', {error: disposeErr});
 			}
 			this.connection = undefined;
 		}

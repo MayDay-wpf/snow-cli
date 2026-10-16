@@ -44,6 +44,9 @@ import {
 	deleteTeamSnapshotsByTeamName,
 } from '../utils/team/teamSnapshot.js';
 import {clearAllTeammateStreamEntries} from '../hooks/conversation/core/subAgentMessageHandler.js';
+import {logger} from '../utils/core/logger.js';
+
+const teamLog = logger.child('mcp:team');
 
 export interface TeamToolExecutionOptions {
 	toolName: string;
@@ -203,9 +206,9 @@ export class TeamService {
 					);
 				}
 			} catch (aiError) {
-				console.error(
+				teamLog.error(
 					`[Team] AI conflict resolution failed for ${file}, falling back to --theirs:`,
-					aiError,
+					{error: aiError, file},
 				);
 				try {
 					execSync(`git checkout --theirs "${file}"`, {stdio: 'pipe'});
@@ -383,7 +386,7 @@ export class TeamService {
 					error: error instanceof Error ? error.message : String(error),
 					completedAt: new Date(),
 				});
-				console.error(`Teammate ${name} failed:`, error);
+				teamLog.error(`Teammate ${name} failed:`, {error, name});
 			})
 			.finally(() => {
 				updateMember(team.name, member.id, {
@@ -1005,7 +1008,7 @@ export class TeamService {
 		try {
 			await cleanupTeamWorktrees(team.name);
 		} catch (e: any) {
-			console.error('Failed to cleanup worktrees:', e);
+			teamLog.error('Failed to cleanup worktrees:', {error: e, team: team.name});
 		}
 
 		// Disband team and clear tracker

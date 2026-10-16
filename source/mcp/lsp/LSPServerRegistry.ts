@@ -1,8 +1,11 @@
 import {exec} from 'child_process';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
-import {homedir} from 'os';
 import {join} from 'path';
 import {promisify} from 'util';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
+import {logger} from '../../utils/core/logger.js';
+
+const lspLog = logger.child('mcp:lsp');
 
 const execAsync = promisify(exec);
 
@@ -19,7 +22,7 @@ export interface LSPConfigFile {
 	servers: Record<string, LSPServerConfig>;
 }
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = getGlobalSnowDir().native;
 const LSP_CONFIG_FILE = join(CONFIG_DIR, 'lsp-config.json');
 
 export const DEFAULT_LSP_SERVERS: Record<string, LSPServerConfig> = {
@@ -178,7 +181,7 @@ function loadServersFromDisk(): Record<string, LSPServerConfig> {
 				'utf8',
 			);
 		} catch (error) {
-			console.debug('Failed to write default lsp-config.json:', error);
+			lspLog.debug('Failed to write default lsp-config.json:', {error});
 		}
 
 		return DEFAULT_LSP_SERVERS;
@@ -191,7 +194,7 @@ function loadServersFromDisk(): Record<string, LSPServerConfig> {
 		const serversFromConfig = parseLspConfigFile(parsed);
 		return serversFromConfig ?? DEFAULT_LSP_SERVERS;
 	} catch (error) {
-		console.debug('Failed to read lsp-config.json, using defaults:', error);
+		lspLog.debug('Failed to read lsp-config.json, using defaults:', {error});
 		return DEFAULT_LSP_SERVERS;
 	}
 }

@@ -2,6 +2,9 @@ import {promises as fs, createReadStream} from 'fs';
 import {createInterface} from 'readline';
 import * as chardet from 'chardet';
 import * as iconv from 'iconv-lite';
+import {logger} from '../../../utils/core/logger.js';
+
+const encodingLog = logger.child('mcp.encoding');
 
 // Node.js max string length is 2^29 - 24 ≈ 512MB chars.
 // Use 256MB as safe limit to account for encoding expansion overhead.
@@ -76,8 +79,9 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 
 		// Check if encoding is supported
 		if (!iconv.encodingExists(encoding)) {
-			console.warn(
+			encodingLog.warn(
 				`Unsupported encoding detected: ${encoding}, falling back to UTF-8`,
+				{encoding, filePath},
 			);
 			return buffer.toString('utf-8');
 		}
@@ -96,8 +100,8 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 		}
 
 		// Fallback to UTF-8 if encoding detection fails
-		console.warn(
-			`Encoding detection failed for ${filePath}, using UTF-8:`,
+		encodingLog.warn(
+			`Encoding detection failed for ${filePath}, using UTF-8`,
 			error,
 		);
 		return await fs.readFile(filePath, 'utf-8');
@@ -244,8 +248,8 @@ export async function writeFileWithEncoding(
 		}
 	} catch (error) {
 		// Fallback to UTF-8 if encoding handling fails
-		console.warn(
-			`Encoding handling failed for ${filePath}, using UTF-8:`,
+		encodingLog.warn(
+			`Encoding handling failed for ${filePath}, using UTF-8`,
 			error,
 		);
 		await fs.writeFile(filePath, content, 'utf-8');

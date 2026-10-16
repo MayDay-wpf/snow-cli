@@ -3,6 +3,9 @@ import * as path from 'path';
 import type {Position, Location} from 'vscode-languageserver-protocol';
 import {LSPClient} from './LSPClient.js';
 import {LSPServerRegistry} from './LSPServerRegistry.js';
+import {logger} from '../../utils/core/logger.js';
+
+const lspLog = logger.child('mcp:lsp');
 
 export class LSPManager {
 	private clients: Map<string, LSPClient> = new Map();
@@ -85,14 +88,14 @@ export class LSPManager {
 
 			return locations.length > 0 ? locations[0]! : null;
 		} catch (error) {
-			console.debug('LSP findDefinition error:', error);
+			lspLog.debug('LSP findDefinition error:', {error, filePath, line, column});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					lspLog.debug('Suppressed closeDocument error in findDefinition:', {error: closeError, uri});
 				}
 			}
 		}
@@ -134,14 +137,14 @@ export class LSPManager {
 
 			return locations.slice(0, maxResults);
 		} catch (error) {
-			console.debug('LSP findReferences error:', error);
+			lspLog.debug('LSP findReferences error:', {error, filePath, line, column});
 			return [];
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					lspLog.debug('Suppressed closeDocument error in findReferences:', {error: closeError, uri});
 				}
 			}
 		}
@@ -177,14 +180,14 @@ export class LSPManager {
 
 			return symbols;
 		} catch (error) {
-			console.debug('LSP documentSymbol error:', error);
+			lspLog.debug('LSP documentSymbol error:', {error, filePath});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					lspLog.debug('Suppressed closeDocument error in getDocumentSymbols:', {error: closeError, uri});
 				}
 			}
 		}
@@ -221,14 +224,14 @@ export class LSPManager {
 
 			return hover;
 		} catch (error) {
-			console.debug('LSP hover error:', error);
+			lspLog.debug('LSP hover error:', {error, filePath, line, column});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					lspLog.debug('Suppressed closeDocument error in getHoverInfo:', {error: closeError, uri});
 				}
 			}
 		}
