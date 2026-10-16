@@ -67,9 +67,9 @@ test('ZeroSilentCatchGuard: enforces ratchet threshold on blind silent catch {} 
 	}
 
 	// 基线棘轮机制：原先全量为 307 处
-	// 历经全域深度治理与可观测性重构，空 catch 已从 307 骤降至 55 处
+	// 历经全域深度治理与可观测性重构，外层 UI/Hooks 与四大中枢已系统性收官，空 catch 已从 307 骤降至 26 处
 	// 伴随治理持续下锁，只降不升，严禁新增任何盲目吞错代码！
-	const CURRENT_MAX_SILENT_CATCH_RATCHET = 55;
+	const CURRENT_MAX_SILENT_CATCH_RATCHET = 26;
 
 	t.true(
 		allViolations.length <= CURRENT_MAX_SILENT_CATCH_RATCHET,

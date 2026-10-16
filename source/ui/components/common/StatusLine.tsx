@@ -14,6 +14,9 @@ import {
 import {readSettings} from '../../../utils/config/unifiedSettings.js';
 import {configEvents} from '../../../utils/config/configEvents.js';
 import {useStatusLineHookItems} from './statusline/useStatusLineHooks.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:StatusLine');
 import {BUILTIN_STATUSLINE_IDS} from './statusline/builtinIds.js';
 import {
 	tpsTracker,
@@ -142,7 +145,11 @@ async function getWindowsProcessMemoryUsageMb(): Promise<number | undefined> {
 			if (memoryUsageMb !== undefined) {
 				return memoryUsageMb;
 			}
-		} catch {}
+		} catch (e) {
+			log.debug('Failed to get Windows process memory usage', {
+				error: e instanceof Error ? e.message : String(e),
+			});
+		}
 	}
 
 	return undefined;

@@ -5,6 +5,9 @@ import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {streamGeneratePrompt} from '../../../utils/commands/newPrompt.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:NewPromptPanel');
 
 type Step = 'input' | 'generating' | 'preview' | 'error';
 
@@ -72,8 +75,10 @@ export const NewPromptPanel: React.FC<Props> = ({onAccept, onCancel}) => {
 	const handleCancel = useCallback(() => {
 		try {
 			abortControllerRef.current?.abort();
-		} catch {
-			// ignore
+		} catch (e) {
+			log.debug('Error aborting prompt generation on cancel', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 		onCancel();
 	}, [onCancel]);

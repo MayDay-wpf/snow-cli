@@ -3,6 +3,8 @@ import {exec} from 'child_process';
 import {promisify} from 'util';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('hooks:useClipboard');
 import {
 	isWSL,
 	findPowerShellInWSL,
@@ -269,7 +271,10 @@ end try'`;
 						try {
 							await execAsync(`rm "${tmpFile}"`, {timeout: 1000});
 						} catch (e) {
-							// Ignore cleanup errors
+							log.debug('Failed to clean up clipboard temp file', {
+								tmpFile,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 
 						if (base64 && base64.length > 100) {

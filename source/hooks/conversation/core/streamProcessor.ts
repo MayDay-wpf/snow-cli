@@ -6,6 +6,9 @@ import {createStreamGenerator} from './streamFactory.js';
 import {tpsTracker} from './tpsTracker.js';
 import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import {cleanThinkingContent} from '../utils/thinkingExtractor.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('hooks:streamProcessor');
 import type {
 	ConversationHandlerOptions,
 	ConversationUsage,
@@ -253,8 +256,10 @@ export async function processStreamRound(ctx: {
 				setStreamTokenCount(currentTokenCount);
 				lastTokenUpdateTime = now;
 			}
-		} catch {
-			// Ignore encoding errors
+		} catch (e) {
+			log.debug('Failed to encode tokens in streamProcessor', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	};
 

@@ -170,8 +170,11 @@ export default function ToolConfirmation({
 			if (command && typeof command === 'string') {
 				return isSensitiveCommand(command);
 			}
-		} catch {
-			// Ignore parse errors
+		} catch (e) {
+			compLog.debug('Failed to parse tool arguments for sensitive command check', {
+				toolName,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 
 		return {isSensitive: false};
@@ -587,8 +590,10 @@ export default function ToolConfirmation({
 						});
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (e) {
+				compLog.debug('Failed to parse tool arguments for diff preview', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 			return entries;
 		};

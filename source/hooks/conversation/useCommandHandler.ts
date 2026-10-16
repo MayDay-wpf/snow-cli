@@ -1555,8 +1555,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						);
 						const todoService = getTodoService();
 						await todoService.copyTodoList(currentSession.id, forkedSession.id);
-					} catch {
-						// Non-critical
+					} catch (e) {
+						log.debug('Failed to copy todo list to forked session (non-critical)', {
+							sourceSessionId: currentSession.id,
+							forkedSessionId: forkedSession.id,
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 
 					if (options.onResumeSessionById) {

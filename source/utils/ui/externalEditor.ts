@@ -5,6 +5,8 @@ import {join} from 'path';
 import {readFileWithEncoding} from '../../mcp/utils/filesystem/encoding.utils.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('ui:externalEditor');
+
 type StdinLike = NodeJS.ReadStream & {
 	isRaw?: boolean;
 	setRawMode?: (mode: boolean) => void;
@@ -83,8 +85,11 @@ export async function editTextWithNotepad(initialText: string): Promise<string> 
 
 		try {
 			await fs.unlink(tempFile);
-		} catch {
-			// 临时文件清理失败不应阻断主流程
+		} catch (e) {
+			log.debug('Failed to unlink external editor temp file', {
+				tempFile,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }

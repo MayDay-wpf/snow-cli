@@ -1,3 +1,7 @@
+import {logger} from '../core/logger.js';
+
+const log = logger.child('ui:terminalTitle');
+
 type TerminalTitleStreamLike =
 	| Pick<NodeJS.WriteStream, 'write' | 'isTTY'>
 	| {
@@ -27,14 +31,19 @@ export function setTerminalTitle(
 	if (safeTitle) {
 		try {
 			process.title = safeTitle;
-		} catch {
-			// 某些平台（如部分容器/沙箱）写入 process.title 会失败，忽略
+		} catch (e) {
+			log.debug('Failed to set process.title in current environment', {
+				title: safeTitle,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 
 	try {
 		stream.write(`\x1b]0;${safeTitle}\x07`);
-	} catch {
-		// stdout 已关闭或不可写时忽略，避免应用崩溃
+	} catch (e) {
+		log.debug('Failed to write OSC 0 title sequence to stream', {
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 }

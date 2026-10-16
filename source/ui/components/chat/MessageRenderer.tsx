@@ -16,6 +16,9 @@ import {getCompressionSummaryDisplay} from '../../../utils/ui/compressionSummary
 import type {ThinkDisplayMode} from '../../../utils/config/themeConfig.js';
 import {getToolStatusIcon} from '../special/toolIcons.js';
 import {cleanThinkingContent} from '../../../hooks/conversation/utils/thinkingExtractor.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:MessageRenderer');
 
 /**
  * Compact thinking content for display in compact mode.
@@ -544,8 +547,10 @@ function MessageRendererImpl({
 														/>
 													);
 												}
-											} catch {
-												// Not JSON, continue with normal rendering
+											} catch (e) {
+												log.debug('Tool result content is not HookError JSON, rendering standard output', {
+													error: e instanceof Error ? e.message : String(e),
+												});
 											}
 
 											// For tool messages with status, render as plain text with color

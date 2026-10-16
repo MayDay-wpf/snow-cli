@@ -1,6 +1,9 @@
 import {existsSync, readFileSync} from 'fs';
 import {join} from 'path';
 import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:themes');
 
 export type ThemeType =
 	| 'dark'
@@ -88,8 +91,11 @@ function loadCustomThemeColors(): ThemeColors {
 			}
 			return colors;
 		}
-	} catch {
-		// ignore
+	} catch (e) {
+		log.debug('Failed to read or parse custom theme colors from config', {
+			configPath,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 	return defaultCustomColors;
 }

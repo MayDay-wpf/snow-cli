@@ -1,5 +1,8 @@
 import {useState, useCallback} from 'react';
 import {exec} from 'child_process';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('hooks:useBackgroundProcesses');
 
 export interface BackgroundProcess {
 	id: string;
@@ -95,15 +98,21 @@ export function useBackgroundProcesses() {
 							global.process.kill(pid, 0);
 							// If we get here, process is still alive, send SIGKILL
 							global.process.kill(pid, 'SIGKILL');
-						} catch {
-							// Process already dead or no permission, ignore
+						} catch (e) {
+							log.debug('Process already dead or no permission on SIGKILL follow-up', {
+								pid,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 					}, 100);
 
 					// Update status after kill
 					updateProcessStatus(id, 'failed', 130);
-				} catch {
-					// Process already dead or no permission
+				} catch (e) {
+					log.debug('Process already dead or no permission on initial kill', {
+						pid,
+						error: e instanceof Error ? e.message : String(e),
+					});
 				}
 			}
 		},

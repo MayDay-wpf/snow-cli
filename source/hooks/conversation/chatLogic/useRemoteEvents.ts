@@ -5,6 +5,9 @@ import {connectionManager} from '../../../utils/connection/ConnectionManager.js'
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {performAutoCompression} from '../../../utils/core/autoCompress.js';
 import {isCompressionAborted} from '../../../utils/core/autoCompress.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('hooks:useRemoteEvents');
 
 interface UseRemoteEventsHandlers {
 	handleMessageSubmit: (
@@ -132,8 +135,11 @@ export function useRemoteEvents(
 							if (Array.isArray(parsed)) {
 								selected = parsed.filter(item => typeof item === 'string');
 							}
-						} catch {
-							// Keep original selected value if parsing fails
+						} catch (e) {
+							log.debug('Failed to parse remote selected array JSON, keeping original string', {
+								trimmed,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 					}
 				}

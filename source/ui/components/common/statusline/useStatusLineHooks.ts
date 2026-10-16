@@ -10,6 +10,8 @@ import React from 'react';
 import {STATUSLINE_HOOKS_DIR} from '../../../../utils/config/apiConfig.js';
 import {logger} from '../../../../utils/core/logger.js';
 import {gitBranchStatusLineHook} from './gitBranch.js';
+
+const log = logger.child('ui:useStatusLineHooks');
 import type {
 	StatusLineHookContext,
 	StatusLineHookDefinition,
@@ -272,15 +274,20 @@ export function useStatusLineHookItems(
 				watcher.on('error', () => {
 					try {
 						watcher?.close();
-					} catch {
-						// ignore
+					} catch (e) {
+						log.debug('Error closing statusline hook watcher on watcher error', {
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 					watcher = null;
 					if (!disposed) {
 						setTimeout(startWatch, 300);
 					}
 				});
-			} catch {
+			} catch (err) {
+				log.debug('Error starting statusline hook watcher', {
+					error: err instanceof Error ? err.message : String(err),
+				});
 				if (!disposed) {
 					setTimeout(startWatch, 400);
 				}
@@ -297,8 +304,10 @@ export function useStatusLineHookItems(
 			if (debounceTimer) clearTimeout(debounceTimer);
 			try {
 				watcher?.close();
-			} catch {
-				// ignore
+			} catch (e) {
+				log.debug('Error closing statusline hook watcher on unmount', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		};
 	}, []);
