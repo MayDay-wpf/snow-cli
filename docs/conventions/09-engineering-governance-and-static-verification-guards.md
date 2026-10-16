@@ -50,11 +50,15 @@ status: normative
 ### 2. Tier 1: 提交期增量安全气囊（Commit-Time Hook via Git pre-commit）
 - **部署位置**：`.git/hooks/pre-commit`。
 - **执行原则**：**仅增量扫描当前暂存区（`git diff --cached --name-only`）**，绝不进行全量全工程拖慢提交体验。
-- **硬拦截指标**：
-  - 拦截任何非标准的 logger 命名（只能声明为 `const log`）；
-  - 拦截对全局单例 `logger.` 的跨级直调；
-  - 拦截无任何线索的静默 `catch {}` 或 `catch (e) {}`；
-  - 拦截任何非法 `console.log` / `console.error`。
+- **执行时序（严格串行短路）**：
+  1. **Phase 1: 轻量 AST/正则契约扫描（< 50ms）**
+     - 拦截任何非标准的 logger 命名（只能声明为 `const log`）；
+     - 拦截对全局单例 `logger.` 的跨级直调；
+     - 拦截无任何线索的静默 `catch {}` 或 `catch (e) {}`；
+     - 拦截任何非法 `console.log` / `console.error`；
+     - 拦截绕过 `snowContext` 的硬编码 `homedir()/.snow`。
+  2. **Phase 2: 暂存区 Biome 增量格式化与 Lint 校验（< 80ms）**
+     - 运行 `npx @biomejs/biome check --staged` 确保提交的代码风格与静态规则零违规。
 
 ### 3. Tier 2: 类型健全性编译仲裁（Type-Soundness Oracle via `tsc --noEmit`）
 - **职责定位**：类型系统的绝对最高法官。

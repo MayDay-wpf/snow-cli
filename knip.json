@@ -1,0 +1,22 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"entry": [
+		"source/cli.tsx",
+		"source/test/**/*.ts",
+		"source/test/**/*.tsx",
+		"scripts/**/*.ts",
+		"scripts/**/*.mjs",
+		"scripts/**/*.cjs"
+	],
+	"project": [
+		"source/**/*.ts",
+		"source/**/*.tsx",
+		"scripts/**/*.ts"
+	],
+	"ignore": [
+		"source/vendor/**"
+	],
+	"ignoreDependencies": [
+		"@sindresorhus/tsconfig"
+	]
+}

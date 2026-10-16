@@ -53,8 +53,11 @@
 		"test:integration": "ava source/test/integration/**/*.ts",
 		"test:tui": "ava source/test/tui/**/*.tsx",
 		"test:run": "ava",
-		"lint": "xo",
-		"format": "prettier --write ."
+		"lint": "biome lint .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write .",
+		"deadcode": "knip",
+		"check": "biome check . && tsc --noEmit && npm test"
 	},
 	"files": [
 		"bundle",
@@ -76,6 +79,7 @@
 	"devDependencies": {
 		"@agentclientprotocol/sdk": "^0.14.1",
 		"@alcalzone/ansi-tokenize": "^0.3.0",
+		"@biomejs/biome": "^2.5.15",
 		"@blindfold/sdk": "^1.0.2",
 		"@grpc/grpc-js": "^1.14.4",
 		"@inkjs/ui": "^2.0.0",
@@ -136,6 +140,7 @@
 		"ink-text-input": "^6.0.0",
 		"is-in-ci": "^2.0.0",
 		"katex": "^0.16.27",
+		"knip": "^6.41.0",
 		"mammoth": "^1.11.0",
 		"marked": "^15.0.6",
 		"marked-terminal": "^7.3.0",
