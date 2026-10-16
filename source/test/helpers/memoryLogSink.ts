@@ -1,15 +1,10 @@
-import type {LogLevel} from '../../utils/core/logger.js';
+import type {
+	StructuredLogEntry,
+	LoggerSink,
+	LogLevelName,
+} from '../../utils/core/logger.js';
 
-export interface CapturedLogEntry {
-	level: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
-	message: string;
-	meta?: any;
-	timestamp: string;
-}
-
-export interface LoggerSink {
-	write(entry: CapturedLogEntry): void;
-}
+export type CapturedLogEntry = StructuredLogEntry;
 
 /**
  * 内存日志接收器：在测试沙箱中截流所有日志输出，提供零 IO、无竞态的断言能力。
@@ -25,13 +20,13 @@ export class MemoryLogSink implements LoggerSink {
 		return [...this.entries];
 	}
 
-	getMessages(level?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG'): string[] {
+	getMessages(level?: LogLevelName): string[] {
 		return this.entries
 			.filter(e => (level ? e.level === level : true))
 			.map(e => e.message);
 	}
 
-	hasMessage(pattern: string | RegExp, level?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG'): boolean {
+	hasMessage(pattern: string | RegExp, level?: LogLevelName): boolean {
 		const msgs = this.getMessages(level);
 		return msgs.some(msg =>
 			typeof pattern === 'string' ? msg.includes(pattern) : pattern.test(msg),
