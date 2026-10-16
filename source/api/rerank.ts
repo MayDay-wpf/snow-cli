@@ -100,7 +100,7 @@ interface FitResult {
  * 3. If a single document exceeds 30% of context, truncate it
  * 4. Drop documents that no longer fit
  */
-async function fitDocumentsToContext(
+export async function fitDocumentsToContext(
 	query: string,
 	documents: string[],
 	contextLength: number,
@@ -165,7 +165,7 @@ async function fitDocumentsToContext(
 	return {documents: fitted, originalIndices, droppedCount, truncatedCount};
 }
 
-function resolveRerankEndpoint(baseUrl: string): string {
+export function resolveRerankEndpoint(baseUrl: string): string {
 	const trimmed = baseUrl.trim().replace(/\/+$/, '');
 
 	if (trimmed.endsWith('/rerank')) {
@@ -184,7 +184,7 @@ function resolveRerankEndpoint(baseUrl: string): string {
  * Normalize various rerank API response formats into a unified structure.
  * Supports Jina, Cohere, and OpenAI-compatible rerank responses.
  */
-function normalizeRerankResponse(data: any): RerankResponse {
+export function normalizeRerankResponse(data: any): RerankResponse {
 	if (data && Array.isArray(data.results)) {
 		return {
 			results: data.results.map((r: any) => ({

@@ -170,7 +170,7 @@ export function createIdleTimeoutGuard({
 				// 忽略取消失败
 			}
 		}
-	}, 5000);
+	}, Math.min(5000, Math.max(10, Math.floor(idleTimeoutMs / 2))));
 
 	return {
 		abandon: () => {

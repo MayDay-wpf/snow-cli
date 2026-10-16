@@ -2,6 +2,7 @@ import {
 	getSnowConfig,
 	getCustomSystemPrompt,
 } from '../utils/config/apiConfig.js';
+import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -548,3 +549,4 @@ Please provide your review in a clear, structured format.`;
 
 // Export singleton instance
 export const reviewAgent = new ReviewAgent();
+registerCacheClearer(() => reviewAgent.clearCache());

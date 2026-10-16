@@ -1,4 +1,5 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
+import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -705,3 +706,4 @@ Guidelines:
 
 // Export singleton instance
 export const codebaseReviewAgent = new CodebaseReviewAgent();
+registerCacheClearer(() => codebaseReviewAgent.clearCache());

@@ -1,4 +1,5 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
+import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -178,3 +179,4 @@ Now produce the compressed terminal result:`;
 }
 
 export const bashOutputSummaryAgent = new BashOutputSummaryAgent();
+registerCacheClearer(() => bashOutputSummaryAgent.clearCache());

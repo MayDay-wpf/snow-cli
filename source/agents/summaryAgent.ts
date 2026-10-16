@@ -1,4 +1,5 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
+import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
@@ -324,3 +325,4 @@ Output in the following JSON format (JSON only, no other content):
 
 // Export singleton instance
 export const summaryAgent = new SummaryAgent();
+registerCacheClearer(() => summaryAgent.clearCache());

@@ -254,7 +254,11 @@ function loadDiskCatalog(expectedHash: string): MCPCatalogDiskFormat | null {
 		if (!fs.existsSync(CATALOG_FILE_PATH)) return null;
 		const raw = fs.readFileSync(CATALOG_FILE_PATH, 'utf8');
 		const data = JSON.parse(raw) as MCPCatalogDiskFormat;
-		if (data.version === 1 && data.configHash === expectedHash && Array.isArray(data.servicesInfo)) {
+		if (
+			data.version === 1 &&
+			data.configHash === expectedHash &&
+			Array.isArray(data.servicesInfo)
+		) {
 			logger.debug('[MCP] Loaded valid external MCP catalog from disk cache');
 			return data;
 		}
@@ -273,7 +277,11 @@ function saveDiskCatalog(catalog: MCPCatalogDiskFormat): void {
 		if (!fs.existsSync(dir)) {
 			fs.mkdirSync(dir, {recursive: true});
 		}
-		fs.writeFileSync(CATALOG_FILE_PATH, JSON.stringify(catalog, null, 2), 'utf8');
+		fs.writeFileSync(
+			CATALOG_FILE_PATH,
+			JSON.stringify(catalog, null, 2),
+			'utf8',
+		);
 		logger.debug('[MCP] Saved external MCP catalog to disk cache');
 	} catch (e) {
 		logger.warn('[MCP] Failed to save disk catalog:', e);
@@ -1418,6 +1426,13 @@ export async function executeMCPTool(
 	abortSignal?: AbortSignal,
 	onTokenUpdate?: (tokenCount: number) => void,
 ): Promise<any> {
+	// Fast-fail if the caller already aborted (e.g. ESC pressed before dispatch).
+	// Prevents starting subprocess/HTTP work that would be immediately discarded.
+	if (abortSignal?.aborted) {
+		const reason: any = (abortSignal as any).reason;
+		throw reason instanceof Error ? reason : new Error('Operation aborted');
+	}
+
 	// Normalize args: parse stringified JSON parameters for known parameters
 	// Some AI models (e.g., Anthropic) may serialize array/object parameters as JSON strings
 	// Only parse parameters that are EXPECTED to be arrays/objects (whitelist approach)
@@ -2440,7 +2455,10 @@ async function executeOnExternalMCPService(
 		// SDK v2 handles input_required responses transparently inside callTool().
 		// If server returned structured error result (isError: true), preserve content for model reasoning.
 		if ((result as any).isError) {
-			logger.warn(`MCP service ${serviceName} tool ${toolName} reported error:`, result);
+			logger.warn(
+				`MCP service ${serviceName} tool ${toolName} reported error:`,
+				result,
+			);
 		}
 		return result.content;
 	};
@@ -2468,23 +2486,29 @@ async function executeOnExternalMCPService(
 		}
 
 		// 自适应状态机降级：如果是超时或中断，就地封装为友好结构化结果，防止拖垮 Promise.all 阻断整轮会话
-		const isTimeout = error instanceof Error && (
-			error.name === 'TimeoutError' ||
-			error.message.toLowerCase().includes('timeout') ||
-			error.message.toLowerCase().includes('timed out')
-		);
-		const isAborted = abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError');
+		const isTimeout =
+			error instanceof Error &&
+			(error.name === 'TimeoutError' ||
+				error.message.toLowerCase().includes('timeout') ||
+				error.message.toLowerCase().includes('timed out'));
+		const isAborted =
+			abortSignal?.aborted ||
+			(error instanceof Error && error.name === 'AbortError');
 
 		if (isTimeout || isAborted) {
 			logger.warn(
-				`MCP service ${serviceName} tool ${toolName} ${isAborted ? 'aborted' : 'timed out'}:`,
+				`MCP service ${serviceName} tool ${toolName} ${
+					isAborted ? 'aborted' : 'timed out'
+				}:`,
 				error,
 			);
 			return [
 				{
 					type: 'text',
 					text: `[MCP Service Notice] Tool "${toolName}" on service "${serviceName}" ${
-						isAborted ? 'was cancelled by user.' : 'did not respond within 20s (network timeout).'
+						isAborted
+							? 'was cancelled by user.'
+							: 'did not respond within 20s (network timeout).'
 					} Please continue with other available context or try an alternative tool.`,
 				},
 			];

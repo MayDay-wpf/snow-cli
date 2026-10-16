@@ -68,6 +68,12 @@ export class Logger {
 		fs.renameSync(filePath, rotatedPath);
 	}
 
+	private sink: {write(entry: any): void} | null = null;
+
+	setSink(sink: {write(entry: any): void} | null): void {
+		this.sink = sink;
+	}
+
 	private writeLog(level: LogLevel, message: string, meta?: any): void {
 		const timestamp = this.formatTimestamp(new Date());
 		const levelName = LogLevel[level].toUpperCase().padEnd(5);
@@ -77,6 +83,11 @@ export class Logger {
 			message,
 			...(meta && {meta}),
 		};
+
+		if (this.sink) {
+			this.sink.write(logEntry);
+			return;
+		}
 
 		const logLine = JSON.stringify(logEntry) + '\n';
 		const filePath = this.getLogFilePath(level);
@@ -121,6 +132,9 @@ function getDefaultLogger(): Logger {
 
 // Create a proxy object that lazily initializes the logger
 const logger = {
+	setSink(sink: {write(entry: any): void} | null): void {
+		getDefaultLogger().setSink(sink);
+	},
 	error(message: string, meta?: any): void {
 		getDefaultLogger().error(message, meta);
 	},
