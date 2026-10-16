@@ -68,10 +68,10 @@ status: normative
   - `noUnusedLocals: true`、`noUnusedParameters: true`、`noPropertyAccessFromIndexSignature: true` 均为硬性拦截；
   - **绑定位置**：作为 `scripts/gate-runner.mjs` 的 **Step 0 强制前置检查**。执行 `npm test` 前必须先通过类型编译，杜绝测试框架 JIT `transpileOnly` 掩盖类型破损。
 
-### 4. Tier 3: 七维 0-容忍架构门禁网格（Zero-Tolerance Guard Mesh）
-全量门禁以高优先级单元测试形式固化于 `source/test/unit/core/`，并永久绑定至 `gate-runner.mjs fast` 核心套件：
+### 4. Tier 3: 七项架构门控测试 (Architecture Guards)
+门控测试以单元测试形式位于 `source/test/unit/core/`，并绑定至 `scripts/gate-runner.mjs fast` 核心套件：
 
-| 门控名称 | 测试文件路径 | 物理拦截目标 | 验收棘轮 (Ratchet) |
+| 门控名称 | 测试文件路径 | 检查目标 | 允许阈值 (Ratchet) |
 | :--- | :--- | :--- | :--- |
 | **ZeroSilentCatchGuard** | `zeroSilentCatchGuard.test.ts` | 拦截全仓无诊断日志记录的盲目 `catch {}` | **0** (零容忍) |
 | **ZeroLoggerNameGuard** | `zeroLoggerNameGuard.test.ts` | 严禁除 `const log = logger.child(...)` 以外的任何变体命名，含反消融测试 | **0** (零容忍) |
