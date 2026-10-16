@@ -6,7 +6,7 @@ import {
 import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 import {logger} from '../../utils/core/logger.js';
 
-const sessionSaveLog = logger.child('hooks:session-save');
+const log = logger.child('hooks:session-save');
 
 export function useSessionSave() {
 	const savedMessagesRef = useRef<Set<string>>(new Set());
@@ -66,7 +66,7 @@ export function useSessionSave() {
 				await sessionManager.addMessage(sessionMessage);
 				savedMessagesRef.current.add(messageId);
 			} catch (error) {
-				sessionSaveLog.error('Failed to save message:', {error, messageId});
+				log.error('Failed to save message:', {error, messageId});
 			}
 		},
 		[generateMessageId],

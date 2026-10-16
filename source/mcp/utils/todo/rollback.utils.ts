@@ -5,7 +5,7 @@ import {getProjectId} from '../../../utils/session/projectUtils.js';
 import {getGlobalSnowDir} from '../../../utils/core/snowContext.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const todoLog = logger.child('mcp.todoRollback');
+const log = logger.child('mcp.todoRollback');
 
 export interface TodoSnapshotOperation {
 	beforeList: TodoList | null;
@@ -58,7 +58,7 @@ function saveTodoSnapshotData(data: TodoSnapshotData): void {
 			'utf-8',
 		);
 	} catch (error) {
-		todoLog.error('Failed to save TODO snapshot data', error);
+		log.error('Failed to save TODO snapshot data', error);
 	}
 }
 

@@ -12,7 +12,7 @@ import type {OAuthProfileMetadata} from '../oauth/types.js';
 import {logger} from '../core/logger.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 
-const configLogger = logger.child('config.api');
+const log = logger.child('config.api');
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
@@ -283,7 +283,7 @@ function migrateProxyConfigToNewFile(legacyProxy: any): void {
 			);
 		}
 	} catch (error) {
-		configLogger.error('Failed to migrate proxy config', error);
+		log.error('Failed to migrate proxy config', error);
 	}
 }
 
@@ -525,7 +525,7 @@ export async function updateSnowConfig(
 		}
 	} catch (error) {
 		// Profiles system not available yet (during initialization), skip sync
-		configLogger.debug('updateSnowConfig profiles system not available, skipping sync', {error});
+		log.debug('updateSnowConfig profiles system not available, skipping sync', {error});
 	}
 
 	const currentConfig = activeProfileConfig ?? loadConfig();
@@ -546,7 +546,7 @@ export async function updateSnowConfig(
 			clearAllAgentCaches();
 		} catch (error) {
 			// Profiles system not available yet (during initialization), skip sync
-			configLogger.debug('updateSnowConfig profile save failed, skipping sync', {error, activeProfileName});
+			log.debug('updateSnowConfig profile save failed, skipping sync', {error, activeProfileName});
 		}
 	}
 }
@@ -785,7 +785,7 @@ function migrateSystemPromptFromTxt(): void {
 		// 删除旧文件
 		unlinkSync(SYSTEM_PROMPT_FILE);
 	} catch (error) {
-		configLogger.error('Failed to migrate system prompt', error);
+		log.error('Failed to migrate system prompt', error);
 	}
 }
 
@@ -822,7 +822,7 @@ export function getSystemPromptConfig(): SystemPromptConfig | undefined {
 
 		return config;
 	} catch (error) {
-		configLogger.error('Failed to read system prompt config', error);
+		log.error('Failed to read system prompt config', error);
 		return undefined;
 	}
 }
@@ -840,7 +840,7 @@ export function saveSystemPromptConfig(config: SystemPromptConfig): void {
 			'utf8',
 		);
 	} catch (error) {
-		configLogger.error('Failed to save system prompt config', error);
+		log.error('Failed to save system prompt config', error);
 		throw error;
 	}
 }

@@ -20,7 +20,7 @@ import type {RequestMethod} from '../config/apiConfig.js';
 import {cleanOrphanedToolCalls} from './contextCompressor.js';
 import {logger} from './logger.js';
 
-const compressorLog = logger.child('core.subAgentContextCompressor');
+const log = logger.child('core.subAgentContextCompressor');
 
 /** Threshold percentage to trigger compression */
 const COMPRESS_THRESHOLD = 80;
@@ -94,7 +94,7 @@ export function freeSubAgentEncoder(): void {
 			_encoder.free();
 		} catch (error) {
 			// already freed or unavailable
-			compressorLog.debug('freeSubAgentEncoder free() failed or already freed', {error});
+			log.debug('freeSubAgentEncoder free() failed or already freed', {error});
 		}
 		_encoder = null;
 	}
@@ -143,7 +143,7 @@ export function countMessagesTokens(messages: ChatMessage[]): number {
 		}
 		return total;
 	} catch (error) {
-		compressorLog.error('tiktoken counting failed, falling back to char estimate', error);
+		log.error('tiktoken counting failed, falling back to char estimate', error);
 		// Rough fallback: ~4 chars per token
 		const totalChars = messages.reduce(
 			(sum, m) => sum + (m.content?.length || 0),
@@ -544,12 +544,12 @@ async function aiSummaryCompress(
 		if (config.abortSignal?.aborted) {
 			return {messages, aborted: true};
 		}
-		compressorLog.error('AI compression failed', error);
+		log.error('AI compression failed', error);
 		return {messages};
 	}
 
 	if (!summary) {
-		compressorLog.warn('AI compression returned empty summary');
+		log.warn('AI compression returned empty summary');
 		return {messages};
 	}
 
@@ -728,7 +728,7 @@ export async function compressSubAgentContext(
 
 	// Fallback: AI compression returned original messages (failed or nothing to compress).
 	// Try smart truncation as a last resort to free some context space.
-	compressorLog.warn(
+	log.warn(
 		'AI compression ineffective, falling back to truncation',
 	);
 	const truncatedMessages = truncateToolResults(messages, keepRounds);

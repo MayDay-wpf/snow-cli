@@ -14,7 +14,7 @@ import {
 import GameRunner from '../components/games/GameRunner.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack?: () => void;
@@ -49,7 +49,7 @@ export default function GamesScreen({onBack, terminalWidth}: Props) {
 					setLoadingExternal(false);
 				}
 			} catch (error) {
-				pageLog.debug('Failed to load external game plugins', {error});
+				log.debug('Failed to load external game plugins', {error});
 				if (!disposed) {
 					setLoadingExternal(false);
 				}

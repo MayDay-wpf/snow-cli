@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {registerCustomCommands} from '../../../utils/commands/custom.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 export function useChatScreenCommands(workingDirectory: string) {
 	const [commandsLoaded, setCommandsLoaded] = useState(false);
@@ -76,7 +76,7 @@ export function useChatScreenCommands(workingDirectory: string) {
 				}
 			})
 			.catch(error => {
-				pageLog.error('Failed to load commands', error);
+				log.error('Failed to load commands', error);
 				if (isMounted) {
 					setCommandsLoaded(true);
 				}

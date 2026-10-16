@@ -11,7 +11,7 @@ import {
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: () => void;
@@ -45,7 +45,7 @@ export default function TaskManagerScreen({onBack, onResumeTask}: Props) {
 			const taskList = await taskManager.listTasks();
 			setTasks(taskList);
 		} catch (error) {
-			pageLog.error('Failed to load tasks', error);
+			log.error('Failed to load tasks', error);
 			setTasks([]);
 		} finally {
 			setIsLoading(false);

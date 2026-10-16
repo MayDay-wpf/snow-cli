@@ -2,7 +2,7 @@ import {createServer, IncomingMessage, ServerResponse} from 'http';
 import {parse as parseUrl} from 'url';
 import {logger} from '../utils/core/logger.js';
 
-const sseLog = logger.child('sse:server');
+const log = logger.child('sse:server');
 
 /**
  * SSE 事件类型定义
@@ -72,7 +72,7 @@ class SSEConnection {
 		this.connectionId = connectionId;
 
 		this.response.on('error', error => {
-			sseLog.debug(`SSE response error on ${this.connectionId}:`, error);
+			log.debug(`SSE response error on ${this.connectionId}:`, error);
 		});
 
 		// 设置 SSE 响应头
@@ -99,7 +99,7 @@ class SSEConnection {
 			const eventData = `data: ${JSON.stringify(event)}\n\n`;
 			this.response.write(eventData);
 		} catch (error) {
-			sseLog.debug(`Failed to send SSE event to ${this.connectionId}:`, error);
+			log.debug(`Failed to send SSE event to ${this.connectionId}:`, error);
 		}
 	}
 
@@ -110,7 +110,7 @@ class SSEConnection {
 		try {
 			this.response.end();
 		} catch (error) {
-			sseLog.debug(`Failed to close SSE connection ${this.connectionId}:`, error);
+			log.debug(`Failed to close SSE connection ${this.connectionId}:`, error);
 		}
 	}
 
@@ -161,9 +161,9 @@ export class SSEServer {
 			this.logCallback(message, level);
 		} else {
 			if (level === 'error') {
-				sseLog.error(message);
+				log.error(message);
 			} else {
-				sseLog.info(message);
+				log.info(message);
 			}
 		}
 	}
@@ -193,7 +193,7 @@ export class SSEServer {
 			);
 
 			this.server.on('error', error => {
-				sseLog.error('SSE server error:', error);
+				log.error('SSE server error:', error);
 				reject(error);
 			});
 
@@ -214,7 +214,7 @@ export class SSEServer {
 				try {
 					conn.close();
 				} catch (err) {
-					sseLog.debug(`Failed to close connection ${conn.getId()}:`, err);
+					log.debug(`Failed to close connection ${conn.getId()}:`, err);
 				}
 			});
 			this.connections.clear();
@@ -275,7 +275,7 @@ export class SSEServer {
 				try {
 					resolve(body ? (JSON.parse(body) as T) : ({} as T));
 				} catch (error) {
-					sseLog.debug('Failed to parse JSON body:', error);
+					log.debug('Failed to parse JSON body:', error);
 					reject(error);
 				}
 			});
@@ -438,7 +438,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify(result));
 			} catch (error) {
-				sseLog.debug('Failed to run session command:', error);
+				log.debug('Failed to run session command:', error);
 				res.writeHead(500, {
 					'Content-Type': 'application/json',
 					'Access-Control-Allow-Origin': '*',
@@ -479,7 +479,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true, session}));
 			} catch (error) {
-				sseLog.debug('Failed to create session:', error);
+				log.debug('Failed to create session:', error);
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({
@@ -526,7 +526,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true, session}));
 			} catch (error) {
-				sseLog.debug('Failed to load session:', error);
+				log.debug('Failed to load session:', error);
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({
@@ -649,7 +649,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true, sessionId, points}));
 			} catch (error) {
-				sseLog.debug('Failed to get rollback points:', error);
+				log.debug('Failed to get rollback points:', error);
 				res.writeHead(500, {
 					'Content-Type': 'application/json',
 					'Access-Control-Allow-Origin': '*',
@@ -712,7 +712,7 @@ export class SSEServer {
 					}),
 				);
 			} catch (error) {
-				sseLog.debug('Failed to list sessions:', error);
+				log.debug('Failed to list sessions:', error);
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({
@@ -749,7 +749,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true, deleted}));
 			} catch (error) {
-				sseLog.debug('Failed to delete session:', error);
+				log.debug('Failed to delete session:', error);
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({
@@ -869,7 +869,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true, result}));
 			} catch (error) {
-				sseLog.debug('Failed to compress context:', error);
+				log.debug('Failed to compress context:', error);
 				res.writeHead(500, {
 					'Content-Type': 'application/json',
 					'Access-Control-Allow-Origin': '*',
@@ -896,7 +896,7 @@ export class SSEServer {
 		this.connections.set(connectionId, connection);
 
 		req.on('error', error => {
-			sseLog.debug(`SSE request error on connection ${connectionId}:`, error);
+			log.debug(`SSE request error on connection ${connectionId}:`, error);
 		});
 
 		// 连接关闭时清理
@@ -970,7 +970,7 @@ export class SSEServer {
 				});
 				res.end(JSON.stringify({success: true}));
 			} catch (error) {
-				sseLog.debug('Failed to handle client message:', error);
+				log.debug('Failed to handle client message:', error);
 				res.writeHead(500, {'Content-Type': 'application/json'});
 				res.end(
 					JSON.stringify({

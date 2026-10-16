@@ -14,7 +14,7 @@ import type {PixelGrid} from '../components/pixel-editor/types.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	version?: string;
@@ -62,7 +62,7 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 					setExitImageGrid(undefined);
 				}
 			} catch (error) {
-				pageLog.debug('Failed to load exit image', {error});
+				log.debug('Failed to load exit image', {error});
 				if (active) {
 					setExitImageGrid(undefined);
 				}

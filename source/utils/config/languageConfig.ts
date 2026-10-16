@@ -3,7 +3,7 @@ import {join} from 'path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.language');
+const log = logger.child('config.language');
 
 export type Language = 'en' | 'zh' | 'zh-TW';
 
@@ -47,7 +47,7 @@ export function loadLanguageConfig(): LanguageConfig {
 		};
 	} catch (error) {
 		// If config file is corrupted, return default config
-		configLogger.warn('Corrupted language config, falling back to default', error);
+		log.warn('Corrupted language config, falling back to default', error);
 		return DEFAULT_CONFIG;
 	}
 }
@@ -63,7 +63,7 @@ export function saveLanguageConfig(config: LanguageConfig): void {
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(configFile, configData, 'utf-8');
 	} catch (error) {
-		configLogger.error('Failed to save language config', error);
+		log.error('Failed to save language config', error);
 	}
 }
 

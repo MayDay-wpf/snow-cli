@@ -22,7 +22,7 @@ import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: () => void;
@@ -38,7 +38,7 @@ function checkCommandExists(command: string): boolean {
 			});
 			return true;
 		} catch (error) {
-			pageLog.debug('where command check failed', {error, command});
+			log.debug('where command check failed', {error, command});
 			return false;
 		}
 	}
@@ -53,7 +53,7 @@ function checkCommandExists(command: string): boolean {
 			});
 			return true;
 		} catch (error) {
-			pageLog.debug('shell command check failed', {error, command, shell});
+			log.debug('shell command check failed', {error, command, shell});
 			// Try next shell
 		}
 	}
@@ -150,7 +150,7 @@ function openEditorForScope(
 				? '  Windows: Notepad++ or VS Code'
 				: '  Ubuntu/Debian: sudo apt-get install nano\n  CentOS/RHEL:   sudo yum install nano\n  macOS:         nano is usually pre-installed';
 
-		pageLog.error(
+		log.error(
 			`No text editor found! Please set the EDITOR or VISUAL environment variable.\n\nExamples:\n${examples}\n\nOr install a text editor:\n${recommendations}`,
 		);
 		onBack();
@@ -184,18 +184,18 @@ function openEditorForScope(
 						scope === 'project'
 							? i18nMessages.scopeProjectLabel
 							: i18nMessages.scopeGlobalLabel;
-					pageLog.info(i18nMessages.savedSuccess.replace('{scope}', scopeLabel));
+					log.info(i18nMessages.savedSuccess.replace('{scope}', scopeLabel));
 				} else {
-					pageLog.error(
+					log.error(
 						i18nMessages.configErrors.replace(
 							'{errors}',
 							validationErrors.join(', '),
 						),
 					);
-					pageLog.error(i18nMessages.reverted);
+					log.error(i18nMessages.reverted);
 				}
 			} catch (error) {
-				pageLog.error(i18nMessages.invalidJson, error);
+				log.error(i18nMessages.invalidJson, error);
 			}
 
 			// The draft file only exists as a scratch area for the external editor.
@@ -203,7 +203,7 @@ function openEditorForScope(
 			try {
 				unlinkSync(configFilePath);
 			} catch (error) {
-				pageLog.debug('Failed to unlink temporary config file', {error});
+				log.debug('Failed to unlink temporary config file', {error});
 			}
 		}
 
@@ -216,7 +216,7 @@ function openEditorForScope(
 			process.stdin.setRawMode(true);
 		}
 
-		pageLog.error('Failed to open editor', error);
+		log.error('Failed to open editor', error);
 		onBack();
 	});
 }

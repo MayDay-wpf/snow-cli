@@ -2,7 +2,7 @@ import {getProxyConfig, sanitizeProxyHost} from '../config/proxyConfig.js';
 import {Agent, ProxyAgent, setGlobalDispatcher} from 'undici';
 import {logger} from './logger.js';
 
-const proxyLog = logger.child('core.proxyUtils');
+const log = logger.child('core.proxyUtils');
 
 let globalProxyInitialized = false;
 let directAgent: Agent | undefined;
@@ -131,7 +131,7 @@ export function initGlobalProxy(): void {
 			setGlobalDispatcher(agent);
 			globalProxyInitialized = true;
 		} catch (error) {
-			proxyLog.error('Failed to initialize global proxy', error);
+			log.error('Failed to initialize global proxy', error);
 		}
 	}
 }
@@ -165,7 +165,7 @@ export function createProxyAgent(
 		return new ProxyAgent(proxyUrl);
 	} catch (error) {
 		// 代理创建失败，返回 undefined 让请求直连
-		proxyLog.error('Failed to create proxy agent', error);
+		log.error('Failed to create proxy agent', error);
 		return undefined;
 	}
 }

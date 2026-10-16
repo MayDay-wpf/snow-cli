@@ -11,7 +11,7 @@ import {
 import {join, dirname, basename} from 'path';
 import {logger} from '../core/logger.js';
 
-const sseLog = logger.child('sse:daemon');
+const log = logger.child('sse:daemon');
 
 /**
  * 守护进程专用日志记录器
@@ -50,7 +50,7 @@ export class DaemonLogger {
 				mkdirSync(archiveDir, {recursive: true});
 			}
 		} catch (err) {
-			sseLog.debug('Failed to ensure log directories exist:', err);
+			log.debug('Failed to ensure log directories exist:', err);
 		}
 	}
 
@@ -81,7 +81,7 @@ export class DaemonLogger {
 			appendFileSync(this.logFilePath, logLine, 'utf-8');
 		} catch (error) {
 			// 日志写入失败时记录错误，避免影响守护进程运行
-			sseLog.error('日志写入失败:', error);
+			log.error('日志写入失败:', error);
 		}
 	}
 
@@ -105,7 +105,7 @@ export class DaemonLogger {
 			this.rotate();
 		} catch (error) {
 			// 轮转失败时记录错误
-			sseLog.error('日志轮转失败:', error);
+			log.error('日志轮转失败:', error);
 		}
 	}
 
@@ -125,7 +125,7 @@ export class DaemonLogger {
 				mkdirSync(archiveDateDir, {recursive: true});
 			}
 		} catch (err) {
-			sseLog.debug('Failed to create archive date directory:', err);
+			log.debug('Failed to create archive date directory:', err);
 		}
 
 		// 获取归档文件名，添加时间戳避免重复
@@ -140,12 +140,12 @@ export class DaemonLogger {
 			// 清理旧归档文件（保留最近 maxBackupFiles 个）
 			this.cleanupOldArchives(archiveDateDir, logFileName);
 		} catch (error) {
-			sseLog.debug('Failed to rename log file during rotation, attempting truncation:', error);
+			log.debug('Failed to rename log file during rotation, attempting truncation:', error);
 			// 如果重命名失败，直接清空当前日志文件
 			try {
 				writeFileSync(this.logFilePath, '', 'utf-8');
 			} catch (err) {
-				sseLog.debug('Failed to truncate log file after rotation failure:', err);
+				log.debug('Failed to truncate log file after rotation failure:', err);
 			}
 		}
 	}
@@ -173,13 +173,13 @@ export class DaemonLogger {
 					try {
 						unlinkSync(file.path);
 					} catch (err) {
-						sseLog.debug(`Failed to unlink old archive file ${file.path}:`, err);
+						log.debug(`Failed to unlink old archive file ${file.path}:`, err);
 					}
 				}
 			}
 		} catch (error) {
 			// 清理失败时记录诊断信息
-			sseLog.debug('Failed to cleanup old archives in daemon logger:', error);
+			log.debug('Failed to cleanup old archives in daemon logger:', error);
 		}
 	}
 

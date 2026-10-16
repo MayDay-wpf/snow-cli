@@ -3,7 +3,7 @@ import path from 'path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const checkpointLogger = logger.child('session.checkpoint');
+const log = logger.child('session.checkpoint');
 
 /**
  * File checkpoint data structure
@@ -45,7 +45,7 @@ class CheckpointManager {
 			await fs.mkdir(this.checkpointsDir, { recursive: true });
 		} catch (error) {
 			// Directory already exists or other error
-			checkpointLogger.debug('ensureCheckpointsDir mkdir failed or already exists', {error, dir: this.checkpointsDir});
+			log.debug('ensureCheckpointsDir mkdir failed or already exists', {error, dir: this.checkpointsDir});
 		}
 	}
 
@@ -165,14 +165,14 @@ class CheckpointManager {
 						await fs.unlink(snapshot.path);
 					} catch (error) {
 						// File may already be deleted, trace safely
-						checkpointLogger.debug('File to unlink already deleted or missing', {
+						log.debug('File to unlink already deleted or missing', {
 							path: snapshot.path,
 							error,
 						});
 					}
 				}
 			} catch (error) {
-				checkpointLogger.error(`Failed to rollback file ${snapshot.path}`, {
+				log.error(`Failed to rollback file ${snapshot.path}`, {
 					path: snapshot.path,
 					error,
 				});
@@ -194,7 +194,7 @@ class CheckpointManager {
 			await fs.unlink(checkpointPath);
 		} catch (error) {
 			// Checkpoint may not exist, ignore
-			checkpointLogger.debug('clearCheckpoint unlink failed or not found', {error, sessionId});
+			log.debug('clearCheckpoint unlink failed or not found', {error, sessionId});
 		}
 
 		if (this.activeCheckpoint?.sessionId === sessionId) {

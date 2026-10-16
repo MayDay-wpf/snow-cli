@@ -36,7 +36,7 @@ import {DuckDuckGoEngine} from './duckduckgo.engine.js';
 import {BingEngine} from './bing.engine.js';
 import type {SearchEngine, SearchEngineId} from './types.js';
 
-const websearchLog = logger.child('mcp:websearch');
+const log = logger.child('mcp:websearch');
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngineId = 'duckduckgo';
 
@@ -129,7 +129,7 @@ async function loadExternalEngines(): Promise<void> {
 	try {
 		entries = readdirSync(SEARCH_ENGINES_DIR, {withFileTypes: true});
 	} catch (error) {
-		websearchLog.warn('[websearch] failed to read plugin dir', {error});
+		log.warn('[websearch] failed to read plugin dir', {error});
 		return;
 	}
 
@@ -148,7 +148,7 @@ async function loadExternalEngines(): Promise<void> {
 			const mod = (await import(moduleUrl)) as SearchEngineModule;
 			const engines = collectFromModule(mod);
 			if (engines.length === 0) {
-				websearchLog.warn(
+				log.warn(
 					`[websearch] plugin "${file.name}" did not export a valid SearchEngine`,
 					{file: file.name},
 				);
@@ -165,7 +165,7 @@ async function loadExternalEngines(): Promise<void> {
 				ENGINES.set(engine.id, engine);
 			}
 		} catch (error) {
-			websearchLog.warn(
+			log.warn(
 				`[websearch] failed to load search engine plugin "${file.name}":`,
 				{error, file: file.name},
 			);
@@ -204,13 +204,13 @@ function ensurePluginWatcher(): void {
 					pluginWatcher?.close();
 				} catch (error) {
 					// ignore
-					websearchLog.debug('Failed to close pluginWatcher on error', {error});
+					log.debug('Failed to close pluginWatcher on error', {error});
 				}
 				pluginWatcher = null;
 				setTimeout(startWatch, 300);
 			});
 		} catch (error) {
-			websearchLog.debug('Failed to start watching search engines directory', {
+			log.debug('Failed to start watching search engines directory', {
 				dir: SEARCH_ENGINES_DIR,
 				error,
 			});

@@ -25,7 +25,7 @@ import {
 } from './profileStore.js';
 import {logger} from '../core/logger.js';
 
-const oauthLog = logger.child('oauth:login');
+const log = logger.child('oauth:login');
 import type {
 	OAuthLoginOutcome,
 	OAuthLoginStartResult,
@@ -205,7 +205,7 @@ async function ensureChatGptHostId(): Promise<string> {
 			return hostId;
 		}
 	} catch (e) {
-		oauthLog.debug('ChatGPT host id file missing or invalid, generating fresh id', {
+		log.debug('ChatGPT host id file missing or invalid, generating fresh id', {
 			path,
 			error: e instanceof Error ? e.message : String(e),
 		});
@@ -216,7 +216,7 @@ async function ensureChatGptHostId(): Promise<string> {
 		await mkdir(dirname(path), {recursive: true});
 		await writeFile(path, JSON.stringify({ext_agent_host_id: hostId}), 'utf8');
 	} catch (error) {
-		oauthLog.error(
+		log.error(
 			'[oauth] failed to persist the ChatGPT host id:',
 			{error: error instanceof Error ? error.message : error},
 		);

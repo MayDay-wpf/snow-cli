@@ -23,7 +23,7 @@ import {OAUTH_PROVIDERS} from './constants.js';
 import {applyProviderRequestHeaders, refreshTokens} from './flows.js';
 import {logger} from '../core/logger.js';
 
-const profileStoreLog = logger.child('oauth:profile-store');
+const log = logger.child('oauth:profile-store');
 import type {
 	OAuthClaims,
 	OAuthLoginOutcome,
@@ -227,7 +227,7 @@ export async function refreshOAuthTokenIfNeeded(
 		);
 	} catch (error) {
 		// 保留旧 token，让上游请求自行返回 401，避免静默失败难以排查
-		profileStoreLog.error(
+		log.error(
 			`[oauth] token refresh failed for ${metadata.provider}:`,
 			{
 				error: error instanceof Error ? error.message : error,
@@ -300,7 +300,7 @@ function persistRefreshedOAuth(
 			saveConfig(updatedConfig);
 		}
 	} catch (error) {
-		profileStoreLog.error(
+		log.error(
 			'[oauth] failed to persist refreshed token:',
 			{error: error instanceof Error ? error.message : error},
 		);

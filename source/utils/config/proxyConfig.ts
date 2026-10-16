@@ -3,7 +3,7 @@ import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.proxy');
+const log = logger.child('config.proxy');
 
 /**
  * Supported search engine identifiers. Keep in sync with
@@ -90,7 +90,7 @@ export function loadProxyConfig(): ProxyConfig {
 
 		return mergedConfig;
 	} catch (error) {
-		configLogger.error('Failed to load proxy config', error);
+		log.error('Failed to load proxy config', error);
 		return DEFAULT_PROXY_CONFIG;
 	}
 }
@@ -142,7 +142,7 @@ export async function updateProxyConfig(
 			}
 		}
 	} catch (error) {
-		configLogger.debug('Profiles system not available yet, skipped sync', {error});
+		log.debug('Profiles system not available yet, skipped sync', {error});
 	}
 }
 
@@ -185,7 +185,7 @@ export function compileBlockedPatterns(
 		try {
 			compiled.push(new RegExp(trimmed, 'i'));
 		} catch (error) {
-			configLogger.debug('Ignored invalid regex pattern in blocked patterns', {pattern: trimmed, error});
+			log.debug('Ignored invalid regex pattern in blocked patterns', {pattern: trimmed, error});
 		}
 	}
 
@@ -211,7 +211,7 @@ export function isUrlBlocked(
 	try {
 		candidates.push(new URL(url).host);
 	} catch (error) {
-		configLogger.debug('URL host extraction fallback to raw text matching', {url, error});
+		log.debug('URL host extraction fallback to raw text matching', {url, error});
 	}
 
 	return compiledPatterns.some(regex =>

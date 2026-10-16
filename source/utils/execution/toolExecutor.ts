@@ -17,7 +17,7 @@ import type {UnifiedHookExecutionResult} from './unifiedHooksExecutor.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
 import {logger} from '../core/logger.js';
 
-const toolLogger = logger.child('execution.toolExecutor');
+const log = logger.child('execution.toolExecutor');
 
 //安全解析JSON，处理可能被拼接的多个JSON对象
 function safeParseToolArguments(argsString: string): Record<string, any> {
@@ -28,7 +28,7 @@ function safeParseToolArguments(argsString: string): Record<string, any> {
 	try {
 		return JSON.parse(argsString);
 	} catch (error) {
-		toolLogger.debug(
+		log.debug(
 			'Failed to parse full tool arguments JSON, attempting partial extraction',
 			{error, argsString},
 		);
@@ -75,7 +75,7 @@ function safeParseToolArguments(argsString: string): Record<string, any> {
 						try {
 							return JSON.parse(firstJsonObject);
 						} catch (firstObjError) {
-							toolLogger.debug(
+							log.debug(
 								'Failed to parse extracted JSON object from tool arguments',
 								{error: firstObjError, firstJsonObject},
 							);
@@ -224,7 +224,7 @@ function extractHookProvidedAnswer(
 				return {selected: parsed};
 			}
 		} catch (error) {
-			toolLogger.debug(
+			log.debug(
 				'Failed to parse selected option JSON, treating as raw string',
 				{error, rawOutput},
 			);
@@ -275,7 +275,7 @@ export async function executeToolCall(
 				const str = data.toString();
 				// ESC key: \x1b
 				if (str === '\x1b' && abortController && !abortSignal?.aborted) {
-					toolLogger.info('[ESC] Interrupting command execution', {
+					log.info('[ESC] Interrupting command execution', {
 						tool: 'terminal-execute',
 					});
 					abortController.abort();
@@ -326,7 +326,7 @@ export async function executeToolCall(
 					return result;
 				}
 			} catch (error) {
-				toolLogger.warn('Failed to execute beforeToolCall hook', error);
+				log.warn('Failed to execute beforeToolCall hook', error);
 			}
 
 			// If the tool is askuser-ask_question, check whether the
@@ -422,7 +422,7 @@ export async function executeToolCall(
 						agentName = agentConfig.name;
 					}
 				} catch (error) {
-					toolLogger.debug(
+					log.debug(
 						'Failed to resolve sub-agent configuration',
 						{error, agentId},
 					);
@@ -701,7 +701,7 @@ export async function executeToolCall(
 					}
 				}
 			} catch (error) {
-				toolLogger.warn('Failed to execute afterToolCall hook', error);
+				log.warn('Failed to execute afterToolCall hook', error);
 			}
 
 			if (result && !executionError && !result.hookFailed) {
@@ -805,7 +805,7 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `independent:${toolCall.id}`;
 			}
 		} catch (error) {
-			toolLogger.debug(
+			log.debug(
 				'Failed to parse todo tool arguments for resource identifier',
 				{error, toolCallId: toolCall.id},
 			);
@@ -822,7 +822,7 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `independent:${toolCall.id}`;
 			}
 		} catch (error) {
-			toolLogger.debug(
+			log.debug(
 				'Failed to parse notebook tool arguments for resource identifier',
 				{error, toolCallId: toolCall.id},
 			);
@@ -857,7 +857,7 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `filesystem-batch:${toolCall.id}`;
 			}
 		} catch (error) {
-			toolLogger.debug(
+			log.debug(
 				'Failed to parse filesystem tool arguments for resource identifier',
 				{error, toolCallId: toolCall.id},
 			);

@@ -2,7 +2,7 @@ import {getSubAgent} from '../config/subAgentConfig.js';
 import type {MCPTool} from './mcpToolsManager.js';
 import {logger} from '../core/logger.js';
 
-const subAgentLogger = logger.child('execution.subAgentResolver');
+const log = logger.child('execution.subAgentResolver');
 
 export interface ResolveAgentResult {
 	agent: any;
@@ -91,7 +91,7 @@ export function warnUnknownAgentTools(
 	);
 
 	if (unknown.length > 0) {
-		subAgentLogger.warn('Unknown tools for sub-agent', {
+		log.warn('Unknown tools for sub-agent', {
 			agentId: agent?.id || agent?.name || '?',
 			unknownTools: unknown,
 		});

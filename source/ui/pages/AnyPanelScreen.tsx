@@ -20,7 +20,7 @@ import {
 } from '../../utils/plugins/anypanel/types.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	/** AnyPanel 插件 id，来自自定义指令的 command 字段 */
@@ -113,13 +113,13 @@ export default function AnyPanelScreen({
 				try {
 					found.onMount?.(stateRef.current);
 				} catch (error) {
-					pageLog.debug('AnyPanel onMount failed', {error});
+					log.debug('AnyPanel onMount failed', {error});
 				}
 				// 面板挂载即获得焦点
 				try {
 					found.onFocus?.(stateRef.current);
 				} catch (error) {
-					pageLog.debug('AnyPanel onFocus failed', {error});
+					log.debug('AnyPanel onFocus failed', {error});
 				}
 			} catch (err) {
 				if (disposed) return;
@@ -157,7 +157,7 @@ export default function AnyPanelScreen({
 				setPlugin(found);
 				forceRender(n => n + 1);
 			} catch (error) {
-				pageLog.debug('AnyPanel reloadPlugin failed', {error});
+				log.debug('AnyPanel reloadPlugin failed', {error});
 			}
 		};
 
@@ -176,7 +176,7 @@ export default function AnyPanelScreen({
 		);
 
 		watcher.on('error', error => {
-			pageLog.debug('AnyPanel watcher error', {error});
+			log.debug('AnyPanel watcher error', {error});
 		});
 
 		return () => {
@@ -211,7 +211,7 @@ export default function AnyPanelScreen({
 				try {
 					currentPlugin.onUnmount(stateRef.current);
 				} catch (error) {
-					pageLog.debug('AnyPanel cleanup onUnmount failed', {error});
+					log.debug('AnyPanel cleanup onUnmount failed', {error});
 				}
 			}
 		};
@@ -233,12 +233,12 @@ export default function AnyPanelScreen({
 			try {
 				plugin.onBlur?.(stateRef.current);
 			} catch (error) {
-				pageLog.debug('AnyPanel onBlur failed', {error});
+				log.debug('AnyPanel onBlur failed', {error});
 			}
 			try {
 				plugin.onUnmount?.(stateRef.current);
 			} catch (error) {
-				pageLog.debug('AnyPanel onUnmount failed', {error});
+				log.debug('AnyPanel onUnmount failed', {error});
 			}
 		}
 		onClose();
@@ -395,7 +395,7 @@ export default function AnyPanelScreen({
 	try {
 		hint = plugin.getHint?.(stateRef.current);
 	} catch (error) {
-		pageLog.debug('AnyPanel getHint failed', {error});
+		log.debug('AnyPanel getHint failed', {error});
 		hint = undefined;
 	}
 

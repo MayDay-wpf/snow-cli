@@ -8,7 +8,7 @@
 
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.cacheRegistry');
+const log = logger.child('config.cacheRegistry');
 
 type CacheClearer = () => void;
 
@@ -35,7 +35,7 @@ export function clearAllRegisteredCaches(): void {
 		try {
 			clearer();
 		} catch (error) {
-			configLogger.debug('Failed to clear cache handler', error);
+			log.debug('Failed to clear cache handler', error);
 		}
 	}
 }

@@ -12,7 +12,7 @@ import {getProjectId} from '../session/projectUtils.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const teamSnapshotLog = logger.child('team:snapshot');
+const log = logger.child('team:snapshot');
 
 // ── Types ──
 
@@ -57,7 +57,7 @@ function saveSnapshotData(data: TeamSnapshotData): void {
 	try {
 		fs.writeFileSync(getTeamSnapshotFilePath(), JSON.stringify(data, null, 2), 'utf-8');
 	} catch (error) {
-		teamSnapshotLog.error('Failed to save team snapshot data:', {error});
+		log.error('Failed to save team snapshot data:', {error});
 	}
 }
 
@@ -173,12 +173,12 @@ export async function rollbackTeamState(
 			await cleanupTeamWorktrees(teamName);
 			cleanedCount++;
 		} catch (error) {
-			teamSnapshotLog.error(`Failed to cleanup worktrees for team ${teamName}:`, {error, teamName});
+			log.error(`Failed to cleanup worktrees for team ${teamName}:`, {error, teamName});
 		}
 		try {
 			disbandTeam(teamName);
 		} catch (disbandError) {
-			teamSnapshotLog.debug(`Team ${teamName} may already be disbanded during snapshot cleanup`, {error: disbandError});
+			log.debug(`Team ${teamName} may already be disbanded during snapshot cleanup`, {error: disbandError});
 		}
 	}
 

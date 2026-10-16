@@ -14,7 +14,7 @@ import {interpretHookResult} from '../../../utils/execution/hookResultInterprete
 import {sendTerminalInput} from '../../../hooks/execution/useTerminalExecutionState.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const compLog = logger.child('ui:components');
+const log = logger.child('ui:components');
 
 interface BashCommandConfirmationProps {
 	command: string;
@@ -117,18 +117,18 @@ export function BashCommandConfirmation({
 			.then(hookResult => {
 				const interpreted = interpretHookResult('toolConfirmation', hookResult);
 				if (interpreted.action === 'warn' && interpreted.warningMessage) {
-					compLog.warn(interpreted.warningMessage);
+					log.warn(interpreted.warningMessage);
 				} else if (interpreted.action === 'block' && interpreted.errorDetails) {
 					const {exitCode, command, output, error} = interpreted.errorDetails;
 					const combinedOutput =
 						[output, error].filter(Boolean).join('\n\n') || '(no output)';
-					compLog.error(
+					log.error(
 						`[Hook Error] toolConfirmation Hook failed (exitCode ${exitCode}):\nCommand: ${command}\nOutput: ${combinedOutput}`,
 					);
 				}
 			})
 			.catch((error: any) => {
-				compLog.error('Failed to execute toolConfirmation hook:', error);
+				log.error('Failed to execute toolConfirmation hook:', error);
 			});
 	}, [command, sensitiveCheck.isSensitive]);
 

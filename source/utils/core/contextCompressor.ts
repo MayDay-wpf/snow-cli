@@ -8,7 +8,7 @@ import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import {cleanThinkingContent} from '../../hooks/conversation/utils/thinkingExtractor.js';
 import {logger} from './logger.js';
 
-const compressorLog = logger.child('core.contextCompressor');
+const log = logger.child('core.contextCompressor');
 
 export interface CompressionResult {
 	summary: string;
@@ -691,16 +691,16 @@ export async function compressContext(
 			};
 		}
 		if (interpreted.action === 'warn' && interpreted.warningMessage) {
-			compressorLog.warn(interpreted.warningMessage);
+			log.warn(interpreted.warningMessage);
 		}
 	} catch (error) {
-		compressorLog.warn('Failed to execute beforeCompress hook', error);
+		log.warn('Failed to execute beforeCompress hook', error);
 	}
 
 	const config = getSnowConfig();
 
 	if (messages.length === 0) {
-		compressorLog.warn('No messages to compress');
+		log.warn('No messages to compress');
 		return null;
 	}
 
@@ -723,7 +723,7 @@ export async function compressContext(
 	// 如果 preserveStartIndex 为 0，说明所有消息都需要保留（没有历史可压缩）
 	// 例如：整个对话只有一条 user→assistant(tool_calls)，无法压缩
 	if (preserveStartIndex === 0) {
-		compressorLog.warn(
+		log.warn(
 			'Cannot compress: all messages need to be preserved (no history)',
 		);
 		return null;

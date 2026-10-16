@@ -31,6 +31,8 @@ const ROOT_LOGGER_IGNORE = [
 	'source/utils/core/snowContext.ts',
 ];
 
+const nonLogVariableDeclarations: Array<{file: string; varName: string; domain: string}> = [];
+
 for (const file of files) {
 	const norm = file.replace(/\\/g, '/');
 	if (norm.includes('/test/') || norm.includes('.test.')) continue;
@@ -45,6 +47,9 @@ for (const file of files) {
 		const varName = match[1];
 		const domain = match[2];
 		logVariableNames[varName] = (logVariableNames[varName] || 0) + 1;
+		if (varName !== 'log') {
+			nonLogVariableDeclarations.push({file: norm, varName, domain});
+		}
 		if (!namespaceMap[domain]) {
 			namespaceMap[domain] = {count: 0, files: []};
 		}
@@ -154,15 +159,4 @@ for (const [layer, data] of Object.entries(layerStats)) {
 	data.filesCount = layerFiles.size;
 }
 
-console.log(JSON.stringify({
-	totalScannedFiles: files.length,
-	logVariableNames,
-	unnamespacedLoggerUsages,
-	emptyCatchesCount: emptyCatches.length,
-	emptyCatches,
-	rawHomedirSnowCount: rawHomedirSnow.length,
-	totalUniqueNamespaces: Object.keys(namespaceMap).length,
-	totalFilesWithLoggerChild: allFilesWithChild.size,
-	layerStats,
-	consoleUsagesCount: consoleUsages.length,
-}, null, 2));
+console.log(JSON.stringify(nonLogVariableDeclarations, null, 2));

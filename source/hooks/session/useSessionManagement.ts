@@ -4,7 +4,7 @@ import type {Message} from '../../ui/components/chat/MessageList.js';
 import {convertSessionMessagesToUI} from '../../utils/session/sessionConverter.js';
 import {logger} from '../../utils/core/logger.js';
 
-const sessionMgmtLog = logger.child('hooks:session-management');
+const log = logger.child('hooks:session-management');
 
 /**
  * Hook for managing session list and session selection
@@ -38,7 +38,7 @@ export function useSessionManagement(
 				initializeFromSession(session.messages);
 			}
 		} catch (error) {
-			sessionMgmtLog.error('Failed to load session:', {error, sessionId});
+			log.error('Failed to load session:', {error, sessionId});
 		}
 	};
 

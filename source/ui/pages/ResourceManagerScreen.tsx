@@ -19,7 +19,7 @@ import {
 } from '../../utils/core/processResourceMonitor.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 /**
  * Resource Manager Screen
@@ -331,7 +331,7 @@ export default function ResourceManagerScreen({onBack, terminalWidth}: Props) {
 			const next = sortEntries(await collectResourceEntries());
 			setEntries(next);
 		} catch (error) {
-			pageLog.debug('Failed to collect resource entries', {error});
+			log.debug('Failed to collect resource entries', {error});
 			// 采样失败时保留上一帧快照，避免界面闪空
 		} finally {
 			setIsLoading(false);

@@ -15,7 +15,7 @@ import type {MCPTool} from './mcpToolsManager.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {logger} from '../core/logger.js';
 
-const streamLogger = logger.child('execution.subAgentStream');
+const log = logger.child('execution.subAgentStream');
 
 export interface StreamProcessResult {
 	currentContent: string;
@@ -310,7 +310,7 @@ export async function handleContextCompression(
 								? retryError.message
 								: String(retryError),
 					});
-					streamLogger.warn(
+					log.warn(
 						`[SubAgent:${ctx.agent.name}] Compression failed, retrying (${
 							retryAttempt + 1
 						}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
@@ -337,7 +337,7 @@ export async function handleContextCompression(
 				afterTokensEstimate: compressionResult.afterTokensEstimate,
 			});
 
-			streamLogger.info(
+			log.info(
 				`[SubAgent:${ctx.agent.name}] Context compressed: ` +
 					`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
 				{
@@ -350,7 +350,7 @@ export async function handleContextCompression(
 			return true;
 		}
 	} catch (compressError) {
-		streamLogger.error(
+		log.error(
 			`[SubAgent:${ctx.agent.name}] Context compression failed after retries`,
 			compressError,
 		);

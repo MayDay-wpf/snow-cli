@@ -8,7 +8,7 @@ import type {
 	FileUpdateNotificationState,
 } from './types.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type ProgressData = NonNullable<CodebaseProgressState>;
 
@@ -58,7 +58,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 
 				if (!config.enabled) {
 					if (codebaseAgentRef.current) {
-						pageLog.info('Codebase feature disabled, stopping agent');
+						log.info('Codebase feature disabled, stopping agent');
 						await codebaseAgentRef.current.stop();
 						codebaseAgentRef.current.stopWatching();
 						codebaseAgentRef.current = null;
@@ -72,7 +72,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 				const validation = validateGitignore(workingDirectory);
 				if (!validation.isValid) {
 					if (validation.isHomeOrRoot) {
-						pageLog.info(
+						log.info(
 							validation.error ||
 								'Codebase indexing skipped for home or root directory',
 						);
@@ -89,7 +89,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 						error: validation.error,
 					});
 					setWatcherEnabled(false);
-					pageLog.error(validation.error || 'Validation error');
+					log.error(validation.error || 'Validation error');
 					return;
 				}
 
@@ -106,7 +106,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 
 				const wasWatcherEnabled = await agent.isWatcherEnabled();
 				if (wasWatcherEnabled) {
-					pageLog.info('Restoring file watcher from previous session');
+					log.info('Restoring file watcher from previous session');
 					agent.startWatching(syncProgress);
 					setWatcherEnabled(true);
 					setCodebaseIndexing(false);
@@ -129,7 +129,7 @@ export function useCodebaseIndexing(workingDirectory: string) {
 					}
 				});
 			} catch (error) {
-				pageLog.error('Failed to start codebase indexing', error);
+				log.error('Failed to start codebase indexing', error);
 				setCodebaseIndexing(false);
 			}
 		};

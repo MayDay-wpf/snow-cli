@@ -5,7 +5,7 @@ import {configEvents} from './configEvents.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.theme');
+const log = logger.child('config.theme');
 
 export function getThemeConfigDir(): string {
 	return getGlobalSnowDir().native;
@@ -133,7 +133,7 @@ export function saveThemeConfig(config: ThemeConfig): void {
 		const configData = JSON.stringify(config, null, 2);
 		writeFileSync(configFile, configData, 'utf-8');
 	} catch (error) {
-		configLogger.error('Failed to save theme config', error);
+		log.error('Failed to save theme config', error);
 	}
 }
 

@@ -10,7 +10,7 @@ import {
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.hooks');
+const log = logger.child('config.hooks');
 
 /**
  * Hook 类型
@@ -212,7 +212,7 @@ export function loadHookConfig(
 
 		return [];
 	} catch (error) {
-		configLogger.error(`Failed to load hook config for ${hookType}`, error);
+		log.error(`Failed to load hook config for ${hookType}`, error);
 		return [];
 	}
 }

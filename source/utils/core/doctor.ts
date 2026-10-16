@@ -9,7 +9,7 @@ import {getCurrentLanguage} from '../config/languageConfig.js';
 import {getGlobalSnowDir} from './snowContext.js';
 import {logger} from './logger.js';
 
-const doctorLog = logger.child('cli:doctor');
+const log = logger.child('cli:doctor');
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -179,7 +179,7 @@ function countJsonFiles(directoryPath: string): number {
 			.readdirSync(directoryPath)
 			.filter(fileName => fileName.endsWith('.json')).length;
 	} catch (error) {
-		doctorLog.debug('Failed to count profiles in directory:', {error, directoryPath});
+		log.debug('Failed to count profiles in directory:', {error, directoryPath});
 		return 0;
 	}
 }
@@ -211,7 +211,7 @@ function getActiveProfileName(snowDir: string): string {
 			);
 		}
 	} catch (error) {
-		doctorLog.debug('Failed to read legacy active-profile.txt:', {error});
+		log.debug('Failed to read legacy active-profile.txt:', {error});
 	}
 
 	return 'default';
@@ -280,7 +280,7 @@ function getAliveSseDaemonCount(snowDir: string): {
 			}
 		}
 	} catch (error) {
-		doctorLog.debug('Failed to count running daemons in daemon registry:', {error});
+		log.debug('Failed to count running daemons in daemon registry:', {error});
 		return {total, alive, stale};
 	}
 

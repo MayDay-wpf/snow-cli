@@ -18,7 +18,7 @@ import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: () => void;
@@ -43,7 +43,7 @@ function checkCommandExists(command: string): boolean {
 			});
 			return true;
 		} catch (error) {
-			pageLog.debug('where command check failed', {error, command});
+			log.debug('where command check failed', {error, command});
 			return false;
 		}
 	}
@@ -59,7 +59,7 @@ function checkCommandExists(command: string): boolean {
 			});
 			return true;
 		} catch (error) {
-			pageLog.debug('shell command check failed', {error, command, shell});
+			log.debug('shell command check failed', {error, command, shell});
 			// Try next shell
 		}
 	}

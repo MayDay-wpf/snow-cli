@@ -18,7 +18,7 @@ import {
 } from 'fs';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 const DRAW_DIR = join(getGlobalSnowDir().native, 'draw');
 const EXIT_IMAGE_PATH = join(getGlobalSnowDir().native, 'exit-image.json');
@@ -110,7 +110,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 							updatedAt: data.updatedAt ?? stat.mtime.toISOString(),
 						};
 					} catch (error) {
-						pageLog.debug('Failed to parse drawing metadata', {error, fileName: f});
+						log.debug('Failed to parse drawing metadata', {error, fileName: f});
 						return null;
 					}
 				})
@@ -121,7 +121,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 				);
 			setDrawings(files);
 		} catch (error) {
-			pageLog.debug('Failed to load drawing files list', {error});
+			log.debug('Failed to load drawing files list', {error});
 			setDrawings([]);
 		}
 	}, []);
@@ -139,7 +139,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 					setExitImageName(data.name);
 					setExitImageEnabled(data.enabled ?? true);
 				} catch (error) {
-					pageLog.debug('Failed to parse exit image file', {error});
+					log.debug('Failed to parse exit image file', {error});
 					setExitImageName(undefined);
 					setExitImageEnabled(false);
 				}
@@ -194,7 +194,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 						'utf8',
 					);
 				} catch (error) {
-					pageLog.debug('Failed to sync exit image file', {error});
+					log.debug('Failed to sync exit image file', {error});
 				}
 			}
 		},
@@ -211,7 +211,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 				return data.grid.map(row => [...row]);
 			}
 		} catch (error) {
-			pageLog.debug('Failed to load drawing file', {error, fileName});
+			log.debug('Failed to load drawing file', {error, fileName});
 		}
 		return undefined;
 	}, []);
@@ -222,7 +222,7 @@ export default function PixelEditorScreen({onBack}: Props) {
 			try {
 				unlinkSync(filePath);
 			} catch (error) {
-				pageLog.debug('Failed to delete drawing file', {error, fileName: name});
+				log.debug('Failed to delete drawing file', {error, fileName: name});
 			}
 		}
 		setSelectedNames(new Set());

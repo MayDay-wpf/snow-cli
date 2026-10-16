@@ -20,7 +20,7 @@ import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfi
 import {extractMultimodalContent} from './toolResultNormalizer.js';
 import {logger} from '../core/logger.js';
 
-const teamLogger = logger.child('execution.teamExecutor');
+const log = logger.child('execution.teamExecutor');
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -658,7 +658,7 @@ ${role ? `Your role: ${role}` : ''}
 											},
 										});
 									}
-									teamLogger.warn(
+									log.warn(
 										`[Teammate:${memberName}] Compression failed, retrying (${
 											retryAttempt + 1
 										}/${COMPRESS_MAX_RETRIES}) in ${retryDelay / 1000}s...`,
@@ -692,7 +692,7 @@ ${role ? `Your role: ${role}` : ''}
 								});
 							}
 
-							teamLogger.info(
+							log.info(
 								`[Teammate:${memberName}] Context compressed: ` +
 									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
 								{
@@ -703,7 +703,7 @@ ${role ? `Your role: ${role}` : ''}
 							);
 						}
 					} catch (compressError) {
-						teamLogger.error(
+						log.error(
 							`[Teammate:${memberName}] Context compression failed after retries`,
 							compressError,
 						);
@@ -769,7 +769,7 @@ ${role ? `Your role: ${role}` : ''}
 				try {
 					args = JSON.parse(tc.function.arguments);
 				} catch (error) {
-					teamLogger.debug('Failed to parse synthetic tool arguments', {callId: tc.id, toolName: tc.function.name, error});
+					log.debug('Failed to parse synthetic tool arguments', {callId: tc.id, toolName: tc.function.name, error});
 				}
 
 				let resultContent = '';
@@ -885,7 +885,7 @@ ${role ? `Your role: ${role}` : ''}
 				try {
 					waitArgs = JSON.parse(waitCall.function.arguments);
 				} catch (error) {
-					teamLogger.debug('Failed to parse wait_for_messages arguments', {callId: waitCall.id, error});
+					log.debug('Failed to parse wait_for_messages arguments', {callId: waitCall.id, error});
 				}
 
 				const summary = waitArgs.summary || 'Work completed.';
@@ -1033,7 +1033,7 @@ ${role ? `Your role: ${role}` : ''}
 										continue;
 									}
 								} catch (error) {
-									teamLogger.debug('beforeToolCall hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug('beforeToolCall hook failed for customTool', {toolName: tc.function.name, error});
 								}
 
 								const result = await executeMCPTool(
@@ -1073,7 +1073,7 @@ ${role ? `Your role: ${role}` : ''}
 										resultContent = aInterp.replacedContent;
 									}
 								} catch (error) {
-									teamLogger.debug('afterToolCall hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug('afterToolCall hook failed for customTool', {toolName: tc.function.name, error});
 								}
 
 								messages.push({
@@ -1109,7 +1109,7 @@ ${role ? `Your role: ${role}` : ''}
 										error: e,
 									});
 								} catch (error) {
-									teamLogger.debug('afterToolCall error-handler hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug('afterToolCall error-handler hook failed for customTool', {toolName: tc.function.name, error});
 								}
 							}
 						}
@@ -1123,7 +1123,7 @@ ${role ? `Your role: ${role}` : ''}
 					try {
 						toolArgs = JSON.parse(tc.function.arguments || '{}');
 					} catch (error) {
-						teamLogger.debug('Failed to parse regular tool arguments', {toolName, error});
+						log.debug('Failed to parse regular tool arguments', {toolName, error});
 					}
 
 					let approved = yoloMode || false;
@@ -1200,7 +1200,7 @@ ${role ? `Your role: ${role}` : ''}
 								continue;
 							}
 						} catch (error) {
-							teamLogger.debug('beforeToolCall hook failed for regular tool', {toolName, error});
+							log.debug('beforeToolCall hook failed for regular tool', {toolName, error});
 						}
 
 						try {
@@ -1237,7 +1237,7 @@ ${role ? `Your role: ${role}` : ''}
 									resultContent = aInterp.replacedContent;
 								}
 							} catch (error) {
-								teamLogger.debug('afterToolCall hook failed for regular tool', {toolName, error});
+								log.debug('afterToolCall hook failed for regular tool', {toolName, error});
 							}
 
 							messages.push({
@@ -1268,7 +1268,7 @@ ${role ? `Your role: ${role}` : ''}
 									error: e,
 								});
 							} catch (error) {
-								teamLogger.debug('afterToolCall error-handler hook failed for regular tool', {toolName, error});
+								log.debug('afterToolCall error-handler hook failed for regular tool', {toolName, error});
 							}
 						}
 					}
@@ -1332,7 +1332,7 @@ ${role ? `Your role: ${role}` : ''}
 					message: {type: 'done'},
 				});
 			} catch (error) {
-				teamLogger.debug('Failed to emit teammate done message', {memberId, error});
+				log.debug('Failed to emit teammate done message', {memberId, error});
 			}
 		}
 
@@ -1343,7 +1343,7 @@ ${role ? `Your role: ${role}` : ''}
 			);
 			autoCommitWorktreeChanges(worktreePath, memberName);
 		} catch (error) {
-			teamLogger.debug('Failed to auto-commit worktree changes on shutdown', {worktreePath, error});
+			log.debug('Failed to auto-commit worktree changes on shutdown', {worktreePath, error});
 		}
 
 		updateMember(teamName, memberId, {

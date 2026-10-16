@@ -9,7 +9,7 @@ import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const compLog = logger.child('ui:components');
+const log = logger.child('ui:components');
 
 type Props = {
 	onClose: () => void;
@@ -164,7 +164,7 @@ export default function TodoListPanel({onClose}: Props) {
 			const todoList = await todoService.getTodoList(currentSession.id);
 			setTodos(todoList?.todos ?? []);
 		} catch (error) {
-			compLog.error('Failed to load todo list:', error);
+			log.error('Failed to load todo list:', error);
 			setTodos([]);
 		} finally {
 			setLoading(false);
@@ -282,7 +282,7 @@ export default function TodoListPanel({onClose}: Props) {
 			setMarkedTodoIds(new Set());
 			setPendingDelete(false);
 		} catch (error) {
-			compLog.error('Failed to delete todo items:', error);
+			log.error('Failed to delete todo items:', error);
 		} finally {
 			setDeleting(false);
 		}

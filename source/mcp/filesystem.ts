@@ -51,7 +51,7 @@ import {
 } from './utils/filesystem/encoding.utils.js';
 import {logger} from '../utils/core/logger.js';
 
-const fsLog = logger.child('mcp:filesystem');
+const log = logger.child('mcp:filesystem');
 
 const {resolve, dirname, isAbsolute, extname} = path;
 
@@ -335,7 +335,7 @@ export class FilesystemMCPService {
 				mimeType,
 			};
 		} catch (error) {
-			fsLog.error(`Failed to read image ${fullPath}:`, {error, fullPath});
+			log.error(`Failed to read image ${fullPath}:`, {error, fullPath});
 			return null;
 		}
 	}
@@ -500,7 +500,7 @@ export class FilesystemMCPService {
 					}
 				} catch (error) {
 					// If parsing fails, treat as a regular string path
-					fsLog.debug('Failed to parse filePath as JSON array, treating as regular string', {
+					log.debug('Failed to parse filePath as JSON array, treating as regular string', {
 						filePath,
 						error,
 					});
@@ -542,7 +542,7 @@ export class FilesystemMCPService {
 						fixedExists = true;
 					} catch (accessErr) {
 						// Fixed path also doesn't work, just throw original error
-						fsLog.debug('Fixed path candidate does not exist, keeping original ENOENT', {
+						log.debug('Fixed path candidate does not exist, keeping original ENOENT', {
 							filePath,
 							fixedPath,
 							error: accessErr,
@@ -705,7 +705,7 @@ export class FilesystemMCPService {
 				}
 			} catch (error) {
 				// Optional diagnostics retrieval, do not block create success
-				fsLog.debug('Failed to get fresh diagnostics after file create/overwrite', {
+				log.debug('Failed to get fresh diagnostics after file create/overwrite', {
 					filePath: fullPath,
 					error,
 				});

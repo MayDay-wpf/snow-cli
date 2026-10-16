@@ -1,7 +1,7 @@
 import {spawnSync} from 'child_process';
 import {logger} from './logger.js';
 
-const updaterLog = logger.child('cli:updater');
+const log = logger.child('cli:updater');
 
 const OFFICIAL_NPM_REGISTRY = 'https://registry.npmjs.org/';
 const MANUAL_UPDATE_COMMANDS = [
@@ -116,7 +116,7 @@ export function runUpdateAndExit(): never {
 			mainInk.unmount();
 		}
 	} catch (error) {
-		updaterLog.debug('Failed to unmount Ink before update:', {error});
+		log.debug('Failed to unmount Ink before update:', {error});
 	}
 
 	// Restore cursor visibility / disable bracketed paste mode just in case
@@ -126,7 +126,7 @@ export function runUpdateAndExit(): never {
 		process.stdout.write('\x1b[?25h');
 		process.stdout.write('\x1b[0 q');
 	} catch (error) {
-		updaterLog.debug('Failed to restore terminal state before update:', {error});
+		log.debug('Failed to restore terminal state before update:', {error});
 	}
 
 	console.log('\nUpdating snow-ai to the latest version...\n');

@@ -4,7 +4,7 @@ import os from 'os';
 import {getGlobalSnowDir} from './snowContext.js';
 import {logger} from './logger.js';
 
-const usageLog = logger.child('core.usageLogger');
+const log = logger.child('core.usageLogger');
 
 interface UsageLogEntry {
 	model: string;
@@ -56,7 +56,7 @@ async function getUsageDir(): Promise<string> {
 		await fs.mkdir(dateDir, {recursive: true});
 	} catch (error) {
 		// 目录可能已存在，忽略错误
-		usageLog.debug('getUsageDir mkdir failed or already exists', {error, dateDir});
+		log.debug('getUsageDir mkdir failed or already exists', {error, dateDir});
 	}
 
 	return dateDir;
@@ -145,10 +145,10 @@ export function saveUsageToFile(
 				const line = JSON.stringify(record) + '\n';
 				await fs.appendFile(logFile, line, 'utf-8');
 			} catch (error) {
-				usageLog.error('Failed to save usage data', error);
+				log.error('Failed to save usage data', error);
 			}
 		})
 		.catch(error => {
-			usageLog.error('Usage persistence queue error', error);
+			log.error('Usage persistence queue error', error);
 		});
 }

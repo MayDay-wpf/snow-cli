@@ -26,7 +26,7 @@ import UserMessagePreview from '../components/chat/UserMessagePreview.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: (nextSelectedTheme?: ThemeType) => void;
@@ -92,7 +92,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 		try {
 			return hexToOklch(initialCustom.text || '#ffffff');
 		} catch (error) {
-			pageLog.debug('Failed to parse hex to oklch', {error});
+			log.debug('Failed to parse hex to oklch', {error});
 			return {h: 215, c: 0.16, l: 0.85};
 		}
 	}, [initialCustom]);
@@ -118,7 +118,7 @@ export default function CustomThemeScreen({onBack}: Props) {
 				activeProfileName
 			);
 		} catch (error) {
-			pageLog.debug('Failed to load profile for active model name', {error});
+			log.debug('Failed to load profile for active model name', {error});
 			return 'default';
 		}
 	}, [activeProfileName]);

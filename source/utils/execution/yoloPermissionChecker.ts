@@ -12,7 +12,7 @@
 import type {ToolCall} from '../../ui/components/tools/ToolConfirmation.js';
 import {logger} from '../core/logger.js';
 
-const yoloLogger = logger.child('execution.yolo');
+const log = logger.child('execution.yolo');
 
 /**
  * YOLO 权限检查结果接口
@@ -68,7 +68,7 @@ export async function checkYoloPermission(
 			}
 		} catch (error) {
 			// 异常处理：如果敏感检查过程出错，出于安全兜底原则，强制要求确认
-			yoloLogger.warn('Failed to check sensitive command', error);
+			log.warn('Failed to check sensitive command', error);
 			needsConfirmation = true;
 			isSensitive = true;
 		}

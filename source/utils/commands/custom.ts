@@ -10,7 +10,7 @@ import {existsSync} from 'fs';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
-const customCmdLog = logger.child('commands:custom');
+const log = logger.child('commands:custom');
 
 export type CommandLocation = 'global' | 'project';
 
@@ -112,7 +112,7 @@ async function listJsonCommandsRecursively(
 	try {
 		entries = await readdir(dir, {withFileTypes: true});
 	} catch (error) {
-		customCmdLog.debug('Failed to read custom commands directory', {dir, error});
+		log.debug('Failed to read custom commands directory', {dir, error});
 		return [];
 	}
 
@@ -207,7 +207,7 @@ async function loadCustomCommandFromFile(
 
 		return cmd;
 	} catch (error) {
-		customCmdLog.error(`Failed to load custom command: ${entry.filePath}`, {
+		log.error(`Failed to load custom command: ${entry.filePath}`, {
 			error,
 			filePath: entry.filePath,
 		});
@@ -320,7 +320,7 @@ export function checkCommandExists(
 		const filePath = getCommandJsonFilePath(dir, name);
 		return existsSync(filePath);
 	} catch (error) {
-		customCmdLog.debug('Failed to check if custom command exists', {name, dir, error});
+		log.debug('Failed to check if custom command exists', {name, dir, error});
 		return false;
 	}
 }

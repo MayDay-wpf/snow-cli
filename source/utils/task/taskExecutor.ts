@@ -6,7 +6,7 @@ import {logger} from '../core/logger.js';
 import {notifyTaskFinished} from '../platform/notification.js';
 import {taskManager} from './taskManager.js';
 
-const taskLog = logger.child('task:executor');
+const log = logger.child('task:executor');
 const TASK_LOG_DIR = join(getGlobalSnowDir().native, 'task-logs');
 
 function ensureLogDir() {
@@ -27,7 +27,7 @@ function writeLog(taskId: string, message: string) {
 		appendFileSync(logPath, `[${timestamp}] ${message}\n`, 'utf-8');
 	} catch (error) {
 		// Fail silently - don't break task execution
-		taskLog.debug('taskExecutor writeLog appendFileSync failed', {error, taskId});
+		log.debug('taskExecutor writeLog appendFileSync failed', {error, taskId});
 	}
 }
 
@@ -48,7 +48,7 @@ async function notifyTaskExitFromParent(taskId: string): Promise<void> {
 		);
 	} catch (error) {
 		// Parent-side terminal fallback is best-effort.
-		taskLog.debug('notifyTaskExitFromParent failed', {error, taskId});
+		log.debug('notifyTaskExitFromParent failed', {error, taskId});
 	}
 }
 
@@ -125,12 +125,12 @@ export async function executeTaskInBackground(
 	// Detach the child process so parent can exit
 	child.unref();
 
-	taskLog.info(`Task ${taskId} started in background (PID: ${child.pid})`, {
+	log.info(`Task ${taskId} started in background (PID: ${child.pid})`, {
 		taskId,
 		pid: child.pid,
 		logPath,
 	});
-	taskLog.info(`Logs: ${logPath}`, {logPath});
+	log.info(`Logs: ${logPath}`, {logPath});
 }
 
 export async function executeTask(

@@ -7,7 +7,7 @@ import {getDisabledSkills} from '../utils/config/disabledSkills.js';
 import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
 import {logger} from '../utils/core/logger.js';
 
-const skillsLog = logger.child('mcp:skills');
+const log = logger.child('mcp:skills');
 
 export interface SkillMetadata {
 	name: string;
@@ -88,7 +88,7 @@ async function readSkillFile(skillPath: string): Promise<{
 			content,
 		};
 	} catch (error) {
-		skillsLog.error(`Failed to read skill at ${skillPath}:`, {error, skillPath});
+		log.error(`Failed to read skill at ${skillPath}:`, {error, skillPath});
 		return null;
 	}
 }
@@ -174,7 +174,7 @@ async function loadSkillsFromDirectory(
 			}
 		}
 	} catch (error) {
-		skillsLog.error(`Failed to load ${location} skills:`, {error, location});
+		log.error(`Failed to load ${location} skills:`, {error, location});
 	}
 }
 
@@ -385,7 +385,7 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 					}
 				} catch (error) {
 					// Ignore subdirectory read errors
-					skillsLog.debug('Failed to read skill subdirectory tree', {
+					log.debug('Failed to read skill subdirectory tree', {
 						subPath,
 						error,
 					});
@@ -398,7 +398,7 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 
 		return lines.join('\n');
 	} catch (error) {
-		skillsLog.debug('Failed to generate skill directory tree', {
+		log.debug('Failed to generate skill directory tree', {
 			skillPath,
 			error,
 		});

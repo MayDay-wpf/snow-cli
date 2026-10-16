@@ -29,7 +29,7 @@ import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {withAgentSpan} from '../telemetry/otel.js';
 import {logger} from '../core/logger.js';
 
-const subAgentLogger = logger.child('execution.subAgent');
+const log = logger.child('execution.subAgent');
 import type {
 	SubAgentExecutionContext,
 	SubAgentMessage,
@@ -135,7 +135,7 @@ export async function executeSubAgent(
 					}
 				} catch (error) {
 					// fail-open: keep original prompt
-					subAgentLogger.warn('beforeSubAgentStart hook failed', error);
+					log.warn('beforeSubAgentStart hook failed', error);
 				}
 
 				// 3. Build initial messages.
@@ -309,7 +309,7 @@ export async function executeSubAgent(
 			try {
 				emitSubAgentMessage(ctx, {type: 'done'});
 			} catch (error) {
-				subAgentLogger.debug(
+				log.debug(
 					'Failed to emit final done message for sub-agent',
 					{instanceId: ctx.instanceId, error},
 				);
@@ -370,7 +370,7 @@ async function resolveConfig(
 				return {config, model: config.advancedModel || 'gpt-5'};
 			}
 		} catch (error) {
-			subAgentLogger.warn(
+			log.warn(
 				`Failed to load profile ${agent.configProfile} for sub-agent, using main config`,
 				error,
 			);
@@ -465,7 +465,7 @@ async function handleCompletionHooks(
 
 		return interpreted.shouldContinueConversation || false;
 	} catch (error) {
-		subAgentLogger.error('onSubAgentComplete hook execution failed', error);
+		log.error('onSubAgentComplete hook execution failed', error);
 		return false;
 	}
 }

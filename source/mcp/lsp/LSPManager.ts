@@ -5,7 +5,7 @@ import {LSPClient} from './LSPClient.js';
 import {LSPServerRegistry} from './LSPServerRegistry.js';
 import {logger} from '../../utils/core/logger.js';
 
-const lspLog = logger.child('mcp:lsp');
+const log = logger.child('mcp:lsp');
 
 export class LSPManager {
 	private clients: Map<string, LSPClient> = new Map();
@@ -24,7 +24,7 @@ export class LSPManager {
 				await client.shutdown();
 			} catch (error) {
 				// Ignore cleanup errors for dead clients
-				lspLog.debug('Failed to shutdown dead LSP client during recreation', {
+				log.debug('Failed to shutdown dead LSP client during recreation', {
 					language,
 					error,
 				});
@@ -92,14 +92,14 @@ export class LSPManager {
 
 			return locations.length > 0 ? locations[0]! : null;
 		} catch (error) {
-			lspLog.debug('LSP findDefinition error:', {error, filePath, line, column});
+			log.debug('LSP findDefinition error:', {error, filePath, line, column});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
 				} catch (closeError) {
-					lspLog.debug('Suppressed closeDocument error in findDefinition:', {error: closeError, uri});
+					log.debug('Suppressed closeDocument error in findDefinition:', {error: closeError, uri});
 				}
 			}
 		}
@@ -141,14 +141,14 @@ export class LSPManager {
 
 			return locations.slice(0, maxResults);
 		} catch (error) {
-			lspLog.debug('LSP findReferences error:', {error, filePath, line, column});
+			log.debug('LSP findReferences error:', {error, filePath, line, column});
 			return [];
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
 				} catch (closeError) {
-					lspLog.debug('Suppressed closeDocument error in findReferences:', {error: closeError, uri});
+					log.debug('Suppressed closeDocument error in findReferences:', {error: closeError, uri});
 				}
 			}
 		}
@@ -184,14 +184,14 @@ export class LSPManager {
 
 			return symbols;
 		} catch (error) {
-			lspLog.debug('LSP documentSymbol error:', {error, filePath});
+			log.debug('LSP documentSymbol error:', {error, filePath});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
 				} catch (closeError) {
-					lspLog.debug('Suppressed closeDocument error in getDocumentSymbols:', {error: closeError, uri});
+					log.debug('Suppressed closeDocument error in getDocumentSymbols:', {error: closeError, uri});
 				}
 			}
 		}
@@ -228,14 +228,14 @@ export class LSPManager {
 
 			return hover;
 		} catch (error) {
-			lspLog.debug('LSP hover error:', {error, filePath, line, column});
+			log.debug('LSP hover error:', {error, filePath, line, column});
 			return null;
 		} finally {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
 				} catch (closeError) {
-					lspLog.debug('Suppressed closeDocument error in getHoverInfo:', {error: closeError, uri});
+					log.debug('Suppressed closeDocument error in getHoverInfo:', {error: closeError, uri});
 				}
 			}
 		}

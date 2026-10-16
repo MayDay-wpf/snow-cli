@@ -11,7 +11,7 @@ import {OFFICE_FILE_TYPES} from '../../types/filesystem.types.js';
 import * as path from 'path';
 import {logger} from '../../../utils/core/logger.js';
 
-const parserLog = logger.child('mcp.officeParser');
+const log = logger.child('mcp.officeParser');
 
 /**
  * Parse Word document (.docx, .doc)
@@ -34,7 +34,7 @@ export async function parseWordDocument(
 			},
 		};
 	} catch (error) {
-		parserLog.error(`Failed to parse Word document: ${fullPath}`, {
+		log.error(`Failed to parse Word document: ${fullPath}`, {
 			path: fullPath,
 			error,
 		});
@@ -73,7 +73,7 @@ export async function parsePDFDocument(
 			},
 		};
 	} catch (error) {
-		parserLog.error(`Failed to parse PDF document: ${fullPath}`, {
+		log.error(`Failed to parse PDF document: ${fullPath}`, {
 			path: fullPath,
 			error,
 		});
@@ -115,7 +115,7 @@ export async function parseExcelDocument(
 			},
 		};
 	} catch (error) {
-		parserLog.error(`Failed to parse Excel document: ${fullPath}`, {
+		log.error(`Failed to parse Excel document: ${fullPath}`, {
 			path: fullPath,
 			error,
 		});
@@ -149,7 +149,7 @@ export async function parsePowerPointDocument(
 			},
 		};
 	} catch (error) {
-		parserLog.error(`Failed to parse PowerPoint document: ${fullPath}`, {
+		log.error(`Failed to parse PowerPoint document: ${fullPath}`, {
 			path: fullPath,
 			error,
 		});

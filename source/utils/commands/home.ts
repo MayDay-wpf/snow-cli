@@ -9,7 +9,7 @@ import {resetApiClient as resetResponseClient} from '../../api/responses.js';
 import {clearConfigCache} from '../config/apiConfig.js';
 import {logger} from '../core/logger.js';
 
-const homeLog = logger.child('commands:home');
+const log = logger.child('commands:home');
 
 // Home command handler - returns to welcome screen
 registerCommand('home', {
@@ -18,12 +18,12 @@ registerCommand('home', {
 		if ((global as any).__stopCodebaseIndexing) {
 			try {
 				// Show stopping message
-				homeLog.info('Pausing codebase indexing...');
+				log.info('Pausing codebase indexing...');
 				await (global as any).__stopCodebaseIndexing();
-				homeLog.info('Indexing paused, progress saved');
+				log.info('Indexing paused, progress saved');
 			} catch (error) {
 				// Record error during stop
-				homeLog.error('Failed to stop codebase indexing:', {error});
+				log.error('Failed to stop codebase indexing:', {error});
 			}
 		}
 

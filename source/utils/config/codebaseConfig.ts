@@ -1,7 +1,7 @@
 import {readSettings, updateSettings} from './unifiedSettings.js';
 import {logger} from '../core/logger.js';
 
-const configLogger = logger.child('config.codebase');
+const log = logger.child('config.codebase');
 
 /**
  * Codebase configuration.
@@ -144,7 +144,7 @@ export const loadCodebaseConfig = (
 			reranking,
 		};
 	} catch (error) {
-		configLogger.error('Failed to load codebase config', error);
+		log.error('Failed to load codebase config', error);
 		return {...DEFAULT_CONFIG};
 	}
 };
@@ -180,7 +180,7 @@ export const saveCodebaseConfig = (
 			workingDirectory,
 		);
 	} catch (error) {
-		configLogger.error('Failed to save codebase config', error);
+		log.error('Failed to save codebase config', error);
 		throw error;
 	}
 };

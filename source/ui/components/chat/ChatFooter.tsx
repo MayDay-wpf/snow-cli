@@ -18,7 +18,7 @@ import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 import type {ActiveBusyKind} from './statusVerbs.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const compLog = logger.child('ui:components');
+const log = logger.child('ui:components');
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
@@ -269,7 +269,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 
 				setTodos(todoList?.todos ?? []);
 			} catch (error) {
-				compLog.error('Failed to load current session TODO list:', error);
+				log.error('Failed to load current session TODO list:', error);
 				if (!disposed) {
 					setTodos([]);
 				}

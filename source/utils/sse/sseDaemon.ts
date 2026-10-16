@@ -14,7 +14,7 @@ import {translations} from '../../i18n/index.js';
 import {logger} from '../core/logger.js';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 
-const sseLog = logger.child('sse:daemon');
+const log = logger.child('sse:daemon');
 
 /**
  * SSE 守护进程管理器
@@ -48,7 +48,7 @@ try {
 		mkdirSync(LOG_DIR, {recursive: true});
 	}
 } catch (err) {
-	sseLog.debug('Failed to create daemon directories:', err);
+	log.debug('Failed to create daemon directories:', err);
 }
 
 interface DaemonInfo {
@@ -94,32 +94,32 @@ export function startDaemon(
 			try {
 				process.kill(pid, 0);
 				const t = getTranslation();
-				sseLog.error(formatMessage(t.portOccupied, {port, pid}));
-				sseLog.error(formatMessage(t.stopExistingByPort, {port}));
-				sseLog.error(formatMessage(t.stopExistingByPid, {pid}));
+				log.error(formatMessage(t.portOccupied, {port, pid}));
+				log.error(formatMessage(t.stopExistingByPort, {port}));
+				log.error(formatMessage(t.stopExistingByPid, {pid}));
 				process.exit(1);
 			} catch (err) {
 				// 进程不存在，清理旧文件
-				sseLog.debug(`Process ${pid} is not running, unlinking stale pid file ${pidFile}:`, err);
+				log.debug(`Process ${pid} is not running, unlinking stale pid file ${pidFile}:`, err);
 				try {
 					unlinkSync(pidFile);
 				} catch (unlinkErr) {
-					sseLog.debug(`Failed to unlink stale pid file ${pidFile}:`, unlinkErr);
+					log.debug(`Failed to unlink stale pid file ${pidFile}:`, unlinkErr);
 				}
 			}
 		} catch (err) {
 			// PID文件损坏，删除它
-			sseLog.debug(`Corrupted PID file ${pidFile}, deleting:`, err);
+			log.debug(`Corrupted PID file ${pidFile}, deleting:`, err);
 			try {
 				unlinkSync(pidFile);
 			} catch (unlinkErr) {
-				sseLog.debug(`Failed to unlink corrupted pid file ${pidFile}:`, unlinkErr);
+				log.debug(`Failed to unlink corrupted pid file ${pidFile}:`, unlinkErr);
 			}
 		}
 	}
 
 	const t = getTranslation();
-	sseLog.info(formatMessage(t.startingDaemon, {port}));
+	log.info(formatMessage(t.startingDaemon, {port}));
 
 	// 构建启动参数
 	const args = [
@@ -187,24 +187,24 @@ export function startDaemon(
 	try {
 		writeFileSync(pidFile, JSON.stringify(daemonInfo, null, 2));
 		const t = getTranslation();
-		sseLog.info(t.daemonStarted);
-		sseLog.info(`${t.pid}: ${child.pid}`);
-		sseLog.info(`${t.port}: ${port}`);
-		sseLog.info(`${t.workDir}: ${daemonInfo.workDir}`);
-		sseLog.info(`${t.timeout}: ${timeout}ms`);
-		sseLog.info(`${t.logFile}: ${logFile}`);
-		sseLog.info(`\n${t.stopService}:`);
-		sseLog.info(`  ${t.stopByPort}: snow --sse-stop --sse-port ${port}`);
-		sseLog.info(`  ${t.stopByPid}:  snow --sse-stop ${child.pid}`);
-		sseLog.info(`\n${t.checkStatus}: snow --sse-status`);
+		log.info(t.daemonStarted);
+		log.info(`${t.pid}: ${child.pid}`);
+		log.info(`${t.port}: ${port}`);
+		log.info(`${t.workDir}: ${daemonInfo.workDir}`);
+		log.info(`${t.timeout}: ${timeout}ms`);
+		log.info(`${t.logFile}: ${logFile}`);
+		log.info(`\n${t.stopService}:`);
+		log.info(`  ${t.stopByPort}: snow --sse-stop --sse-port ${port}`);
+		log.info(`  ${t.stopByPid}:  snow --sse-stop ${child.pid}`);
+		log.info(`\n${t.checkStatus}: snow --sse-status`);
 	} catch (error) {
 		const t = getTranslation();
-		sseLog.error(`${t.savePidFailed}:`, error);
+		log.error(`${t.savePidFailed}:`, error);
 		// 杀死子进程
 		try {
 			process.kill(child.pid!);
 		} catch (killErr) {
-			sseLog.debug(`Failed to kill child ${child.pid} after pid save failure:`, killErr);
+			log.debug(`Failed to kill child ${child.pid} after pid save failure:`, killErr);
 		}
 		process.exit(1);
 	}
@@ -215,14 +215,14 @@ export function startDaemon(
 			process.kill(child.pid!, 0); // 检查进程是否存在
 		} catch (err) {
 			const t = getTranslation();
-			sseLog.error(t.daemonStartFailed);
-			sseLog.error(`  ${logFile}`);
-			sseLog.debug(`Daemon process ${child.pid} terminated shortly after spawn:`, err);
+			log.error(t.daemonStartFailed);
+			log.error(`  ${logFile}`);
+			log.debug(`Daemon process ${child.pid} terminated shortly after spawn:`, err);
 			// 清理 PID 文件
 			try {
 				unlinkSync(pidFile);
 			} catch (unlinkErr) {
-				sseLog.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+				log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
 			}
 		}
 	}, 1000);
@@ -250,12 +250,12 @@ export function stopDaemon(target?: number): void {
 			killProcess(daemonInfo.pid, pidFile);
 		} catch (error) {
 			const t = getTranslation();
-			sseLog.error(`${t.readPidFailed}:`, error);
-			sseLog.info(t.tryRemoveInvalidPid);
+			log.error(`${t.readPidFailed}:`, error);
+			log.info(t.tryRemoveInvalidPid);
 			try {
 				unlinkSync(pidFile);
 			} catch (unlinkErr) {
-				sseLog.debug(`Failed to unlink invalid pid file ${pidFile}:`, unlinkErr);
+				log.debug(`Failed to unlink invalid pid file ${pidFile}:`, unlinkErr);
 			}
 		}
 	} else {
@@ -274,13 +274,13 @@ export function stopDaemon(target?: number): void {
 					break;
 				}
 			} catch (err) {
-				sseLog.debug(`Failed to read pid file ${pidFile}:`, err);
+				log.debug(`Failed to read pid file ${pidFile}:`, err);
 			}
 		}
 
 		if (!found) {
 			const t = getTranslation();
-			sseLog.info(formatMessage(t.noDaemonForPid, {pid: target}));
+			log.info(formatMessage(t.noDaemonForPid, {pid: target}));
 		}
 	}
 }
@@ -290,48 +290,48 @@ export function stopDaemon(target?: number): void {
  */
 function killProcess(pid: number, pidFile: string): void {
 	const t = getTranslation();
-	sseLog.info(formatMessage(t.stoppingDaemon, {pid}));
+	log.info(formatMessage(t.stoppingDaemon, {pid}));
 
 	try {
 		if (process.platform === 'win32') {
 			// Windows: 使用 taskkill 杀死进程树（同步执行）
 			try {
 				execSync(`taskkill /PID ${pid} /T /F`, {stdio: 'ignore'});
-				sseLog.info(t.daemonStopped);
+				log.info(t.daemonStopped);
 			} catch (error: any) {
-				sseLog.debug(`taskkill failed for pid ${pid}, falling back to process.kill:`, error);
+				log.debug(`taskkill failed for pid ${pid}, falling back to process.kill:`, error);
 				// taskkill 失败时尝试使用 process.kill
 				try {
 					process.kill(pid, 'SIGTERM');
-					sseLog.info(t.daemonStopped);
+					log.info(t.daemonStopped);
 				} catch (killErr) {
-					sseLog.error(t.stopProcessFailed);
-					sseLog.debug(`process.kill fallback failed for pid ${pid}:`, killErr);
+					log.error(t.stopProcessFailed);
+					log.debug(`process.kill fallback failed for pid ${pid}:`, killErr);
 				}
 			}
 		} else {
 			// Unix: 使用 SIGTERM
 			process.kill(pid, 'SIGTERM');
-			sseLog.info(t.daemonStopped);
+			log.info(t.daemonStopped);
 		}
 
 		// 删除 PID 文件
 		try {
 			unlinkSync(pidFile);
 		} catch (unlinkErr) {
-			sseLog.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+			log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
 		}
 	} catch (error: any) {
 		if (error.code === 'ESRCH') {
-			sseLog.info(t.processNotExists);
+			log.info(t.processNotExists);
 			try {
 				unlinkSync(pidFile);
 			} catch (unlinkErr) {
-				sseLog.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+				log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
 			}
 		} else {
-			sseLog.error(`${t.stopProcessError}:`, error.message);
-			sseLog.debug(`Error stopping process ${pid}:`, error);
+			log.error(`${t.stopProcessError}:`, error.message);
+			log.debug(`Error stopping process ${pid}:`, error);
 		}
 	}
 }
@@ -345,7 +345,7 @@ function getAllPidFiles(): string[] {
 			.filter(file => file.endsWith('.pid'))
 			.map(file => join(DAEMON_DIR, file));
 	} catch (err) {
-		sseLog.debug(`Failed to read pid directory ${DAEMON_DIR}:`, err);
+		log.debug(`Failed to read pid directory ${DAEMON_DIR}:`, err);
 		return [];
 	}
 }
@@ -358,7 +358,7 @@ export function daemonStatus(): void {
 	const t = getTranslation();
 
 	if (allPidFiles.length === 0) {
-		sseLog.info(t.noRunningDaemons);
+		log.info(t.noRunningDaemons);
 		return;
 	}
 
@@ -377,30 +377,30 @@ export function daemonStatus(): void {
 				runningDaemons.push(daemonInfo);
 			} catch (err) {
 				// 进程已停止，记录待清理的文件
-				sseLog.debug(`Daemon process ${pid} is not alive:`, err);
+				log.debug(`Daemon process ${pid} is not alive:`, err);
 				stoppedPidFiles.push(pidFile);
 			}
 		} catch (err) {
 			// PID文件损坏，记录待清理的文件
-			sseLog.debug(`Corrupted PID file ${pidFile}:`, err);
+			log.debug(`Corrupted PID file ${pidFile}:`, err);
 			stoppedPidFiles.push(pidFile);
 		}
 	}
 
 	if (runningDaemons.length === 0) {
-		sseLog.info(t.noRunningDaemons);
+		log.info(t.noRunningDaemons);
 		if (stoppedPidFiles.length > 0) {
-			sseLog.info(
+			log.info(
 				`\n${formatMessage(t.foundInvalidPids, {
 					count: stoppedPidFiles.length,
 				})}`,
 			);
-			sseLog.info(t.cleanupHint);
+			log.info(t.cleanupHint);
 		}
 		return;
 	}
 
-	sseLog.info(
+	log.info(
 		`${formatMessage(t.runningDaemons, {count: runningDaemons.length})}:\n`,
 	);
 
@@ -408,22 +408,22 @@ export function daemonStatus(): void {
 		const {pid, port, workDir, timeout, startTime} = daemon;
 		const logFile = getLogFilePath(port);
 
-		sseLog.info(`${t.pid}: ${pid} | ${t.port}: ${port}`);
-		sseLog.info(`  ${t.workDir}: ${workDir}`);
-		sseLog.info(`  ${t.timeout}: ${timeout}ms`);
-		sseLog.info(`  ${t.startTime}: ${new Date(startTime).toLocaleString()}`);
-		sseLog.info(`  ${t.logFile}: ${logFile}`);
-		sseLog.info(`  ${t.endpoint}: http://localhost:${port}/events`);
-		sseLog.info(
+		log.info(`${t.pid}: ${pid} | ${t.port}: ${port}`);
+		log.info(`  ${t.workDir}: ${workDir}`);
+		log.info(`  ${t.timeout}: ${timeout}ms`);
+		log.info(`  ${t.startTime}: ${new Date(startTime).toLocaleString()}`);
+		log.info(`  ${t.logFile}: ${logFile}`);
+		log.info(`  ${t.endpoint}: http://localhost:${port}/events`);
+		log.info(
 			`  ${t.stopCommand}: snow --sse-stop ${pid} 或 snow --sse-stop --sse-port ${port}`,
 		);
-		sseLog.info('');
+		log.info('');
 	}
 
 	if (stoppedPidFiles.length > 0) {
-		sseLog.info(
+		log.info(
 			formatMessage(t.invalidPidsStopped, {count: stoppedPidFiles.length}),
 		);
-		sseLog.info(t.autoCleanupHint);
+		log.info(t.autoCleanupHint);
 	}
 }

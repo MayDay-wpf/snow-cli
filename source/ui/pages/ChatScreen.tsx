@@ -42,7 +42,7 @@ import {resetTerminal} from '../../utils/execution/terminal.js';
 import {useBuddyNotification} from '../../buddy/useBuddyNotification.js';
 import {logger} from '../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 const MIN_TERMINAL_HEIGHT = 10;
 
 type Props = {
@@ -392,7 +392,7 @@ export default function ChatScreen({
 			// 等价于 useCommandHandler 处理 startGoalLoop action 的核心两步
 			await processMessage('', undefined, false, true);
 		} catch (err) {
-			pageLog.error('[goal] resume from panel failed', err);
+			log.error('[goal] resume from panel failed', err);
 		}
 	};
 

@@ -11,7 +11,7 @@ import {
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
 import {logger} from '../../../utils/core/logger.js';
 
-const pageLog = logger.child('ui:pages');
+const log = logger.child('ui:pages');
 
 type Options = {
 	autoResume?: boolean;
@@ -67,7 +67,7 @@ export function useChatScreenSessionLifecycle({
 					}
 				}
 			} catch (error) {
-				pageLog.error('Failed to auto-resume session', error);
+				log.error('Failed to auto-resume session', error);
 			} finally {
 				setIsResumingSession?.(false);
 			}

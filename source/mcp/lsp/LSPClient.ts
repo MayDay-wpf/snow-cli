@@ -28,7 +28,7 @@ import {processManager} from '../../utils/core/processManager.js';
 import {logger} from '../../utils/core/logger.js';
 import type {LSPServerConfig} from './LSPServerRegistry.js';
 
-const lspLog = logger.child('mcp:lsp-client');
+const log = logger.child('mcp:lsp-client');
 
 export interface LSPClientConfig extends LSPServerConfig {
 	language: string;
@@ -106,7 +106,7 @@ export class LSPClient {
 				this.connection.dispose();
 			} catch (error) {
 				// Connection may already be disposed
-				lspLog.debug('Failed to dispose LSP connection during stream teardown', {error});
+				log.debug('Failed to dispose LSP connection during stream teardown', {error});
 			}
 		}
 	}
@@ -162,7 +162,7 @@ export class LSPClient {
 						// Pass absolute path to avoid ambiguity; csharp-ls accepts absolute.
 						args.push('-s', slnPath);
 					} else {
-						lspLog.info(
+						log.info(
 							`[LSP:csharp] No .sln found under rootPath=${this.config.rootPath}; skip -s and rely on fallback.`,
 							{rootPath: this.config.rootPath},
 						);
@@ -218,7 +218,7 @@ export class LSPClient {
 					return;
 				}
 
-				lspLog.debug('LSP connection error:', {error: error?.message || error});
+				log.debug('LSP connection error:', {error: error?.message || error});
 			});
 			this.connection.onClose(() => {
 				this.markTransportClosed();
@@ -352,7 +352,7 @@ export class LSPClient {
 				}
 			}
 		} catch (error) {
-			lspLog.debug('Error during LSP shutdown:', {error});
+			log.debug('Error during LSP shutdown:', {error});
 		} finally {
 			await this.cleanup();
 		}
@@ -363,7 +363,7 @@ export class LSPClient {
 			try {
 				this.connection.dispose();
 			} catch (disposeErr) {
-				lspLog.debug('Suppressed error during connection disposal:', {error: disposeErr});
+				log.debug('Suppressed error during connection disposal:', {error: disposeErr});
 			}
 			this.connection = undefined;
 		}
@@ -375,7 +375,7 @@ export class LSPClient {
 				}
 			} catch (error) {
 				// Process may already be dead
-				lspLog.debug('Failed to kill LSP process during stop', {error});
+				log.debug('Failed to kill LSP process during stop', {error});
 			}
 			this.process = undefined;
 		}

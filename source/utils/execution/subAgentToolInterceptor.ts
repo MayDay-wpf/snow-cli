@@ -16,7 +16,7 @@ import {emitSubAgentMessage} from './subAgentTypes.js';
 import type {SubAgentExecutionContext, ChatMessage} from './subAgentTypes.js';
 import {logger} from '../core/logger.js';
 
-const subAgentLogger = logger.child('execution.subAgentInterceptor');
+const log = logger.child('execution.subAgentInterceptor');
 
 export interface InterceptResult {
 	remainingToolCalls: any[];
@@ -118,7 +118,7 @@ export async function interceptSendMessage(
 					targetInstanceId = args.target_instance_id;
 					msgContent = args.message || '';
 				} catch (error) {
-					subAgentLogger.error(
+					log.error(
 						'Failed to parse send_message_to_agent arguments',
 						error,
 					);
@@ -300,7 +300,7 @@ export async function interceptSpawnSubAgent(
 					spawnAgentId = args.agent_id || '';
 					spawnPrompt = args.prompt || '';
 				} catch (error) {
-					subAgentLogger.error('Failed to parse spawn_sub_agent arguments', error);
+					log.error('Failed to parse spawn_sub_agent arguments', error);
 				}
 
 				if (!spawnAgentId || !spawnPrompt) {
@@ -336,7 +336,7 @@ export async function interceptSpawnSubAgent(
 						spawnAgentName = agentConfig.name;
 					}
 				} catch (error) {
-					subAgentLogger.debug(
+					log.debug(
 						'Failed to resolve sub-agent configuration for spawn, falling back to builtin name',
 						{spawnAgentId, error},
 					);
@@ -485,7 +485,7 @@ export async function interceptAskUser(
 					multiSelect = true;
 				}
 			} catch (error) {
-				subAgentLogger.error('Failed to parse askuser tool arguments', error);
+				log.error('Failed to parse askuser tool arguments', error);
 			}
 
 			// Execute beforeToolCall hook inside the askuser tool span.
@@ -523,7 +523,7 @@ export async function interceptAskUser(
 					return {result: undefined, outputContent: content};
 				}
 			} catch (hookError) {
-				subAgentLogger.warn(
+				log.warn(
 					'Failed to execute beforeToolCall hook for askuser in sub-agent',
 					hookError,
 				);
@@ -585,7 +585,7 @@ export async function interceptAskUser(
 					error: null,
 				});
 			} catch (hookError) {
-				subAgentLogger.warn(
+				log.warn(
 					'Failed to execute afterToolCall hook for askuser in sub-agent',
 					hookError,
 				);

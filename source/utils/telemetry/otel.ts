@@ -42,7 +42,7 @@ import {
 } from '../config/projectSettings.js';
 import {logger} from '../core/logger.js';
 
-const otelLog = logger.child('telemetry:otel');
+const log = logger.child('telemetry:otel');
 
 let telemetrySdk: NodeSDK | null = null;
 let telemetryStarted = false;
@@ -452,7 +452,7 @@ export function initializeTelemetry(sessionId?: string): boolean {
 	} catch (error) {
 		telemetrySdk = null;
 		telemetryStarted = false;
-		otelLog.error(
+		log.error(
 			'[telemetry] Failed to initialize OpenTelemetry:',
 			{error: error instanceof Error ? error.message : String(error)},
 		);
@@ -471,7 +471,7 @@ export async function shutdownTelemetry(): Promise<void> {
 	try {
 		await sdk.shutdown();
 	} catch (error) {
-		otelLog.error(
+		log.error(
 			'[telemetry] Failed to shutdown OpenTelemetry:',
 			{error: error instanceof Error ? error.message : String(error)},
 		);

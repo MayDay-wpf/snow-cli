@@ -19,7 +19,7 @@ import type {
 } from './subAgentTypes.js';
 import {logger} from '../core/logger.js';
 
-const subAgentLogger = logger.child('execution.subAgentApproval');
+const log = logger.child('execution.subAgentApproval');
 
 export interface ApprovalResult {
 	approvedToolCalls: any[];
@@ -47,7 +47,7 @@ export async function checkAndApproveTools(
 		try {
 			args = JSON.parse(toolCall.function.arguments);
 		} catch (error) {
-			subAgentLogger.debug(
+			log.debug(
 				'Failed to parse sub-agent tool call arguments JSON for approval check',
 				{toolName, error},
 			);
@@ -241,7 +241,7 @@ export async function executeMcpTools(
 					continue;
 				}
 			} catch (hookError) {
-				subAgentLogger.warn(
+				log.warn(
 					'Failed to execute beforeToolCall hook in sub-agent',
 					hookError,
 				);
@@ -354,7 +354,7 @@ export async function executeMcpTools(
 					}
 				}
 			} catch (hookError) {
-				subAgentLogger.warn(
+				log.warn(
 					'Failed to execute afterToolCall hook in sub-agent',
 					hookError,
 				);
@@ -407,7 +407,7 @@ export async function executeMcpTools(
 					error: normalizedError,
 				});
 			} catch (hookError) {
-				subAgentLogger.warn(
+				log.warn(
 					'Failed to execute afterToolCall hook in sub-agent',
 					hookError,
 				);
