@@ -16,7 +16,7 @@ status: normative
 
 ## 1. 规范矩阵全景（Convention Registry）
 
-当前全套规范体系按历史演化排序共包含 **9 大核心规范**（含 1 篇元规范基底与 8 篇领域工程规范）：
+当前全套规范体系按历史演化排序共包含 **10 大核心规范**（含 1 篇元规范基底与 9 篇领域工程规范）：
 
 | # | 规范文档 (Document) | 首次确立时间 | 领域类别 | 范畴与权责 (Scope) | 状态 |
 |---|---|---|---|---|---|
@@ -29,6 +29,7 @@ status: normative
 | **06** | [06-logging-and-observability.md](./06-logging-and-observability.md) | 2026-10-16 11:58 | `observability / guard` | 统一结构化日志（ECS/OTel 语义兼容）、TUI 渲染防击穿硬门禁、三层 Sink（TUI/文件/测试）、基于依赖图的日志覆盖审计 | 强制规范 |
 | **07** | [07-posix-path-discipline.md](./07-posix-path-discipline.md) | 2026-10-16 11:58 | `filesystem / core` | 全链路 POSIX 统一单斜杠、不可变 `StructuredPath` 值对象、`snowContext` 唯一沙箱持久化源头 | 强制规范 |
 | **08** | [08-dependency-graph-guards.md](./08-dependency-graph-guards.md) | 2026-10-16 11:58 | `architecture / graph` | 单向依赖流向分层、Registry 依赖倒置解耦模式、运行时循环依赖恒为 0 门禁 | 强制规范 |
+| **09** | [09-engineering-governance-and-static-verification-guards.md](./09-engineering-governance-and-static-verification-guards.md) | 2026-10-16 19:07 | `verify / toolchain` | 五维静态验证流水线 (Biome/Pre-commit/TSC/GuardMesh/Knip)、0-容忍门禁网格、启发/消融/反向消融契约 | 强制规范 |
 
 ---
 

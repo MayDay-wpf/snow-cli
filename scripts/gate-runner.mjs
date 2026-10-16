@@ -117,6 +117,18 @@ function run() {
 		process.exit(2);
 	}
 
+	// === Tier 2: AOT Type Soundness Oracle (Step 0) ===
+	console.log(`[GateRunner] [Step 0] Verifying TypeScript type soundness (tsc --noEmit)...`);
+	const tscResult = spawnSync('npx', ['tsc', '--noEmit'], {
+		stdio: 'inherit',
+		shell: true,
+	});
+	if (tscResult.status !== 0) {
+		console.error(`\n[GateRunner] [Step 0 FAILED] TypeScript type compilation failed. Fix type errors before running tests.`);
+		process.exit(tscResult.status ?? 1);
+	}
+	console.log(`[GateRunner] [Step 0 PASSED] TypeScript types strictly sound.\n`);
+
 	console.log(`[GateRunner] Profile [${profile}] executing ${suites.length} test suites...`);
 	const avaArgs = ['node_modules/ava/entrypoints/cli.mjs', '--timeout=1m', ...suites];
 	const result = spawnSync('node', avaArgs, {
