@@ -17,6 +17,8 @@ import type {
 import {vscodeConnection} from '../ui/vscodeConnection.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:agentChildProcessWorker');
+
 interface PendingRequest {
 	resolve: (value: any) => void;
 	reject: (error: Error) => void;
@@ -55,7 +57,7 @@ let ideConnectionReady: Promise<void> | undefined;
 function ensureIdeConnection(): Promise<void> {
 	if (!ideConnectionReady) {
 		ideConnectionReady = vscodeConnection.start().catch(error => {
-			logger.debug(
+			log.debug(
 				'Failed to start vscodeConnection in agent worker, continuing without IDE',
 				{error},
 			);

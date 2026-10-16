@@ -647,7 +647,7 @@ async function* parseSSEStream(
 			bufferLength: buffer.length,
 			bufferPreview: buffer.substring(0, 200),
 		};
-		logger.error(
+		log.error(
 			'[API_ERROR] [RETRIABLE] OpenAI SSE stream parsing error with checkpoint context:',
 			errorContext,
 		);
@@ -679,7 +679,7 @@ export async function* createStreamingChatCompletion(
 				// Profile not found, fallback to main config
 				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
-				logger.warn(
+				log.warn(
 					`Profile ${options.configProfile} not found, using main config`,
 				);
 			}
@@ -687,7 +687,7 @@ export async function* createStreamingChatCompletion(
 			// If loading profile fails, fallback to main config
 			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
-			logger.warn(
+			log.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
 				error,
 			);

@@ -21,6 +21,8 @@ import {
 	type RequestMethod,
 } from './apiConfig.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('config:configManager');
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
@@ -91,7 +93,7 @@ export function getActiveProfileName(): string {
 			return profileName;
 		} catch (error) {
 			// If migration fails, continue with default
-			logger.debug('getActiveProfileName legacy profile migration failed', {error});
+			log.debug('getActiveProfileName legacy profile migration failed', {error});
 		}
 	}
 
@@ -304,7 +306,7 @@ export function getAllProfiles(): ConfigProfile[] {
 		}
 	} catch (error) {
 		// If reading fails, return empty array
-		logger.debug('getAllProfiles readDir or profile load failed', {error});
+		log.debug('getAllProfiles readDir or profile load failed', {error});
 	}
 
 	// Ensure at least a default profile exists

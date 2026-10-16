@@ -5,6 +5,8 @@ import {markedTerminal} from 'marked-terminal';
 import {supportsLanguage} from 'cli-highlight';
 import logger from '../../../utils/core/logger.js';
 import {visualWidth} from '../../../utils/core/textUtils.js';
+
+const log = logger.child('ui:components.common.MarkdownRenderer');
 import {
 	getAvailableTerminalColumns,
 	getTerminalColumns,
@@ -253,7 +255,7 @@ export default function MarkdownRenderer({content}: Props) {
 		const rendered = marked.parse(sanitizedContent) as string;
 
 		if (!rendered || typeof rendered !== 'string') {
-			// logger.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
+			// log.warn('[MarkdownRenderer] Invalid rendered output, falling back', {
 			// 	renderedType: typeof rendered,
 			// 	renderedValue: rendered,
 			// });
@@ -272,7 +274,7 @@ export default function MarkdownRenderer({content}: Props) {
 		);
 	} catch (error: any) {
 		if (error?.message?.includes('Number must be >')) {
-			logger.warn(
+			log.warn(
 				'[MarkdownRenderer] Invalid list numbering detected, falling back to plain text',
 				{
 					error: error.message,
@@ -281,7 +283,7 @@ export default function MarkdownRenderer({content}: Props) {
 			return renderFallback(content);
 		}
 
-		logger.error(
+		log.error(
 			'[MarkdownRenderer] Unexpected error during markdown rendering',
 			{
 				error: error.message,

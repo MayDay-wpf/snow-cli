@@ -5,6 +5,8 @@ import {
 import type {ConnectionConfig} from './types.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('connection:configStore');
+
 /**
  * Connection config storage.
  *
@@ -20,7 +22,7 @@ export class ConfigStore {
 			});
 		} catch (error) {
 			// Ignore save errors
-			logger.debug('Failed to save connection config', {error});
+			log.debug('Failed to save connection config', {error});
 		}
 	}
 
@@ -38,7 +40,7 @@ export class ConfigStore {
 			}
 			return null;
 		} catch (error) {
-			logger.debug('Failed to load connection config', {error});
+			log.debug('Failed to load connection config', {error});
 			return null;
 		}
 	}
@@ -48,7 +50,7 @@ export class ConfigStore {
 		try {
 			return this.load() !== null;
 		} catch (error) {
-			logger.debug('Failed to check if connection config exists', {error});
+			log.debug('Failed to check if connection config exists', {error});
 			return false;
 		}
 	}
@@ -61,7 +63,7 @@ export class ConfigStore {
 			});
 		} catch (error) {
 			// Ignore clear errors
-			logger.debug('Failed to clear connection config', {error});
+			log.debug('Failed to clear connection config', {error});
 		}
 	}
 }

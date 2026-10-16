@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('connection:instanceLock');
+
 export class InstanceLockManager {
 	private readonly locksDir: string;
 
@@ -44,12 +46,12 @@ export class InstanceLockManager {
 				return true; // Process is still running
 			} catch (error) {
 				// Process doesn't exist anymore, stale lock
-				logger.debug('Process is not running, removing stale lock file', {instanceId, pid: lockData.pid, error});
+				log.debug('Process is not running, removing stale lock file', {instanceId, pid: lockData.pid, error});
 				fs.unlinkSync(lockPath);
 				return false;
 			}
 		} catch (error) {
-			logger.debug('Failed to check instance lock', {instanceId, error});
+			log.debug('Failed to check instance lock', {instanceId, error});
 			return false;
 		}
 	}
@@ -73,7 +75,7 @@ export class InstanceLockManager {
 			fs.writeFileSync(lockPath, JSON.stringify(lockData), 'utf-8');
 			return true;
 		} catch (error) {
-			logger.debug('Failed to lock instance ID', {instanceId, error});
+			log.debug('Failed to lock instance ID', {instanceId, error});
 			return false;
 		}
 	}
@@ -87,7 +89,7 @@ export class InstanceLockManager {
 			}
 		} catch (error) {
 			// Ignore unlock errors
-			logger.debug('Failed to unlock instance ID', {instanceId, error});
+			log.debug('Failed to unlock instance ID', {instanceId, error});
 		}
 	}
 }

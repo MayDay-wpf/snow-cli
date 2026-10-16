@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {logger} from './logger.js';
 
+const log = logger.child('core:imageContextCompressor');
+
 /**
  * Snapcompact 风格的图片上下文压缩。
  *
@@ -213,7 +215,7 @@ async function renderArchiveToImagePages(
 		sharp = (await import('sharp')).default;
 	} catch (error) {
 		// sharp 是可选依赖；不可用时保留无损 PNG。
-		logger.debug('sharp optional dependency unavailable, using PNG fallback', {error});
+		log.debug('sharp optional dependency unavailable, using PNG fallback', {error});
 	}
 
 	for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {

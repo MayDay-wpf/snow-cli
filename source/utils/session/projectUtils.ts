@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('session:projectUtils');
+
 /**
  * 项目工具函数 - 用于获取项目标识
  *
@@ -275,7 +277,7 @@ function writeProjectRegistry(registry: ProjectRegistry): void {
 		fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf-8');
 	} catch (error) {
 		// 项目注册表只是兼容性加速索引，写入失败不应影响主流程。
-		logger.debug('writeProjectRegistry failed to write project registry', {error});
+		log.debug('writeProjectRegistry failed to write project registry', {error});
 	}
 }
 
@@ -304,7 +306,7 @@ function discoverProjectIdsByName(projectNames: string[]): string[] {
 			}
 		} catch (error) {
 			// 目录不存在或不可读时跳过，保持完全无感。
-			logger.debug('discoverProjectIdsByName directory read skipped', {error, parentDir});
+			log.debug('discoverProjectIdsByName directory read skipped', {error, parentDir});
 		}
 	}
 

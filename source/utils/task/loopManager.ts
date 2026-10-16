@@ -11,6 +11,8 @@ import {
 import {join} from 'path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('task:loopManager');
 import {taskManager} from './taskManager.js';
 import {executeTaskInBackground} from './taskExecutor.js';
 
@@ -118,11 +120,11 @@ function readLoopDaemonState(filePath: string): LoopDaemonState | null {
 			scheduleKind: state.scheduleKind ?? 'interval',
 		};
 	} catch (error) {
-		logger.debug('readLoopDaemonState failed to read state', {error, filePath});
+		log.debug('readLoopDaemonState failed to read state', {error, filePath});
 		try {
 			unlinkSync(filePath);
 		} catch (unlinkError) {
-			logger.debug('readLoopDaemonState failed to unlink invalid file', {error: unlinkError, filePath});
+			log.debug('readLoopDaemonState failed to unlink invalid file', {error: unlinkError, filePath});
 		}
 
 		return null;
@@ -143,7 +145,7 @@ function writeLoopDaemonLog(loopId: string, message: string): void {
 			flag: 'a',
 		});
 	} catch (error) {
-		logger.debug('writeLoopDaemonLog failed to write log', {error, loopId});
+		log.debug('writeLoopDaemonLog failed to write log', {error, loopId});
 	}
 }
 
@@ -469,7 +471,7 @@ class LoopManager {
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
 			} catch (error) {
-				logger.debug('SIGTERM failed to unlink daemon file', {error, loopId: loop.id});
+				log.debug('SIGTERM failed to unlink daemon file', {error, loopId: loop.id});
 			}
 
 			process.exit(0);
@@ -480,7 +482,7 @@ class LoopManager {
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
 			} catch (error) {
-				logger.debug('SIGINT failed to unlink daemon file', {error, loopId: loop.id});
+				log.debug('SIGINT failed to unlink daemon file', {error, loopId: loop.id});
 			}
 
 			process.exit(0);
@@ -618,7 +620,7 @@ class LoopManager {
 		try {
 			unlinkSync(filePath);
 		} catch (error) {
-			logger.debug('stopDaemonLoop failed to unlink daemon file', {error, filePath});
+			log.debug('stopDaemonLoop failed to unlink daemon file', {error, filePath});
 		}
 
 		return state;

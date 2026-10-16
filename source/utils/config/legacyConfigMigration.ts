@@ -21,6 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('config:legacyConfigMigration');
 import {
 	readSettings,
 	writeSettings,
@@ -66,7 +68,7 @@ function safeUnlink(filePath: string): void {
 		}
 	} catch (error) {
 		// ignore
-		logger.debug('safeUnlink failed to unlink legacy file', {error, filePath});
+		log.debug('safeUnlink failed to unlink legacy file', {error, filePath});
 	}
 }
 

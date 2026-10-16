@@ -13,6 +13,8 @@ import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {ChatMessage} from '../../api/chat.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:subAgentSessionStore');
+
 export type SubAgentSessionStatus =
 	| 'running'
 	| 'completed'
@@ -58,7 +60,7 @@ class SubAgentSessionStore {
 		if (record.sessionId) {
 			this.loadedSessionIds.add(record.sessionId);
 			this.persist(record.sessionId).catch(error => {
-				logger.error('Failed to persist sub-agent sessions:', {
+				log.error('Failed to persist sub-agent sessions:', {
 					sessionId: record.sessionId,
 					error: error instanceof Error ? error.message : String(error),
 				});
@@ -85,7 +87,7 @@ class SubAgentSessionStore {
 				this.records.set(record.key, this.normalize(record));
 			}
 		} catch (error) {
-			logger.debug('Failed to read or parse sub-agent session file', {
+			log.debug('Failed to read or parse sub-agent session file', {
 				filePath,
 				error,
 			});
@@ -105,7 +107,7 @@ class SubAgentSessionStore {
 			try {
 				await fs.unlink(filePath);
 			} catch (error) {
-				logger.debug('Failed to unlink sub-agent session file', {
+				log.debug('Failed to unlink sub-agent session file', {
 					filePath,
 					error,
 				});
@@ -116,7 +118,7 @@ class SubAgentSessionStore {
 		try {
 			await fs.unlink(this.getLegacySessionFilePath(sessionId));
 		} catch (error) {
-			logger.debug('Failed to unlink legacy sub-agent session file', {
+			log.debug('Failed to unlink legacy sub-agent session file', {
 				sessionId,
 				error,
 			});
@@ -178,7 +180,7 @@ class SubAgentSessionStore {
 			const {sessionManager} = await import('../session/sessionManager.js');
 			return sessionManager.getSubAgentSessionsDir();
 		} catch (error) {
-			logger.debug('Failed to resolve sub-agent sessions directory', {error});
+			log.debug('Failed to resolve sub-agent sessions directory', {error});
 			return undefined;
 		}
 	}
@@ -213,7 +215,7 @@ class SubAgentSessionStore {
 					if (await this.exists(candidate)) return candidate;
 				}
 			} catch (error) {
-				logger.debug(
+				log.debug(
 					'Failed to read project directory for sub-agent sessions',
 					{projectDir, error},
 				);
@@ -231,7 +233,7 @@ class SubAgentSessionStore {
 			await fs.access(filePath);
 			return true;
 		} catch (error) {
-			logger.debug('Sub-agent session file does not exist', {
+			log.debug('Sub-agent session file does not exist', {
 				filePath,
 				error,
 			});
@@ -244,7 +246,7 @@ class SubAgentSessionStore {
 		const previous = this.persistQueues.get(sessionId) ?? Promise.resolve();
 		const next = previous
 			.catch(error => {
-				logger.debug('Previous sub-agent persist queue task failed', {
+				log.debug('Previous sub-agent persist queue task failed', {
 					sessionId,
 					error,
 				});

@@ -14,6 +14,8 @@ import {InteractionManager} from './interactionManager.js';
 import {ProjectDataManager} from './projectData.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('connection:ConnectionManager');
+
 // Re-export types for backward compatibility
 export type {
 	ConnectionStatus,
@@ -407,14 +409,14 @@ class ConnectionManager {
 					JSON.stringify(files),
 				);
 			} catch (error) {
-				logger.debug('Failed to get file list or send result', {requestId, error});
+				log.debug('Failed to get file list or send result', {requestId, error});
 				await this.connection!.invoke(
 					'SendFileListResult',
 					requestId,
 					JSON.stringify([]),
 				).catch(sendError => {
 					// Silently fail
-					logger.debug('Failed to send empty file list result fallback', {requestId, error: sendError});
+					log.debug('Failed to send empty file list result fallback', {requestId, error: sendError});
 				});
 			}
 		});
@@ -440,14 +442,14 @@ class ConnectionManager {
 						JSON.stringify(result),
 					);
 				} catch (error) {
-					logger.debug('Failed to get session list or send result', {requestId, error});
+					log.debug('Failed to get session list or send result', {requestId, error});
 					await this.connection!.invoke(
 						'SendSessionListResult',
 						requestId,
 						JSON.stringify({sessions: [], total: 0, hasMore: false}),
 					).catch(sendError => {
 						// Silently fail
-						logger.debug('Failed to send empty session list result fallback', {requestId, error: sendError});
+						log.debug('Failed to send empty session list result fallback', {requestId, error: sendError});
 					});
 				}
 			},
@@ -542,7 +544,7 @@ class ConnectionManager {
 			await this.connection.invoke('SendContextInfo', contextInfo);
 		} catch (error) {
 			// Silently fail - don't spam errors for push failures
-			logger.debug('Failed to push context info to server', {error});
+			log.debug('Failed to push context info to server', {error});
 		}
 	}
 
@@ -562,7 +564,7 @@ class ConnectionManager {
 				await this.connection.stop();
 			} catch (error) {
 				// Ignore disconnection errors
-				logger.debug('Error stopping connection during disconnect', {error});
+				log.debug('Error stopping connection during disconnect', {error});
 			}
 			this.connection = null;
 			this.interactionManager.setConnection(null);
@@ -703,7 +705,7 @@ class ConnectionManager {
 			await this.connection.invoke('NotifyCompactStarted');
 		} catch (error) {
 			// Silently fail
-			logger.debug('Failed to invoke NotifyCompactStarted', {error});
+			log.debug('Failed to invoke NotifyCompactStarted', {error});
 		}
 	}
 
@@ -723,7 +725,7 @@ class ConnectionManager {
 			);
 		} catch (error) {
 			// Silently fail
-			logger.debug('Failed to invoke NotifyCompactCompleted', {result, error});
+			log.debug('Failed to invoke NotifyCompactCompleted', {result, error});
 		}
 	}
 }

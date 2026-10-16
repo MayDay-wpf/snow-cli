@@ -30,6 +30,8 @@ import {pathToFileURL} from 'node:url';
 
 import {CUSTOM_HEADERS_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+
+const log = logger.child('plugins:customHeaders.index');
 import type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
 
 export type {CustomHeaderPlugin, CustomHeaderPluginContext} from './types.js';
@@ -109,7 +111,7 @@ async function loadExternalPlugins(): Promise<void> {
 	try {
 		entries = readdirSync(CUSTOM_HEADERS_PLUGIN_DIR, {withFileTypes: true});
 	} catch (error) {
-		logger.warn('Failed to read custom header plugin directory', {
+		log.warn('Failed to read custom header plugin directory', {
 			directory: CUSTOM_HEADERS_PLUGIN_DIR,
 			error,
 		});
@@ -133,7 +135,7 @@ async function loadExternalPlugins(): Promise<void> {
 			const mod = (await import(moduleUrl)) as CustomHeaderPluginModule;
 			const plugins = collectFromModule(mod);
 			if (plugins.length === 0) {
-				logger.warn(
+				log.warn(
 					`[custom-headers] plugin "${file.name}" did not export a valid CustomHeaderPlugin`,
 				);
 				continue;
@@ -143,7 +145,7 @@ async function loadExternalPlugins(): Promise<void> {
 				nextPlugins.push(plugin);
 			}
 		} catch (error) {
-			logger.warn(`[custom-headers] failed to load plugin "${file.name}":`, {
+			log.warn(`[custom-headers] failed to load plugin "${file.name}":`, {
 				error,
 			});
 		}
@@ -334,7 +336,7 @@ export async function resolveCustomHeaderPlaceholders(
 				}
 			}
 		} catch (error) {
-			logger.warn('Custom header plugin resolve failed', {
+			log.warn('Custom header plugin resolve failed', {
 				pluginId: plugin.id,
 				error,
 			});

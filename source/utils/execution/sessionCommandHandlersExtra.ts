@@ -65,6 +65,8 @@ import {
 import type {ThemeType} from '../../ui/themes/index.js';
 import {themes} from '../../ui/themes/index.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:sessionCommandHandlersExtra');
 import {
 	failResult,
 	okResult,
@@ -100,7 +102,7 @@ function applyCustomThemeColors(
 	try {
 		parsed = JSON.parse(trimmed);
 	} catch (error) {
-		logger.debug(
+		log.debug(
 			'Failed to parse customColors JSON in session command handler',
 			{trimmed, error},
 		);
@@ -1009,7 +1011,7 @@ export async function handleSession(
 					forkedSession.id,
 				);
 			} catch (error) {
-				logger.debug(
+				log.debug(
 					'Failed to copy todo list for forked session',
 					{sourceSessionId: currentSession.id, forkedSessionId: forkedSession.id, error},
 				);

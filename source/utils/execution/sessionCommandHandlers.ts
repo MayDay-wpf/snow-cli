@@ -76,6 +76,8 @@ import {
 	getTelemetryConfig,
 } from '../config/projectSettings.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:sessionCommandHandlers');
 import {tpsTracker} from '../../hooks/conversation/core/tpsTracker.js';
 import {
 	getActiveProfileName,
@@ -1761,7 +1763,7 @@ async function handleCompact(
 			const {getTodoService} = await import('./mcpToolsManager.js');
 			await getTodoService().copyTodoList(session.id, compressedSession.id);
 		} catch (error) {
-			logger.debug('Failed to inherit todo list during session compact', {
+			log.debug('Failed to inherit todo list during session compact', {
 				sessionId: session.id,
 				compressedSessionId: compressedSession.id,
 				error,
@@ -1778,7 +1780,7 @@ async function handleCompact(
 					compressedSession.id,
 				);
 			} catch (error) {
-				logger.debug('Failed to migrate goal during session compact', {
+				log.debug('Failed to migrate goal during session compact', {
 					sessionId: session.id,
 					compressedSessionId: compressedSession.id,
 					error,
@@ -1940,7 +1942,7 @@ async function handleReindex(
 		try {
 			agent.stopWatching?.();
 		} catch (error) {
-			logger.debug('Failed to stop watching codebase in session command handler', {
+			log.debug('Failed to stop watching codebase in session command handler', {
 				error,
 			});
 			// ignore

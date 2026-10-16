@@ -2,6 +2,8 @@ import fs from 'fs';
 import {calculateSimilarity} from '../../mcp/utils/filesystem/similarity.utils.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('ui:diffPreview');
+
 /**
  * Read the original content of a file, returning null if the file
  * does not exist or cannot be read.
@@ -11,7 +13,7 @@ export function readOriginalFile(filePath: string): string | null {
 		if (!filePath || !fs.existsSync(filePath)) return null;
 		return fs.readFileSync(filePath, 'utf-8');
 	} catch (error) {
-		logger.debug('Failed to read original file for diff preview', {filePath, error});
+		log.debug('Failed to read original file for diff preview', {filePath, error});
 		return null;
 	}
 }
@@ -320,7 +322,7 @@ export function collectDiffPreviewEntries(
 				parsed.filePath = JSON.parse(parsed.filePath);
 			} catch (error) {
 				// Not valid JSON — leave as-is (single file path string)
-				logger.debug('Failed to parse filePath JSON in computePendingDiffPreviewEntries', {error});
+				log.debug('Failed to parse filePath JSON in computePendingDiffPreviewEntries', {error});
 			}
 		}
 
@@ -478,7 +480,7 @@ export function collectDiffPreviewEntries(
 		}
 	} catch (error) {
 		// Ignore parse errors
-		logger.debug('Failed to parse copy segments in computeCopySegmentPreviewEntries', {error});
+		log.debug('Failed to parse copy segments in computeCopySegmentPreviewEntries', {error});
 	}
 	return entries;
 }
@@ -519,7 +521,7 @@ export function enrichPendingEditArgs(
 			toolArgs = {...toolArgs, filePath: JSON.parse(rawFilePath)};
 		} catch (error) {
 			// Not valid JSON — leave as-is (single file path string)
-			logger.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {error});
+			log.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {error});
 		}
 	}
 

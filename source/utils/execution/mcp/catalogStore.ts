@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import {getGlobalSnowDir} from '../../core/snowContext.js';
 import {logger} from '../../core/logger.js';
+
+const log = logger.child('execution:mcp.catalogStore');
 import type {MCPServiceTools} from '../mcpToolsManager.js';
 
 export type MCPCacheEventType =
@@ -129,7 +131,7 @@ export class MCPCatalogStore {
 			try {
 				data = JSON.parse(raw) as MCPCatalogDiskFormat;
 			} catch (parseErr) {
-				logger.debug('[MCP] Failed to parse disk catalog JSON:', parseErr);
+				log.debug('[MCP] Failed to parse disk catalog JSON:', parseErr);
 				this.recordEvent('MISS_CORRUPTED', expectedHash);
 				return null;
 			}
@@ -150,10 +152,10 @@ export class MCPCatalogStore {
 			}
 
 			this.recordEvent('HIT_DISK_SNAPSHOT', expectedHash, data.configHash);
-			logger.debug('[MCP] Loaded valid external MCP catalog from disk cache');
+			log.debug('[MCP] Loaded valid external MCP catalog from disk cache');
 			return data;
 		} catch (error) {
-			logger.debug('[MCP] Failed to load disk catalog:', error);
+			log.debug('[MCP] Failed to load disk catalog:', error);
 			this.recordEvent('MISS_CORRUPTED', expectedHash);
 			return null;
 		}
@@ -174,9 +176,9 @@ export class MCPCatalogStore {
 			const serialized = JSON.stringify(catalog, null, 2);
 			fs.writeFileSync(tempPath, serialized, 'utf8');
 			fs.renameSync(tempPath, this.catalogFilePath);
-			logger.debug('[MCP] Atomically saved external MCP catalog to disk cache');
+			log.debug('[MCP] Atomically saved external MCP catalog to disk cache');
 		} catch (error) {
-			logger.warn('[MCP] Failed to save disk catalog atomically:', error);
+			log.warn('[MCP] Failed to save disk catalog atomically:', error);
 			try {
 				if (fs.existsSync(tempPath)) {
 					fs.unlinkSync(tempPath);

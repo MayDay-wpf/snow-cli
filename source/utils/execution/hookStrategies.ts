@@ -9,6 +9,8 @@ import {
 } from './hookResultInterpreter.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:hookStrategies');
+
 export interface HookStrategy {
 	interpret(
 		hookResult: UnifiedHookExecutionResult,
@@ -22,7 +24,7 @@ function attachAdditionalContext(
 ): InterpretedHookResult {
 	const extracted = extractAdditionalContext(hookResult);
 	if (extracted.truncated) {
-		logger.warn(
+		log.warn(
 			'Hook additionalContext exceeded max length and was truncated',
 		);
 	}
@@ -224,7 +226,7 @@ const beforeSubAgentStartStrategy: HookStrategy = {
 		const error = findFirstFailedCommand(hookResult);
 		if (error && (error.exitCode >= 2 || error.exitCode < 0)) {
 			// Hard failure: still fail-open for sub-agent start (do not block spawn)
-			logger.warn(
+			log.warn(
 				`beforeSubAgentStart hook hard failure (fail-open): ${error.command} exit ${error.exitCode}`,
 			);
 			return {action: 'continue'};
@@ -232,7 +234,7 @@ const beforeSubAgentStartStrategy: HookStrategy = {
 
 		const extracted = extractPromptOverride(hookResult);
 		if (extracted.truncated) {
-			logger.warn(
+			log.warn(
 				'beforeSubAgentStart context/prompt exceeded max length and was truncated',
 			);
 		}
@@ -320,7 +322,7 @@ const onStopStrategy: HookStrategy = {
 		for (const result of hookResult.results) {
 			if (result.type === 'command' && !result.success) {
 				if (result.exitCode === 1) {
-					logger.warn(
+					log.warn(
 						'onStop hook warning',
 						{message: result.error || result.output || ''},
 					);

@@ -11,6 +11,8 @@ import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('commands:codebase');
+
 // Get translated messages
 function getMessages() {
 	const currentLanguage = getCurrentLanguage();
@@ -57,7 +59,7 @@ registerCommand('codebase', {
 						.replace('{fileWord}', fileWord),
 				};
 			} catch (error) {
-				logger.debug('Failed to count codebase files for status', {error});
+				log.debug('Failed to count codebase files for status', {error});
 				return {
 					success: true,
 					message: messages.status.replace('{status}', statusLabel),

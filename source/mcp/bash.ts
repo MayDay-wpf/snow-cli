@@ -93,7 +93,7 @@ export class TerminalCommandService {
 
 			return summarizedResult;
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'terminal-execute: summarize in bash service failed, fallback to original',
 				error,
 			);
@@ -594,7 +594,7 @@ export class TerminalCommandService {
 
 					// Enhanced error logging for debugging spawn failures
 					const errnoError = error as NodeJS.ErrnoException;
-					logger.error('Spawn process failed', {
+					log.error('Spawn process failed', {
 						command,
 						errorMessage: error.message,
 						errorCode: errnoError.code,

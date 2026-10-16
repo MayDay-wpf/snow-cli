@@ -2,6 +2,8 @@ import {createHash} from 'crypto';
 import {existsSync, mkdirSync, appendFileSync} from 'fs';
 import {join} from 'path';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:hookInjectDebug');
 import type {HookType} from '../config/hooksConfig.js';
 
 export type HookInjectDebugEntry = {
@@ -95,7 +97,7 @@ export function recordHookInjectDebug(entry: HookInjectDebugEntry): void {
 			'utf8',
 		);
 	} catch (error) {
-		logger.debug('Failed to write hooks-inject.txt log', {error});
+		log.debug('Failed to write hooks-inject.txt log', {error});
 		// fail-open: never block hook flow for debug logging
 	}
 }

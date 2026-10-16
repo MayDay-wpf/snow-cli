@@ -572,7 +572,7 @@ async function* parseSSEStream(
 		}
 	} catch (error) {
 		const {logger} = await import('../utils/core/logger.js');
-		logger.error('Responses API SSE stream parsing error:', {
+		log.error('Responses API SSE stream parsing error:', {
 			error: error instanceof Error ? error.message : 'Unknown error',
 			remainingBuffer: buffer.substring(0, 200),
 		});
@@ -834,7 +834,7 @@ export async function* createStreamingResponse(
 				// Profile not found, fallback to main config
 				config = getSnowConfig();
 				const {logger} = await import('../utils/core/logger.js');
-				logger.warn(
+				log.warn(
 					`Profile ${options.configProfile} not found, using main config`,
 				);
 			}
@@ -842,7 +842,7 @@ export async function* createStreamingResponse(
 			// If loading profile fails, fallback to main config
 			config = getSnowConfig();
 			const {logger} = await import('../utils/core/logger.js');
-			logger.warn(
+			log.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
 				error,
 			);

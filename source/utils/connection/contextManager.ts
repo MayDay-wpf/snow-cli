@@ -2,6 +2,8 @@ import type {ContextInfo, ContextInfoMessage, TokenUsageInfo} from './types.js';
 import type {StateManager} from './stateManager.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('connection:contextManager');
+
 // Global token usage storage - updated by ChatScreen
 let globalTokenUsage: TokenUsageInfo | null = null;
 
@@ -159,7 +161,7 @@ export class ContextManager {
 
 			return JSON.stringify(contextInfo);
 		} catch (error) {
-			logger.debug('Failed to get context info', {error});
+			log.debug('Failed to get context info', {error});
 			return JSON.stringify({
 				error: error instanceof Error ? error.message : 'Unknown error',
 				timestamp: new Date().toISOString(),
@@ -181,7 +183,7 @@ export class ContextManager {
 				});
 			})
 			.catch(error => {
-				logger.debug('Failed to setup message change listener', {error});
+				log.debug('Failed to setup message change listener', {error});
 				// Return no-op on error
 				return () => {};
 			});

@@ -32,7 +32,7 @@ function pauseStdinForExternalEditor(): () => void {
 				stdin.setRawMode(wasRaw ?? true);
 			} catch (error) {
 				// 恢复 raw mode 失败时不应影响主流程
-				logger.debug('Failed to restore stdin rawMode after external editor', {error});
+				log.debug('Failed to restore stdin rawMode after external editor', {error});
 			}
 		}
 	};

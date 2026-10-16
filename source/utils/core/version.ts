@@ -3,6 +3,8 @@ import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 import {logger} from './logger.js';
 
+const log = logger.child('core:version');
+
 let cachedVersion: string = '';
 
 /**
@@ -32,7 +34,7 @@ export function getPackageVersion(): string {
 				}
 			} catch (error) {
 				// try next candidate
-				logger.debug('getPackageVersion candidate read skipped', {error, path: p});
+				log.debug('getPackageVersion candidate read skipped', {error, path: p});
 			}
 		}
 		cachedVersion = '1.0.0';

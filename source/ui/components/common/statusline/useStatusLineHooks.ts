@@ -85,7 +85,7 @@ function normalizeStatusLineHookExports(
 	].filter(Boolean);
 
 	if (exportedHooks.length === 0) {
-		logger.warn('Status line hook module has no supported export', {
+		log.warn('Status line hook module has no supported export', {
 			modulePath,
 		});
 		return [];
@@ -98,7 +98,7 @@ function normalizeStatusLineHookExports(
 	return hooks.filter(hook => {
 		const isValid = isStatusLineHookDefinition(hook);
 		if (!isValid) {
-			logger.warn('Ignoring invalid status line hook export', {modulePath});
+			log.warn('Ignoring invalid status line hook export', {modulePath});
 		}
 
 		return isValid;
@@ -125,7 +125,7 @@ async function loadExternalStatusLineHooks(): Promise<
 	try {
 		entries = readdirSync(STATUSLINE_HOOKS_DIR, {withFileTypes: true});
 	} catch (error) {
-		logger.warn('Failed to read status line hook directory', {
+		log.warn('Failed to read status line hook directory', {
 			directory: STATUSLINE_HOOKS_DIR,
 			error,
 		});
@@ -148,7 +148,7 @@ async function loadExternalStatusLineHooks(): Promise<
 			const importedModule = (await import(moduleUrl)) as StatusLineHookModule;
 			hooks.push(...normalizeStatusLineHookExports(importedModule, modulePath));
 		} catch (error) {
-			logger.warn('Failed to load status line hook module', {
+			log.warn('Failed to load status line hook module', {
 				modulePath,
 				error,
 			});
@@ -350,7 +350,7 @@ export function useStatusLineHookItems(
 						[hook.id]: [],
 					}));
 				}
-				logger.warn('Status line hook refresh failed', {
+				log.warn('Status line hook refresh failed', {
 					hookId: hook.id,
 					error,
 				});

@@ -13,6 +13,8 @@ import {pathToFileURL} from 'node:url';
 
 import {ANYPANEL_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+
+const log = logger.child('plugins:anypanel.loader');
 import type {AnyPanelPlugin, AnyPanelPluginModule} from './types.js';
 
 export const SUPPORTED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
@@ -74,7 +76,7 @@ export async function loadAnyPanelPlugins(
 	try {
 		entries = readdirSync(ANYPANEL_PLUGIN_DIR, {withFileTypes: true});
 	} catch (error) {
-		logger.warn('Failed to read anypanel plugin directory', {
+		log.warn('Failed to read anypanel plugin directory', {
 			directory: ANYPANEL_PLUGIN_DIR,
 			error,
 		});
@@ -101,7 +103,7 @@ export async function loadAnyPanelPlugins(
 			const mod = (await import(moduleUrl)) as AnyPanelPluginModule;
 			const collected = collectFromModule(mod);
 			if (collected.length === 0) {
-				logger.warn(
+				log.warn(
 					`[anypanel] plugin "${file.name}" did not export a valid AnyPanelPlugin`,
 				);
 				continue;
@@ -111,7 +113,7 @@ export async function loadAnyPanelPlugins(
 				plugins.push(plugin);
 			}
 		} catch (error) {
-			logger.warn(`[anypanel] failed to load plugin "${file.name}":`, {error});
+			log.warn(`[anypanel] failed to load plugin "${file.name}":`, {error});
 		}
 	}
 

@@ -6,6 +6,8 @@
 
 import {logger} from './logger.js';
 
+const log = logger.child('core:streamGuards');
+
 /**
  * 流式读取空闲超时默认常量(3分钟)
  * 作为兜底值使用,调用方可通过 createIdleTimeoutGuard 传入 idleTimeoutMs 覆盖
@@ -134,16 +136,16 @@ export function createIdleTimeoutGuard({
 			try {
 				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
-					logger.debug('streamGuards reader.cancel async rejection ignored', {error: err});
+					log.debug('streamGuards reader.cancel async rejection ignored', {error: err});
 				});
 			} catch (error) {
 				// 忽略取消失败
-				logger.debug('streamGuards reader.cancel sync error ignored', {error});
+				log.debug('streamGuards reader.cancel sync error ignored', {error});
 			}
 
 			// 日志写入可能同步抛错,必须捕获,避免定时器回调触发 uncaughtException
 			try {
-				logger.warn(`Stream idle timeout detected after ${idleTimeoutMs}ms`);
+				log.warn(`Stream idle timeout detected after ${idleTimeoutMs}ms`);
 			} catch (error) {
 				// 忽略日志写入失败，避免死循环
 				void error;
@@ -168,11 +170,11 @@ export function createIdleTimeoutGuard({
 			try {
 				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
-					logger.debug('streamGuards reader.cancel async rejection in catch block ignored', {error: err});
+					log.debug('streamGuards reader.cancel async rejection in catch block ignored', {error: err});
 				});
 			} catch (cancelError) {
 				// 忽略取消失败
-				logger.debug('streamGuards reader.cancel sync error in catch block ignored', {error: cancelError});
+				log.debug('streamGuards reader.cancel sync error in catch block ignored', {error: cancelError});
 			}
 		}
 	}, Math.min(5000, Math.max(10, Math.floor(idleTimeoutMs / 2))));
@@ -183,11 +185,11 @@ export function createIdleTimeoutGuard({
 			try {
 				reader?.cancel().catch((err: unknown) => {
 					// 忽略取消失败
-					logger.debug('streamGuards abandon reader.cancel async rejection ignored', {error: err});
+					log.debug('streamGuards abandon reader.cancel async rejection ignored', {error: err});
 				});
 			} catch (error) {
 				// 忽略取消失败
-				logger.debug('streamGuards abandon reader.cancel sync error ignored', {error});
+				log.debug('streamGuards abandon reader.cancel sync error ignored', {error});
 			}
 		},
 

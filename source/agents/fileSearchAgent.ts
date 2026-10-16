@@ -127,7 +127,7 @@ export class FileSearchAgent {
 			this.initialized = true;
 			return true;
 		} catch (error) {
-			logger.warn('Failed to initialize file search agent:', error);
+			log.warn('Failed to initialize file search agent:', error);
 			return false;
 		}
 	}
@@ -292,7 +292,7 @@ export class FileSearchAgent {
 		try {
 			tools = await this.getSearchTools();
 		} catch (error) {
-			logger.warn('File search agent: failed to collect tools:', error);
+			log.warn('File search agent: failed to collect tools:', error);
 		}
 		if (tools.length === 0) {
 			yield {

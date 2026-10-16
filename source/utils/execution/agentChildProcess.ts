@@ -6,6 +6,8 @@ import {fileURLToPath} from 'node:url';
 import {getConversationContext} from '../codebase/conversationContext.js';
 import type {ChatMessage} from '../../api/chat.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:agentChildProcess');
 import {buildSessionIdentityEnv} from './sessionIdentityEnv.js';
 
 import {
@@ -197,7 +199,7 @@ function safeSend(child: ChildProcess, message: any): boolean {
 		child.send(message);
 		return true;
 	} catch (error) {
-		logger.debug('Failed to send IPC message to child process', {error});
+		log.debug('Failed to send IPC message to child process', {error});
 		return false;
 	}
 }

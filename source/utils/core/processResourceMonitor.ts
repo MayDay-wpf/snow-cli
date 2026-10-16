@@ -1,6 +1,8 @@
 import {execFile} from 'node:child_process';
 import {logger} from './logger.js';
 
+const log = logger.child('core:processResourceMonitor');
+
 /**
  * Process Resource Monitor
  *
@@ -369,7 +371,7 @@ export function killProcessTree(pid: number): void {
 			process.kill(pid, 'SIGKILL');
 		} catch (error) {
 			// 进程已退出
-			logger.debug('processResourceMonitor process kill 0/SIGKILL skipped (process exited)', {error, pid});
+			log.debug('processResourceMonitor process kill 0/SIGKILL skipped (process exited)', {error, pid});
 		}
 	}, 800);
 

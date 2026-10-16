@@ -7,6 +7,8 @@
 
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:runningSubAgentTracker');
+
 export interface InterAgentMessage {
 	/** Instance ID of the sender sub-agent */
 	fromInstanceId: string;
@@ -402,7 +404,7 @@ class RunningSubAgentTracker {
 					message,
 				});
 			} catch (error) {
-				logger.debug('Error in interAgentListener callback', {
+				log.debug('Error in interAgentListener callback', {
 					fromAgent,
 					targetAgent,
 					error,
@@ -479,7 +481,7 @@ class RunningSubAgentTracker {
 			try {
 				listener();
 			} catch (error) {
-				logger.debug('Error in runningSubAgentTracker listener callback', {
+				log.debug('Error in runningSubAgentTracker listener callback', {
 					error,
 				});
 				// Ignore listener errors

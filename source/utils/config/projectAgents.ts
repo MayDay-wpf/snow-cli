@@ -8,6 +8,8 @@ import {basename, extname, join} from 'path';
 import matter from 'gray-matter';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('config:projectAgents');
 import type {SubAgent} from './subAgentConfig.js';
 
 function listMarkdownFilesRecursive(dir: string): string[] {
@@ -81,7 +83,7 @@ export function parseAgentMarkdownFile(filePath: string): SubAgent | null {
 			mtime = statSync(filePath).mtime.toISOString();
 		} catch (error) {
 			// ignore
-			logger.debug('parseAgentFile statSync failed to read mtime', {error, filePath});
+			log.debug('parseAgentFile statSync failed to read mtime', {error, filePath});
 		}
 
 		return {
@@ -95,7 +97,7 @@ export function parseAgentMarkdownFile(filePath: string): SubAgent | null {
 			updatedAt: mtime,
 		};
 	} catch (error) {
-		logger.warn('Failed to parse project agent markdown', {
+		log.warn('Failed to parse project agent markdown', {
 			filePath,
 			error: error instanceof Error ? error.message : String(error),
 		});
@@ -111,7 +113,7 @@ export function loadAgentsFromDir(dir: string): SubAgent[] {
 		if (agent) {
 			agents.push(agent);
 		} else {
-			logger.warn('Skipping invalid project agent file', {file});
+			log.warn('Skipping invalid project agent file', {file});
 		}
 	}
 	return agents;

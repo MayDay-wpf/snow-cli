@@ -3,6 +3,8 @@ import path from 'path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('session:commandUsageManager');
+
 /**
  * 命令使用频率数据结构
  */
@@ -43,7 +45,7 @@ class CommandUsageManager {
 			await fs.mkdir(snowDir, {recursive: true});
 		} catch (error) {
 			// 目录已存在或其他错误
-			logger.debug('ensureSnowDir mkdir failed or already exists', {error, usageFile: this.usageFile});
+			log.debug('ensureSnowDir mkdir failed or already exists', {error, usageFile: this.usageFile});
 		}
 	}
 
@@ -95,7 +97,7 @@ class CommandUsageManager {
 			);
 			this.isDirty = false;
 		} catch (error) {
-			logger.error('Failed to save command usage:', error);
+			log.error('Failed to save command usage:', error);
 		}
 	}
 

@@ -10,6 +10,8 @@ import {formatToolTitleLine} from '../../ui/components/special/toolIcons.js';
 import {cleanThinkingContent} from '../../hooks/conversation/utils/thinkingExtractor.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('session:sessionConverter');
+
 /**
  * 从后续的 tool result 消息中提取 editDiffData。
  *
@@ -347,7 +349,7 @@ export function convertSessionMessagesToUI(
 						}
 					} catch (e) {
 						// Ignore parse errors
-						logger.debug('sessionConverter failed to parse terminal-execute result JSON', {error: e, toolName});
+						log.debug('sessionConverter failed to parse terminal-execute result JSON', {error: e, toolName});
 					}
 				}
 
@@ -413,7 +415,7 @@ export function convertSessionMessagesToUI(
 						}
 					} catch (e) {
 						// Ignore parse errors
-						logger.debug('sessionConverter failed to parse fileToolData result JSON', {error: e, toolName});
+						log.debug('sessionConverter failed to parse fileToolData result JSON', {error: e, toolName});
 					}
 				}
 
@@ -665,7 +667,7 @@ export function convertSessionMessagesToUI(
 								}
 							} catch (e) {
 								// Ignore parse errors
-								logger.debug('sessionConverter failed to parse editDiffData result JSON', {error: e, toolName});
+								log.debug('sessionConverter failed to parse editDiffData result JSON', {error: e, toolName});
 							}
 						}
 
@@ -686,7 +688,7 @@ export function convertSessionMessagesToUI(
 								}
 							} catch (e) {
 								// Ignore parse errors
-								logger.debug('sessionConverter failed to parse terminal result JSON', {error: e, toolName});
+								log.debug('sessionConverter failed to parse terminal result JSON', {error: e, toolName});
 							}
 						}
 

@@ -1,6 +1,8 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:bashOutputSummaryAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -29,7 +31,7 @@ export class BashOutputSummaryAgent {
 			this.initialized = true;
 			return true;
 		} catch (error) {
-			logger.warn('Bash output summary agent: initialize failed', error);
+			log.warn('Bash output summary agent: initialize failed', error);
 			return false;
 		}
 	}
@@ -169,7 +171,7 @@ Now produce the compressed terminal result:`;
 				stderr: '',
 			};
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'Bash output summary agent: summarize failed, fallback to original output',
 				error,
 			);

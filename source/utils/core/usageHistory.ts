@@ -7,6 +7,8 @@ import path from 'path';
 import os from 'os';
 import {logger} from './logger.js';
 
+const log = logger.child('core:usageHistory');
+
 export interface UsageLogEntry {
 	model: string;
 	profileName: string;
@@ -178,7 +180,7 @@ export async function loadUsageData(
 						});
 					} catch (error) {
 						// Skip invalid lines
-						logger.debug('loadUsageLogs skipped invalid jsonl line', {error, line});
+						log.debug('loadUsageLogs skipped invalid jsonl line', {error, line});
 					}
 				}
 			}

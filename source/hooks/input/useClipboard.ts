@@ -194,7 +194,7 @@ export function useClipboard(
 					}
 				} catch (imgError) {
 					// No image in clipboard or error, fall through to text
-					logger.error(
+					log.error(
 						'Failed to read image from Windows clipboard:',
 						imgError,
 					);
@@ -290,7 +290,7 @@ end try'`;
 						}
 					}
 				} catch (imgError) {
-					logger.error('Failed to read image from macOS clipboard:', imgError);
+					log.error('Failed to read image from macOS clipboard:', imgError);
 				}
 			}
 
@@ -342,10 +342,10 @@ end try'`;
 
 				insertClipboardText(clipboardText);
 			} catch (textError) {
-				logger.error('Failed to read text from clipboard:', textError);
+				log.error('Failed to read text from clipboard:', textError);
 			}
 		} catch (error) {
-			logger.error('Failed to read from clipboard:', error);
+			log.error('Failed to read from clipboard:', error);
 		} finally {
 			// 兜底：确保 loading 占位符在任何异常路径下都不会残留
 			if (!imageInserted) {

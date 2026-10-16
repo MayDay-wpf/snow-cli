@@ -2,6 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('session:historyManager');
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {resolveProjectIdentity} from './projectUtils.js';
 
@@ -50,7 +52,7 @@ class HistoryManager {
 			await fs.mkdir(snowDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists or other error
-			logger.debug('ensureSnowDir mkdir failed or already exists', {error, historyFile: this.historyFile});
+			log.debug('ensureSnowDir mkdir failed or already exists', {error, historyFile: this.historyFile});
 		}
 	}
 
@@ -132,7 +134,7 @@ class HistoryManager {
 			};
 
 			if (legacyCount > 0) {
-				logger.debug(
+				log.debug(
 					`Loaded ${legacyCount} legacy or moved-project history entries as read-only backup`,
 				);
 			}
@@ -228,7 +230,7 @@ class HistoryManager {
 		// Save if we removed any entries
 		if (this.historyData.entries.length < originalLength) {
 			await this.saveHistory();
-			logger.debug(
+			log.debug(
 				`Cleaned up ${
 					originalLength - this.historyData.entries.length
 				} old history entries`,
@@ -252,7 +254,7 @@ class HistoryManager {
 				'utf-8',
 			);
 		} catch (error) {
-			logger.error('Failed to save history:', error);
+			log.error('Failed to save history:', error);
 		}
 	}
 

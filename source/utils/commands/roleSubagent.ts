@@ -9,6 +9,8 @@ import {getGlobalSnowDir} from '../core/snowContext.js';
 import {getSubAgents, type SubAgent} from '../config/subAgentConfig.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('commands:roleSubagent');
+
 export type RoleSubagentLocation = 'global' | 'project';
 
 export interface RoleSubagentItem {
@@ -144,7 +146,7 @@ export function listRoleSubagents(
 		}
 	} catch (error) {
 		// ignore
-		logger.debug('Failed to read role-subagent directory', {dir, location, error});
+		log.debug('Failed to read role-subagent directory', {dir, location, error});
 	}
 
 	return items.sort((a, b) => a.agentName.localeCompare(b.agentName));
@@ -170,7 +172,7 @@ export function loadSubAgentCustomRole(
 				if (content) return content;
 			} catch (error) {
 				// fall through to global
-				logger.debug('Failed to read project custom role for subagent', {agentName, projectPath, error});
+				log.debug('Failed to read project custom role for subagent', {agentName, projectPath, error});
 			}
 		}
 	}
@@ -182,7 +184,7 @@ export function loadSubAgentCustomRole(
 			if (content) return content;
 		} catch (error) {
 			// no custom role
-			logger.debug('Failed to read global custom role for subagent', {agentName, globalPath, error});
+			log.debug('Failed to read global custom role for subagent', {agentName, globalPath, error});
 		}
 	}
 

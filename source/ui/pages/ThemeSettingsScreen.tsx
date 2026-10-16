@@ -24,12 +24,12 @@ type Props = {
 type Screen = 'main' | 'custom';
 
 const sampleOldCode = `function greet(name) {
-  logger.info("Hello " + name);
+  log.info("Hello " + name);
   return "Welcome!";
 }`;
 
 const sampleNewCode = `function greet(name: string): string {
-  logger.info(\`Hello \${name}\`);
+  log.info(\`Hello \${name}\`);
   return \`Welcome, \${name}!\`;
 }`;
 

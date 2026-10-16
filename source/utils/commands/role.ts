@@ -15,6 +15,8 @@ import {
 } from '../config/unifiedSettings.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('commands:role');
+
 // Role location type
 export type RoleLocation = 'global' | 'project';
 
@@ -258,7 +260,7 @@ export function listRoles(
 		}
 	} catch (error) {
 		// Directory read error, return empty
-		logger.debug('Failed to read roles directory', {dir, location, error});
+		log.debug('Failed to read roles directory', {dir, location, error});
 	}
 
 	// Sort by filename only to keep list stable when switching active role

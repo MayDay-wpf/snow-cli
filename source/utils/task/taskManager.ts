@@ -3,6 +3,8 @@ import path from 'path';
 import {randomUUID} from 'crypto';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('task:taskManager');
 import type {ChatMessage} from '../session/sessionManager.js';
 
 export interface Task {
@@ -74,7 +76,7 @@ class TaskManager {
 			await fs.mkdir(this.tasksDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists
-			logger.debug('ensureTasksDir failed or already exists', {error, dir: this.tasksDir});
+			log.debug('ensureTasksDir failed or already exists', {error, dir: this.tasksDir});
 		}
 	}
 
@@ -167,11 +169,11 @@ class TaskManager {
 						process.kill(task.pid, 'SIGKILL');
 					} catch (killError) {
 						// Process already terminated, ignore
-						logger.debug('deleteTask process.kill SIGKILL ignored', {error: killError, pid: task.pid});
+						log.debug('deleteTask process.kill SIGKILL ignored', {error: killError, pid: task.pid});
 					}
 				} catch (killError) {
 					// Process doesn't exist or already terminated, continue with deletion
-					logger.debug('deleteTask process.kill SIGTERM ignored', {error: killError, pid: task.pid});
+					log.debug('deleteTask process.kill SIGTERM ignored', {error: killError, pid: task.pid});
 				}
 			}
 

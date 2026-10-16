@@ -4,6 +4,8 @@ import {
 } from '../execution/commandExecutor.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('commands:buddy');
 import {translations} from '../../i18n/translations.js';
 import type {CompanionStat, Species} from '../../buddy/types.js';
 import {COMPANION_NAMED_COLORS, COMPANION_STATS, EYES, HATS, SPECIES} from '../../buddy/types.js';
@@ -476,7 +478,7 @@ registerCommand('buddy', {
 					companionReaction(reply);
 				})
 				.catch(error => {
-					logger.debug('Failed to generate buddy pet reply', {error});
+					log.debug('Failed to generate buddy pet reply', {error});
 				});
 
 			return {

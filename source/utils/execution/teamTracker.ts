@@ -7,6 +7,8 @@
 
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:teamTracker');
+
 export interface TeammateMessage {
 	fromInstanceId: string;
 	fromMemberId: string;
@@ -158,7 +160,7 @@ class TeamTracker {
 			try {
 				controller.abort();
 			} catch (error) {
-				logger.debug('Failed to abort teammate controller', {error});
+				log.debug('Failed to abort teammate controller', {error});
 				/* noop */
 			}
 		}
@@ -552,7 +554,7 @@ class TeamTracker {
 			try {
 				listener();
 			} catch (error) {
-				logger.debug('Error in teamTracker listener callback', {error});
+				log.debug('Error in teamTracker listener callback', {error});
 				// Ignore listener errors
 			}
 		}
@@ -563,7 +565,7 @@ class TeamTracker {
 			try {
 				listener(event);
 			} catch (error) {
-				logger.debug('Error in teamTracker messageListener callback', {
+				log.debug('Error in teamTracker messageListener callback', {
 					event,
 					error,
 				});

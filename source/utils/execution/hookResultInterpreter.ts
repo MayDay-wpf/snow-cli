@@ -6,6 +6,8 @@ import type {
 } from './unifiedHooksExecutor.js';
 import {hookStrategies} from './hookStrategies.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:hookResultInterpreter');
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 
 /**
@@ -125,7 +127,7 @@ export function parseAdditionalContextOutput(rawOutput: string): {
 
 		return {context, display, prompt};
 	} catch (error) {
-		logger.debug(
+		log.debug(
 			'Hook stdout is not JSON, ignoring for context extraction',
 			{error},
 		);
@@ -306,7 +308,7 @@ export function interpretHookResult(
 				});
 			})
 			.catch(error => {
-				logger.debug('Failed to record hook inject debug info', {error});
+				log.debug('Failed to record hook inject debug info', {error});
 			});
 	}
 
@@ -380,7 +382,7 @@ export function extractHookProvidedConfirmation(
 				}
 			}
 		} catch (error) {
-			logger.debug(
+			log.debug(
 				'Hook confirmation output is not JSON, falling back to keyword matching',
 				{error, rawOutput},
 			);

@@ -1,6 +1,8 @@
 import {execFileSync} from 'child_process';
 import {logger} from './logger.js';
 
+const log = logger.child('core:clipboard');
+
 function runClipboardCommand(
 	command: string,
 	args: string[],
@@ -204,7 +206,7 @@ export async function copyToClipboard(content: string): Promise<void> {
 			linuxCopySuccess = true;
 		} catch (error) {
 			// xclip failed (no X11 display or not installed)
-			logger.debug('clipboard xclip copy failed', {error});
+			log.debug('clipboard xclip copy failed', {error});
 		}
 		if (!linuxCopySuccess) {
 			try {
@@ -212,7 +214,7 @@ export async function copyToClipboard(content: string): Promise<void> {
 				linuxCopySuccess = true;
 			} catch (error) {
 				// wl-copy failed (no Wayland display or not installed)
-				logger.debug('clipboard wl-copy copy failed', {error});
+				log.debug('clipboard wl-copy copy failed', {error});
 			}
 		}
 		if (!linuxCopySuccess) {
@@ -221,7 +223,7 @@ export async function copyToClipboard(content: string): Promise<void> {
 				linuxCopySuccess = true;
 			} catch (error) {
 				// xsel failed (no X11 display or not installed)
-				logger.debug('clipboard xsel copy failed', {error});
+				log.debug('clipboard xsel copy failed', {error});
 			}
 		}
 		if (!linuxCopySuccess) {

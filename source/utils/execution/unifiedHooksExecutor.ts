@@ -9,6 +9,8 @@ import {
 import {processManager} from '../core/processManager.js';
 import {getSnowConfig} from '../config/apiConfig.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:unifiedHooksExecutor');
 import {
 	createStreamingChatCompletion,
 	type ChatMessage,
@@ -151,7 +153,7 @@ export class UnifiedHooksExecutor {
 			const config = getSnowConfig();
 
 			if (!config.basicModel) {
-				logger.warn('Unified hooks executor: Basic model not configured');
+				log.warn('Unified hooks executor: Basic model not configured');
 				return false;
 			}
 
@@ -161,7 +163,7 @@ export class UnifiedHooksExecutor {
 
 			return true;
 		} catch (error) {
-			logger.warn('Unified hooks executor: Failed to initialize:', error);
+			log.warn('Unified hooks executor: Failed to initialize:', error);
 			return false;
 		}
 	}
@@ -627,7 +629,7 @@ export class UnifiedHooksExecutor {
 				childProcess.stdin.on('error', (error: any) => {
 					// EPIPE 错误 - 进程可能不读取 stdin，这是正常的
 					if (error.code !== 'EPIPE') {
-						logger.error('Hook stdin error:', error);
+						log.error('Hook stdin error:', error);
 					}
 				});
 
@@ -638,7 +640,7 @@ export class UnifiedHooksExecutor {
 						if (childProcess.stdin && !childProcess.stdin.destroyed) {
 							childProcess.stdin.write(stdinData, (error: any) => {
 								if (error && error.code !== 'EPIPE') {
-									logger.error('Hook stdin write error:', error);
+									log.error('Hook stdin write error:', error);
 								}
 							});
 							childProcess.stdin.end();
@@ -963,7 +965,7 @@ Rules:
 				}
 			}
 		} catch (streamError) {
-			logger.error('Unified hooks executor: Streaming error:', streamError);
+			log.error('Unified hooks executor: Streaming error:', streamError);
 			throw streamError;
 		}
 
@@ -988,7 +990,7 @@ Rules:
 
 			return parsed as PromptHookResponse;
 		} catch (error) {
-			logger.warn('Unified hooks executor: Failed to parse JSON:', error);
+			log.warn('Unified hooks executor: Failed to parse JSON:', error);
 			return null;
 		}
 	}

@@ -2,6 +2,8 @@ import type * as signalR from '@microsoft/signalr';
 import type {StateManager} from './stateManager.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('connection:interactionManager');
+
 export class InteractionManager {
 	private connection: signalR.HubConnection | null = null;
 	private stateManager: StateManager;
@@ -46,7 +48,7 @@ export class InteractionManager {
 				allTools ? JSON.stringify(allTools) : null,
 			);
 		} catch (error) {
-			logger.debug('Failed to invoke NotifyToolConfirmationNeeded', {toolName, toolCallId, error});
+			log.debug('Failed to invoke NotifyToolConfirmationNeeded', {toolName, toolCallId, error});
 		}
 	}
 
@@ -77,7 +79,7 @@ export class InteractionManager {
 				multiSelect ?? false,
 			);
 		} catch (error) {
-			logger.debug('Failed to invoke NotifyUserInteractionNeeded', {question, toolCallId, error});
+			log.debug('Failed to invoke NotifyUserInteractionNeeded', {question, toolCallId, error});
 		}
 	}
 
@@ -108,7 +110,7 @@ export class InteractionManager {
 				payload.todoCount ?? 0,
 			);
 		} catch (error) {
-			logger.debug('Failed to invoke NotifyRollbackConfirmationNeeded', {payload, error});
+			log.debug('Failed to invoke NotifyRollbackConfirmationNeeded', {payload, error});
 		}
 	}
 
@@ -132,7 +134,7 @@ export class InteractionManager {
 				reason ?? null,
 			);
 		} catch (error) {
-			logger.debug('Failed to invoke SendToolConfirmationResult', {toolCallId, result, error});
+			log.debug('Failed to invoke SendToolConfirmationResult', {toolCallId, result, error});
 		}
 	}
 
@@ -158,7 +160,7 @@ export class InteractionManager {
 				cancelled ?? false,
 			);
 		} catch (error) {
-			logger.debug('Failed to invoke SendUserQuestionResult', {toolCallId, error});
+			log.debug('Failed to invoke SendUserQuestionResult', {toolCallId, error});
 		}
 	}
 
@@ -171,7 +173,7 @@ export class InteractionManager {
 		try {
 			await this.connection.invoke('SendMessageProcessingCompleted');
 		} catch (error) {
-			logger.debug('Failed to invoke SendMessageProcessingCompleted', {error});
+			log.debug('Failed to invoke SendMessageProcessingCompleted', {error});
 		}
 	}
 }

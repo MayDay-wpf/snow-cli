@@ -1,6 +1,8 @@
 import type {UnifiedHookExecutionResult, HookActionResult, CommandHookResult} from './unifiedHooksExecutor.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('execution:hookResultCore');
+
 /**
  * Hook 错误详情（结构化数据，供 UI 组件渲染）
  */
@@ -117,7 +119,7 @@ export function parseAdditionalContextOutput(rawOutput: string): {
 			...(prompt ? {prompt} : {}),
 		};
 	} catch (error) {
-		logger.debug('Hook stdout is not JSON, ignoring for context extraction', {
+		log.debug('Hook stdout is not JSON, ignoring for context extraction', {
 			error,
 		});
 		// Non-JSON output — do not treat stdout as context

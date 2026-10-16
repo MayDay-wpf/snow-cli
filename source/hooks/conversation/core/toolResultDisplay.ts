@@ -11,6 +11,8 @@ import {
 import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 import {logger} from '../../../utils/core/logger.js';
 
+const log = logger.child('hooks:conversation.core.toolResultDisplay');
+
 /**
  * Build UI messages for tool execution results.
  */
@@ -39,7 +41,7 @@ export function buildToolResultMessages(
 					usage = subAgentResult.usage;
 				} catch (error) {
 					// Ignore parsing errors
-					logger.debug('Failed to parse subagent result content as JSON', {error});
+					log.debug('Failed to parse subagent result content as JSON', {error});
 				}
 			}
 
@@ -116,14 +118,14 @@ function extractEditDiffData(
 					}
 				} catch (error) {
 					// ignore
-					logger.debug('Failed to parse toolCall arguments for filename fallback', {error});
+					log.debug('Failed to parse toolCall arguments for filename fallback', {error});
 				}
 			}
 			return fromParsed;
 		}
 	} catch (error) {
 		// If parsing fails, show regular result
-		logger.debug('Failed to parse raw tool result content as JSON for diff extraction', {error});
+		log.debug('Failed to parse raw tool result content as JSON for diff extraction', {error});
 	}
 
 	// For filesystem-create single file: the result is a plain string message,
@@ -142,7 +144,7 @@ function extractEditDiffData(
 			}
 		} catch (error) {
 			// ignore
-			logger.debug('Failed to parse filesystem-create arguments', {error});
+			log.debug('Failed to parse filesystem-create arguments', {error});
 		}
 	}
 

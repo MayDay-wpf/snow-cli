@@ -16,6 +16,8 @@ import {getGlobalSnowDir} from './snowContext.js';
 import {isProjectFolder} from '../session/projectUtils.js';
 import {logger} from './logger.js';
 
+const log = logger.child('core:cleanupService');
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 按时间清理时可选的天数档位 */
@@ -583,7 +585,7 @@ function deleteOlderThanInPath(
 		}
 	} catch (error) {
 		// 目录非空或已被并发移除时忽略
-		logger.debug('deleteOlderThanInPath rmdirSync skipped', {error, targetPath});
+		log.debug('deleteOlderThanInPath rmdirSync skipped', {error, targetPath});
 	}
 }
 

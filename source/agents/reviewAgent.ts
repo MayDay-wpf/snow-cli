@@ -38,7 +38,7 @@ export class ReviewAgent {
 
 			return true;
 		} catch (error) {
-			logger.warn('Failed to initialize review agent:', error);
+			log.warn('Failed to initialize review agent:', error);
 			return false;
 		}
 	}
@@ -209,7 +209,7 @@ export class ReviewAgent {
 
 			return '# Staged Changes\n\n' + stagedDiff;
 		} catch (error) {
-			logger.error('Failed to get staged diff:', error);
+			log.error('Failed to get staged diff:', error);
 			throw new Error(
 				'Failed to get staged changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -237,7 +237,7 @@ export class ReviewAgent {
 
 			return '# Unstaged Changes\n\n' + unstagedDiff;
 		} catch (error) {
-			logger.error('Failed to get unstaged diff:', error);
+			log.error('Failed to get unstaged diff:', error);
 			throw new Error(
 				'Failed to get unstaged changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -281,7 +281,7 @@ export class ReviewAgent {
 
 			return combinedDiff;
 		} catch (error) {
-			logger.error('Failed to get git diff:', error);
+			log.error('Failed to get git diff:', error);
 			throw new Error(
 				'Failed to get git changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -395,7 +395,7 @@ export class ReviewAgent {
 
 			return stdout;
 		} catch (error) {
-			logger.error('Failed to get commit patch:', error);
+			log.error('Failed to get commit patch:', error);
 			throw new Error(
 				'Failed to get commit patch: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
