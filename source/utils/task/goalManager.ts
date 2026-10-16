@@ -68,7 +68,9 @@ class GoalManager {
 
 	private getGoalDir(): string {
 		const projectId = sessionManager.getProjectId();
-		return path.join(os.homedir(), '.snow', 'goals', projectId);
+		const override = process.env['SNOW_CONFIG_DIR']?.trim();
+		const baseSnowDir = override ? override : path.join(os.homedir(), '.snow');
+		return path.join(baseSnowDir, 'goals', projectId);
 	}
 
 	private getGoalPath(sessionId: string): string {

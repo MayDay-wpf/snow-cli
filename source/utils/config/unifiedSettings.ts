@@ -43,6 +43,7 @@ export interface UnifiedSettings {
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
 	speedometerEnabled?: boolean;
+	terminalShell?: 'auto' | 'pwsh' | 'powershell' | 'cmd' | 'git-bash' | string;
 	telemetry?: {
 		enabled?: boolean;
 		serviceName?: string;
@@ -186,7 +187,8 @@ const SETTINGS_FILE_NAME = 'settings.json';
 
 function getSnowDir(scope: SettingsScope, workingDirectory?: string): string {
 	if (scope === 'global') {
-		return path.join(os.homedir(), '.snow');
+		const override = process.env['SNOW_CONFIG_DIR']?.trim();
+		return override ? override : path.join(os.homedir(), '.snow');
 	}
 	return path.join(workingDirectory || process.cwd(), '.snow');
 }
@@ -273,6 +275,22 @@ export function readMergedSettings(workingDirectory?: string): UnifiedSettings {
 	return {...globalSettings, ...projectSettings};
 }
 
+/**
+ * Convenience helper: merge patch into global settings.
+ */
+export function writeMergedSettings(
+	patch: Partial<UnifiedSettings>,
+	workingDirectory?: string,
+): void {
+	updateSettings(
+		'global',
+		current => {
+			Object.assign(current, patch);
+		},
+		workingDirectory,
+	);
+}
+
 const DEFAULT_GOAL_TOKEN_BUDGET_M = 2; // 2M tokens = 2,000,000
 
 /**
@@ -287,4 +305,18 @@ export function getDefaultGoalTokenBudget(workingDirectory?: string): number {
 		return Math.round(budgetM * 1_000_000);
 	}
 	return DEFAULT_GOAL_TOKEN_BUDGET_M * 1_000_000;
+}
+
+/**
+ * Get preferred terminal shell from unified settings or environment variables.
+ * Precedence: settings.json -> SNOW_SHELL -> SHELL -> 'auto'
+ */
+export function getTerminalShellPreference(workingDirectory?: string): string {
+	const merged = readMergedSettings(workingDirectory);
+	return (
+		merged.terminalShell ||
+		process.env['SNOW_SHELL'] ||
+		process.env['SHELL'] ||
+		'auto'
+	);
 }

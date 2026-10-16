@@ -51,7 +51,11 @@ import {
 } from '../config/codebaseConfig.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {getSnowConfig, updateSnowConfig} from '../config/apiConfig.js';
-import {readSettings} from '../config/unifiedSettings.js';
+import {
+	readSettings,
+	writeMergedSettings,
+	getTerminalShellPreference,
+} from '../config/unifiedSettings.js';
 import {
 	loadPermissionsConfig,
 	addToolToPermissions,
@@ -1435,6 +1439,7 @@ export function handleConfigSnapshot(
 			subAgentMaxSpawnDepth: getSubAgentMaxSpawnDepth(),
 			fileListDisplayMode: getFileListDisplayMode(),
 			language: getCurrentLanguage(),
+			terminalShell: getTerminalShellPreference(),
 			showThinking: snow.showThinking !== false,
 			privacy: (() => {
 				const settings = readSettings('project');
@@ -1465,6 +1470,7 @@ export function handleConfigStatus(
 	meta: SessionCommandMeta,
 ): SessionCommandResult {
 	const snow = getSnowConfig();
+	const shell = getTerminalShellPreference();
 	const data = {
 		profile: getActiveProfileName(),
 		advancedModel: snow.advancedModel ?? null,
@@ -1472,13 +1478,14 @@ export function handleConfigStatus(
 		requestMethod: snow.requestMethod ?? null,
 		maxContextTokens: snow.maxContextTokens ?? null,
 		maxTokens: snow.maxTokens ?? null,
+		terminalShell: shell,
 	};
 	return okResult(
 		meta.id,
 		data,
 		`Context=${data.maxContextTokens ?? '?'} maxTokens=${
 			data.maxTokens ?? '?'
-		} model=${data.advancedModel ?? '?'}`,
+		} model=${data.advancedModel ?? '?'} shell=${shell}`,
 		meta.risk,
 	);
 }
@@ -1490,7 +1497,7 @@ function parsePositiveInt(raw: string): number | null {
 }
 
 const CONFIG_SET_KEYS =
-	'maxContextTokens, maxTokens, advancedModel, basicModel, requestMethod';
+	'maxContextTokens, maxTokens, advancedModel, basicModel, requestMethod, terminalShell';
 
 /**
  * Set active snowcfg via updateSnowConfig (writes config.json + active profile).
@@ -1527,6 +1534,7 @@ export async function handleConfigSet(
 		basicModel?: string;
 		requestMethod?: 'chat' | 'responses' | 'gemini' | 'anthropic';
 	} = {};
+	const settingsPatch: {terminalShell?: string} = {};
 	for (const token of body) {
 		const eq = token.indexOf('=');
 		if (eq <= 0) {
@@ -1630,6 +1638,25 @@ export async function handleConfigSet(
 				meta.risk,
 			);
 		}
+		if (
+			key === 'terminalshell' ||
+			key === 'shell' ||
+			key === 'terminal'
+		) {
+			const validShells = ['auto', 'pwsh', 'powershell', 'cmd', 'git-bash'];
+			const normVal = value.trim().toLowerCase();
+			if (!validShells.includes(normVal)) {
+				return failResult(
+					meta.id,
+					'INVALID_ARGS',
+					`terminalShell must be one of [${validShells.join(', ')}], got "${value}"`,
+					meta.risk,
+				);
+			}
+			writeMergedSettings({terminalShell: normVal as any});
+			settingsPatch.terminalShell = normVal;
+			continue;
+		}
 		return failResult(
 			meta.id,
 			'INVALID_ARGS',
@@ -1638,7 +1665,7 @@ export async function handleConfigSet(
 		);
 	}
 
-	if (Object.keys(patch).length === 0) {
+	if (Object.keys(patch).length === 0 && Object.keys(settingsPatch).length === 0) {
 		return failResult(
 			meta.id,
 			'INVALID_ARGS',
@@ -1648,13 +1675,15 @@ export async function handleConfigSet(
 	}
 
 	const previous = getSnowConfig();
-	await updateSnowConfig(patch);
+	if (Object.keys(patch).length > 0) {
+		await updateSnowConfig(patch);
+	}
 	const next = getSnowConfig();
 
 	return okResult(
 		meta.id,
 		{
-			changed: patch,
+			changed: {...patch, ...settingsPatch},
 			previous: {
 				maxContextTokens: previous.maxContextTokens ?? null,
 				maxTokens: previous.maxTokens ?? null,

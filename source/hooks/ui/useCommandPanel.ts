@@ -69,7 +69,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	deepresearch: '<prompt>',
 	connect: '[apiUrl]',
 	export: '[txt|md|html|json]',
-	config: '<export|import>',
+	config: '[status|set <key>=<val>|export|import]',
 	'tool-display': '[full|compact|hidden|status]',
 	'tool-icons':
 		'[on|off|status|status on|off|status:<key>:<glyph>|<tool>:<emoji>]',
@@ -105,7 +105,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	'subagent-depth': ['status'],
 	loop: ['daemon', 'daily', 'at', 'list', 'tasks', 'cancel'],
 	export: ['txt', 'md', 'html', 'json'],
-	config: ['export', 'import'],
+	config: ['status', 'set', 'export', 'import'],
 	'tool-display': ['full', 'compact', 'hidden', 'status'],
 	'tool-icons': ['on', 'off', 'status', 'status on', 'status off'],
 	'tool-names': ['status', 'clear'],
@@ -136,6 +136,23 @@ export function getCommandArgsOptions(
 		/^\/buddy\s+profile\s*$/.test(inputText ?? '')
 	) {
 		return getBuddyProfileArgOptions();
+	}
+
+	if (
+		commandName === 'config' &&
+		/^\/config\s+set\s*$/.test(inputText ?? '')
+	) {
+		return [
+			'terminalShell=auto',
+			'terminalShell=pwsh',
+			'terminalShell=powershell',
+			'terminalShell=cmd',
+			'terminalShell=git-bash',
+			'maxTokens=4096',
+			'maxTokens=8192',
+			'maxContextTokens=128000',
+			'maxContextTokens=200000',
+		];
 	}
 
 	// Check static dictionary first
