@@ -6,7 +6,7 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!!**/dist", "!!**/bundle", "!!source/vendor", "!!build.mjs"]
+		"includes": ["source/**", "scripts/**", "!!source/vendor/**"]
 	},
 	"formatter": {
 		"enabled": true,
