@@ -100,3 +100,42 @@ test('logger CircularBufferMemorySink: caps memory buffer and prevents unbounded
 	t.is(entries[1]?.message, 'Msg 4');
 	t.is(entries[2]?.message, 'Msg 5');
 });
+
+test('logger startTimer: measures performance latency and propagates durationMs and spanId', async t => {
+	const sink = new MemoryLogSink();
+	logger.setSink(sink);
+
+	try {
+		const timedLogger = logger.child('mcp.tool', {
+			sessionId: 'sess-perf-1',
+			spanId: 'span-001',
+		});
+
+		const timer = timedLogger.startTimer('executeTool', {tool: 'bash'});
+		await new Promise(r => setTimeout(r, 25));
+		const elapsed = timer.end('Tool execution completed', {exitCode: 0});
+
+		t.true(elapsed >= 15);
+
+		const entries = sink.getEntries();
+		t.is(entries.length, 1);
+		t.is(entries[0]?.level, 'INFO');
+		t.is(entries[0]?.namespace, 'mcp.tool');
+		t.is(entries[0]?.spanId, 'span-001');
+		t.true(typeof entries[0]?.durationMs === 'number');
+		t.true((entries[0]?.durationMs || 0) >= 15);
+		t.is(entries[0]?.meta?.tool, 'bash');
+		t.is(entries[0]?.meta?.exitCode, 0);
+
+		// 验证计时失败分支
+		const failTimer = timedLogger.startTimer('failingJob');
+		failTimer.fail('Job crashed unexpectedly', new Error('OOM'));
+
+		const errorEntries = sink.getEntries().filter(e => e.level === 'ERROR');
+		t.is(errorEntries.length, 1);
+		t.is(errorEntries[0]?.error?.message, 'OOM');
+		t.true(typeof errorEntries[0]?.durationMs === 'number');
+	} finally {
+		logger.setSink(undefined);
+	}
+});

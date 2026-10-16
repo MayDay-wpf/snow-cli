@@ -31,6 +31,11 @@ export interface StructuredLogEntry {
     sessionId?: string;         // 关联会话 ID
     taskId?: string;            // 关联后台任务 ID
     traceId?: string;           // 单次调用追踪链路 ID
+    spanId?: string;            // OTel Span 标识
+    parentSpanId?: string;      // 父 Span 标识
+    
+    // 性能与时序维度 (APM & Performance Integration)
+    durationMs?: number;        // 毫秒级耗时指标 (如慢工具、LLM 首包/全量延迟)
     
     // 消息与载荷
     message: string;            // 规范的人类可读描述

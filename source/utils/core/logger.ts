@@ -18,6 +18,9 @@ export interface StructuredLogEntry {
 	sessionId?: string;
 	taskId?: string;
 	traceId?: string;
+	spanId?: string;
+	parentSpanId?: string;
+	durationMs?: number; // 耗时（毫秒），与性能模块及 APM 观测强相关
 	message: string;
 	meta?: Record<string, unknown>;
 	error?: {
@@ -63,6 +66,8 @@ export interface LoggerContext {
 	sessionId?: string;
 	taskId?: string;
 	traceId?: string;
+	spanId?: string;
+	parentSpanId?: string;
 }
 
 export interface LoggerConfig {
@@ -214,6 +219,13 @@ export class Logger {
 			}
 		}
 
+		let durationMs: number | undefined;
+		if (metaObj && typeof metaObj.durationMs === 'number') {
+			durationMs = metaObj.durationMs;
+			const {durationMs: _, ...rest} = metaObj;
+			metaObj = Object.keys(rest).length > 0 ? rest : undefined;
+		}
+
 		const entry: StructuredLogEntry = {
 			timestamp,
 			level: levelName,
@@ -221,6 +233,9 @@ export class Logger {
 			...(this.context.sessionId && {sessionId: this.context.sessionId}),
 			...(this.context.taskId && {taskId: this.context.taskId}),
 			...(this.context.traceId && {traceId: this.context.traceId}),
+			...(this.context.spanId && {spanId: this.context.spanId}),
+			...(this.context.parentSpanId && {parentSpanId: this.context.parentSpanId}),
+			...(durationMs !== undefined && {durationMs}),
 			message,
 			...(metaObj && {meta: metaObj}),
 			...(errorObj && {error: errorObj}),
@@ -264,6 +279,42 @@ export class Logger {
 	log(level: LogLevel, message: string, metaOrError?: any): void {
 		this.writeLog(level, message, metaOrError);
 	}
+
+	/**
+	 * 启动高精度性能计时器
+	 * 用于对慢工具、LLM API、文件 I/O 进行耗时可观测性追踪
+	 */
+	startTimer(operation: string, initialMeta?: Record<string, unknown>) {
+		const start = performance.now();
+		return {
+			end: (message?: string, meta?: Record<string, unknown>): number => {
+				const durationMs = Math.round((performance.now() - start) * 100) / 100;
+				this.writeLog(LogLevel.INFO, message || `${operation} completed`, {
+					...initialMeta,
+					...meta,
+					durationMs,
+				});
+				return durationMs;
+			},
+			fail: (message: string, errorOrMeta?: any): number => {
+				const durationMs = Math.round((performance.now() - start) * 100) / 100;
+				if (errorOrMeta instanceof Error) {
+					this.writeLog(LogLevel.ERROR, message, {
+						error: errorOrMeta,
+						...initialMeta,
+						durationMs,
+					});
+				} else {
+					this.writeLog(LogLevel.ERROR, message, {
+						...initialMeta,
+						...errorOrMeta,
+						durationMs,
+					});
+				}
+				return durationMs;
+			},
+		};
+	}
 }
 
 // Lazy initialization to avoid blocking startup
@@ -301,6 +352,9 @@ const logger = {
 	},
 	log(level: LogLevel, message: string, metaOrError?: any): void {
 		getDefaultLogger().log(level, message, metaOrError);
+	},
+	startTimer(operation: string, initialMeta?: Record<string, unknown>) {
+		return getDefaultLogger().startTimer(operation, initialMeta);
 	},
 };
 
