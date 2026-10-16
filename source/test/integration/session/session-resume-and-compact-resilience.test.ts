@@ -1,7 +1,7 @@
 import test from 'ava';
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
 import {sessionManager, type Session} from '../../../utils/session/sessionManager.js';
-import type {ChatMessage} from '../api/chat.js';
+import type {ChatMessage} from '../../../api/chat.js';
 
 test('sessionConverter does not generate duplicate pending messages for completed tools', t => {
 	const sessionMessages: ChatMessage[] = [

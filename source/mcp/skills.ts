@@ -365,8 +365,8 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 			if (entry.isDirectory()) {
 				lines.push(`${prefix} ${entry.name}/`);
 				// Recursively list directory contents (one level deep only)
+				const subPath = join(skillPath, entry.name);
 				try {
-					const subPath = join(skillPath, entry.name);
 					const subEntries = readdirSync(subPath, {withFileTypes: true});
 					const sortedSubEntries = subEntries.sort((a, b) =>
 						a.name.localeCompare(b.name),

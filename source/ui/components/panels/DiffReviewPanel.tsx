@@ -351,7 +351,7 @@ export default function DiffReviewPanel({
 						}
 					} catch (e) {
 						log.debug('Failed to read file preview for diff review', {
-							filePath: preview.absolutePath,
+							relativeFile,
 							error: e instanceof Error ? e.message : String(e),
 						});
 					}

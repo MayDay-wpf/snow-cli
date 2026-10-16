@@ -2,16 +2,16 @@ import test from 'ava';
 import {
 	IdeDiagnosticsMCPService,
 	mcpTools as diagnosticsMcpTools,
-} from '../../../mcp/ideDiagnostics.ts';
+} from '../../../mcp/ideDiagnostics.js';
 import {
 	mcpTools as askUserTools,
 	type AskUserQuestionArgs,
-} from '../../../mcp/askUserQuestion.ts';
+} from '../../../mcp/askUserQuestion.js';
 import type {Diagnostic} from '../../../utils/ui/vscodeConnection.js';
 
 test('askUserQuestion exposes correct MCP tool schema', t => {
 	t.is(askUserTools.length, 1);
-	const tool = askUserTools[0];
+	const tool = askUserTools[0]!;
 	t.is(tool.type, 'function');
 	t.is(tool.function.name, 'askuser-ask_question');
 	t.deepEqual(tool.function.parameters.required, ['question', 'options']);
@@ -71,7 +71,7 @@ test('IdeDiagnosticsMCPService throws when IDE is not connected', async t => {
 
 test('ideDiagnostics exposes valid MCP schema', t => {
 	t.is(diagnosticsMcpTools.length, 1);
-	const tool = diagnosticsMcpTools[0];
+	const tool = diagnosticsMcpTools[0]!;
 	t.is(tool.name, 'ide-get_diagnostics');
 	t.is(tool.inputSchema.type, 'object');
 	t.is(tool.inputSchema.properties.filePath.type, 'string');

@@ -8,7 +8,6 @@ import {
 	mkdirSync,
 } from 'fs';
 import {join} from 'path';
-import {homedir} from 'os';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
 import {logger} from '../core/logger.js';

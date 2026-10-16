@@ -79,7 +79,7 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 
 		// Check if encoding is supported
 		if (!iconv.encodingExists(encoding)) {
-			encodingLog.warn(
+			log.warn(
 				`Unsupported encoding detected: ${encoding}, falling back to UTF-8`,
 				{encoding, filePath},
 			);
@@ -100,7 +100,7 @@ export async function readFileWithEncoding(filePath: string): Promise<string> {
 		}
 
 		// Fallback to UTF-8 if encoding detection fails
-		encodingLog.warn(
+		log.warn(
 			`Encoding detection failed for ${filePath}, using UTF-8`,
 			error,
 		);

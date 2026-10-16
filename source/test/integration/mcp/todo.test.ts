@@ -17,9 +17,10 @@ test('todo: saveTodoList and getTodoList basic lifecycle', async t => {
 	await service.initialize();
 
 	try {
+		const now = new Date().toISOString();
 		const initialTodos: TodoItem[] = [
-			{id: '1', title: 'Task 1', completed: false},
-			{id: '2', title: 'Task 2', completed: true},
+			{id: '1', content: 'Task 1', status: 'pending', createdAt: now, updatedAt: now},
+			{id: '2', content: 'Task 2', status: 'completed', createdAt: now, updatedAt: now},
 		];
 
 		// 1. 保存 TodoList
@@ -31,18 +32,18 @@ test('todo: saveTodoList and getTodoList basic lifecycle', async t => {
 		const retrieved = await service.getTodoList(sessionId);
 		t.truthy(retrieved);
 		t.is(retrieved?.todos.length, 2);
-		t.is(retrieved?.todos[0]?.title, 'Task 1');
-		t.is(retrieved?.todos[1]?.completed, true);
+		t.is(retrieved?.todos[0]?.content, 'Task 1');
+		t.is(retrieved?.todos[1]?.status, 'completed');
 
-		// 3. 增量更新状态 (Task 1 改为 completed: true)
+		// 3. 增量更新状态 (Task 1 改为 status: 'completed')
 		const updatedTodos: TodoItem[] = [
-			{id: '1', title: 'Task 1', completed: true},
-			{id: '2', title: 'Task 2', completed: true},
+			{id: '1', content: 'Task 1', status: 'completed', createdAt: now, updatedAt: new Date().toISOString()},
+			{id: '2', content: 'Task 2', status: 'completed', createdAt: now, updatedAt: now},
 		];
 		await service.saveTodoList(sessionId, updatedTodos, retrieved);
 
 		const afterUpdate = await service.getTodoList(sessionId);
-		t.is(afterUpdate?.todos[0]?.completed, true);
+		t.is(afterUpdate?.todos[0]?.status, 'completed');
 	} finally {
 		fs.rmSync(tempDir, {recursive: true, force: true});
 	}

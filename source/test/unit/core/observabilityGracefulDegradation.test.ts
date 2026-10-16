@@ -68,7 +68,7 @@ test.serial('Graceful Degradation with Observability: SessionManager handles cor
 
 	try {
 		// 查询不存在的非凡 ID
-		const result = await sessionManager.loadSessionFromDisk('non-existent-uuid-for-test');
+		const result = await (sessionManager as any).loadSessionFromDisk('non-existent-uuid-for-test');
 		t.is(result, null, 'SessionManager must safely return null on missing session');
 
 		// 验证排查线索记录

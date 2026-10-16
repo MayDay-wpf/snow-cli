@@ -1,7 +1,4 @@
 import test from 'ava';
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
 import {
 	addNotebook,
 	queryNotebook,
@@ -10,8 +7,6 @@ import {
 	getNotebooksByFile,
 	clearNotebooksByFile,
 	recordNotebookAddition,
-	recordNotebookUpdate,
-	recordNotebookDeletion,
 	rollbackNotebooks,
 	clearAllNotebookSnapshots,
 } from '../../../utils/core/notebookManager.js';

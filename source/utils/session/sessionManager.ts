@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {randomUUID} from 'crypto';
 import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 import type {UsageInfo} from '../../api/types.js';

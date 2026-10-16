@@ -2,7 +2,6 @@ import test from 'ava';
 import {
 	createIdleTimeoutGuard,
 	StreamIdleTimeoutError,
-	STREAM_IDLE_TIMEOUT_MS,
 } from '../../../utils/core/streamGuards.js';
 
 // ============================================================================

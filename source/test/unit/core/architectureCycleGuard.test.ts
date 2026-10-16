@@ -34,7 +34,7 @@ function findCircularDependencies(): Array<string[]> {
 		const dir = path.dirname(file);
 
 		while ((m = importRegex.exec(content)) !== null) {
-			let target = path.resolve(dir, m[1]).replace(/\\/g, '/');
+			let target = path.resolve(dir, m[1] ?? '').replace(/\\/g, '/');
 			if (target.endsWith('.js')) {
 				target = target.slice(0, -3);
 			}

@@ -1,5 +1,5 @@
 import test from 'ava';
-import {logger, LogLevel} from '../../../utils/core/logger.js';
+import {logger} from '../../../utils/core/logger.js';
 import {MemoryLogSink} from '../../helpers/memoryLogSink.js';
 
 test('logger sink: MemoryLogSink safely intercepts logs in-memory without disk I/O', t => {
@@ -21,7 +21,7 @@ test('logger sink: MemoryLogSink safely intercepts logs in-memory without disk I
 		// 验证结构化元数据
 		const errorEntry = sink.getEntries().find(e => e.level === 'ERROR');
 		t.truthy(errorEntry);
-		t.is(errorEntry?.meta?.code, 500);
+		t.is(errorEntry?.meta?.['code'], 500);
 
 		// 清理验证
 		sink.clear();
@@ -53,7 +53,7 @@ test('logger child namespace: inherits and chains hierarchical module domains', 
 		t.is(entries[1]?.namespace, 'mcp.catalog');
 		t.is(entries[1]?.sessionId, 'sess-123');
 		t.is(entries[1]?.taskId, 'task-456');
-		t.is(entries[1]?.meta?.count, 42);
+		t.is(entries[1]?.meta?.['count'], 42);
 	} finally {
 		logger.setSink(undefined);
 	}
@@ -145,8 +145,8 @@ test('logger startTimer: measures performance latency and propagates durationMs 
 		t.is(entries[0]?.spanId, 'span-001');
 		t.true(typeof entries[0]?.durationMs === 'number');
 		t.true((entries[0]?.durationMs || 0) >= 15);
-		t.is(entries[0]?.meta?.tool, 'bash');
-		t.is(entries[0]?.meta?.exitCode, 0);
+		t.is(entries[0]?.meta?.['tool'], 'bash');
+		t.is(entries[0]?.meta?.['exitCode'], 0);
 
 		// 验证计时失败分支
 		const failTimer = timedLogger.startTimer('failingJob');

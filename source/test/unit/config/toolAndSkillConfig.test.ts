@@ -4,7 +4,6 @@ import path from 'path';
 import fs from 'fs';
 import {
 	loadPermissionsConfig,
-	savePermissionsConfig,
 	addToolToPermissions,
 	removeToolFromPermissions,
 	clearAllPermissions,
@@ -17,7 +16,6 @@ import {
 import {
 	isMCPToolEnabled,
 	toggleMCPTool,
-	getDisabledMCPTools,
 } from '../../../utils/config/disabledMCPTools.js';
 
 test('permissionsConfig loads, adds, removes and clears tool permissions', t => {

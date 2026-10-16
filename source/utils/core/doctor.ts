@@ -1,7 +1,6 @@
 import {spawnSync} from 'child_process';
 import fs from 'fs';
 import {createRequire} from 'module';
-import os from 'os';
 import path from 'path';
 import {translations} from '../../i18n/translations.js';
 import type {TranslationKeys} from '../../i18n/types.js';

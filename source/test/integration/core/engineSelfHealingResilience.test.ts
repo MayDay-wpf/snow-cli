@@ -7,10 +7,10 @@ import {
 } from '../../../utils/codebase/gitignoreValidator.js';
 import {
 	GREP_EXCLUDE_DIRS,
-} from '../mcp/utils/aceCodeSearch/constants.utils.js';
+} from '../../../mcp/utils/aceCodeSearch/constants.utils.js';
 import {
 	DEFAULT_EXCLUDES,
-} from '../mcp/utils/aceCodeSearch/filesystem.utils.js';
+} from '../../../mcp/utils/aceCodeSearch/filesystem.utils.js';
 import {
 	cleanupSessionResources,
 } from '../../../utils/core/globalCleanup.js';

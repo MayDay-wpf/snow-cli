@@ -1,6 +1,5 @@
 import {
 	parseCanonicalPath,
-	toCanonicalPath,
 	type StructuredPath,
 } from '../core/canonicalPath.js';
 

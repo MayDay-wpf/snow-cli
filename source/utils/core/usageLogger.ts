@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {getGlobalSnowDir} from './snowContext.js';
 import {logger} from './logger.js';
 

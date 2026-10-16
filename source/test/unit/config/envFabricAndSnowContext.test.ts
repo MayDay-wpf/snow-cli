@@ -1,7 +1,5 @@
 import test from 'ava';
 import {
-	KNOWN_ENV_KEYS,
-	getSnowEnv,
 	parseEnvBoolean,
 	parseEnvInteger,
 	parseEnvPath,

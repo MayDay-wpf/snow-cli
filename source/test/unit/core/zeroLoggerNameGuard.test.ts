@@ -38,15 +38,14 @@ test('ZeroLoggerNameGuard: enforces strictly `const log = logger.child(...)` nam
 		if (normalized.endsWith('source/utils/core/logger.ts')) continue;
 
 		const content = fs.readFileSync(file, 'utf-8');
-		const lines = content.split('\n');
 
 		// 匹配形如 const xxx = logger.child(...) 或 let xxx = child(...)
 		const childDeclRegex = /(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:[a-zA-Z0-9_$]+\.)?child\(\s*['"]([^'"]+)['"]/g;
 		let match: RegExpExecArray | null;
 
 		while ((match = childDeclRegex.exec(content)) !== null) {
-			const varName = match[1];
-			const domain = match[2];
+			const varName = match[1] ?? '';
+			const domain = match[2] ?? '';
 
 			if (varName !== 'log') {
 				const line = content.substring(0, match.index).split('\n').length;

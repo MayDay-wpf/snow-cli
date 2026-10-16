@@ -35,6 +35,9 @@ import {
 	recordChatUsage,
 	startChatSpan,
 } from '../utils/telemetry/otel.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:chat');
 
 export type {
 	ChatMessage,
@@ -637,8 +640,6 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/core/logger.js');
-
 		// 增强错误日志,包含断点状态
 		const errorContext = {
 			error: error instanceof Error ? error.message : 'Unknown error',
@@ -678,7 +679,6 @@ export async function* createStreamingChatCompletion(
 			} else {
 				// Profile not found, fallback to main config
 				config = getSnowConfig();
-				const {logger} = await import('../utils/core/logger.js');
 				log.warn(
 					`Profile ${options.configProfile} not found, using main config`,
 				);
@@ -686,7 +686,6 @@ export async function* createStreamingChatCompletion(
 		} catch (error) {
 			// If loading profile fails, fallback to main config
 			config = getSnowConfig();
-			const {logger} = await import('../utils/core/logger.js');
 			log.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
 				error,

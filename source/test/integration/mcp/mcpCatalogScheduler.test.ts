@@ -1,6 +1,4 @@
 import anyTest, {type TestFn} from 'ava';
-import os from 'os';
-import path from 'path';
 import fs from 'fs';
 
 const test = (anyTest as unknown as TestFn).serial;
@@ -110,6 +108,7 @@ test('resilience: corrupted disk catalog triggers graceful fallback and self-hea
 		t.is(parsed, null, 'Invalid JSON safely returns null without throwing');
 
 		// In fast-path with valid catalog, tools return instantly
+		const {collectAllMCPTools} = await import('../../../utils/execution/mcpToolsManager.js');
 		const tools = await collectAllMCPTools();
 		t.true(Array.isArray(tools));
 		t.true(tools.length > 0);

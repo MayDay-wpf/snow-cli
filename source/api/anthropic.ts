@@ -670,8 +670,6 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/core/logger.js');
-
 		// 增强错误日志,包含断点状态
 		const errorContext = {
 			error: error instanceof Error ? error.message : 'Unknown error',

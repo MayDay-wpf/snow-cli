@@ -17,7 +17,6 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {randomUUID} from 'crypto';
 import {sessionManager} from '../session/sessionManager.js';
 import {getDefaultGoalTokenBudget} from '../config/unifiedSettings.js';

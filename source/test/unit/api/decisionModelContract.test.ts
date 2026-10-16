@@ -17,6 +17,7 @@ test('resolveDecisionModelReviewConfig: returns undefined for undefined or missi
 		baseUrlMode: 'auto',
 		apiKey: '   ',
 		model: 'system-one-preview',
+		createdAt: new Date().toISOString(),
 	};
 	t.is(resolveDecisionModelReviewConfig(missingApiKey), undefined);
 
@@ -27,6 +28,7 @@ test('resolveDecisionModelReviewConfig: returns undefined for undefined or missi
 		baseUrlMode: 'auto',
 		apiKey: 'sec-12345',
 		model: '   ',
+		createdAt: new Date().toISOString(),
 	};
 	t.is(resolveDecisionModelReviewConfig(missingModel), undefined);
 });
@@ -39,6 +41,7 @@ test('resolveDecisionModelReviewConfig: extracts clean config when valid', t => 
 		baseUrlMode: 'endpoint',
 		apiKey: '  token-secret-xyz  ',
 		model: '  system-one-2026  ',
+		createdAt: new Date().toISOString(),
 	};
 
 	const resolved = resolveDecisionModelReviewConfig(validItem);

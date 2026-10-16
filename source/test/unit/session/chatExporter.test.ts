@@ -37,13 +37,14 @@ test('formatSessionAsText and formatSessionAsMarkdown format session details cor
 			{
 				role: 'assistant',
 				content: 'Hello User! How can I help you?',
-				thinking: {thinking: 'Analyzing user greeting'},
+				thinking: {type: 'thinking', thinking: 'Analyzing user greeting'},
 				timestamp: 1700000200000,
 			},
 			{
 				role: 'assistant',
 				content: 'Internal step',
 				subAgentInternal: true,
+				timestamp: 1700000300000,
 			},
 		],
 		messageCount: 3,

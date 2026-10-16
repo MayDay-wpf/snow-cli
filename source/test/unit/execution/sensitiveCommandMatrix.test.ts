@@ -1,7 +1,6 @@
 import test from 'ava';
 import {
 	isSensitiveCommand,
-	getAllSensitiveCommands,
 } from '../../../utils/execution/sensitiveCommandManager.js';
 
 test('DDT / Table-Driven: recognizes dangerous commands even when chained or padded', t => {

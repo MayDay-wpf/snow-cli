@@ -6,7 +6,6 @@ import {
 	formatBytes,
 	scanPathStats,
 	getCleanupCategories,
-	deleteProjectData,
 	deleteOlderThan,
 } from '../../../utils/core/cleanupService.js';
 

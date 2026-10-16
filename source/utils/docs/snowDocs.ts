@@ -287,7 +287,7 @@ function loadCatalog(docsRoot: string): Map<string, SnowDocEntry> {
 				};
 				map.set(`${locale}:${id}`, entry);
 			} catch (error) {
-				log.debug('Skipping unreadable doc file during catalog build', {id, absPath, error});
+				log.debug('Skipping unreadable doc file during catalog build', {absPath, error});
 			}
 		}
 	}

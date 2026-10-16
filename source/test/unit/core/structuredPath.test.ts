@@ -1,10 +1,6 @@
 import test from 'ava';
 import {
-	toCanonicalPath,
-	isCanonicalAbsolute,
-	splitCanonicalPath,
 	parseCanonicalPath,
-	CanonicalPath,
 } from '../../../utils/core/canonicalPath.js';
 
 test('StructuredPath: decomposes path into immutable value object with rich metadata', t => {
