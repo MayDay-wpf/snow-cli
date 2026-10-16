@@ -5,6 +5,9 @@ import {mkdir, rm, readFile, writeFile, readdir} from 'fs/promises';
 import {writeFile as writeJsonFile} from 'fs/promises';
 import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {SkillLocation} from '../commands/skills.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('skills:githubSkillInstaller');
 
 // ---------------------------------------------------------------------------
 // Types
@@ -344,8 +347,11 @@ async function downloadAndExtract(
 				gzip: true,
 			});
 			extracted = true;
-		} catch {
-			// tar package not available or extraction failed; try next strategy
+		} catch (e) {
+			log.debug('Tar npm package extraction failed or not available, falling back to system tar', {
+				tarballPath,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 

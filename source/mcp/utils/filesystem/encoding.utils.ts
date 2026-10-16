@@ -4,7 +4,7 @@ import * as chardet from 'chardet';
 import * as iconv from 'iconv-lite';
 import {logger} from '../../../utils/core/logger.js';
 
-const encodingLog = logger.child('mcp.encoding');
+const log = logger.child('mcp:filesystem.encoding');
 
 // Node.js max string length is 2^29 - 24 ≈ 512MB chars.
 // Use 256MB as safe limit to account for encoding expansion overhead.
@@ -151,8 +151,11 @@ export async function readFileLinesStreaming(
 		} finally {
 			await fd.close();
 		}
-	} catch {
-		// Fallback to UTF-8
+	} catch (e) {
+		log.debug('Failed to read sample bytes for encoding detection, falling back to UTF-8', {
+			filePath,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 
 	const result: string[] = [];
@@ -235,8 +238,11 @@ export async function writeFileWithEncoding(
 					}
 				}
 			}
-		} catch {
-			// File doesn't exist, use UTF-8 for new files
+		} catch (e) {
+			log.debug('File does not exist or cannot be checked for existing encoding, using UTF-8', {
+				filePath,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 
 		// Write with target encoding
@@ -248,7 +254,7 @@ export async function writeFileWithEncoding(
 		}
 	} catch (error) {
 		// Fallback to UTF-8 if encoding handling fails
-		encodingLog.warn(
+		log.warn(
 			`Encoding handling failed for ${filePath}, using UTF-8`,
 			error,
 		);

@@ -204,8 +204,11 @@ async function ensureChatGptHostId(): Promise<string> {
 		if (hostId) {
 			return hostId;
 		}
-	} catch {
-		// 文件缺失或内容损坏：走下面的重新生成分支
+	} catch (e) {
+		oauthLog.debug('ChatGPT host id file missing or invalid, generating fresh id', {
+			path,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 
 	const hostId = `urn:uuid:${generateSessionId()}`;

@@ -183,7 +183,12 @@ export class MCPCatalogStore {
 				if (fs.existsSync(tempPath)) {
 					fs.unlinkSync(tempPath);
 				}
-			} catch {}
+			} catch (e) {
+				log.debug('Failed to remove temp catalog file after save error', {
+					tempPath,
+					error: e instanceof Error ? e.message : String(e),
+				});
+			}
 		}
 	}
 
@@ -195,8 +200,11 @@ export class MCPCatalogStore {
 			if (fs.existsSync(this.catalogFilePath)) {
 				fs.unlinkSync(this.catalogFilePath);
 			}
-		} catch {
-			// Best-effort cleanup
+		} catch (e) {
+			log.debug('Failed to clear catalog file from disk', {
+				catalogFilePath: this.catalogFilePath,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }

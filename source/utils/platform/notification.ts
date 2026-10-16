@@ -4,6 +4,9 @@ import process from 'node:process';
 
 import {translations} from '../../i18n/translations.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('platform:notification');
 
 const appId = 'Snow CLI';
 /** Windows toast identity shown as the notification app name. */
@@ -291,8 +294,10 @@ function writeTerminalNotification(title: string, body: string): void {
 	for (const sequence of buildTerminalNotificationSequences(title, body)) {
 		try {
 			process.stdout.write(sequence);
-		} catch {
-			// Terminal notifications are best-effort.
+		} catch (e) {
+			log.debug('Failed to write terminal notification sequence', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }
@@ -307,8 +312,11 @@ function spawnDetachedBestEffort(command: string, args: string[]): void {
 
 		child.on('error', () => undefined);
 		child.unref();
-	} catch {
-		// Desktop notifications are best-effort.
+	} catch (e) {
+		log.debug('Failed to spawn desktop notification process', {
+			command,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 }
 

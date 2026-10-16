@@ -341,7 +341,11 @@ class HashBasedSnapshotManager {
 					}
 				}
 			} catch (error) {
-				// Snapshot doesn't exist, nothing to remove
+				log.debug('Snapshot metadata does not exist during removeFileBackup, nothing to remove', {
+					sessionId,
+					messageIndex,
+					error: error instanceof Error ? error.message : String(error),
+				});
 			}
 		} catch (error) {
 			log.warn(
@@ -516,8 +520,11 @@ class HashBasedSnapshotManager {
 							try {
 								await fs.unlink(fullPath);
 								totalFilesRolledBack++;
-							} catch {
-								// File may not exist
+							} catch (unlinkErr) {
+								log.debug('Failed to unlink newly created file during rollback (file may not exist)', {
+									fullPath,
+									error: unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr),
+								});
 							}
 						}
 					} catch (error) {

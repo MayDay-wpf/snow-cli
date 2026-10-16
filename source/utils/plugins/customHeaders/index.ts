@@ -181,13 +181,19 @@ function ensurePluginWatcher(): void {
 			pluginWatcher.on('error', () => {
 				try {
 					pluginWatcher?.close();
-				} catch {
-					// ignore
+				} catch (e) {
+					log.debug('Failed to close plugin watcher on error', {
+						error: e instanceof Error ? e.message : String(e),
+					});
 				}
 				pluginWatcher = null;
 				setTimeout(startWatch, 300);
 			});
-		} catch {
+		} catch (e) {
+			log.debug('Failed to start watching custom header plugin directory, retrying', {
+				dir: CUSTOM_HEADERS_PLUGIN_DIR,
+				error: e instanceof Error ? e.message : String(e),
+			});
 			setTimeout(startWatch, 400);
 		}
 	};

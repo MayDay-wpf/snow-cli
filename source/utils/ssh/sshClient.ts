@@ -434,8 +434,10 @@ export class SSHClient {
 							try {
 								stream.close();
 								stream.destroy();
-							} catch {
-								// Ignore.
+							} catch (e) {
+								log.debug('Failed to close SSH stream on abort', {
+									error: e instanceof Error ? e.message : String(e),
+								});
 							}
 							safeReject(abortError);
 					  }
@@ -461,8 +463,11 @@ export class SSHClient {
 						try {
 							stream.close();
 							stream.destroy();
-						} catch {
-							// Ignore.
+						} catch (e) {
+							log.debug('Failed to close SSH stream on timeout', {
+								timeoutMs,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 						safeReject(timeoutError);
 					}, timeoutMs);

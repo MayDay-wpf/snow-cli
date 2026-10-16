@@ -67,12 +67,13 @@ test('ZeroSilentCatchGuard: enforces ratchet threshold on blind silent catch {} 
 	}
 
 	// 基线棘轮机制：原先全量为 307 处
-	// 历经全域深度治理与可观测性重构，外层 UI/Hooks 与四大中枢已系统性收官，空 catch 已从 307 骤降至 26 处
-	// 伴随治理持续下锁，只降不升，严禁新增任何盲目吞错代码！
-	const CURRENT_MAX_SILENT_CATCH_RATCHET = 26;
+	// 历经全域深度治理与可观测性重构，外层 UI/Hooks、业务域与四大中枢已系统性彻底清零（0 盲目吞错）
+	// 棘轮指标终极归零锁死，严禁全库新增任何未受检或静默吞错代码！
+	const CURRENT_MAX_SILENT_CATCH_RATCHET = 0;
 
-	t.true(
-		allViolations.length <= CURRENT_MAX_SILENT_CATCH_RATCHET,
-		`Silent catch blocks count (${allViolations.length}) exceeded the strict ratchet limit (${CURRENT_MAX_SILENT_CATCH_RATCHET}). Every catch block must log or rethrow!`,
+	t.is(
+		allViolations.length,
+		CURRENT_MAX_SILENT_CATCH_RATCHET,
+		`Silent catch blocks count (${allViolations.length}) must be strictly 0! Violations: ${JSON.stringify(allViolations, null, 2)}`,
 	);
 });

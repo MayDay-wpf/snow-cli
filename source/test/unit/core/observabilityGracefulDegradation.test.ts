@@ -110,4 +110,28 @@ test.serial('Ablation & Anti-Ablation: UnifiedSettings getLoggingConfig correctl
 		if (prevDisk !== undefined) process.env['SNOW_LOG_DISK_ARCHIVE'] = prevDisk;
 		else delete process.env['SNOW_LOG_DISK_ARCHIVE'];
 	}
+
+	// 3. 反消融与异常边界测试 (Anti-Ablation & Boundary Resiliency)
+	// 当注入非法非数字、负数或零时，必须稳健回退至默认值，绝不可产生 NaN 或崩溃
+	try {
+		process.env['SNOW_LOG_BUFFER_SIZE'] = 'invalid_not_a_number';
+		process.env['SNOW_LOG_DISK_ARCHIVE'] = '0'; // 0 应视为 false
+
+		const boundaryConfig1 = getLoggingConfig();
+		t.is(boundaryConfig1.bufferSize, 1000, 'Invalid non-numeric bufferSize must safely fallback to default 1000');
+		t.is(boundaryConfig1.diskArchive, false, 'SNOW_LOG_DISK_ARCHIVE="0" must evaluate to false');
+
+		process.env['SNOW_LOG_BUFFER_SIZE'] = '-50'; // 负数
+		process.env['SNOW_LOG_DISK_ARCHIVE'] = '1';  // 1 应视为 true
+
+		const boundaryConfig2 = getLoggingConfig();
+		t.is(boundaryConfig2.bufferSize, 1000, 'Negative bufferSize must safely fallback to default 1000');
+		t.is(boundaryConfig2.diskArchive, true, 'SNOW_LOG_DISK_ARCHIVE="1" must evaluate to true');
+	} finally {
+		if (prevBuffer !== undefined) process.env['SNOW_LOG_BUFFER_SIZE'] = prevBuffer;
+		else delete process.env['SNOW_LOG_BUFFER_SIZE'];
+
+		if (prevDisk !== undefined) process.env['SNOW_LOG_DISK_ARCHIVE'] = prevDisk;
+		else delete process.env['SNOW_LOG_DISK_ARCHIVE'];
+	}
 });

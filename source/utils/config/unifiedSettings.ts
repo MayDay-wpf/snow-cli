@@ -22,6 +22,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config:unifiedSettings');
 
 /**
  * Top-level shape of the unified settings file.
@@ -253,8 +256,12 @@ export function writeSettings(
 		ensureDir(dir);
 		const filePath = getSettingsPath(scope, workingDirectory);
 		fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf-8');
-	} catch {
-		// ignore
+	} catch (e) {
+		log.debug('Failed to write unified settings to disk', {
+			scope,
+			workingDirectory,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 }
 
