@@ -3,7 +3,8 @@ import {useCallback} from 'react';
 import type {Message} from '../../ui/components/chat/MessageList.js';
 import type {CompressionStatus} from '../../ui/components/compression/CompressionStatus.js';
 import {
-	buildInitialUserPromptBlock,
+	buildActiveAndInitialUserPromptBlock,
+	getActiveUserPrompt,
 	sessionManager,
 } from '../../utils/session/sessionManager.js';
 import {compressContext} from '../../utils/core/contextCompressor.js';
@@ -70,21 +71,25 @@ function buildGoalObjectiveBlock(goal: GoalRecord): string {
 	].join('\n');
 }
 
-function prependInitialUserPromptBlock(
+function prependActiveAndInitialUserPromptBlock(
 	messages: Array<{role?: string; content?: string}>,
+	activeUserPrompt: string | null,
 	initialUserPrompt: string | null,
 ): void {
-	if (!initialUserPrompt) {
+	const block = buildActiveAndInitialUserPromptBlock(
+		activeUserPrompt,
+		initialUserPrompt,
+	);
+	if (!block) {
 		return;
 	}
 
-	const initialUserPromptBlock = buildInitialUserPromptBlock(initialUserPrompt);
 	const firstUserIndex = messages.findIndex(
 		message => message?.role === 'user',
 	);
 	const firstUserMessage = messages[firstUserIndex];
 	if (firstUserMessage) {
-		firstUserMessage.content = `${initialUserPromptBlock}\n\n${
+		firstUserMessage.content = `${block}\n\n${
 			firstUserMessage.content ?? ''
 		}`;
 		return;
@@ -92,7 +97,7 @@ function prependInitialUserPromptBlock(
 
 	messages.unshift({
 		role: 'user',
-		content: initialUserPromptBlock,
+		content: block,
 	});
 }
 
@@ -184,6 +189,7 @@ export async function executeContextCompression(
 
 		// 使用会话文件中的消息进行压缩（这是真实的对话记录）
 		const sessionMessages = currentSession.messages;
+		const activeUserPrompt = getActiveUserPrompt(currentSession);
 		const initialUserPrompt = await sessionManager.getInitialUserPrompt(
 			currentSession,
 		);
@@ -394,7 +400,11 @@ export async function executeContextCompression(
 					});
 				}
 			}
-			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
+			prependActiveAndInitialUserPromptBlock(
+				newSessionMessages,
+				activeUserPrompt,
+				initialUserPrompt,
+			);
 			compressedSession.messages = newSessionMessages;
 			compressedSession.messageCount = newSessionMessages.length;
 			compressedSession.updatedAt = Date.now();
@@ -402,7 +412,8 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
-			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
+			compressedSession.initialUserPrompt =
+				activeUserPrompt ?? initialUserPrompt ?? undefined;
 			compressedSession.originalMessageIndex = currentSession.messages.length;
 			// ── /goal: 把 hasGoal 标记带过来，新会话 saveSession 后即可让
 			// mcpToolsManager 在切换后重新暴露 goal-update_goal 工具。
@@ -531,7 +542,11 @@ export async function executeContextCompression(
 					});
 				}
 			}
-			prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
+			prependActiveAndInitialUserPromptBlock(
+				newSessionMessages,
+				activeUserPrompt,
+				initialUserPrompt,
+			);
 
 			// Create new session
 			const compressedSession = await sessionManager.createNewSession(
@@ -545,7 +560,8 @@ export async function executeContextCompression(
 			compressedSession.summary = currentSession.summary;
 			compressedSession.compressedFrom = currentSession.id;
 			compressedSession.compressedAt = Date.now();
-			compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
+			compressedSession.initialUserPrompt =
+				activeUserPrompt ?? initialUserPrompt ?? undefined;
 			compressedSession.originalMessageIndex = currentSession.messages.length;
 			compressedSession.imageContextArchive = imageResult.archiveText;
 
@@ -678,7 +694,11 @@ export async function executeContextCompression(
 			content: finalContent,
 			timestamp: Date.now(),
 		});
-		prependInitialUserPromptBlock(newSessionMessages, initialUserPrompt);
+		prependActiveAndInitialUserPromptBlock(
+			newSessionMessages,
+			activeUserPrompt,
+			initialUserPrompt,
+		);
 
 		if (preservedMessages.length > 0) {
 			newSessionMessages.push(
@@ -709,7 +729,8 @@ export async function executeContextCompression(
 		// 记录压缩关系
 		compressedSession.compressedFrom = currentSession.id;
 		compressedSession.compressedAt = Date.now();
-		compressedSession.initialUserPrompt = initialUserPrompt ?? undefined;
+		compressedSession.initialUserPrompt =
+			activeUserPrompt ?? initialUserPrompt ?? undefined;
 		compressedSession.originalMessageIndex =
 			compressionResult.preservedMessageStartIndex;
 
@@ -1048,7 +1069,7 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				options.currentContextPercentageRef.current = 0;
 
 				import('../../utils/core/globalCleanup.js')
-					.then(({cleanupSessionResources}) => cleanupSessionResources())
+					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
 					.catch(() => {});
 
 				const commandMessage: Message = {
@@ -1119,9 +1140,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
 
-						// Clean up session-level singleton resources to reclaim memory without dropping MCP
+						// Clean up global singleton resources to reclaim memory
 						import('../../utils/core/globalCleanup.js')
-							.then(({cleanupSessionResources}) => cleanupSessionResources())
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
 							.catch(() => {});
 
 						// Add command message
@@ -1155,9 +1176,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// before useEffect syncs the state to ref
 						options.currentContextPercentageRef.current = 0;
 
-						// Clean up session-level singleton resources to reclaim memory without dropping MCP
+						// Clean up global singleton resources to reclaim memory
 						import('../../utils/core/globalCleanup.js')
-							.then(({cleanupSessionResources}) => cleanupSessionResources())
+							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
 							.catch(() => {});
 
 						const commandMessage: Message = {

@@ -15,16 +15,27 @@ export function getPackageVersion(): string {
 	}
 
 	try {
-		// In bundled code, __filename points to bundle/cli.mjs
-		// So we need to go up one level to reach package.json
 		const currentDir = dirname(fileURLToPath(import.meta.url));
-		const packageJsonPath = join(currentDir, '../package.json');
-		const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-		cachedVersion = packageJson.version || '1.0.0';
+		const candidatePaths = [
+			join(currentDir, '../package.json'),
+			join(currentDir, '../../package.json'),
+			join(currentDir, '../../../package.json'),
+			join(process.cwd(), 'package.json'),
+		];
+		for (const p of candidatePaths) {
+			try {
+				const packageJson = JSON.parse(readFileSync(p, 'utf-8'));
+				if (packageJson && packageJson.version) {
+					cachedVersion = packageJson.version;
+					return cachedVersion;
+				}
+			} catch {
+				// try next candidate
+			}
+		}
+		cachedVersion = '1.0.0';
 		return cachedVersion;
-	} catch (error) {
-		// Fallback version if reading fails
-		console.error('Failed to read version from package.json:', error);
+	} catch {
 		cachedVersion = '1.0.0';
 		return cachedVersion;
 	}
