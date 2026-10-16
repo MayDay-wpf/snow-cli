@@ -47,6 +47,7 @@ const PROFILES = {
 		'source/test/unit/core/zeroRootLoggerGuard.test.ts',
 		'source/test/unit/core/zeroLoggerNameGuard.test.ts',
 		'source/test/unit/core/zeroConsoleLeakGuard.test.ts',
+		'source/test/unit/core/zeroDynamicInterpolationGuard.test.ts',
 		'source/test/unit/core/architectureCycleGuard.test.ts',
 		// ====================================================
 		'source/test/unit/mcp/mcpCircuitBreaker.test.ts',

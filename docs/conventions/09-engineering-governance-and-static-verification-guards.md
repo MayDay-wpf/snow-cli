@@ -67,7 +67,7 @@ status: normative
   - `noUnusedLocals: true`、`noUnusedParameters: true`、`noPropertyAccessFromIndexSignature: true` 均为硬性拦截；
   - **绑定位置**：作为 `scripts/gate-runner.mjs` 的 **Step 0 强制前置检查**。执行 `npm test` 前必须先通过类型编译，杜绝测试框架 JIT `transpileOnly` 掩盖类型破损。
 
-### 4. Tier 3: 六维 0-容忍架构门禁网格（Zero-Tolerance Guard Mesh）
+### 4. Tier 3: 七维 0-容忍架构门禁网格（Zero-Tolerance Guard Mesh）
 全量门禁以高优先级单元测试形式固化于 `source/test/unit/core/`，并永久绑定至 `gate-runner.mjs fast` 核心套件：
 
 | 门控名称 | 测试文件路径 | 物理拦截目标 | 验收棘轮 (Ratchet) |
@@ -77,7 +77,12 @@ status: normative
 | **ZeroRootLoggerGuard** | `zeroRootLoggerGuard.test.ts` | 严禁业务模块越权直调全局单例 `logger.*`（必须使用 namespace `log`） | **0** (零容忍) |
 | **ZeroConsoleLeakGuard** | `zeroConsoleLeakGuard.test.ts` | 严防控制台裸输出击穿 Ink/TUI 终端缓冲区 | **0** (零容忍) |
 | **ZeroLeakStorageGuard** | `zeroLeakStorageGuard.test.ts` | 杜绝绕过 `snowContext` 裸拼写 `~/.snow` 导致跨盘符/沙箱污染 | **0** (零容忍) |
+| **ZeroDynamicInterpolationGuard** | `zeroDynamicInterpolationGuard.test.ts` | 严禁任意动态拼接 `import(a + b)` / `import(\`\${x}\`)`，捍卫静态确定性有向图 | **0** (零容忍) |
 | **ArchitectureCycleGuard**| `architectureCycleGuard.test.ts` | 基于 DFS 强连通分量分析，禁止跨模块无序循环依赖新增 | **10** (基准锁死不增殖) |
+
+> [!NOTE] **静态自注册模式 (Static Self-Registration Pattern) 与动态导入铁律**
+> - **动态导入的不变式边界**：动态 `import()` 仅允许两种合法形式：（1）确定性字面量 `import('./lazyModule.js')`（用于重型三方库懒加载与解环）；（2）受信任的用户外部插件运行时装载机制（如 `~/.snow/plugin/` 下经过安全沙箱认证的扩展）。
+> - **严禁业务内部逻辑动态拼接**：严禁在业务域通过变量或模板字符串拼接路径进行动态导入。对于插件、命令或代理的动态扩展，必须采用**静态自注册表（Static Self-Registration Registry）**，即各模块静态声明自身元数据与导出，统一汇入确定性的集中映射表，从根本上消灭 AST 分析死角与幽灵边。
 
 ### 5. Tier 4: 全仓死代码与孤立依赖雷达（Dead-Code & Orphan Radar via Knip）
 - **工具选型**：`knip`（TypeScript 现代化死代码消除工业标准）。
