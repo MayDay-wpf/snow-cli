@@ -46,13 +46,10 @@ test('ZeroLeakStorageGuard: ensures no source file bypasses snowContext to hardc
 		}
 	}
 
-	// 渐进式治理门禁：断言违规项已处于可测控范围，防止进一步恶化新增
-	t.true(
-		Array.isArray(violations),
-		'ZeroLeakStorageGuard must return structured violations array',
-	);
-	t.true(
-		violations.length <= 50,
-		`Storage leak violations (${violations.length}) exceeded upper bounds threshold`,
+	// 严苛零容忍门禁：全域业务代码 100% 杜绝直接 hardcode homedir()/.snow，必须统一收归 getGlobalSnowDir()
+	t.deepEqual(
+		violations,
+		[],
+		`Detected ${violations.length} storage leak violations bypassing getGlobalSnowDir():\n${JSON.stringify(violations, null, 2)}`,
 	);
 });

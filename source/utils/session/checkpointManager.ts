@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
 const checkpointLogger = logger.child('session.checkpoint');
@@ -34,7 +34,7 @@ class CheckpointManager {
 	private activeCheckpoint: ConversationCheckpoint | null = null;
 
 	constructor() {
-		this.checkpointsDir = path.join(os.homedir(), '.snow', 'checkpoints');
+		this.checkpointsDir = path.join(getGlobalSnowDir().native, 'checkpoints');
 	}
 
 	/**

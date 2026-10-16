@@ -1,6 +1,6 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
 const configLogger = logger.child('config.proxy');
@@ -59,7 +59,7 @@ export function sanitizeProxyHost(host: string | undefined): string {
 	return host.trim().replace(/^https?:\/\//i, '') || DEFAULT_PROXY_HOST;
 }
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = getGlobalSnowDir().native;
 const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
 
 function ensureConfigDirectory(): void {

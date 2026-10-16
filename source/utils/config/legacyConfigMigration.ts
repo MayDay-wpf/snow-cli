@@ -18,8 +18,8 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {
 	readSettings,
 	writeSettings,
@@ -42,7 +42,7 @@ const LEGACY_FILES = {
 
 function getSnowDir(scope: SettingsScope, workingDirectory?: string): string {
 	if (scope === 'global') {
-		return path.join(os.homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return path.join(workingDirectory || process.cwd(), '.snow');
 }

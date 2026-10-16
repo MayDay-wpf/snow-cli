@@ -21,6 +21,7 @@ import os from 'os';
 import {randomUUID} from 'crypto';
 import {sessionManager} from '../session/sessionManager.js';
 import {getDefaultGoalTokenBudget} from '../config/unifiedSettings.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 export type GoalStatus =
 	| 'pursuing'
@@ -68,9 +69,7 @@ class GoalManager {
 
 	private getGoalDir(): string {
 		const projectId = sessionManager.getProjectId();
-		const override = process.env['SNOW_CONFIG_DIR']?.trim();
-		const baseSnowDir = override ? override : path.join(os.homedir(), '.snow');
-		return path.join(baseSnowDir, 'goals', projectId);
+		return path.join(getGlobalSnowDir().native, 'goals', projectId);
 	}
 
 	private getGoalPath(sessionId: string): string {

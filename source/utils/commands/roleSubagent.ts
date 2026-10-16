@@ -4,8 +4,8 @@ import {
 } from '../execution/commandExecutor.js';
 import fs from 'fs/promises';
 import path from 'path';
-import {homedir} from 'os';
 import {existsSync, readdirSync, readFileSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {getSubAgents, type SubAgent} from '../config/subAgentConfig.js';
 
 export type RoleSubagentLocation = 'global' | 'project';
@@ -23,7 +23,7 @@ function getRoleSubagentDirectory(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return projectRoot || process.cwd();
 }

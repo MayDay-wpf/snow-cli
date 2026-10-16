@@ -5,8 +5,8 @@ import {
 	statSync,
 } from 'fs';
 import {basename, extname, join} from 'path';
-import {homedir} from 'os';
 import matter from 'gray-matter';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 import type {SubAgent} from './subAgentConfig.js';
 
@@ -121,7 +121,7 @@ export function getProjectAgentsDir(cwd: string = process.cwd()): string {
 }
 
 export function getGlobalAgentsDir(): string {
-	return join(homedir(), '.snow', 'agents');
+	return join(getGlobalSnowDir().native, 'agents');
 }
 
 export function loadProjectAgents(cwd: string = process.cwd()): SubAgent[] {

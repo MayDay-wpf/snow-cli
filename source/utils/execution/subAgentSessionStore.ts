@@ -9,7 +9,7 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {ChatMessage} from '../../api/chat.js';
 import {logger} from '../core/logger.js';
 
@@ -43,7 +43,7 @@ export interface SubAgentSessionRecord {
 const MAX_PER_SESSION = 20;
 const MAX_TOTAL = 200;
 /** 旧版存储根目录（兼容读取历史数据）：~/.snow/subagents/ */
-const LEGACY_STORAGE_ROOT = path.join(os.homedir(), '.snow', 'subagents');
+const LEGACY_STORAGE_ROOT = path.join(getGlobalSnowDir().native, 'subagents');
 
 class SubAgentSessionStore {
 	private records: Map<string, SubAgentSessionRecord> = new Map();

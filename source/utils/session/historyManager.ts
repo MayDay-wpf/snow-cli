@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {resolveProjectIdentity} from './projectUtils.js';
 
 export interface HistoryEntry {
@@ -30,7 +31,7 @@ class HistoryManager {
 	private readonly projectAliasIds: string[];
 
 	constructor() {
-		const snowDir = path.join(os.homedir(), '.snow');
+		const snowDir = getGlobalSnowDir().native;
 		const identity = resolveProjectIdentity();
 		this.currentProjectId = identity.projectId;
 		this.projectAliasIds = identity.projectAliasIds;
@@ -60,7 +61,7 @@ class HistoryManager {
 			files.add(path.join(this.historyRootDir, projectId, 'history.json'));
 		}
 
-		files.add(path.join(os.homedir(), '.snow', 'history.json'));
+		files.add(path.join(getGlobalSnowDir().native, 'history.json'));
 		return [...files];
 	}
 

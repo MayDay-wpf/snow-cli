@@ -6,6 +6,7 @@ import type {ChatMessage as APIChatMessage} from '../../api/chat.js';
 import type {UsageInfo} from '../../api/types.js';
 import {getTodoService} from '../execution/mcpToolsManager.js';
 import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
 import {
 	resolveProjectIdentity,
@@ -189,9 +190,7 @@ export interface PaginatedSessionList {
 
 class SessionManager {
 	private get sessionsDir(): string {
-		const override = process.env['SNOW_CONFIG_DIR']?.trim();
-		const baseSnowDir = override ? override : path.join(os.homedir(), '.snow');
-		return path.join(baseSnowDir, 'sessions');
+		return path.join(getGlobalSnowDir().native, 'sessions');
 	}
 	private currentSession: Session | null = null;
 	private readonly currentProjectId: string;
@@ -250,7 +249,7 @@ class SessionManager {
 				await fs.mkdir(sessionDir, {recursive: true});
 			}
 		} catch (error) {
-			// Directory already exists or other error
+			logger.debug('ensureSessionsDir directory creation suppressed error', {error, date});
 		}
 	}
 
@@ -520,15 +519,15 @@ class SessionManager {
 			const data = await fs.readFile(oldSessionPath, 'utf-8');
 			const session: Session = JSON.parse(data);
 			return session;
-		} catch {
-			// 旧格式不存在，搜索日期文件夹
+		} catch (error) {
+			logger.debug('loadSessionFromDisk legacy path missed, searching date folders', {sessionId, error});
 		}
 
 		// 在日期文件夹中查找会话
 		try {
 			return await this.findSessionInDateFolders(sessionId);
-		} catch {
-			// 搜索失败
+		} catch (error) {
+			logger.debug('loadSessionFromDisk search in date folders failed', {sessionId, error});
 		}
 
 		return null;
@@ -745,13 +744,13 @@ class SessionManager {
 						const session: Session = JSON.parse(data);
 						return session;
 					} catch (error) {
-						// 文件不存在，继续搜索
+						logger.debug('findSessionInDateFolders file read skipped', {sessionPath, error});
 						continue;
 					}
 				}
 			}
 		} catch (error) {
-			// 目录读取失败
+			logger.debug('findSessionInDateFolders failed to read project directory', {projectDir, error});
 		}
 
 		return null;
@@ -780,12 +779,12 @@ class SessionManager {
 					const session: Session = JSON.parse(data);
 					return session;
 				} catch (error) {
-					// 文件不存在，继续搜索
+					logger.debug('findSessionInProjectDir file read skipped', {sessionPath, error});
 					continue;
 				}
 			}
 		} catch (error) {
-			// 目录读取失败
+			logger.debug('findSessionInProjectDir failed to read project directory', {projectDir, error});
 		}
 
 		return null;
@@ -811,7 +810,7 @@ class SessionManager {
 						await this.readSessionsFromDir(datePath, sessions, seenIds);
 					}
 				} catch (error) {
-					// 项目目录不存在，继续读取其他兼容来源
+					logger.debug('listSessions project directory not present or unreadable, continuing', {dir, error});
 				}
 			}
 
@@ -838,7 +837,7 @@ class SessionManager {
 					}
 				}
 			} catch (error) {
-				// 读取旧格式失败不影响主流程
+				logger.debug('listSessions fallback legacy read encountered error', {sessionsDir: this.sessionsDir, error});
 			}
 
 			// Sort by updatedAt (newest first)
@@ -850,6 +849,7 @@ class SessionManager {
 
 			return sorted;
 		} catch (error) {
+			logger.debug('listSessions root error, returning empty list', {error});
 			return [];
 		}
 	}
@@ -870,7 +870,7 @@ class SessionManager {
 				await this.readLegacySessionFile(filePath, sessions, seenIds);
 			}
 		} catch (error) {
-			// Skip inaccessible directories
+			logger.debug('readLegacySessionsFromDir skipped inaccessible directory', {dirPath, error});
 		}
 	}
 
@@ -887,7 +887,7 @@ class SessionManager {
 			const session: Session = JSON.parse(data);
 			this.addSessionListItem(sessions, seenIds, session);
 		} catch (error) {
-			// Skip invalid session files
+			logger.debug('readLegacySessionFile skipped invalid session file', {filePath, error});
 		}
 	}
 
@@ -966,7 +966,7 @@ class SessionManager {
 				}
 			}
 		} catch (error) {
-			// Skip directory if it can't be read
+			logger.debug('readSessionsFromDir skipped directory read failure', {dirPath, error});
 		}
 	}
 
@@ -1263,8 +1263,8 @@ class SessionManager {
 					goalTokensUsed: goal.tokensUsed,
 					goalTokenBudget: goal.tokenBudget,
 				});
-			} catch {
-				// 单个 goal 读失败不影响整体列表
+			} catch (error) {
+				logger.debug('listSessionsWithGoals single goal read failed, continuing', {sessionId: item.id, error});
 			}
 		}
 		return result;
@@ -1375,7 +1375,7 @@ class SessionManager {
 			await fs.unlink(oldSessionPath);
 			sessionDeleted = true;
 		} catch (error) {
-			// 旧格式不存在，继续搜索
+			logger.debug('deleteSession legacy unlink missed, checking directories', {sessionId, error});
 		}
 
 		// 2. 优先删除稳定项目目录和旧路径别名目录
@@ -1421,13 +1421,13 @@ class SessionManager {
 							sessionDeleted = true;
 							break;
 						} catch (error) {
-							// 文件不存在，继续搜索
+							logger.debug('deleteSession date folder unlink skipped', {sessionPath, error});
 							continue;
 						}
 					}
 				}
 			} catch (error) {
-				// 目录读取失败
+				logger.debug('deleteSession directory scan failed', {sessionsDir: this.sessionsDir, error});
 			}
 		}
 
@@ -1490,12 +1490,12 @@ class SessionManager {
 					await fs.unlink(sessionPath);
 					return true;
 				} catch (error) {
-					// 文件不存在，继续搜索
+					logger.debug('deleteSessionFromProjectDir unlink skipped', {sessionPath, error});
 					continue;
 				}
 			}
 		} catch (error) {
-			// 目录读取失败
+			logger.debug('deleteSessionFromProjectDir failed to read directory', {projectDir, error});
 		}
 
 		return false;

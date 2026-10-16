@@ -6,6 +6,7 @@ import path from 'path';
 import {translations} from '../../i18n/translations.js';
 import type {TranslationKeys} from '../../i18n/types.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {getGlobalSnowDir} from './snowContext.js';
 import {logger} from './logger.js';
 
 const doctorLog = logger.child('cli:doctor');
@@ -485,7 +486,7 @@ export function runDoctorAndExit(
 ): never {
 	const checks: DoctorCheck[] = [];
 	const t = getDoctorTranslations();
-	const snowDir = path.join(os.homedir(), '.snow');
+	const snowDir = getGlobalSnowDir().native;
 	const projectSnowDir = path.join(process.cwd(), '.snow');
 	const globalSettingsPath = path.join(snowDir, 'settings.json');
 	const projectSettingsPath = path.join(projectSnowDir, 'settings.json');

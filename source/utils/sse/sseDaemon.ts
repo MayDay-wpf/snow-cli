@@ -12,6 +12,7 @@ import {homedir} from 'os';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
 import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 const sseLog = logger.child('sse:daemon');
 
@@ -34,7 +35,7 @@ function formatMessage(template: string, params: Record<string, any>): string {
 }
 
 // PID 文件存储目录
-const SNOW_DIR = join(homedir(), '.snow');
+const SNOW_DIR = getGlobalSnowDir().native;
 const DAEMON_DIR = join(SNOW_DIR, 'sse-daemons');
 const LOG_DIR = join(SNOW_DIR, 'sse-logs');
 

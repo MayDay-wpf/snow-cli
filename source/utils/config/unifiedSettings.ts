@@ -20,8 +20,8 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 /**
  * Top-level shape of the unified settings file.
@@ -187,8 +187,7 @@ const SETTINGS_FILE_NAME = 'settings.json';
 
 function getSnowDir(scope: SettingsScope, workingDirectory?: string): string {
 	if (scope === 'global') {
-		const override = process.env['SNOW_CONFIG_DIR']?.trim();
-		return override ? override : path.join(os.homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return path.join(workingDirectory || process.cwd(), '.snow');
 }

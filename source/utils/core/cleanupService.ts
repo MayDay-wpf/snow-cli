@@ -11,8 +11,8 @@
  */
 
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
+import {getGlobalSnowDir} from './snowContext.js';
 import {isProjectFolder} from '../session/projectUtils.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -114,8 +114,7 @@ type RegistryEntry = {
  * 避免引入其模块级副作用（proxy 迁移等）。
  */
 export function getSnowRootDir(): string {
-	const override = process.env['SNOW_CONFIG_DIR']?.trim();
-	return override ? override : path.join(os.homedir(), '.snow');
+	return getGlobalSnowDir().native;
 }
 
 export function formatBytes(bytes: number): string {

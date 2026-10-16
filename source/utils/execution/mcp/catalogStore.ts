@@ -1,6 +1,6 @@
 import path from 'path';
-import os from 'os';
 import fs from 'fs';
+import {getGlobalSnowDir} from '../../core/snowContext.js';
 import {logger} from '../../core/logger.js';
 import type {MCPServiceTools} from '../mcpToolsManager.js';
 
@@ -58,7 +58,7 @@ export class MCPCatalogStore {
 
 	constructor(customFilePath?: string) {
 		this.catalogFilePath =
-			customFilePath || path.join(os.homedir(), '.snow', 'mcp-catalog.json');
+			customFilePath || path.join(getGlobalSnowDir().native, 'mcp-catalog.json');
 	}
 
 	getFilePath(): string {

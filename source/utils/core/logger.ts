@@ -83,6 +83,7 @@ export class Logger {
 	private readonly maxFileSize: number;
 	private readonly context: LoggerContext;
 	private sink: LoggerSink | null = null;
+	private static sharedSink: LoggerSink | null = null;
 
 	constructor(config: LoggerConfig = {}) {
 		this.logDir =
@@ -155,10 +156,11 @@ export class Logger {
 
 	setSink(sink: LoggerSink | null | undefined): void {
 		this.sink = sink ?? null;
+		Logger.sharedSink = this.sink;
 	}
 
 	getSink(): LoggerSink | null {
-		return this.sink;
+		return this.sink ?? Logger.sharedSink;
 	}
 
 	/**
@@ -241,8 +243,9 @@ export class Logger {
 			...(errorObj && {error: errorObj}),
 		};
 
-		if (this.sink) {
-			this.sink.write(entry);
+		const activeSink = this.sink ?? Logger.sharedSink;
+		if (activeSink) {
+			activeSink.write(entry);
 			return;
 		}
 

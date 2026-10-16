@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { join } from 'path';
+import { getGlobalSnowDir } from './snowContext.js';
 
-const SNOW_DIR = join(homedir(), '.snow');
+const SNOW_DIR = getGlobalSnowDir().native;
 const DEV_USER_ID_FILE = join(SNOW_DIR, 'dev-user-id');
 
 /**

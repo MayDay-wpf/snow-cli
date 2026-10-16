@@ -4,9 +4,9 @@ import {
 } from '../execution/commandExecutor.js';
 import fs from 'fs/promises';
 import path from 'path';
-import {homedir} from 'os';
 import {existsSync, readdirSync} from 'fs';
 import crypto from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {
 	readSettings,
 	updateSettings,
@@ -80,7 +80,7 @@ export function getRoleFilePath(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow', 'ROLE.md');
+		return path.join(getGlobalSnowDir().native, 'ROLE.md');
 	}
 	const root = projectRoot || process.cwd();
 	return path.join(root, 'ROLE.md');
@@ -192,7 +192,7 @@ export function getRoleDirectory(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return projectRoot || process.cwd();
 }

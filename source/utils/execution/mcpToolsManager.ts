@@ -63,6 +63,7 @@ import {
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 import os from 'os';
 import path from 'path';
@@ -178,7 +179,7 @@ export function getTodoService(): TodoService {
 	if (!todoService) {
 		// 获取当前项目ID，与 Session 路径结构保持一致
 		const projectId = sessionManager.getProjectId();
-		const basePath = path.join(os.homedir(), '.snow', 'todos', projectId);
+		const basePath = path.join(getGlobalSnowDir().native, 'todos', projectId);
 
 		todoService = new TodoService(basePath, () => {
 			const session = sessionManager.getCurrentSession();
@@ -236,7 +237,7 @@ export function getRegisteredServicePrefixes(): string[] {
 // In-flight refresh promise to prevent duplicate concurrent discovery runs
 let inFlightRefreshPromise: Promise<void> | null = null;
 
-const CATALOG_FILE_PATH = path.join(os.homedir(), '.snow', 'mcp-catalog.json');
+const CATALOG_FILE_PATH = path.join(getGlobalSnowDir().native, 'mcp-catalog.json');
 
 interface MCPCatalogDiskFormat {
 	version: number;

@@ -3,6 +3,7 @@ import {join} from 'path';
 import {existsSync} from 'fs';
 import {mkdir, rm, readFile, writeFile, readdir} from 'fs/promises';
 import {writeFile as writeJsonFile} from 'fs/promises';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {SkillLocation} from '../commands/skills.js';
 
 // ---------------------------------------------------------------------------
@@ -160,7 +161,7 @@ export function parseGitHubUrl(input: string): ParsedGitHubUrl | null {
 
 function getRegistryPath(): string {
 	// Registry is stored at ~/.snow/skills-registry.json
-	return join(homedir(), '.snow', 'skills-registry.json');
+	return join(getGlobalSnowDir().native, 'skills-registry.json');
 }
 
 export async function loadInstalledSkills(): Promise<InstalledSkillRecord[]> {
@@ -184,7 +185,7 @@ async function saveInstalledSkills(
 	records: InstalledSkillRecord[],
 ): Promise<void> {
 	const registryPath = getRegistryPath();
-	await mkdir(join(homedir(), '.snow'), {recursive: true});
+	await mkdir(getGlobalSnowDir().native, {recursive: true});
 	await writeJsonFile(registryPath, JSON.stringify(records, null, 2), 'utf-8');
 }
 
@@ -222,7 +223,7 @@ function getSkillDirectory(
 ): string {
 	const segments = skillId.split('/').filter(Boolean);
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'skills', ...segments);
+		return join(getGlobalSnowDir().native, 'skills', ...segments);
 	}
 	const root = projectRoot || process.cwd();
 	return join(root, '.snow', 'skills', ...segments);
