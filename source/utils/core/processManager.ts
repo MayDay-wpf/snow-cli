@@ -1,8 +1,68 @@
-import {ChildProcess, exec} from 'child_process';
+import {ChildProcess, exec, execSync, spawnSync} from 'child_process';
 
 export interface TrackedProcessInfo {
 	pid: number;
 	command: string;
+}
+
+/**
+ * Find child PIDs of a process on Unix/POSIX systems.
+ * Uses pgrep or ps to discover active child processes directly without shell overhead.
+ */
+function getChildPidsUnix(parentPid: number): number[] {
+	if (!Number.isInteger(parentPid) || parentPid <= 0) return [];
+
+	const pidStr = String(parentPid);
+	try {
+		const result = spawnSync('pgrep', ['-P', pidStr], {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore'],
+		});
+		if (result.stdout) {
+			return result.stdout
+				.trim()
+				.split(/\s+/)
+				.map(Number)
+				.filter(p => Number.isInteger(p) && p > 0);
+		}
+	} catch {}
+
+	try {
+		const result = spawnSync('ps', ['-o', 'pid=', '--ppid', pidStr], {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore'],
+		});
+		if (result.stdout) {
+			return result.stdout
+				.trim()
+				.split(/\s+/)
+				.map(Number)
+				.filter(p => Number.isInteger(p) && p > 0);
+		}
+	} catch {}
+
+	return [];
+}
+
+/**
+ * Recursively discover all descendant PIDs under a root PID on Unix/POSIX systems.
+ */
+function getAllDescendantPidsUnix(rootPid: number): number[] {
+	const allPids: number[] = [];
+	const queue = [rootPid];
+
+	while (queue.length > 0) {
+		const current = queue.shift()!;
+		const children = getChildPidsUnix(current);
+		for (const child of children) {
+			if (!allPids.includes(child)) {
+				allPids.push(child);
+				queue.push(child);
+			}
+		}
+	}
+
+	return allPids;
 }
 
 /**
@@ -37,40 +97,90 @@ class ProcessManager {
 	}
 
 	/**
-	 * Kill a specific process gracefully
-	 * On Windows, uses taskkill with /T flag to terminate process tree
+	 * Terminate an entire process tree by PID cross-platform.
+	 * On Windows: uses taskkill /PID ${pid} /T /F
+	 * On Unix/POSIX: recursively reaps all descendant PIDs, plus process group and direct kill
 	 */
-	private killProcess(process: ChildProcess): void {
-		const pid = process.pid;
-		if (!pid || process.killed) {
-			return;
-		}
+	killPidTree(pid: number): void {
+		if (!pid || pid <= 0) return;
 
 		if (this.isWindows) {
-			// Windows: Use taskkill to kill entire process tree
-			// /T = terminate child processes, /F = force
-			// Redirect stderr to NUL to suppress "Access is denied" error spam
 			exec(`taskkill /PID ${pid} /T /F 2>NUL`, {windowsHide: true}, () => {
 				// Ignore errors - process may already be dead or inaccessible
 			});
 		} else {
-			// Unix: Use SIGTERM for graceful termination
-			try {
-				process.kill('SIGTERM');
-
-				// Force kill after 1 second if still alive
-				setTimeout(() => {
-					try {
-						if (!process.killed) {
-							process.kill('SIGKILL');
-						}
-					} catch {
-						// Process already dead
-					}
-				}, 1000);
-			} catch {
-				// Process already dead
+			// POSIX: Reap all descendant PIDs from leaves to root to prevent orphan adoption
+			const descendants = getAllDescendantPidsUnix(pid);
+			for (const childPid of descendants.reverse()) {
+				try {
+					process.kill(childPid, 'SIGKILL');
+				} catch {}
 			}
+
+			// Try process group kill in case child process was spawned as detached group leader
+			try {
+				process.kill(-pid, 'SIGKILL');
+			} catch {}
+
+			// Final direct kill
+			try {
+				process.kill(pid, 'SIGKILL');
+			} catch {}
+		}
+	}
+
+	/**
+	 * Synchronously terminate a process tree by PID cross-platform.
+	 * Essential during process exit hooks where event loop may not tick again.
+	 */
+	killPidTreeSync(pid: number): void {
+		if (!pid || pid <= 0) return;
+
+		if (this.isWindows) {
+			try {
+				execSync(`taskkill /PID ${pid} /T /F 2>NUL`, {
+					windowsHide: true,
+					stdio: 'ignore',
+				});
+			} catch {
+				// Ignore errors - process already terminated
+			}
+		} else {
+			const descendants = getAllDescendantPidsUnix(pid);
+			for (const childPid of descendants.reverse()) {
+				try {
+					process.kill(childPid, 'SIGKILL');
+				} catch {}
+			}
+
+			try {
+				process.kill(-pid, 'SIGKILL');
+			} catch {}
+
+			try {
+				process.kill(pid, 'SIGKILL');
+			} catch {}
+		}
+	}
+
+	/**
+	 * Kill a specific process gracefully and reap its entire process tree.
+	 * On Windows, uses taskkill with /T flag to terminate process tree.
+	 * On POSIX, uses process group signals.
+	 */
+	killProcess(proc: ChildProcess | number): void {
+		const pid = typeof proc === 'number' ? proc : proc.pid;
+		if (!pid) {
+			return;
+		}
+		if (typeof proc !== 'number' && proc.killed) {
+			return;
+		}
+
+		this.killPidTree(pid);
+
+		if (typeof proc !== 'number') {
+			this.processes.delete(proc);
 		}
 	}
 

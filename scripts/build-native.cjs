@@ -13,7 +13,8 @@ const libraryName =
 	platform === 'win32'
 		? `snow_native.${extension}`
 		: `libsnow_native.${extension}`;
-const source = join('crates', 'snow-native', 'target', 'release', libraryName);
+const targetDir = join('crates', 'snow-native', 'target');
+const source = join(targetDir, 'release', libraryName);
 const destinationDirectory = join('bundle', 'native');
 const destination = join(destinationDirectory, `snow_native.${target}.node`);
 
@@ -57,18 +58,38 @@ function tryCopyFile(src, dest) {
 }
 
 // 检查是否需要重新编译 native 库
-if (!isNativeStale()) {
+if (!existsSync(destination) && existsSync(source)) {
+	mkdirSync(destinationDirectory, {recursive: true});
+	tryCopyFile(source, destination);
+} else if (!isNativeStale()) {
 	console.log(
 		`Native accelerator up to date (${destination}). Skipping cargo build.`,
 	);
 } else {
-	execFileSync(
-		'cargo',
-		['build', '--manifest-path', 'crates/snow-native/Cargo.toml', '--release'],
-		{
-			stdio: 'inherit',
-		},
-	);
+	try {
+		execFileSync(
+			'cargo',
+			[
+				'build',
+				'--manifest-path',
+				'crates/snow-native/Cargo.toml',
+				'--release',
+				'--target-dir',
+				targetDir,
+			],
+			{
+				stdio: 'inherit',
+			},
+		);
+	} catch (error) {
+		if (existsSync(source)) {
+			console.warn(
+				'Cargo not available; reusing existing precompiled native binary.',
+			);
+		} else {
+			throw error;
+		}
+	}
 
 	if (!existsSync(source)) {
 		throw new Error(`Rust native build did not create ${source}`);
