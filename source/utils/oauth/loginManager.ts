@@ -23,6 +23,9 @@ import {
 	pickModel,
 	saveOAuthProfile,
 } from './profileStore.js';
+import {logger} from '../core/logger.js';
+
+const oauthLog = logger.child('oauth:login');
 import type {
 	OAuthLoginOutcome,
 	OAuthLoginStartResult,
@@ -210,9 +213,9 @@ async function ensureChatGptHostId(): Promise<string> {
 		await mkdir(dirname(path), {recursive: true});
 		await writeFile(path, JSON.stringify({ext_agent_host_id: hostId}), 'utf8');
 	} catch (error) {
-		console.error(
+		oauthLog.error(
 			'[oauth] failed to persist the ChatGPT host id:',
-			error instanceof Error ? error.message : error,
+			{error: error instanceof Error ? error.message : error},
 		);
 	}
 	return hostId;

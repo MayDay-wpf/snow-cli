@@ -1,11 +1,13 @@
 import {spawn} from 'child_process';
 import {writeFileSync, appendFileSync, existsSync, mkdirSync} from 'fs';
 import {join} from 'path';
-import {homedir} from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
 import {notifyTaskFinished} from '../platform/notification.js';
 import {taskManager} from './taskManager.js';
 
-const TASK_LOG_DIR = join(homedir(), '.snow', 'task-logs');
+const taskLog = logger.child('task:executor');
+const TASK_LOG_DIR = join(getGlobalSnowDir().native, 'task-logs');
 
 function ensureLogDir() {
 	if (!existsSync(TASK_LOG_DIR)) {
@@ -121,8 +123,12 @@ export async function executeTaskInBackground(
 	// Detach the child process so parent can exit
 	child.unref();
 
-	console.log(`Task ${taskId} started in background (PID: ${child.pid})`);
-	console.log(`Logs: ${logPath}`);
+	taskLog.info(`Task ${taskId} started in background (PID: ${child.pid})`, {
+		taskId,
+		pid: child.pid,
+		logPath,
+	});
+	taskLog.info(`Logs: ${logPath}`, {logPath});
 }
 
 export async function executeTask(

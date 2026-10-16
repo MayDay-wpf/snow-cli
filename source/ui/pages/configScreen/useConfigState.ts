@@ -43,6 +43,9 @@ import {
 	MAX_VISIBLE_FIELDS,
 	stripFocusArtifacts,
 } from './types.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const pageLog = logger.child('ui:pages');
 
 export type UseConfigStateOptions = {
 	/**
@@ -538,6 +541,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			const fetchedModels = await fetchAvailableModels(tempConfig);
 			setModels(fetchedModels);
 		} catch (err) {
+			pageLog.debug('Failed to fetch available models', {error: err});
 			const errorMessage =
 				err instanceof Error ? err.message : 'Unknown error occurred';
 			setLoadError(errorMessage);
@@ -818,6 +822,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			setIsEditing(false);
 			setErrors([]);
 		} catch (err) {
+			pageLog.debug('Failed to create profile', {error: err});
 			setErrors([
 				err instanceof Error ? err.message : 'Failed to create profile',
 			]);
@@ -835,6 +840,10 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				try {
 					deleteProfile(profileName);
 				} catch (err) {
+					pageLog.debug('Failed to delete profile in batch', {
+						error: err,
+						profileName,
+					});
 					hasError = true;
 					if (!firstError && err instanceof Error) {
 						firstError = err;
@@ -853,6 +862,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				setErrors([(firstError as Error).message]);
 			}
 		} catch (err) {
+			pageLog.debug('Failed to delete profiles', {error: err});
 			setErrors([
 				err instanceof Error ? err.message : 'Failed to delete profiles',
 			]);
@@ -882,6 +892,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 			setIsEditing(false);
 			setErrors([]);
 		} catch (err) {
+			pageLog.debug('Failed to rename profile', {error: err});
 			setErrors([
 				err instanceof Error ? err.message : 'Failed to rename profile',
 			]);
@@ -1054,7 +1065,7 @@ export function useConfigState(options?: UseConfigStateOptions) {
 				// 准确落盘到"用户进入页面时编辑的那个 profile"文件，绝不污染其他 profile。
 				saveProfile(editingProfile, fullConfig as any);
 			} catch (err) {
-				console.error('Failed to save profile:', err);
+				pageLog.error('Failed to save profile', err);
 			}
 
 			setErrors([]);

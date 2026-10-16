@@ -4,7 +4,10 @@ import {
 	findInlineCommandInvocation,
 	isInlineExecutableCommand,
 } from '../utils/inlineCommandTrigger.js';
+import {logger} from '../../../../utils/core/logger.js';
 import type {HandlerContext} from '../types.js';
+
+const submitLog = logger.child('hooks:input:submit');
 
 export function submitHandler(ctx: HandlerContext): boolean {
 	const {key, buffer, options, refs, helpers} = ctx;
@@ -97,7 +100,10 @@ export function submitHandler(ctx: HandlerContext): boolean {
 						Promise.resolve(
 							onCommand(inlineInvocation.commandName, result),
 						).catch(error => {
-							console.error('Command execution error:', error);
+							submitLog.error('Command execution error:', {
+								error,
+								command: inlineInvocation.commandName,
+							});
 						});
 					}
 				},
@@ -204,7 +210,10 @@ export function submitHandler(ctx: HandlerContext): boolean {
 					if (onCommand) {
 						// Ensure onCommand errors are caught
 						Promise.resolve(onCommand(commandName, result)).catch(error => {
-							console.error('Command execution error:', error);
+							submitLog.error('Command execution error:', {
+								error,
+								command: commandName,
+							});
 						});
 					}
 				});

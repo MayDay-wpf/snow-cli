@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {randomUUID} from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {ChatMessage} from '../session/sessionManager.js';
 
 export interface Task {
@@ -42,7 +42,7 @@ class TaskManager {
 	private readonly operationQueues: Map<string, Promise<any>> = new Map();
 
 	constructor() {
-		this.tasksDir = path.join(os.homedir(), '.snow', 'tasks');
+		this.tasksDir = path.join(getGlobalSnowDir().native, 'tasks');
 	}
 
 	/**

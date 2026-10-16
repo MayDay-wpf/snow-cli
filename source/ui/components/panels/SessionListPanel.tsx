@@ -7,6 +7,9 @@ import {
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useTerminalSize} from '../../../hooks/ui/useTerminalSize.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const compLog = logger.child('ui:components');
 
 type Props = {
 	onSelectSession: (sessionId: string) => void;
@@ -106,7 +109,7 @@ export default function SessionListPanel({
 				setSelectedIndex(0);
 				setScrollOffset(0);
 			} catch (error) {
-				console.error('Failed to load sessions:', error);
+				compLog.error('Failed to load sessions:', error);
 				setSessions([]);
 			} finally {
 				setLoading(false);
@@ -131,7 +134,7 @@ export default function SessionListPanel({
 			setHasMore(result.hasMore);
 			setCurrentPage(nextPage);
 		} catch (error) {
-			console.error('Failed to load more sessions:', error);
+			compLog.error('Failed to load more sessions:', error);
 		} finally {
 			setLoadingMore(false);
 		}

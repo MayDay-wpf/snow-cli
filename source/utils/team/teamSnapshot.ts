@@ -8,8 +8,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import {getProjectId} from '../session/projectUtils.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const teamSnapshotLog = logger.child('team:snapshot');
 
 // ── Types ──
 
@@ -24,7 +27,7 @@ interface TeamSnapshotData {
 // ── File I/O ──
 
 function getTeamSnapshotDir(): string {
-	return path.join(os.homedir(), '.snow', 'team-snapshots');
+	return path.join(getGlobalSnowDir().native, 'team-snapshots');
 }
 
 function getTeamSnapshotFilePath(): string {
@@ -54,7 +57,7 @@ function saveSnapshotData(data: TeamSnapshotData): void {
 	try {
 		fs.writeFileSync(getTeamSnapshotFilePath(), JSON.stringify(data, null, 2), 'utf-8');
 	} catch (error) {
-		console.error('Failed to save team snapshot data:', error);
+		teamSnapshotLog.error('Failed to save team snapshot data:', {error});
 	}
 }
 
@@ -170,12 +173,12 @@ export async function rollbackTeamState(
 			await cleanupTeamWorktrees(teamName);
 			cleanedCount++;
 		} catch (error) {
-			console.error(`Failed to cleanup worktrees for team ${teamName}:`, error);
+			teamSnapshotLog.error(`Failed to cleanup worktrees for team ${teamName}:`, {error, teamName});
 		}
 		try {
 			disbandTeam(teamName);
-		} catch {
-			// May already be disbanded
+		} catch (disbandError) {
+			teamSnapshotLog.debug(`Team ${teamName} may already be disbanded during snapshot cleanup`, {error: disbandError});
 		}
 	}
 

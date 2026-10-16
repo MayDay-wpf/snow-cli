@@ -8,16 +8,16 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from 'fs';
-import {homedir} from 'os';
 import {join} from 'path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {taskManager} from './taskManager.js';
 import {executeTaskInBackground} from './taskExecutor.js';
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_ACTIVE_LOOPS = 50;
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'running', 'paused']);
-const LOOP_DAEMON_DIR = join(homedir(), '.snow', 'loop-daemons');
-const LOOP_DAEMON_LOG_DIR = join(homedir(), '.snow', 'loop-logs');
+const LOOP_DAEMON_DIR = join(getGlobalSnowDir().native, 'loop-daemons');
+const LOOP_DAEMON_LOG_DIR = join(getGlobalSnowDir().native, 'loop-logs');
 
 type LoopExecutionTaskStatus =
 	| 'pending'

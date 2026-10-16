@@ -13,6 +13,9 @@ import {
 import {SSHClient} from '../../../utils/ssh/sshClient.js';
 import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const compLog = logger.child('ui:components');
 
 type Props = {
 	onClose: () => void;
@@ -81,7 +84,7 @@ export default function WorkingDirectoryPanel({onClose}: Props) {
 				const dirs = await getWorkingDirectories();
 				setDirectories(dirs);
 			} catch (error) {
-				console.error('Failed to load working directories:', error);
+				compLog.error('Failed to load working directories:', error);
 				setDirectories([]);
 			} finally {
 				setLoading(false);
@@ -209,7 +212,7 @@ export default function WorkingDirectoryPanel({onClose}: Props) {
 								setSelectedIndex(0);
 							})
 							.catch(error => {
-								console.error('Failed to delete directories:', error);
+								compLog.error('Failed to delete directories:', error);
 								setConfirmDelete(false);
 							});
 					} else if (input.toLowerCase() === 'n') {

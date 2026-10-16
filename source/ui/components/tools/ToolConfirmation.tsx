@@ -18,6 +18,9 @@ import {
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import {collectDiffPreviewEntries} from '../../../utils/ui/diffPreview.js';
 import fs from 'fs';
+import {logger} from '../../../utils/core/logger.js';
+
+const compLog = logger.child('ui:components');
 
 export type ConfirmationResult =
 	| 'approve'
@@ -354,7 +357,7 @@ export default function ToolConfirmation({
 
 				const interpreted = interpretHookResult('toolConfirmation', hookResult);
 				if (interpreted.action === 'warn' && interpreted.warningMessage) {
-					console.warn(interpreted.warningMessage);
+					compLog.warn(interpreted.warningMessage);
 				} else if (interpreted.action === 'block' && interpreted.errorDetails) {
 					if (onHookError) {
 						onHookError(interpreted.errorDetails);
@@ -364,7 +367,7 @@ export default function ToolConfirmation({
 				}
 			})
 			.catch(error => {
-				console.error('Failed to execute toolConfirmation hook:', error);
+				compLog.error('Failed to execute toolConfirmation hook:', error);
 			});
 	}, [
 		toolName,

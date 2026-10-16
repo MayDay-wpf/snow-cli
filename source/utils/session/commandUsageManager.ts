@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
 
 /**
@@ -30,7 +30,7 @@ class CommandUsageManager {
 	private readonly saveDelay = 1000; // 1秒延迟写入
 
 	constructor() {
-		const snowDir = path.join(os.homedir(), '.snow');
+		const snowDir = getGlobalSnowDir().native;
 		this.usageFile = path.join(snowDir, 'command-usage.json');
 	}
 

@@ -12,6 +12,9 @@ import {
 	type GamePlugin,
 } from '../../utils/plugins/games/index.js';
 import GameRunner from '../components/games/GameRunner.js';
+import {logger} from '../../utils/core/logger.js';
+
+const pageLog = logger.child('ui:pages');
 
 type Props = {
 	onBack?: () => void;
@@ -45,7 +48,8 @@ export default function GamesScreen({onBack, terminalWidth}: Props) {
 					setGames(mergeGamePlugins(external));
 					setLoadingExternal(false);
 				}
-			} catch {
+			} catch (error) {
+				pageLog.debug('Failed to load external game plugins', {error});
 				if (!disposed) {
 					setLoadingExternal(false);
 				}

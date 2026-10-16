@@ -5,8 +5,8 @@ import {useI18n} from '../../i18n/index.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
 import {navigateTo} from '../../hooks/integration/useGlobalNavigation.js';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
-import {homedir} from 'os';
 import {join} from 'path';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
 import {
 	existsSync,
 	mkdirSync,
@@ -16,9 +16,12 @@ import {
 	unlinkSync,
 	statSync,
 } from 'fs';
+import {logger} from '../../utils/core/logger.js';
 
-const DRAW_DIR = join(homedir(), '.snow', 'draw');
-const EXIT_IMAGE_PATH = join(homedir(), '.snow', 'exit-image.json');
+const pageLog = logger.child('ui:pages');
+
+const DRAW_DIR = join(getGlobalSnowDir().native, 'draw');
+const EXIT_IMAGE_PATH = join(getGlobalSnowDir().native, 'exit-image.json');
 
 function ensureDrawDir(): void {
 	if (!existsSync(DRAW_DIR)) {
@@ -106,7 +109,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 							fileName: f,
 							updatedAt: data.updatedAt ?? stat.mtime.toISOString(),
 						};
-					} catch {
+					} catch (error) {
+						pageLog.debug('Failed to parse drawing metadata', {error, fileName: f});
 						return null;
 					}
 				})
@@ -116,7 +120,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 						new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
 				);
 			setDrawings(files);
-		} catch {
+		} catch (error) {
+			pageLog.debug('Failed to load drawing files list', {error});
 			setDrawings([]);
 		}
 	}, []);
@@ -133,7 +138,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 					};
 					setExitImageName(data.name);
 					setExitImageEnabled(data.enabled ?? true);
-				} catch {
+				} catch (error) {
+					pageLog.debug('Failed to parse exit image file', {error});
 					setExitImageName(undefined);
 					setExitImageEnabled(false);
 				}
@@ -187,8 +193,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 						JSON.stringify(exitData, null, 2),
 						'utf8',
 					);
-				} catch {
-					// ignore sync errors
+				} catch (error) {
+					pageLog.debug('Failed to sync exit image file', {error});
 				}
 			}
 		},
@@ -204,8 +210,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 			if (data.grid) {
 				return data.grid.map(row => [...row]);
 			}
-		} catch {
-			// ignore
+		} catch (error) {
+			pageLog.debug('Failed to load drawing file', {error, fileName});
 		}
 		return undefined;
 	}, []);
@@ -215,8 +221,8 @@ export default function PixelEditorScreen({onBack}: Props) {
 			const filePath = join(DRAW_DIR, name);
 			try {
 				unlinkSync(filePath);
-			} catch {
-				// ignore
+			} catch (error) {
+				pageLog.debug('Failed to delete drawing file', {error, fileName: name});
 			}
 		}
 		setSelectedNames(new Set());

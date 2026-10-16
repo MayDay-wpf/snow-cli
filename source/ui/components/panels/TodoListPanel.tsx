@@ -7,6 +7,9 @@ import type {TodoItem} from '../../../mcp/types/todo.types.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const compLog = logger.child('ui:components');
 
 type Props = {
 	onClose: () => void;
@@ -161,7 +164,7 @@ export default function TodoListPanel({onClose}: Props) {
 			const todoList = await todoService.getTodoList(currentSession.id);
 			setTodos(todoList?.todos ?? []);
 		} catch (error) {
-			console.error('Failed to load todo list:', error);
+			compLog.error('Failed to load todo list:', error);
 			setTodos([]);
 		} finally {
 			setLoading(false);
@@ -279,7 +282,7 @@ export default function TodoListPanel({onClose}: Props) {
 			setMarkedTodoIds(new Set());
 			setPendingDelete(false);
 		} catch (error) {
-			console.error('Failed to delete todo items:', error);
+			compLog.error('Failed to delete todo items:', error);
 		} finally {
 			setDeleting(false);
 		}

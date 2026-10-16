@@ -7,7 +7,10 @@ import {
 	isInlinePickerCommand,
 	isInlineTextInsertionCommand,
 } from '../../utils/inlineCommandTrigger.js';
+import {logger} from '../../../../../utils/core/logger.js';
 import type {HandlerContext} from '../../types.js';
+
+const commandPanelLog = logger.child('hooks:input:command-panel');
 
 export function commandPanelHandler(ctx: HandlerContext): boolean {
 	const {key, buffer, options} = ctx;
@@ -127,7 +130,10 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 							if (onCommand) {
 								Promise.resolve(onCommand(selectedCommand.name, result)).catch(
 									error => {
-										console.error('Command execution error:', error);
+										commandPanelLog.error('Command execution error:', {
+											error,
+											command: selectedCommand.name,
+										});
 									},
 								);
 							}
@@ -218,7 +224,10 @@ export function commandPanelHandler(ctx: HandlerContext): boolean {
 						// Ensure onCommand errors are caught
 						Promise.resolve(onCommand(selectedCommand.name, result)).catch(
 							error => {
-								console.error('Command execution error:', error);
+								commandPanelLog.error('Command execution error:', {
+									error,
+									command: selectedCommand.name,
+								});
 							},
 						);
 					}

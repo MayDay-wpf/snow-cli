@@ -7,6 +7,9 @@ import {resetGeminiClient} from '../../api/gemini.js';
 import {resetApiClient as resetChatClient} from '../../api/chat.js';
 import {resetApiClient as resetResponseClient} from '../../api/responses.js';
 import {clearConfigCache} from '../config/apiConfig.js';
+import {logger} from '../core/logger.js';
+
+const homeLog = logger.child('commands:home');
 
 // Home command handler - returns to welcome screen
 registerCommand('home', {
@@ -15,12 +18,12 @@ registerCommand('home', {
 		if ((global as any).__stopCodebaseIndexing) {
 			try {
 				// Show stopping message
-				console.log('\n⏸  Pausing codebase indexing...');
+				homeLog.info('Pausing codebase indexing...');
 				await (global as any).__stopCodebaseIndexing();
-				console.log('✓ Indexing paused, progress saved\n');
+				homeLog.info('Indexing paused, progress saved');
 			} catch (error) {
-				// Ignore errors during stop
-				console.error('Failed to stop codebase indexing:', error);
+				// Record error during stop
+				homeLog.error('Failed to stop codebase indexing:', {error});
 			}
 		}
 

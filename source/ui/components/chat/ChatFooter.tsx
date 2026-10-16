@@ -16,6 +16,9 @@ import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 import type {ActiveBusyKind} from './statusVerbs.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const compLog = logger.child('ui:components');
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
@@ -266,7 +269,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 
 				setTodos(todoList?.todos ?? []);
 			} catch (error) {
-				console.error('Failed to load current session TODO list:', error);
+				compLog.error('Failed to load current session TODO list:', error);
 				if (!disposed) {
 					setTodos([]);
 				}

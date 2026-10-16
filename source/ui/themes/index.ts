@@ -1,6 +1,6 @@
 import {existsSync, readFileSync} from 'fs';
-import {homedir} from 'os';
 import {join} from 'path';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
 
 export type ThemeType =
 	| 'dark'
@@ -73,7 +73,7 @@ export const defaultCustomColors: ThemeColors = {
 };
 
 function loadCustomThemeColors(): ThemeColors {
-	const configPath = join(homedir(), '.snow', 'theme.json');
+	const configPath = join(getGlobalSnowDir().native, 'theme.json');
 	if (!existsSync(configPath)) {
 		return defaultCustomColors;
 	}

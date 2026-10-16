@@ -20,6 +20,9 @@ import {
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {logger} from '../../utils/core/logger.js';
+
+const pageLog = logger.child('ui:pages');
 
 type Props = {
 	onBack: () => void;
@@ -34,7 +37,8 @@ function checkCommandExists(command: string): boolean {
 				windowsHide: true,
 			});
 			return true;
-		} catch {
+		} catch (error) {
+			pageLog.debug('where command check failed', {error, command});
 			return false;
 		}
 	}
@@ -48,7 +52,8 @@ function checkCommandExists(command: string): boolean {
 				env: process.env,
 			});
 			return true;
-		} catch {
+		} catch (error) {
+			pageLog.debug('shell command check failed', {error, command, shell});
 			// Try next shell
 		}
 	}
@@ -136,29 +141,18 @@ function openEditorForScope(
 	const editor = getSystemEditor();
 
 	if (!editor) {
-		console.error(
-			'No text editor found! Please set the EDITOR or VISUAL environment variable.',
+		const examples =
+			platform() === 'win32'
+				? '  set EDITOR=notepad\n  set EDITOR=code\n  set EDITOR=notepad++'
+				: '  export EDITOR=nano\n  export EDITOR=vim\n  export EDITOR=code';
+		const recommendations =
+			platform() === 'win32'
+				? '  Windows: Notepad++ or VS Code'
+				: '  Ubuntu/Debian: sudo apt-get install nano\n  CentOS/RHEL:   sudo yum install nano\n  macOS:         nano is usually pre-installed';
+
+		pageLog.error(
+			`No text editor found! Please set the EDITOR or VISUAL environment variable.\n\nExamples:\n${examples}\n\nOr install a text editor:\n${recommendations}`,
 		);
-		console.error('');
-		console.error('Examples:');
-		if (platform() === 'win32') {
-			console.error('  set EDITOR=notepad');
-			console.error('  set EDITOR=code');
-			console.error('  set EDITOR=notepad++');
-		} else {
-			console.error('  export EDITOR=nano');
-			console.error('  export EDITOR=vim');
-			console.error('  export EDITOR=code');
-		}
-		console.error('');
-		console.error('Or install a text editor:');
-		if (platform() === 'win32') {
-			console.error('  Windows: Notepad++ or VS Code');
-		} else {
-			console.error('  Ubuntu/Debian: sudo apt-get install nano');
-			console.error('  CentOS/RHEL:   sudo yum install nano');
-			console.error('  macOS:         nano is usually pre-installed');
-		}
 		onBack();
 		return;
 	}
@@ -190,26 +184,26 @@ function openEditorForScope(
 						scope === 'project'
 							? i18nMessages.scopeProjectLabel
 							: i18nMessages.scopeGlobalLabel;
-					console.log(i18nMessages.savedSuccess.replace('{scope}', scopeLabel));
+					pageLog.info(i18nMessages.savedSuccess.replace('{scope}', scopeLabel));
 				} else {
-					console.error(
+					pageLog.error(
 						i18nMessages.configErrors.replace(
 							'{errors}',
 							validationErrors.join(', '),
 						),
 					);
-					console.error(i18nMessages.reverted);
+					pageLog.error(i18nMessages.reverted);
 				}
-			} catch {
-				console.error(i18nMessages.invalidJson);
+			} catch (error) {
+				pageLog.error(i18nMessages.invalidJson, error);
 			}
 
 			// The draft file only exists as a scratch area for the external editor.
 			// Clean it up so it doesn't show up in the project tree.
 			try {
 				unlinkSync(configFilePath);
-			} catch {
-				// ignore cleanup errors
+			} catch (error) {
+				pageLog.debug('Failed to unlink temporary config file', {error});
 			}
 		}
 
@@ -222,7 +216,7 @@ function openEditorForScope(
 			process.stdin.setRawMode(true);
 		}
 
-		console.error('Failed to open editor:', error.message);
+		pageLog.error('Failed to open editor', error);
 		onBack();
 	});
 }

@@ -1,6 +1,9 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import type {Skill} from '../../mcp/skills.js';
+import {logger} from '../../utils/core/logger.js';
+
+const skillsPickerLog = logger.child('hooks:skills-picker');
 
 export type SkillsPickerFocus = 'search' | 'append';
 
@@ -71,7 +74,7 @@ export function useSkillsPicker(buffer: TextBuffer, triggerUpdate: () => void) {
 					setIsLoading(false);
 				})
 				.catch(error => {
-					console.error('Failed to load skills:', error);
+					skillsPickerLog.error('Failed to load skills:', {error});
 					setAllSkills([]);
 					setIsLoading(false);
 				});

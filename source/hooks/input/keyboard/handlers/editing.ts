@@ -1,6 +1,9 @@
 import {editTextWithNotepad} from '../../../../utils/ui/externalEditor.js';
 import {copyToClipboard} from '../../../../utils/core/clipboard.js';
+import {logger} from '../../../../utils/core/logger.js';
 import type {HandlerContext} from '../types.js';
+
+const editingLog = logger.child('hooks:input:editing');
 
 export function editingHandler(ctx: HandlerContext): boolean {
 	const {input, key, buffer, options, helpers} = ctx;
@@ -92,7 +95,7 @@ export function editingHandler(ctx: HandlerContext): boolean {
 				onCopyInputSuccess?.();
 			})
 			.catch(error => {
-				console.error('Failed to copy current input to clipboard:', error);
+				editingLog.error('Failed to copy current input to clipboard:', {error});
 				onCopyInputError?.(
 					error instanceof Error ? error.message : 'Unknown error',
 				);

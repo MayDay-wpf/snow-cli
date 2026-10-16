@@ -6,6 +6,9 @@ import path from 'path';
 import {translations} from '../../i18n/translations.js';
 import type {TranslationKeys} from '../../i18n/types.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {logger} from './logger.js';
+
+const doctorLog = logger.child('cli:doctor');
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -174,7 +177,8 @@ function countJsonFiles(directoryPath: string): number {
 		return fs
 			.readdirSync(directoryPath)
 			.filter(fileName => fileName.endsWith('.json')).length;
-	} catch {
+	} catch (error) {
+		doctorLog.debug('Failed to count profiles in directory:', {error, directoryPath});
 		return 0;
 	}
 }
@@ -205,7 +209,9 @@ function getActiveProfileName(snowDir: string): string {
 				fs.readFileSync(legacyActiveProfileFile, 'utf8').trim() || 'default'
 			);
 		}
-	} catch {}
+	} catch (error) {
+		doctorLog.debug('Failed to read legacy active-profile.txt:', {error});
+	}
 
 	return 'default';
 }
@@ -272,7 +278,8 @@ function getAliveSseDaemonCount(snowDir: string): {
 				stale++;
 			}
 		}
-	} catch {
+	} catch (error) {
+		doctorLog.debug('Failed to count running daemons in daemon registry:', {error});
 		return {total, alive, stale};
 	}
 

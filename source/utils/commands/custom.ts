@@ -4,10 +4,13 @@ import {
 	type CommandResult,
 	getAvailableCommands,
 } from '../execution/commandExecutor.js';
-import {homedir} from 'os';
 import {dirname, join} from 'path';
 import {readdir, readFile, writeFile, mkdir, unlink} from 'fs/promises';
 import {existsSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const customCmdLog = logger.child('commands:custom');
 
 export type CommandLocation = 'global' | 'project';
 
@@ -203,7 +206,10 @@ async function loadCustomCommandFromFile(
 
 		return cmd;
 	} catch (error) {
-		console.error(`Failed to load custom command: ${entry.filePath}`, error);
+		customCmdLog.error(`Failed to load custom command: ${entry.filePath}`, {
+			error,
+			filePath: entry.filePath,
+		});
 		return null;
 	}
 }
@@ -241,7 +247,7 @@ function getCustomCommandsDir(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'commands');
+		return join(getGlobalSnowDir().native, 'commands');
 	}
 
 	const root = projectRoot || process.cwd();
