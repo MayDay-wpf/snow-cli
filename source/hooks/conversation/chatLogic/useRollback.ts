@@ -33,6 +33,9 @@ import {
 } from '../core/subAgentMessageHandler.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ChatMessage} from '../../../api/chat.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic:useRollback');
 
 /**
  * Convert a live messages array index to a snapshot-compatible index.
@@ -155,7 +158,7 @@ export function useRollback(props: UseChatLogicProps) {
 			try {
 				rollbackNotebooks(currentSession.id, sIdx);
 			} catch (error) {
-				console.error('Failed to rollback notebooks:', error);
+				log.error('Failed to rollback notebooks:', error);
 			}
 		}
 
@@ -165,7 +168,7 @@ export function useRollback(props: UseChatLogicProps) {
 					getTodoService().restoreTodoList(currentSession.id, todoList),
 				);
 			} catch (error) {
-				console.error('Failed to rollback TODO list:', error);
+				log.error('Failed to rollback TODO list:', error);
 			}
 		}
 
@@ -174,7 +177,7 @@ export function useRollback(props: UseChatLogicProps) {
 			try {
 				await rollbackTeamState(currentSession.id, sIdx);
 			} catch (error) {
-				console.error('Failed to rollback team state:', error);
+				log.error('Failed to rollback team state:', error);
 			}
 		}
 		clearAllTeammateStreamEntries();
@@ -329,7 +332,7 @@ export function useRollback(props: UseChatLogicProps) {
 				originalSessionId,
 			);
 			if (!originalSession) {
-				console.error('Failed to load original session for rollback');
+				log.error('Failed to load original session for rollback');
 				return false;
 			}
 
@@ -360,25 +363,25 @@ export function useRollback(props: UseChatLogicProps) {
 						compressedSessionId,
 					);
 					if (!deleted) {
-						console.warn(
+						log.warn(
 							`Failed to delete compressed session after rollback: ${compressedSessionId}`,
 						);
 					}
 				} catch (cleanupError) {
-					console.error(
+					log.error(
 						'Failed to clean up compressed session after rollback:',
 						cleanupError,
 					);
 				}
 			}
 
-			console.log(
+			log.info(
 				`Switched to original session (before compression) with ${originalSession.messageCount} messages`,
 			);
 
 			return true;
 		} catch (error) {
-			console.error('Failed to switch to original session:', error);
+			log.error('Failed to switch to original session:', error);
 			return false;
 		}
 	};
@@ -541,8 +544,8 @@ export function useRollback(props: UseChatLogicProps) {
 			let detail: any = undefined;
 			try {
 				detail = await response.json();
-			} catch {
-				// ignore
+			} catch (parseError) {
+				log.debug('Failed to parse rollback response error detail:', parseError);
 			}
 			throw new Error(
 				`Rollback request failed: ${response.status} ${response.statusText}` +

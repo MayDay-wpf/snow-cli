@@ -25,6 +25,9 @@ import {
 	shouldNotifyAgentTurnCompletion,
 } from '../../../utils/platform/notification.js';
 import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic:useMessageProcessing');
 
 interface MessageTarget {
 	instanceId: string;
@@ -258,6 +261,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			} catch (error) {
 				const errorMsg =
 					error instanceof Error ? error.message : 'Unknown error';
+				log.error('Auto-compression failed:', error);
 				setCompressionError(errorMsg);
 				props.onCompressionStatus?.({
 					step: 'failed',
@@ -359,7 +363,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						: continuationPrompt;
 				}
 			} catch (err) {
-				console.error('[goal] consumePendingContinuation failed:', err);
+				log.error('[goal] consumePendingContinuation failed:', err);
 			}
 
 			const saveMessageWithOriginal = async (msg: any) => {
@@ -389,12 +393,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 						if (delta > 0) {
 							lastSeenTotalTokens = usage.total_tokens;
 							void goalManager.accrueTokens(delta).catch(err => {
-								console.error('[goal] accrueTokens failed:', err);
+								log.error('[goal] accrueTokens failed:', err);
 							});
 						}
 					}
 				} catch (err) {
-					console.error('[goal] wrappedSetContextUsage failed:', err);
+					log.error('[goal] wrappedSetContextUsage failed:', err);
 				}
 			};
 
@@ -442,6 +446,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
+				log.error('Conversation turn failed:', error);
 				const finalMessage: Message = {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
@@ -449,6 +454,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
+			} else {
+				log.debug('Conversation turn interrupted or aborted:', error);
 			}
 			props.onThinkingStatus?.(null);
 		} finally {
@@ -518,7 +525,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								clearSavedMessages();
 							}
 						} catch (error) {
-							console.error(
+							log.error(
 								'Failed to clean up incomplete conversation:',
 								error,
 							);
@@ -577,7 +584,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								const ref = processMessageRef.current;
 								if (ref) {
 									void ref('', undefined, false, true).catch(err => {
-										console.error('[goal] auto-continuation failed:', err);
+										log.error('[goal] auto-continuation failed:', err);
 									});
 								}
 							}, 0);
@@ -591,14 +598,14 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								const ref = processMessageRef.current;
 								if (ref) {
 									void ref('', undefined, false, true).catch(err => {
-										console.error('[goal] budget-limit wrap-up failed:', err);
+										log.error('[goal] budget-limit wrap-up failed:', err);
 									});
 								}
 							}, 0);
 						}
 					}
 				} catch (err) {
-					console.error('[goal] continuation scheduling failed:', err);
+					log.error('[goal] continuation scheduling failed:', err);
 				} finally {
 					if (
 						shouldNotifyAgentTurnCompletion({
@@ -755,7 +762,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				pending.context,
 			);
 		} catch (error) {
-			console.error('Failed to execute onUserMessage hook:', error);
+			log.error('Failed to execute onUserMessage hook:', error);
 		}
 
 		// 先检查纯 Bash 模式（双感叹号）
@@ -814,12 +821,12 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				try {
 					await saveMessage(bashOutputMessage);
 				} catch (error) {
-					console.error('Failed to save pure bash output message:', error);
+					log.error('Failed to save pure bash output message:', error);
 				}
 				return;
 			}
 		} catch (error) {
-			console.error('Failed to process pure bash commands:', error);
+			log.error('Failed to process pure bash commands:', error);
 		}
 
 		// 再检查命令注入模式（单感叹号）
@@ -843,7 +850,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 
 			message = result.processedMessage;
 		} catch (error) {
-			console.error('Failed to process bash commands:', error);
+			log.error('Failed to process bash commands:', error);
 		}
 
 		// typedMessage = bubble text; message may be hook-enriched for the model.
@@ -913,7 +920,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 				pending.context,
 			);
 		} catch (error) {
-			console.error('Failed to execute onUserMessage hook:', error);
+			log.error('Failed to execute onUserMessage hook:', error);
 		}
 
 		const {cleanContent, validFiles} = await parseAndValidateFileReferences(
@@ -1010,6 +1017,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
+				log.error('Pending messages processing failed:', error);
 				const finalMessage: Message = {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
@@ -1017,6 +1025,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
+			} else {
+				log.debug('Pending messages processing interrupted or aborted:', error);
 			}
 			props.onThinkingStatus?.(null);
 		} finally {
@@ -1064,7 +1074,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 								clearSavedMessages();
 							}
 						} catch (error) {
-							console.error(
+							log.error(
 								'Failed to clean up incomplete conversation:',
 								error,
 							);

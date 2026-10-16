@@ -3,6 +3,9 @@ import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
 import {unifiedHooksExecutor} from '../../../utils/execution/unifiedHooksExecutor.js';
 import {interpretHookResult} from '../../../utils/execution/hookResultInterpreter.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:onStopHookHandler');
 
 export type OnStopHookOptions = {
 	conversationMessages: ChatMessage[];
@@ -63,7 +66,7 @@ export async function handleOnStopHooks(
 
 		return {shouldContinue: interpreted.shouldContinueConversation || false};
 	} catch (error) {
-		console.error('onStop hook execution failed:', error);
+		log.error('onStop hook execution failed:', error);
 		return {shouldContinue: false};
 	}
 }

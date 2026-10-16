@@ -6,6 +6,9 @@ import {
 	handleAutoCompression,
 	type AutoCompressOptions,
 } from './autoCompressHandler.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:pendingMessagesHandler');
 
 export type PendingMessagesOptions = {
 	getPendingMessages?: () => Array<{
@@ -226,7 +229,7 @@ export async function handlePendingMessages(
 			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
-		console.error('Failed to save pending user message:', error);
+		log.error('Failed to save pending user message:', error);
 	}
 
 	return {

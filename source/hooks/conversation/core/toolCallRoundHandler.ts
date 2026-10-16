@@ -24,6 +24,9 @@ import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:toolCallRoundHandler');
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -275,7 +278,7 @@ export async function handleToolCallRound(ctx: {
 			try {
 				await saveMessage(abortedResult);
 			} catch (error) {
-				console.error('Failed to save aborted tool result:', error);
+				log.error('Failed to save aborted tool result:', error);
 			}
 		}
 		freeEncoder();
@@ -288,7 +291,7 @@ export async function handleToolCallRound(ctx: {
 			const {hookFailed, ...resultWithoutFlag} = result;
 			conversationMessages.push(resultWithoutFlag);
 			saveMessage(resultWithoutFlag).catch(error => {
-				console.error('Failed to save tool result:', error);
+				log.error('Failed to save tool result:', error);
 			});
 		}
 		setMessages(prev => [
@@ -326,8 +329,8 @@ export async function handleToolCallRound(ctx: {
 						activeTools.push(tool);
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (e) {
+				log.debug('Failed to parse tool_search arguments:', e);
 			}
 		}
 	}
@@ -342,7 +345,7 @@ export async function handleToolCallRound(ctx: {
 		try {
 			await saveMessage(resultToSave as any);
 		} catch (error) {
-			console.error('Failed to save tool result before compression:', error);
+			log.error('Failed to save tool result before compression:', error);
 		}
 	}
 	options.onBuddyProgress?.({
@@ -429,7 +432,7 @@ export async function handleToolCallRound(ctx: {
 				try {
 					await saveMessage({role: 'user', content: spawnedContent});
 				} catch (error) {
-					console.error('Failed to save spawned agent result:', error);
+					log.error('Failed to save spawned agent result:', error);
 				}
 
 				const uiMessage: Message = {
@@ -452,7 +455,7 @@ export async function handleToolCallRound(ctx: {
 			}
 		}
 	} catch (error) {
-		console.error('Failed to process spawned agent results:', error);
+		log.error('Failed to process spawned agent results:', error);
 	}
 
 	const pendingResult = await handlePendingMessages({

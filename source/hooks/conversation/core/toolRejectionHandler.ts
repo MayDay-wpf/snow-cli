@@ -2,6 +2,9 @@ import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
 import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:toolRejectionHandler');
 
 export type ToolRejectionResult = {
 	shouldContinue: boolean;
@@ -56,7 +59,7 @@ export async function handleToolRejection(
 		};
 		conversationMessages.push(rejectionMessage);
 		saveMessage(rejectionMessage).catch(error => {
-			console.error('Failed to save tool rejection message:', error);
+			log.error('Failed to save tool rejection message:', error);
 		});
 
 		let statusText = '';
@@ -87,7 +90,7 @@ export async function handleToolRejection(
 		};
 		conversationMessages.push(rejectionMessage);
 		saveMessage(rejectionMessage).catch(error => {
-			console.error(
+			log.error(
 				'Failed to save auto-approved tool rejection message:',
 				error,
 			);

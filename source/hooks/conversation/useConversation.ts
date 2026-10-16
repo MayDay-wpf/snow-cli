@@ -30,6 +30,9 @@ export type {
 	ConversationHandlerOptions,
 	UserQuestionResult,
 } from './core/conversationTypes.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('conversation:conversation');
 
 const BUDDY_IN_PROGRESS_COOLDOWN_MS = 45_000;
 let buddyInProgressActive = false;
@@ -263,7 +266,7 @@ async function runConversationWithTools(
 				};
 				conversationMessages.push(assistantMessage);
 				saveMessage(assistantMessage).catch(error => {
-					console.error('Failed to save assistant message:', error);
+					log.error('Failed to save assistant message', error);
 				});
 			}
 
@@ -298,8 +301,9 @@ async function runConversationWithTools(
 
 		try {
 			await connectionManager.notifyMessageProcessingCompleted();
-		} catch {
+		} catch (error) {
 			// Ignore notification errors
+			log.debug('Failed to notify message processing completed', {error});
 		}
 
 		try {
@@ -307,8 +311,9 @@ async function runConversationWithTools(
 				'../../utils/codebase/conversationContext.js'
 			);
 			clearConversationContext();
-		} catch {
+		} catch (error) {
 			// Ignore errors during cleanup
+			log.debug('Failed to clear conversation context during cleanup', {error});
 		}
 
 		freeEncoder();
@@ -340,7 +345,7 @@ async function triggerBuddyContextReaction(
 			companionReaction(reply);
 		}
 	} catch (error) {
-		console.error('Failed to generate buddy context reaction:', error);
+		log.error('Failed to generate buddy context reaction', error);
 	}
 }
 
@@ -389,7 +394,7 @@ async function triggerBuddyInProgressReaction(
 			companionReaction(reply);
 		}
 	} catch (error) {
-		console.error('Failed to generate buddy in-progress reaction:', error);
+		log.error('Failed to generate buddy in-progress reaction', error);
 	} finally {
 		buddyInProgressActive = false;
 	}

@@ -12,6 +12,9 @@ import {buildEditorContextContent} from './editorContextBuilder.js';
 import {cleanOrphanedToolCalls} from '../utils/messageCleanup.js';
 import type {ConversationHandlerOptions} from './conversationTypes.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:conversationSetup');
 
 export type PreparedConversationSetup = {
 	conversationMessages: ChatMessage[];
@@ -103,7 +106,7 @@ export async function appendUserMessageAndSyncContext(options: {
 			images: processedVisionContent.images,
 		});
 	} catch (error) {
-		console.error('Failed to save user message:', error);
+		log.error('Failed to save user message:', error);
 	}
 
 	try {
@@ -118,6 +121,6 @@ export async function appendUserMessageAndSyncContext(options: {
 			setConversationContext(updatedSession.id, snapshotMessageIndex);
 		}
 	} catch (error) {
-		console.error('Failed to set conversation context:', error);
+		log.error('Failed to set conversation context:', error);
 	}
 }

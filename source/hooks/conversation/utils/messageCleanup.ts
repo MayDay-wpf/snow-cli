@@ -1,4 +1,7 @@
 import type {ChatMessage} from '../../../api/chat.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:messageCleanup');
 
 /**
  * LAYER 3 PROTECTION: Clean orphaned tool_calls from conversation messages
@@ -45,18 +48,18 @@ export function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 			);
 
 			if (!hasAllResults) {
-				// const orphanedIds = msg.tool_calls
-				// 	.filter(tc => !toolResultIds.has(tc.id))
-				// 	.map(tc => tc.id);
+				const orphanedIds = msg.tool_calls
+					.filter(tc => !toolResultIds.has(tc.id))
+					.map(tc => tc.id);
 
-				// console.warn(
-				// 	'[cleanOrphanedToolCalls] Removing assistant message with orphaned tool_calls',
-				// 	{
-				// 		messageIndex: i,
-				// 		toolCallIds: msg.tool_calls.map(tc => tc.id),
-				// 		orphanedIds,
-				// 	},
-				// );
+				log.warn(
+					'[cleanOrphanedToolCalls] Removing assistant message with orphaned tool_calls',
+					{
+						messageIndex: i,
+						toolCallIds: msg.tool_calls.map(tc => tc.id),
+						orphanedIds,
+					},
+				);
 
 				indicesToRemove.push(i);
 			}
@@ -65,10 +68,10 @@ export function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 		// Check for orphaned tool result messages
 		if (msg.role === 'tool' && msg.tool_call_id) {
 			if (!declaredToolCallIds.has(msg.tool_call_id)) {
-				// console.warn('[cleanOrphanedToolCalls] Removing orphaned tool result', {
-				// 	messageIndex: i,
-				// 	toolCallId: msg.tool_call_id,
-				// });
+				log.warn('[cleanOrphanedToolCalls] Removing orphaned tool result', {
+					messageIndex: i,
+					toolCallId: msg.tool_call_id,
+				});
 
 				indicesToRemove.push(i);
 			}
@@ -81,8 +84,8 @@ export function cleanOrphanedToolCalls(messages: ChatMessage[]): void {
 	}
 
 	if (indicesToRemove.length > 0) {
-		// console.log(
-		// 	`[cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from conversation`,
-		// );
+		log.info(
+			`[cleanOrphanedToolCalls] Removed ${indicesToRemove.length} orphaned messages from conversation`,
+		);
 	}
 }

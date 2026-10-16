@@ -9,6 +9,9 @@ import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapsho
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
 import {reindexCodebase} from '../../../utils/codebase/reindexCodebase.js';
 import {navigateTo} from '../../integration/useGlobalNavigation.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic:useChatHandlers');
 
 interface UseChatHandlersDeps {
 	processMessage: (
@@ -107,7 +110,7 @@ export function useChatHandlers(
 				snapshotState.setSnapshotFileCount(counts);
 
 				if (sessionManager.lastLoadHookWarning) {
-					console.log(sessionManager.lastLoadHookWarning);
+					log.info(sessionManager.lastLoadHookWarning);
 				}
 			} else {
 				if (sessionManager.lastLoadHookError) {
@@ -126,7 +129,7 @@ export function useChatHandlers(
 				}
 			}
 		} catch (error) {
-			console.error('Failed to load session:', error);
+			log.error('Failed to load session:', error);
 		} finally {
 			setIsResumingSession?.(false);
 		}
