@@ -222,6 +222,111 @@ function extractHookProvidedAnswer(
 }
 
 /**
+ * Collect plain text from an arbitrary tool result payload.
+ * Mirrors the shapes produced by built-in services and external MCP servers.
+ */
+function collectToolResultText(raw: unknown, depth = 0): string {
+	if (raw === null || raw === undefined || depth > 4) {
+		return '';
+	}
+	if (typeof raw === 'string') {
+		return raw;
+	}
+	if (Array.isArray(raw)) {
+		return raw
+			.map(item => collectToolResultText(item, depth + 1))
+			.filter(Boolean)
+			.join('\n');
+	}
+	if (typeof raw === 'object') {
+		const object = raw as Record<string, unknown>;
+		if (object['__toolResultContent'] !== undefined) {
+			return collectToolResultText(object['__toolResultContent'], depth + 1);
+		}
+		if (Array.isArray(object['content'])) {
+			return collectToolResultText(object['content'], depth + 1);
+		}
+		if (typeof object['text'] === 'string') {
+			return object['text'];
+		}
+		if (typeof object['error'] === 'string') {
+			return object['error'];
+		}
+		if (typeof object['message'] === 'string') {
+			return object['message'];
+		}
+	}
+	return '';
+}
+
+/**
+ * Decide whether a tool result represents a failure worth repairing.
+ * Explicit `isError` / `success: false` flags win; otherwise the
+ * `Error:` convention used across built-in tools is checked.
+ */
+function detectToolResultFailure(raw: unknown): {
+	failed: boolean;
+	text: string;
+} {
+	let inner: unknown = raw;
+	if (
+		raw &&
+		typeof raw === 'object' &&
+		(raw as Record<string, unknown>)['__toolResultContent'] !== undefined
+	) {
+		inner = (raw as Record<string, unknown>)['__toolResultContent'];
+	}
+
+	if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+		const object = inner as Record<string, unknown>;
+		if (object['isError'] === true || object['success'] === false) {
+			return {failed: true, text: collectToolResultText(inner)};
+		}
+	}
+
+	const text = collectToolResultText(raw).trim();
+	if (/^error\s*[:：]/i.test(text)) {
+		return {failed: true, text};
+	}
+
+	return {failed: false, text};
+}
+
+/**
+ * Append a short correction note to a tool result without changing its shape.
+ */
+function appendToolResultNote(raw: unknown, note: string): unknown {
+	if (typeof raw === 'string') {
+		return `${raw}\n\n${note}`;
+	}
+	if (Array.isArray(raw)) {
+		return [...raw, {type: 'text', text: note}];
+	}
+	if (raw && typeof raw === 'object') {
+		const object = raw as Record<string, unknown>;
+		if (object['__toolResultContent'] !== undefined) {
+			return {
+				...object,
+				__toolResultContent: appendToolResultNote(
+					object['__toolResultContent'],
+					note,
+				),
+			};
+		}
+		if (Array.isArray(object['content'])) {
+			return {
+				...object,
+				content: [...object['content'], {type: 'text', text: note}],
+			};
+		}
+		if (typeof object['text'] === 'string') {
+			return {...object, text: `${object['text']}\n\n${note}`};
+		}
+	}
+	return raw;
+}
+
+/**
  * Execute a single tool call and return the result
  */
 export async function executeToolCall(
@@ -272,8 +377,12 @@ export async function executeToolCall(
 			}
 		}
 
+		// Arguments actually executed. Tool-call correction may replace them
+		// with a repaired object, and downstream hooks must see the truth.
+		let executedArguments: Record<string, any> | null = null;
 		try {
 			const args = safeParseToolArguments(toolCall.function.arguments);
+			executedArguments = args;
 			recordToolContent(
 				telemetry.span,
 				'tool.input',
@@ -515,13 +624,239 @@ export async function executeToolCall(
 					runningSubAgentTracker.unregister(toolCall.id);
 				}
 			} else {
-				// Regular tool execution
-				const toolResult = await executeMCPTool(
-					toolCall.function.name,
-					args,
-					abortSignal,
-					onTokenUpdate,
-				);
+				// Regular tool execution, with optional argument repair on failure.
+				let correctionModule:
+					| typeof import('./toolCorrection.js')
+					| null = null;
+				let correctionAllowed = false;
+				try {
+					correctionModule = await import('./toolCorrection.js');
+					correctionAllowed =
+						correctionModule.isToolCorrectionEnabledForTool(
+							toolCall.function.name,
+						) && !abortSignal?.aborted;
+				} catch (error) {
+					console.warn('Failed to load tool correction module:', error);
+				}
+
+				const maxRepairs = correctionModule
+					? correctionModule.MAX_TOOL_CORRECTION_ATTEMPTS
+					: 0;
+				const repairAttempts: Array<{
+					argumentsJson: string;
+					error: string;
+				}> = [];
+				let pendingRepairArguments: string | null = null;
+				let corrected = false;
+				let correctionNoticeActive = false;
+				let lastRepairReasoning = '';
+				let currentArguments: Record<string, any> = args;
+				let toolResult: any = undefined;
+				let lastThrownError: unknown = null;
+
+				for (let executionIndex = 0; ; executionIndex += 1) {
+					lastThrownError = null;
+					try {
+						toolResult = await executeMCPTool(
+							toolCall.function.name,
+							currentArguments,
+							abortSignal,
+							onTokenUpdate,
+						);
+					} catch (error) {
+						lastThrownError = error;
+						toolResult = undefined;
+					}
+
+					const failure = lastThrownError
+						? {
+								failed: true,
+								text: `Error: ${
+									lastThrownError instanceof Error
+										? lastThrownError.message
+										: String(lastThrownError)
+								}`,
+						  }
+						: detectToolResultFailure(toolResult);
+
+					if (!failure.failed) {
+						break;
+					}
+
+					// Record the repaired arguments that just failed before asking
+					// the repair model for the next candidate.
+					if (pendingRepairArguments) {
+						repairAttempts.push({
+							argumentsJson: pendingRepairArguments,
+							error: failure.text,
+						});
+						pendingRepairArguments = null;
+					}
+
+					if (
+						!correctionAllowed ||
+						!correctionModule ||
+						executionIndex >= maxRepairs ||
+						abortSignal?.aborted
+					) {
+						break;
+					}
+
+					const repairAttempt = executionIndex + 1;
+					correctionNoticeActive = true;
+					correctionModule.emitToolCorrectionStatus({
+						phase: 'correcting',
+						toolName: toolCall.function.name,
+						attempt: repairAttempt,
+						maxAttempts: maxRepairs,
+					});
+
+					const metadata = await correctionModule.resolveToolMetadata(
+						toolCall.function.name,
+					);
+					const decision = await correctionModule.requestToolCorrection({
+						toolName: toolCall.function.name,
+						toolDescription: metadata.description,
+						inputSchemaJson: metadata.inputSchemaJson,
+						originalArgumentsJson: toolCall.function.arguments,
+						failure: failure.text,
+						attempts: repairAttempts,
+						attempt: repairAttempt,
+						abortSignal,
+					});
+
+					if (!decision || !decision.retry) {
+						lastRepairReasoning = decision?.reasoning ?? '';
+						if (abortSignal?.aborted) {
+							// Per-turn interruption: clear the live notice instead of
+							// leaving a spinner behind in the status line.
+							correctionModule.emitToolCorrectionStatus(null);
+						}
+						break;
+					}
+
+					let repairedArguments: Record<string, any>;
+					try {
+						const parsedArguments = JSON.parse(decision.argumentsJson);
+						if (
+							!parsedArguments ||
+							typeof parsedArguments !== 'object' ||
+							Array.isArray(parsedArguments)
+						) {
+							break;
+						}
+						repairedArguments = parsedArguments;
+					} catch {
+						break;
+					}
+
+					// terminal-execute: a repaired command must still pass the
+					// sensitive-command check, otherwise automatic correction would
+					// bypass the confirmation gate.
+					if (toolCall.function.name === 'terminal-execute') {
+						try {
+							const {isSensitiveCommand} = await import(
+								'./sensitiveCommandManager.js'
+							);
+							const sensitiveCheck = isSensitiveCommand(
+								String(repairedArguments['command'] ?? ''),
+							);
+							if (sensitiveCheck.isSensitive) {
+								lastRepairReasoning =
+									'repaired command requires confirmation';
+								break;
+							}
+						} catch {
+							lastRepairReasoning =
+								'unable to verify repaired command safety';
+							break;
+						}
+					}
+
+					pendingRepairArguments = decision.argumentsJson;
+					lastRepairReasoning = decision.reasoning;
+					currentArguments = repairedArguments;
+					executedArguments = repairedArguments;
+					corrected = true;
+
+					correctionModule.emitToolCorrectionStatus({
+						phase: 'retrying',
+						toolName: toolCall.function.name,
+						attempt: repairAttempt,
+						maxAttempts: maxRepairs,
+						reasoning: decision.reasoning,
+					});
+				}
+
+				if (lastThrownError) {
+					if (corrected && correctionModule) {
+						correctionModule.emitToolCorrectionStatus({
+							phase: 'exhausted',
+							toolName: toolCall.function.name,
+							attempt: Math.max(1, repairAttempts.length),
+							maxAttempts: maxRepairs,
+							reasoning: lastRepairReasoning,
+						});
+					} else if (correctionModule && correctionNoticeActive) {
+						if (abortSignal?.aborted) {
+							correctionModule.emitToolCorrectionStatus(null);
+						} else {
+							correctionModule.emitToolCorrectionStatus({
+								phase: 'exhausted',
+								toolName: toolCall.function.name,
+								attempt: 1,
+								maxAttempts: maxRepairs,
+								reasoning: lastRepairReasoning,
+							});
+						}
+					}
+					throw lastThrownError;
+				}
+
+				if (corrected && correctionModule) {
+					const finalFailure = detectToolResultFailure(toolResult);
+					if (!finalFailure.failed) {
+						correctionModule.emitToolCorrectionStatus({
+							phase: 'success',
+							toolName: toolCall.function.name,
+							attempt: Math.max(1, repairAttempts.length + 1),
+							maxAttempts: maxRepairs,
+							reasoning: lastRepairReasoning,
+						});
+						toolResult = appendToolResultNote(
+							toolResult,
+							`[Tool Correction] This result was produced by a corrected retry after the original invocation failed. Correction note: ${
+								lastRepairReasoning || 'arguments repaired'
+							}\nContinue with this result and do not repeat the original failing call.`,
+						);
+					} else {
+						correctionModule.emitToolCorrectionStatus({
+							phase: 'exhausted',
+							toolName: toolCall.function.name,
+							attempt: Math.max(1, repairAttempts.length),
+							maxAttempts: maxRepairs,
+							reasoning: lastRepairReasoning,
+						});
+					}
+				}
+
+				if (correctionModule && correctionNoticeActive && !corrected) {
+					// The repair request ran but no repaired execution was possible
+					// (unrepairable failure, invalid arguments, blocked retry...).
+					if (abortSignal?.aborted) {
+						correctionModule.emitToolCorrectionStatus(null);
+					} else {
+						correctionModule.emitToolCorrectionStatus({
+							phase: 'exhausted',
+							toolName: toolCall.function.name,
+							attempt: 1,
+							maxAttempts: maxRepairs,
+							reasoning: lastRepairReasoning,
+						});
+					}
+				} else if (abortSignal?.aborted && correctionModule) {
+					correctionModule.emitToolCorrectionStatus(null);
+				}
 
 				// Diff metadata is captured before token truncation inside executeMCPTool
 				const {extractFilesystemEditDiffFromRawResult} = await import(
@@ -549,9 +884,9 @@ export async function executeToolCall(
 					if (
 						editDiffData &&
 						!editDiffData['filename'] &&
-						typeof args['filePath'] === 'string'
+						typeof currentArguments['filePath'] === 'string'
 					) {
-						editDiffData['filename'] = args['filePath'];
+						editDiffData['filename'] = currentArguments['filePath'];
 					}
 				}
 
@@ -665,7 +1000,9 @@ export async function executeToolCall(
 					'afterToolCall',
 					{
 						toolName: toolCall.function.name,
-						args: safeParseToolArguments(toolCall.function.arguments),
+						args:
+							executedArguments ??
+							safeParseToolArguments(toolCall.function.arguments),
 						result,
 						error: executionError,
 					},

@@ -996,6 +996,8 @@ export const en: TranslationKeys = {
 				'Toggle vulnerability hunting mode for security-focused code analysis',
 			autoFormat:
 				'Auto-formatting switch after file editing. Usage: /auto-format [on|off|status]',
+			toolCorrection:
+				'Toggle tool-call correction: the basic model repairs failed tool arguments and the call is retried. Usage: /tool-correction [on|off|status]',
 			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
 			buddy:
 				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
@@ -1057,6 +1059,13 @@ export const en: TranslationKeys = {
 				disabled: 'Auto-format: Disabled for this project',
 				statusEnabled: 'Auto-format: Enabled for this project',
 				statusDisabled: 'Auto-format: Disabled for this project',
+			},
+			// Tool-call correction command messages
+			toolCorrection: {
+				enabled: 'Tool correction: Enabled',
+				disabled: 'Tool correction: Disabled',
+				statusEnabled: 'Tool correction: Enabled',
+				statusDisabled: 'Tool correction: Disabled',
 			},
 			// Simple mode command messages
 			simpleMode: {
@@ -1842,6 +1851,16 @@ export const en: TranslationKeys = {
 		compressionSuccess: 'Compression complete',
 		compressionFailed: '✗ Compression failed: {error}',
 		compressionBlockToast: '✵ Compressing context, press ESC to abort...',
+		// Tool-call correction status line
+		toolCorrectionCorrecting:
+			'✎ Tool correction · {tool} · asking the basic model to repair arguments ({attempt}/{max})',
+		toolCorrectionRetrying:
+			'✎ Tool correction · retrying {tool} with repaired arguments ({attempt}/{max})',
+		toolCorrectionSuccess:
+			'✓ Tool correction · {tool} succeeded after repair ({attempt}/{max})',
+		toolCorrectionExhausted:
+			'✗ Tool correction · {tool} still failed after repair attempts ({attempt}/{max})',
+		toolCorrectionShort: '✎ Fix {tool}',
 		// Review
 		reviewStartTitle: 'Preparing to start code review',
 		reviewSelectedSummary:

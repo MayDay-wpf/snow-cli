@@ -55,6 +55,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	reindex: '[-force]',
 	codebase: '[on|off|status]',
 	'auto-format': '[on|off|status]',
+	'tool-correction': '[on|off|status]',
 	buddy: '[status|hatch|pet|rename|set|say|profile|mute|unmute|reset]',
 	simple: '[on|off|status]',
 	'add-dir': '[path]',
@@ -84,6 +85,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	codebase: ['on', 'off', 'status'],
 	'auto-format': ['on', 'off', 'status'],
+	'tool-correction': ['on', 'off', 'status'],
 	buddy: [
 		'status',
 		'hatch',
@@ -381,6 +383,12 @@ export function useCommandPanel(
 				description:
 					t.commandPanel.commands.autoFormat ||
 					'Toggle MCP file auto-formatting. Usage: /auto-format [on|off|status]',
+			},
+			{
+				name: 'tool-correction',
+				description:
+					t.commandPanel.commands.toolCorrection ||
+					'Toggle tool-call correction (basic model repairs failed tool arguments). Usage: /tool-correction [on|off|status]',
 			},
 			{
 				name: 'simple',

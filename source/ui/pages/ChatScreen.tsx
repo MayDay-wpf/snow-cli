@@ -836,6 +836,7 @@ export default function ChatScreen({
 					elapsedSeconds={streamingState.elapsedSeconds}
 					currentModel={streamingState.currentModel}
 					compressBlockToast={streamingState.compressBlockToast}
+					toolCorrectionStatus={streamingState.toolCorrectionStatus}
 					busyKind={busyKind}
 					busyElapsedSeconds={busyElapsedSeconds}
 				/>

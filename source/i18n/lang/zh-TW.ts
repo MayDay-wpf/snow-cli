@@ -935,6 +935,8 @@ export const zhTW: TranslationKeys = {
 			vulnerabilityHunting: '切換漏洞檢查模式，進行安全性代碼分析',
 			autoFormat:
 				'文件編輯後自動格式化開關。用法: /auto-format [on|off|status]',
+			toolCorrection:
+				'工具呼叫糾錯開關：呼叫失敗時由基礎模型修復參數並重試。用法: /tool-correction [on|off|status]',
 			simple: '切換主題簡易模式。用法: /simple [on|off|status]',
 			buddy:
 				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
@@ -992,6 +994,13 @@ export const zhTW: TranslationKeys = {
 				disabled: '自動格式化: 已停用',
 				statusEnabled: '自動格式化: 已啟用',
 				statusDisabled: '自動格式化: 已停用',
+			},
+			// 工具呼叫糾錯命令訊息
+			toolCorrection: {
+				enabled: '工具呼叫糾錯: 已啟用',
+				disabled: '工具呼叫糾錯: 已停用',
+				statusEnabled: '工具呼叫糾錯: 已啟用',
+				statusDisabled: '工具呼叫糾錯: 已停用',
 			},
 			// 簡易模式命令訊息
 			simpleMode: {
@@ -1739,6 +1748,16 @@ export const zhTW: TranslationKeys = {
 		compressionSuccess: '對話歷史壓縮成功',
 		compressionFailed: '對話歷史壓縮失敗: {error}',
 		compressionBlockToast: '✵ 正在壓縮上下文，可按 ESC 中止...',
+		// 工具呼叫糾錯狀態行
+		toolCorrectionCorrecting:
+			'✎ 工具糾錯 · {tool} · 正在讓基礎模型修復參數 ({attempt}/{max})',
+		toolCorrectionRetrying:
+			'✎ 工具糾錯 · 正在用修復後的參數重試 {tool} ({attempt}/{max})',
+		toolCorrectionSuccess:
+			'✓ 工具糾錯 · {tool} 已在參數修復後成功 ({attempt}/{max})',
+		toolCorrectionExhausted:
+			'✗ 工具糾錯 · {tool} 多次修復後仍然失敗 ({attempt}/{max})',
+		toolCorrectionShort: '✎ 修復 {tool}',
 		reviewStartTitle: '準備開始程式碼 Review',
 		reviewSelectedSummary: '已選：{workingTreePrefix}{commitCount} 個提交',
 		reviewSelectedWorkingTreePrefix: 'Working Tree + ',

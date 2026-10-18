@@ -16,6 +16,7 @@ import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 import type {ActiveBusyKind} from './statusVerbs.js';
+import type {ToolCorrectionStatusEvent} from '../../../utils/execution/toolCorrection.js';
 
 const ReviewCommitPanel = lazy(() => import('../panels/ReviewCommitPanel.js'));
 import type {ReviewCommitSelection} from '../panels/ReviewCommitPanel.js';
@@ -195,6 +196,7 @@ type ChatFooterProps = {
 	elapsedSeconds: number;
 	currentModel?: string | null;
 	compressBlockToast?: string | null;
+	toolCorrectionStatus?: ToolCorrectionStatusEvent | null;
 	/**
 	 * Issue #215：非流式 busy 态分类（无专属面板的后台终端/后台进程/压缩无面板等），
 	 * 用于把 ❆ 行扩展为覆盖全量 busy 的常驻动画指示；空闲时为 'idle'。
@@ -470,6 +472,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							copyStatusMessage={copyStatusMessage}
 							currentProfileName={props.currentProfileName}
 							compressBlockToast={props.compressBlockToast}
+							toolCorrectionStatus={props.toolCorrectionStatus}
 						/>
 
 						{props.showBackgroundPanel && (

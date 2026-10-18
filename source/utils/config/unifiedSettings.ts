@@ -43,6 +43,7 @@ export interface UnifiedSettings {
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
 	speedometerEnabled?: boolean;
+	toolCorrectionEnabled?: boolean;
 	terminalShell?: 'auto' | 'pwsh' | 'powershell' | 'cmd' | 'git-bash' | string;
 	telemetry?: {
 		enabled?: boolean;

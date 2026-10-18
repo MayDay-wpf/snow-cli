@@ -32,6 +32,7 @@ import type {
 	VSCodeConnectionStatus,
 } from './statusline/types.js';
 import {GradientText} from './statusline/GradientText.js';
+import type {ToolCorrectionStatusEvent} from '../../../utils/execution/toolCorrection.js';
 
 const MEMORY_REFRESH_INTERVAL_MS = 5000;
 const PROCESS_MEMORY_COMMAND_TIMEOUT_MS = 1500;
@@ -250,6 +251,9 @@ type Props = {
 
 	// 自动压缩禁止中断提示
 	compressBlockToast?: string | null;
+
+	// 工具调用纠错状态
+	toolCorrectionStatus?: ToolCorrectionStatusEvent | null;
 };
 
 function calculateContextPercentage(
@@ -361,6 +365,7 @@ export default function StatusLine({
 	copyStatusMessage,
 	currentProfileName,
 	compressBlockToast,
+	toolCorrectionStatus,
 }: Props) {
 	const {t, language} = useI18n();
 	const {theme} = useTheme();
@@ -598,6 +603,35 @@ export default function StatusLine({
 		);
 	};
 
+	// 工具调用纠错状态文本（terminal 渲染：单行 + spinner）
+	const toolCorrectionAccent = !toolCorrectionStatus
+		? theme.colors.menuSecondary
+		: toolCorrectionStatus.phase === 'success'
+		? theme.colors.success || 'green'
+		: toolCorrectionStatus.phase === 'exhausted'
+		? theme.colors.error || 'red'
+		: theme.colors.warning || 'yellow';
+	const toolCorrectionLabel = (() => {
+		if (!toolCorrectionStatus) {
+			return '';
+		}
+		const template =
+			toolCorrectionStatus.phase === 'correcting'
+				? t.chatScreen.toolCorrectionCorrecting
+				: toolCorrectionStatus.phase === 'retrying'
+				? t.chatScreen.toolCorrectionRetrying
+				: toolCorrectionStatus.phase === 'success'
+				? t.chatScreen.toolCorrectionSuccess
+				: t.chatScreen.toolCorrectionExhausted;
+		return template
+			.replace('{tool}', toolCorrectionStatus.toolName)
+			.replace('{attempt}', String(Math.max(1, toolCorrectionStatus.attempt)))
+			.replace('{max}', String(toolCorrectionStatus.maxAttempts));
+	})();
+	const toolCorrectionRunning =
+		toolCorrectionStatus?.phase === 'correcting' ||
+		toolCorrectionStatus?.phase === 'retrying';
+
 	// 是否显示任何状态信息
 	const hasAnyStatus =
 		yoloMode ||
@@ -617,6 +651,7 @@ export default function StatusLine({
 		copyStatusMessage ||
 		currentProfileName ||
 		compressBlockToast ||
+		toolCorrectionStatus ||
 		statusLineHookItems.length > 0 ||
 		detailedMemoryStatusText ||
 		tpsTracker.isActive();
@@ -811,6 +846,16 @@ export default function StatusLine({
 			});
 		}
 
+		if (toolCorrectionStatus) {
+			statusItems.push({
+				text: t.chatScreen.toolCorrectionShort.replace(
+					'{tool}',
+					toolCorrectionStatus.toolName,
+				),
+				color: toolCorrectionAccent,
+			});
+		}
+
 		if (!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.memory)) {
 			statusItems.push({
 				text: simpleMemoryStatusText,
@@ -873,6 +918,15 @@ export default function StatusLine({
 						</Text>
 					</Box>
 				)}
+
+			{toolCorrectionStatus && (
+				<Box>
+					<Text color={toolCorrectionAccent} dimColor>
+						{toolCorrectionRunning ? <Spinner type="dots" /> : null}{' '}
+						{toolCorrectionLabel}
+					</Text>
+				</Box>
+			)}
 
 			{statusLineHookItems.map(item => (
 				<Box key={item.id}>

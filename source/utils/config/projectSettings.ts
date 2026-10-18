@@ -19,6 +19,7 @@ export interface ProjectSettings {
 	ultraTodoEnabled?: boolean;
 	disableBashAiSummary?: boolean;
 	speedometerEnabled?: boolean;
+	toolCorrectionEnabled?: boolean;
 	telemetry?: TelemetryConfig;
 }
 
@@ -70,6 +71,7 @@ function loadSettings(): ProjectSettings {
 		ultraTodoEnabled: pick('ultraTodoEnabled'),
 		disableBashAiSummary: pick('disableBashAiSummary'),
 		speedometerEnabled: pick('speedometerEnabled'),
+		toolCorrectionEnabled: pick('toolCorrectionEnabled'),
 		telemetry: pick('telemetry'),
 	};
 }
@@ -211,6 +213,19 @@ export function getSpeedometerEnabled(): boolean {
 
 export function setSpeedometerEnabled(enabled: boolean): void {
 	setField('speedometerEnabled', enabled);
+}
+
+/**
+ * Whether the tool-call correction agent may repair failed tool arguments.
+ * Enabled by default, matching Snow App's `toolCorrection` setting.
+ */
+export function getToolCorrectionEnabled(): boolean {
+	const settings = loadSettings();
+	return settings.toolCorrectionEnabled ?? true;
+}
+
+export function setToolCorrectionEnabled(enabled: boolean): void {
+	setField('toolCorrectionEnabled', enabled);
 }
 
 export function getTelemetryConfig(): TelemetryConfig {

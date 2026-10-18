@@ -1,6 +1,10 @@
 import {useState, useEffect, useSyncExternalStore, useRef} from 'react';
 import type {UsageInfo} from '../../api/chat.js';
 import {pauseGate, type PauseState} from '../../utils/execution/pauseGate.js';
+import {
+	onToolCorrectionStatus,
+	type ToolCorrectionStatusEvent,
+} from '../../utils/execution/toolCorrection.js';
 
 export type RetryStatus = {
 	isRetrying: boolean;
@@ -85,6 +89,30 @@ export function useStreamingState() {
 	const [compressBlockToast, setCompressBlockToast] = useState<string | null>(
 		null,
 	);
+	const [toolCorrectionStatus, setToolCorrectionStatus] =
+		useState<ToolCorrectionStatusEvent | null>(null);
+
+	// Subscribe to the tool-call correction agent's live status.
+	useEffect(() => {
+		return onToolCorrectionStatus(event => {
+			setToolCorrectionStatus(event);
+		});
+	}, []);
+
+	// Terminal states auto-clear so the status line returns to normal.
+	useEffect(() => {
+		if (
+			!toolCorrectionStatus ||
+			(toolCorrectionStatus.phase !== 'success' &&
+				toolCorrectionStatus.phase !== 'exhausted')
+		) {
+			return;
+		}
+		const timeoutId = setTimeout(() => {
+			setToolCorrectionStatus(null);
+		}, 5000);
+		return () => clearTimeout(timeoutId);
+	}, [toolCorrectionStatus]);
 
 	// Auto-clear compress block toast after 2 seconds
 	useEffect(() => {
@@ -231,6 +259,7 @@ export function useStreamingState() {
 		setIsAutoCompressing,
 		compressBlockToast,
 		setCompressBlockToast,
+		toolCorrectionStatus,
 		isPaused,
 		pauseGate,
 	};

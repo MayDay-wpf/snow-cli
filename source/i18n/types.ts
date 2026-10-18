@@ -899,6 +899,7 @@ export type TranslationKeys = {
 			permissions: string;
 			vulnerabilityHunting: string;
 			autoFormat: string;
+			toolCorrection: string;
 			simple: string;
 			buddy: string;
 			toolSearch: string;
@@ -943,6 +944,13 @@ export type TranslationKeys = {
 		commandOutput: {
 			// Auto-format command messages
 			autoFormat: {
+				enabled: string;
+				disabled: string;
+				statusEnabled: string;
+				statusDisabled: string;
+			};
+			// Tool-call correction command messages
+			toolCorrection: {
 				enabled: string;
 				disabled: string;
 				statusEnabled: string;
@@ -1639,6 +1647,12 @@ export type TranslationKeys = {
 		compressionSuccess: string;
 		compressionFailed: string;
 		compressionBlockToast: string;
+		// Tool-call correction status line
+		toolCorrectionCorrecting: string;
+		toolCorrectionRetrying: string;
+		toolCorrectionSuccess: string;
+		toolCorrectionExhausted: string;
+		toolCorrectionShort: string;
 		// Review
 		reviewStartTitle: string;
 		reviewSelectedSummary: string;
