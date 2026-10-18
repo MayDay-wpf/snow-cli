@@ -21,6 +21,7 @@ import {
 } from '../config/configManager.js';
 import {OAUTH_PROVIDERS} from './constants.js';
 import {applyProviderRequestHeaders, refreshTokens} from './flows.js';
+import {ensureProviderHeaderScheme} from './headerSchemes.js';
 import type {
 	OAuthClaims,
 	OAuthLoginOutcome,
@@ -145,11 +146,17 @@ export function buildProfileDraft(
 export function saveOAuthProfile(draft: OAuthProfileDraft): OAuthLoginOutcome {
 	const existing = loadProfile(draft.profileName);
 	const base: AppConfig = existing ?? loadConfig();
+	// 订阅档案的固定身份请求头由「自定义请求头方案」承载：登录时确保 provider 方案
+	// 存在（缺失的必需请求头补齐）并绑定到该档案，用户之后可在设置里自行调整。
+	const customHeadersSchemeId = ensureProviderHeaderScheme(
+		draft.patch.oauth.provider,
+	);
 	const updated: AppConfig = {
 		...base,
 		snowcfg: {
 			...base.snowcfg,
 			...draft.patch,
+			...(customHeadersSchemeId ? {customHeadersSchemeId} : {}),
 		},
 	};
 	saveProfile(draft.profileName, updated);

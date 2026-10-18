@@ -714,6 +714,17 @@ const Startup = ({
 				console.error('Failed to initialize profiles:', error);
 			}
 
+			// 旧版订阅档案未绑定请求头方案（身份请求头曾写死在请求代码中）：
+			// 每个配置目录只迁移一次，为仍是空绑定的 OAuth 档案补建方案并绑定。
+			try {
+				const {bindLegacyOAuthProfilesOnce} = await import(
+					'./utils/oauth/headerSchemes.js'
+				);
+				bindLegacyOAuthProfilesOnce();
+			} catch (error) {
+				console.error('Failed to migrate OAuth header schemes:', error);
+			}
+
 			// Handle dev mode
 			if (isDevMode) {
 				deps.enableDevMode();

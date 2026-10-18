@@ -37,3 +37,9 @@ export {
 	TOKEN_REFRESH_LEEWAY_SECS,
 } from './profileStore.js';
 export {openExternalUrl} from './openBrowser.js';
+export {
+	bindLegacyOAuthProfilesOnce,
+	ensureProviderHeaderScheme,
+	providerHeaderSchemeName,
+	providerRequiredHeaders,
+} from './headerSchemes.js';

@@ -6,8 +6,6 @@
 
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 import {
-	ANTHROPIC_CLI_USER_AGENT,
-	ANTHROPIC_MESSAGES_BETA,
 	ANTHROPIC_OAUTH_BETA,
 	ANTHROPIC_TOKEN_USER_AGENT,
 	ANTHROPIC_VERSION_HEADER,
@@ -1047,8 +1045,12 @@ export async function fetchModels(
 }
 
 /**
- * 为 API 请求注入 provider 专属请求头（对齐 Snow App 的 apply_request_headers）。
- * 注意：只处理附加头，Authorization 由调用方基于最终 apiKey 统一设置。
+ * 为 API 请求注入 provider 的账号级动态请求头（对齐 Snow App 的 apply_request_headers）。
+ *
+ * 固定的身份请求头（User-Agent / anthropic-beta / originator 等）不再写死在请求
+ * 代码里：登录或迁移时会写入并绑定「自定义请求头方案」（Codex / Claude /
+ * Antigravity），由 getCustomHeadersForConfig() 随请求下发，用户可在设置里调整。
+ * 这里只处理随登录账号或令牌变化、无法写入共享方案的动态请求头。
  */
 export function applyProviderRequestHeaders(
 	metadata: OAuthProfileMetadata,
@@ -1056,31 +1058,18 @@ export function applyProviderRequestHeaders(
 ): void {
 	switch (metadata.provider) {
 		case 'codex': {
-			headers['originator'] = CODEX_ORIGINATOR;
-			headers['OpenAI-Beta'] = 'responses=experimental';
-			headers['User-Agent'] = codexUserAgent();
+			// chatgpt-account-id 随登录账号变化，不写入共享方案
 			if (metadata.accountId.trim()) {
 				headers['chatgpt-account-id'] = metadata.accountId.trim();
 			}
 			return;
 		}
 		case 'anthropic': {
-			headers['anthropic-version'] = ANTHROPIC_VERSION_HEADER;
-			// 订阅令牌按 Claude Code 客户端的形状请求：beta 串必须同时声明
-			// claude-code-20250219，并携带 CLI 的 User-Agent、x-app 与直接浏览器
-			// 访问声明，否则网关不把请求当作官方订阅客户端（与 Snow App /
-			// CLIProxyAPI 的上游伪装一致）。
-			headers['anthropic-beta'] = ANTHROPIC_MESSAGES_BETA;
-			headers['anthropic-dangerous-direct-browser-access'] = 'true';
-			headers['x-app'] = 'cli';
-			headers['User-Agent'] = ANTHROPIC_CLI_USER_AGENT;
 			// OAuth token 走 Authorization，不再使用 x-api-key
 			delete headers['x-api-key'];
 			return;
 		}
 		case 'antigravity': {
-			headers['User-Agent'] = antigravityUserAgent();
-			headers['x-goog-api-client'] = ANTIGRAVITY_API_CLIENT;
 			// Cloud Code Assist 使用 Authorization，不使用 x-goog-api-key
 			delete headers['x-goog-api-key'];
 			return;
