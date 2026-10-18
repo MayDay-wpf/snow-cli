@@ -508,6 +508,13 @@ export default function DiffViewer({
 	);
 
 	const renderedOutput = useMemo(() => {
+		// A no-change edit (identical old/new content) must not render as an
+		// empty diff box. The edit tools reject such calls now; this guard also
+		// covers results restored from older sessions or logs.
+		if (diffOldContent === diffNewContent) {
+			return '';
+		}
+
 		const hl = (content: string) =>
 			highlightCodeContent(
 				expandTabsForDisplay(content),
@@ -666,6 +673,10 @@ export default function DiffViewer({
 		theme.colors.text,
 		theme.colors.background,
 	]);
+
+	if (!renderedOutput) {
+		return null;
+	}
 
 	return (
 		<Box flexDirection="column">

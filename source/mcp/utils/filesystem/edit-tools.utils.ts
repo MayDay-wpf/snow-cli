@@ -297,6 +297,22 @@ export async function executeEditBySearchSingle(
 	contextLines: number,
 ): Promise<EditBySearchSingleResult> {
 	try {
+		// Reject no-op edits up front: when search and replacement text are
+		// identical the file would not change, so this must fail instead of
+		// being reported as a successful edit (and rendered as an empty diff).
+		const normalizedSearchForComparison = searchContent
+			.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n');
+		const normalizedReplaceForComparison = replaceContent
+			.replace(/\r\n/g, '\n')
+			.replace(/\r/g, '\n');
+		if (normalizedSearchForComparison === normalizedReplaceForComparison) {
+			throw new Error(
+				`No-op edit rejected for ${filePath}: searchContent and replaceContent are identical, so the edit would not change the file. ` +
+					`Provide a replaceContent that differs from searchContent, or skip this edit if no change is needed.`,
+			);
+		}
+
 		const isRemote = ctx.isSSHPath(filePath);
 		let content: string;
 		let fullPath: string;
@@ -563,6 +579,19 @@ export async function executeEditBySearchSingle(
 		}
 
 		const modifiedContent = modifiedLines.join('\n');
+		// Even when search and replacement text differ, the computed result can
+		// still equal the original file (e.g. identical content plus whitespace
+		// re-indentation). Treat that as a failed edit: no change, no diff.
+		if (
+			modifiedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n') ===
+			normalizedContent
+		) {
+			throw new Error(
+				`No-op edit rejected for ${filePath}: the replacement produces content identical to the current file ` +
+					`(matched lines ${startLine}-${endLine}, occurrence ${occurrence}/${matches.length}). ` +
+					`The requested edit produces an empty diff; provide different replaceContent or skip the call.`,
+			);
+		}
 		const lineDifference = replaceLines.length - (endLine - startLine + 1);
 		const smartBoundaries = findSmartContextBoundaries(
 			lines,
@@ -980,6 +1009,19 @@ export async function executeHashlineEditSingle(
 			.join('\n');
 
 		const modifiedContent = mutableLines.join('\n');
+		// Reject no-op hashline edits: operations that rewrite lines with the
+		// same content must fail instead of reporting success with an empty diff.
+		if (
+			modifiedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n') ===
+			content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+		) {
+			const operationsSummary = opSummaries.join('; ');
+			throw new Error(
+				`No-op edit rejected for ${filePath}: hashline operations (${operationsSummary}) ` +
+					`produced content identical to the current file. The requested edit produces an empty diff; ` +
+					`provide content that actually changes the file or skip the call.`,
+			);
+		}
 		if (isRemote) {
 			await ctx.writeRemoteFile(fullPath, modifiedContent);
 		} else {

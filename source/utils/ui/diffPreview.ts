@@ -476,7 +476,10 @@ export function collectDiffPreviewEntries(
 	} catch {
 		// Ignore parse errors
 	}
-	return entries;
+	// Drop entries that represent no actual change so the pending UI never
+	// renders an empty diff. Edit calls with identical search/replace are
+	// rejected by the tools themselves.
+	return entries.filter(entry => entry.oldContent !== entry.newContent);
 }
 
 /**
