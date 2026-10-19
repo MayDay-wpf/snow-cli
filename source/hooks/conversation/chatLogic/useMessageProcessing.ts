@@ -25,6 +25,9 @@ import {
 	shouldNotifyAgentTurnCompletion,
 } from '../../../utils/platform/notification.js';
 import {hasEnabledHookActions} from '../../../utils/config/hooksConfig.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic:useMessageProcessing');
 
 interface MessageTarget {
 	instanceId: string;
@@ -258,6 +261,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			} catch (error) {
 				const errorMsg =
 					error instanceof Error ? error.message : 'Unknown error';
+				log.error('Auto-compression failed:', error);
 				setCompressionError(errorMsg);
 				props.onCompressionStatus?.({
 					step: 'failed',
@@ -442,6 +446,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
+				log.error('Conversation turn failed:', error);
 				const finalMessage: Message = {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
@@ -449,6 +454,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
+			} else {
+				log.debug('Conversation turn interrupted or aborted:', error);
 			}
 			props.onThinkingStatus?.(null);
 		} finally {
@@ -1010,6 +1017,7 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 			if (!controller.signal.aborted && !userInterruptedRef.current) {
 				const errorMessage =
 					error instanceof Error ? error.message : 'Unknown error occurred';
+				log.error('Pending messages processing failed:', error);
 				const finalMessage: Message = {
 					role: 'assistant',
 					content: `Error: ${errorMessage}`,
@@ -1017,6 +1025,8 @@ export function useMessageProcessing(props: UseChatLogicProps) {
 					messageStatus: 'error',
 				};
 				setMessages(prev => [...prev, finalMessage]);
+			} else {
+				log.debug('Pending messages processing interrupted or aborted:', error);
 			}
 			props.onThinkingStatus?.(null);
 		} finally {

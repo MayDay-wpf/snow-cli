@@ -1,5 +1,8 @@
 import {getSubAgentMaxSpawnDepth} from '../config/projectSettings.js';
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:subAgentBuiltinTools');
 import type {MCPTool} from './mcpToolsManager.js';
 import type {ChatMessage} from '../../api/chat.js';
 
@@ -160,7 +163,11 @@ export async function buildInitialMessages(
 			'../commands/roleSubagent.js'
 		);
 		customRoleContent = loadSubAgentCustomRole(agent.name, process.cwd());
-	} catch {
+	} catch (error) {
+		log.debug('Failed to load sub-agent custom role', {
+			agentName: agent.name,
+			error,
+		});
 		// roleSubagent module unavailable, skip custom role
 	}
 

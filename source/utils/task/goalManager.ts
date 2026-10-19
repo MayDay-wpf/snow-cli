@@ -17,10 +17,13 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {randomUUID} from 'crypto';
 import {sessionManager} from '../session/sessionManager.js';
 import {getDefaultGoalTokenBudget} from '../config/unifiedSettings.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('task:goalManager');
 
 export type GoalStatus =
 	| 'pursuing'
@@ -69,7 +72,7 @@ class GoalManager {
 	private getGoalDir(): string {
 		const projectId = sessionManager.getProjectId();
 		const override = process.env['SNOW_CONFIG_DIR']?.trim();
-		const baseSnowDir = override ? override : path.join(os.homedir(), '.snow');
+		const baseSnowDir = override ? override : getGlobalSnowDir().native;
 		return path.join(baseSnowDir, 'goals', projectId);
 	}
 
@@ -80,8 +83,9 @@ class GoalManager {
 	private async ensureDir(): Promise<void> {
 		try {
 			await fs.mkdir(this.getGoalDir(), {recursive: true});
-		} catch {
+		} catch (error) {
 			// 忽略已存在错误
+			log.debug('goalManager ensureDir failed or already exists', {error, dir: this.getGoalDir()});
 		}
 	}
 
@@ -96,8 +100,9 @@ class GoalManager {
 		for (const cb of this.listeners) {
 			try {
 				cb(goal);
-			} catch {
+			} catch (error) {
 				// 忽略监听器异常，避免拖累主流程
+				log.debug('goalManager notify listener threw error', {error});
 			}
 		}
 	}
@@ -118,8 +123,9 @@ class GoalManager {
 				this.cache.set(sessionId, parsed);
 				return parsed;
 			}
-		} catch {
+		} catch (error) {
 			// 文件不存在或损坏，视为没有目标
+			log.debug('goalManager loadCurrentGoal failed to read file', {error, sessionId});
 		}
 		return null;
 	}
@@ -199,8 +205,9 @@ class GoalManager {
 				'../execution/mcpToolsManager.js'
 			);
 			clearMCPToolsCache();
-		} catch {
+		} catch (error) {
 			// ignore: 仅性能优化，下一次缓存校验会自动重建
+			log.debug('createGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -235,8 +242,9 @@ class GoalManager {
 		const goalPath = this.getGoalPath(session.id);
 		try {
 			await fs.unlink(goalPath);
-		} catch {
+		} catch (error) {
 			// 文件可能不存在，忽略
+			log.debug('clearGoal failed to unlink goal file', {error, goalPath});
 		}
 		this.cache.delete(session.id);
 		this.notify(null);
@@ -247,8 +255,9 @@ class GoalManager {
 				'../execution/mcpToolsManager.js'
 			);
 			clearMCPToolsCache();
-		} catch {
+		} catch (error) {
 			// ignore
+			log.debug('clearGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -286,8 +295,9 @@ class GoalManager {
 				'../execution/mcpToolsManager.js'
 			);
 			clearMCPToolsCache();
-		} catch {
+		} catch (error) {
 			// ignore
+			log.debug('modelUpdateGoal clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}
@@ -306,8 +316,9 @@ class GoalManager {
 			if (parsed && parsed.sessionId === sessionId) {
 				return parsed;
 			}
-		} catch {
+		} catch (error) {
 			// 文件不存在或损坏
+			log.debug('goalManager loadGoalForSession failed to read file', {error, sessionId});
 		}
 		return null;
 	}
@@ -339,8 +350,9 @@ class GoalManager {
 				'../execution/mcpToolsManager.js'
 			);
 			clearMCPToolsCache();
-		} catch {
+		} catch (error) {
 			// ignore
+			log.debug('resumeGoalForSession clearMCPToolsCache skipped', {error});
 		}
 		return goal;
 	}

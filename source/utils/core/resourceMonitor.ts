@@ -4,6 +4,8 @@
 
 import {logger} from './logger.js';
 
+const log = logger.child('core:resourceMonitor');
+
 interface ResourceStats {
 	timestamp: number;
 	memoryUsage: NodeJS.MemoryUsage;
@@ -30,7 +32,7 @@ class ResourceMonitor {
 			this.collectStats();
 		}, intervalMs);
 
-		logger.info('Resource monitoring started');
+		log.info('Resource monitoring started');
 	}
 
 	/**
@@ -40,7 +42,7 @@ class ResourceMonitor {
 		if (this.monitoringInterval) {
 			clearInterval(this.monitoringInterval);
 			this.monitoringInterval = null;
-			logger.info('Resource monitoring stopped');
+			log.info('Resource monitoring stopped');
 		}
 	}
 
@@ -65,14 +67,14 @@ class ResourceMonitor {
 		// Log warning if memory usage is high
 		const heapUsedMB = stats.memoryUsage.heapUsed / 1024 / 1024;
 		if (heapUsedMB > 500) {
-			logger.warn(
+			log.warn(
 				`High memory usage detected: ${heapUsedMB.toFixed(2)} MB heap used`,
 			);
 		}
 
 		// Log debug info periodically (every 5 minutes)
 		if (this.stats.length % 10 === 0) {
-			logger.info(
+			log.info(
 				`Resource stats: Heap ${heapUsedMB.toFixed(2)} MB, Encoders: ${this.activeEncoders}, MCP: ${this.activeMCPConnections}`,
 			);
 		}
@@ -83,7 +85,7 @@ class ResourceMonitor {
 	 */
 	trackEncoderCreated() {
 		this.activeEncoders++;
-		logger.info(`Encoder created (total: ${this.activeEncoders})`);
+		log.info(`Encoder created (total: ${this.activeEncoders})`);
 	}
 
 	/**
@@ -92,10 +94,10 @@ class ResourceMonitor {
 	trackEncoderFreed() {
 		this.activeEncoders--;
 		if (this.activeEncoders < 0) {
-			logger.warn('Encoder count went negative - possible double-free');
+			log.warn('Encoder count went negative - possible double-free');
 			this.activeEncoders = 0;
 		}
-		logger.info(`Encoder freed (remaining: ${this.activeEncoders})`);
+		log.info(`Encoder freed (remaining: ${this.activeEncoders})`);
 	}
 
 	/**
@@ -103,7 +105,7 @@ class ResourceMonitor {
 	 */
 	trackMCPConnectionOpened(serviceName: string) {
 		this.activeMCPConnections++;
-		logger.info(
+		log.info(
 			`MCP connection opened: ${serviceName} (total: ${this.activeMCPConnections})`,
 		);
 	}
@@ -114,10 +116,10 @@ class ResourceMonitor {
 	trackMCPConnectionClosed(serviceName: string) {
 		this.activeMCPConnections--;
 		if (this.activeMCPConnections < 0) {
-			logger.warn('MCP connection count went negative - possible double-close');
+			log.warn('MCP connection count went negative - possible double-close');
 			this.activeMCPConnections = 0;
 		}
-		logger.info(
+		log.info(
 			`MCP connection closed: ${serviceName} (remaining: ${this.activeMCPConnections})`,
 		);
 	}
@@ -182,10 +184,10 @@ class ResourceMonitor {
 	 */
 	forceGC() {
 		if (global.gc) {
-			logger.info('Forcing garbage collection');
+			log.info('Forcing garbage collection');
 			global.gc();
 		} else {
-			logger.warn(
+			log.warn(
 				'GC not available - run with --expose-gc flag for manual GC',
 			);
 		}

@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import {loadCodebaseConfig} from '../../utils/config/codebaseConfig.js';
 import {readSettings} from '../../utils/config/unifiedSettings.js';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
 
 /**
  * Get the system prompt with ROLE.md content if it exists
@@ -45,7 +46,7 @@ export function getSystemPromptWithRole(
 			const baseDir =
 				location === 'project'
 					? process.cwd()
-					: path.join(os.homedir(), '.snow');
+					: getGlobalSnowDir().native;
 
 			const settings = readSettings(location);
 			const activeRoleId = settings.role?.activeRoleId;
@@ -237,7 +238,7 @@ export function getOverrideRoleContent(): string | null {
 			const baseDir =
 				location === 'project'
 					? process.cwd()
-					: path.join(os.homedir(), '.snow');
+					: getGlobalSnowDir().native;
 
 			const settings = readSettings(location);
 			const roleSettings = settings.role ?? {};

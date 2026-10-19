@@ -3,6 +3,8 @@ import {exec} from 'child_process';
 import {promisify} from 'util';
 import {TextBuffer} from '../../utils/ui/textBuffer.js';
 import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('hooks:useClipboard');
 import {
 	isWSL,
 	findPowerShellInWSL,
@@ -192,7 +194,7 @@ export function useClipboard(
 					}
 				} catch (imgError) {
 					// No image in clipboard or error, fall through to text
-					logger.error(
+					log.error(
 						'Failed to read image from Windows clipboard:',
 						imgError,
 					);
@@ -269,7 +271,10 @@ end try'`;
 						try {
 							await execAsync(`rm "${tmpFile}"`, {timeout: 1000});
 						} catch (e) {
-							// Ignore cleanup errors
+							log.debug('Failed to clean up clipboard temp file', {
+								tmpFile,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 
 						if (base64 && base64.length > 100) {
@@ -285,7 +290,7 @@ end try'`;
 						}
 					}
 				} catch (imgError) {
-					logger.error('Failed to read image from macOS clipboard:', imgError);
+					log.error('Failed to read image from macOS clipboard:', imgError);
 				}
 			}
 
@@ -337,10 +342,10 @@ end try'`;
 
 				insertClipboardText(clipboardText);
 			} catch (textError) {
-				logger.error('Failed to read text from clipboard:', textError);
+				log.error('Failed to read text from clipboard:', textError);
 			}
 		} catch (error) {
-			logger.error('Failed to read from clipboard:', error);
+			log.error('Failed to read from clipboard:', error);
 		} finally {
 			// 兜底：确保 loading 占位符在任何异常路径下都不会残留
 			if (!imageInserted) {

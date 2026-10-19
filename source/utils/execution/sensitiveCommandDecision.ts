@@ -1,4 +1,7 @@
 import {isSensitiveCommand} from './sensitiveCommandManager.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:sensitiveCommandDecision');
 import {getSensitiveCommandAssistSettings} from '../config/sensitiveCommandAssistConfig.js';
 import {getDecisionModelsConfig} from '../config/decisionModelsConfig.js';
 import {
@@ -84,7 +87,11 @@ export async function evaluateSensitiveCommandGate(
 			},
 			context.abortSignal,
 		);
-	} catch {
+	} catch (error) {
+		log.debug(
+			'Failed to evaluate sensitive command via decision model, falling back to manual confirmation',
+			{command: trimmedCommand, error},
+		);
 		// 传输 / 协议失败：回退到普通确认提示，绝不放行。
 		return {kind: 'none'};
 	}

@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {ChatMessage, Session} from './sessionManager.js';
 
 export type ExportFormat = 'txt' | 'md' | 'html' | 'json';
@@ -10,7 +10,7 @@ export type ExportFormat = 'txt' | 'md' | 'html' | 'json';
  * project root). Keep them under the global Snow data dir instead.
  */
 export function getDefaultExportDirectory(): string {
-	return path.join(os.homedir(), '.snow', 'exports');
+	return path.join(getGlobalSnowDir().native, 'exports');
 }
 
 export function buildDefaultExportFileName(

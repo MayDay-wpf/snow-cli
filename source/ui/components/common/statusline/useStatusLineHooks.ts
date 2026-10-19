@@ -10,6 +10,8 @@ import React from 'react';
 import {STATUSLINE_HOOKS_DIR} from '../../../../utils/config/apiConfig.js';
 import {logger} from '../../../../utils/core/logger.js';
 import {gitBranchStatusLineHook} from './gitBranch.js';
+
+const log = logger.child('ui:useStatusLineHooks');
 import type {
 	StatusLineHookContext,
 	StatusLineHookDefinition,
@@ -83,7 +85,7 @@ function normalizeStatusLineHookExports(
 	].filter(Boolean);
 
 	if (exportedHooks.length === 0) {
-		logger.warn('Status line hook module has no supported export', {
+		log.warn('Status line hook module has no supported export', {
 			modulePath,
 		});
 		return [];
@@ -96,7 +98,7 @@ function normalizeStatusLineHookExports(
 	return hooks.filter(hook => {
 		const isValid = isStatusLineHookDefinition(hook);
 		if (!isValid) {
-			logger.warn('Ignoring invalid status line hook export', {modulePath});
+			log.warn('Ignoring invalid status line hook export', {modulePath});
 		}
 
 		return isValid;
@@ -123,7 +125,7 @@ async function loadExternalStatusLineHooks(): Promise<
 	try {
 		entries = readdirSync(STATUSLINE_HOOKS_DIR, {withFileTypes: true});
 	} catch (error) {
-		logger.warn('Failed to read status line hook directory', {
+		log.warn('Failed to read status line hook directory', {
 			directory: STATUSLINE_HOOKS_DIR,
 			error,
 		});
@@ -146,7 +148,7 @@ async function loadExternalStatusLineHooks(): Promise<
 			const importedModule = (await import(moduleUrl)) as StatusLineHookModule;
 			hooks.push(...normalizeStatusLineHookExports(importedModule, modulePath));
 		} catch (error) {
-			logger.warn('Failed to load status line hook module', {
+			log.warn('Failed to load status line hook module', {
 				modulePath,
 				error,
 			});
@@ -272,15 +274,20 @@ export function useStatusLineHookItems(
 				watcher.on('error', () => {
 					try {
 						watcher?.close();
-					} catch {
-						// ignore
+					} catch (e) {
+						log.debug('Error closing statusline hook watcher on watcher error', {
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 					watcher = null;
 					if (!disposed) {
 						setTimeout(startWatch, 300);
 					}
 				});
-			} catch {
+			} catch (err) {
+				log.debug('Error starting statusline hook watcher', {
+					error: err instanceof Error ? err.message : String(err),
+				});
 				if (!disposed) {
 					setTimeout(startWatch, 400);
 				}
@@ -297,8 +304,10 @@ export function useStatusLineHookItems(
 			if (debounceTimer) clearTimeout(debounceTimer);
 			try {
 				watcher?.close();
-			} catch {
-				// ignore
+			} catch (e) {
+				log.debug('Error closing statusline hook watcher on unmount', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		};
 	}, []);
@@ -341,7 +350,7 @@ export function useStatusLineHookItems(
 						[hook.id]: [],
 					}));
 				}
-				logger.warn('Status line hook refresh failed', {
+				log.warn('Status line hook refresh failed', {
 					hookId: hook.id,
 					error,
 				});

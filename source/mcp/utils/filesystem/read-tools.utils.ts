@@ -14,6 +14,9 @@ import {
 import {readFileWithNative} from './native-edit.utils.js';
 import {readOfficeDocument} from './office-parser.utils.js';
 import {formatLineWithHash} from './hashline.utils.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:filesystem.readTools');
 
 type GetFileContentContext = {
 	basePath: string;
@@ -215,8 +218,11 @@ export async function executeGetFileContentCore(
 						if (symbolInfo) {
 							fileContent += symbolInfo;
 						}
-					} catch {
-						// optional
+					} catch (symbolError) {
+						log.debug('Failed to parse file symbols for preview', {
+							file: fullPath,
+							error: symbolError instanceof Error ? symbolError.message : String(symbolError),
+						});
 					}
 				}
 
@@ -243,8 +249,11 @@ export async function executeGetFileContentCore(
 					if (attemptedResolve !== inputPath) {
 						resolvedPathInfo = `\n   Resolved to: ${attemptedResolve}`;
 					}
-				} catch {
-					// ignore
+				} catch (resolveError) {
+					log.debug('Failed to resolve relative path for error reporting', {
+						inputPath,
+						error: resolveError instanceof Error ? resolveError.message : String(resolveError),
+					});
 				}
 				multimodalContent.push({
 					type: 'text',
@@ -409,8 +418,11 @@ export async function executeGetFileContentCore(
 		if (symbolInfo) {
 			partialContent += symbolInfo;
 		}
-	} catch {
-		// optional
+	} catch (symbolError) {
+		log.debug('Failed to parse file symbols for single file content', {
+			file: fullPath,
+			error: symbolError instanceof Error ? symbolError.message : String(symbolError),
+		});
 	}
 
 	const notebookInfo = ctx.getNotebookEntries(filePath);

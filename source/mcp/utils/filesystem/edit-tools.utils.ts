@@ -51,6 +51,10 @@ import {
 	appendStructureWarnings,
 } from '../../utils/filesystem/message-format.utils.js';
 import {backupFileBeforeMutation} from '../../utils/filesystem/backup.utils.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:filesystem:edit');
+
 
 /**
  * Read a file using Rust native I/O (encoding-aware, runs on libuv thread),
@@ -635,8 +639,12 @@ export async function executeEditBySearchSingle(
 				}
 				finalLines = finalContent.split('\n');
 				finalTotalLines = finalLines.length;
-			} catch {
+			} catch (error) {
 				// non-fatal
+				log.debug('Auto-format with Prettier failed, proceeding without formatting', {
+					filePath: fullPath,
+					error,
+				});
 			}
 		}
 
@@ -667,8 +675,12 @@ export async function executeEditBySearchSingle(
 		let diagnostics: Diagnostic[] = [];
 		try {
 			diagnostics = await getFreshDiagnostics(fullPath);
-		} catch {
+		} catch (error) {
 			// optional
+			log.debug('Failed to get fresh diagnostics after edit', {
+				filePath: fullPath,
+				error,
+			});
 		}
 
 		const result = {
@@ -1058,8 +1070,12 @@ export async function executeHashlineEditSingle(
 					finalTotalLines,
 					contextStart + (contextEnd - contextStart) + lineDifference,
 				);
-			} catch {
+			} catch (error) {
 				// non-fatal
+				log.debug('Auto-format with Prettier failed, proceeding without formatting', {
+					filePath: fullPath,
+					error,
+				});
 			}
 		}
 
@@ -1083,8 +1099,12 @@ export async function executeHashlineEditSingle(
 		let diagnostics: Diagnostic[] = [];
 		try {
 			diagnostics = await getFreshDiagnostics(fullPath);
-		} catch {
+		} catch (error) {
 			// optional
+			log.debug('Failed to get fresh diagnostics after edit', {
+				filePath: fullPath,
+				error,
+			});
 		}
 
 		const result: EditByHashlineSingleResult = {

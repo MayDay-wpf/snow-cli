@@ -10,6 +10,10 @@ import {
 	isUrlBlocked,
 } from '../utils/config/proxyConfig.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:websearch');
+
 // Type definitions
 import type {
 	SearchResponse,
@@ -458,8 +462,9 @@ export class WebSearchService {
 			if (!this.browserProcess.killed) {
 				this.browserProcess.kill();
 			}
-		} catch {
+		} catch (error) {
 			// Ignore — process may have already exited
+			log.debug('Failed to kill browser process', {error});
 		}
 		this.browserProcess = null;
 	}
@@ -503,8 +508,9 @@ export class WebSearchService {
 				if (browser.connected) {
 					await browser.close();
 				}
-			} catch {
+			} catch (error) {
 				// Ignore close errors (e.g., Windows EBUSY/lockfile issues)
+				log.debug('Failed to close browser instance', {error});
 			}
 			// If browser.close() didn't fully terminate the process (e.g.,
 			// CDP connection was already lost), kill it as a fallback.
@@ -517,8 +523,9 @@ export class WebSearchService {
 				if (browser.connected) {
 					browser.disconnect();
 				}
-			} catch {
+			} catch (error) {
 				// Ignore disconnect errors
+				log.debug('Failed to disconnect browser instance', {error});
 			}
 		}
 
@@ -534,8 +541,9 @@ export class WebSearchService {
 
 		try {
 			await page.close();
-		} catch {
+		} catch (error) {
 			// Ignore close errors. Page cleanup must not mask the real tool result.
+			log.debug('Failed to close browser page', {error});
 		}
 	}
 
@@ -924,6 +932,10 @@ export class WebSearchService {
 				} catch (error: any) {
 					// If compact agent fails, fallback to original content
 					// Error is already logged in compactAgent
+					log.debug('Compact agent extraction failed, falling back to original content', {
+						url,
+						error,
+					});
 				}
 			}
 

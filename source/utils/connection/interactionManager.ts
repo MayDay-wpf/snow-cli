@@ -1,5 +1,8 @@
 import type * as signalR from '@microsoft/signalr';
 import type {StateManager} from './stateManager.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('connection:interactionManager');
 
 export class InteractionManager {
 	private connection: signalR.HubConnection | null = null;
@@ -44,8 +47,8 @@ export class InteractionManager {
 				toolCallId,
 				allTools ? JSON.stringify(allTools) : null,
 			);
-		} catch {
-			// Silently fail - don't block CLI functionality
+		} catch (error) {
+			log.debug('Failed to invoke NotifyToolConfirmationNeeded', {toolName, toolCallId, error});
 		}
 	}
 
@@ -75,8 +78,8 @@ export class InteractionManager {
 				toolCallId,
 				multiSelect ?? false,
 			);
-		} catch {
-			// Silently fail - don't block CLI functionality
+		} catch (error) {
+			log.debug('Failed to invoke NotifyUserInteractionNeeded', {question, toolCallId, error});
 		}
 	}
 
@@ -106,8 +109,8 @@ export class InteractionManager {
 				payload.teamCount ?? 0,
 				payload.todoCount ?? 0,
 			);
-		} catch {
-			// Silently fail - do not block local rollback flow
+		} catch (error) {
+			log.debug('Failed to invoke NotifyRollbackConfirmationNeeded', {payload, error});
 		}
 	}
 
@@ -130,8 +133,8 @@ export class InteractionManager {
 				result,
 				reason ?? null,
 			);
-		} catch {
-			// Silently fail
+		} catch (error) {
+			log.debug('Failed to invoke SendToolConfirmationResult', {toolCallId, result, error});
 		}
 	}
 
@@ -156,8 +159,8 @@ export class InteractionManager {
 				customInput ?? null,
 				cancelled ?? false,
 			);
-		} catch {
-			// Silently fail
+		} catch (error) {
+			log.debug('Failed to invoke SendUserQuestionResult', {toolCallId, error});
 		}
 	}
 
@@ -169,8 +172,8 @@ export class InteractionManager {
 
 		try {
 			await this.connection.invoke('SendMessageProcessingCompleted');
-		} catch {
-			// Silently fail - should not break CLI flow
+		} catch (error) {
+			log.debug('Failed to invoke SendMessageProcessingCompleted', {error});
 		}
 	}
 }

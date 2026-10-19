@@ -4,9 +4,12 @@ import {
 } from '../execution/commandExecutor.js';
 import fs from 'fs/promises';
 import path from 'path';
-import {homedir} from 'os';
 import {existsSync, readdirSync, readFileSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {getSubAgents, type SubAgent} from '../config/subAgentConfig.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('commands:roleSubagent');
 
 export type RoleSubagentLocation = 'global' | 'project';
 
@@ -23,7 +26,7 @@ function getRoleSubagentDirectory(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return projectRoot || process.cwd();
 }
@@ -141,8 +144,9 @@ export function listRoleSubagents(
 				path: path.join(dir, file),
 			});
 		}
-	} catch {
+	} catch (error) {
 		// ignore
+		log.debug('Failed to read role-subagent directory', {dir, location, error});
 	}
 
 	return items.sort((a, b) => a.agentName.localeCompare(b.agentName));
@@ -166,8 +170,9 @@ export function loadSubAgentCustomRole(
 			try {
 				const content = readFileSync(projectPath, 'utf-8').trim();
 				if (content) return content;
-			} catch {
+			} catch (error) {
 				// fall through to global
+				log.debug('Failed to read project custom role for subagent', {agentName, projectPath, error});
 			}
 		}
 	}
@@ -177,8 +182,9 @@ export function loadSubAgentCustomRole(
 		try {
 			const content = readFileSync(globalPath, 'utf-8').trim();
 			if (content) return content;
-		} catch {
+		} catch (error) {
 			// no custom role
+			log.debug('Failed to read global custom role for subagent', {agentName, globalPath, error});
 		}
 	}
 

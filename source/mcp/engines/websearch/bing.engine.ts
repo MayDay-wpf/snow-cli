@@ -27,6 +27,10 @@ import type {Page} from 'puppeteer-core';
 import type {SearchResult} from '../../types/websearch.types.js';
 import {cleanText} from '../../utils/websearch/text.utils.js';
 import type {SearchEngine, SearchEngineId} from './types.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:websearch:bing');
+
 
 export class BingEngine implements SearchEngine {
 	readonly id: SearchEngineId = 'bing';
@@ -50,19 +54,32 @@ export class BingEngine implements SearchEngine {
 				waitUntil: 'domcontentloaded',
 				timeout: 30000,
 			});
-		} catch {
+		} catch (error) {
 			// Navigation timeout — try to extract whatever already loaded.
+			log.debug('Bing navigation timeout, attempting extraction on current page state', {
+				query,
+				searchUrl,
+				error,
+			});
 		}
 
 		// Wait for the results container. Try the most specific selector first,
 		// then fall back. Never throw — empty extraction is a valid outcome.
 		try {
 			await page.waitForSelector('#b_results li.b_algo', {timeout: 10000});
-		} catch {
+		} catch (error) {
+			log.debug('Timeout waiting for #b_results li.b_algo selector on Bing, falling back to #b_results', {
+				query,
+				error,
+			});
 			try {
 				await page.waitForSelector('#b_results', {timeout: 3000});
-			} catch {
+			} catch (error) {
 				// Fall through.
+				log.debug('Timeout waiting for #b_results selector on Bing, proceeding with best effort', {
+					query,
+					error,
+				});
 			}
 		}
 

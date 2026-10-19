@@ -4,10 +4,13 @@ import {
 	type CommandResult,
 	getAvailableCommands,
 } from '../execution/commandExecutor.js';
-import {homedir} from 'os';
 import {dirname, join} from 'path';
 import {readdir, readFile, writeFile, mkdir, unlink} from 'fs/promises';
 import {existsSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('commands:custom');
 
 export type CommandLocation = 'global' | 'project';
 
@@ -108,7 +111,8 @@ async function listJsonCommandsRecursively(
 	let entries: Array<import('fs').Dirent> = [];
 	try {
 		entries = await readdir(dir, {withFileTypes: true});
-	} catch {
+	} catch (error) {
+		log.debug('Failed to read custom commands directory', {dir, error});
 		return [];
 	}
 
@@ -241,7 +245,7 @@ function getCustomCommandsDir(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'commands');
+		return join(getGlobalSnowDir().native, 'commands');
 	}
 
 	const root = projectRoot || process.cwd();
@@ -312,7 +316,8 @@ export function checkCommandExists(
 	try {
 		const filePath = getCommandJsonFilePath(dir, name);
 		return existsSync(filePath);
-	} catch {
+	} catch (error) {
+		log.debug('Failed to check if custom command exists', {name, dir, error});
 		return false;
 	}
 }

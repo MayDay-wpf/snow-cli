@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('codebase:gitignoreValidator');
 
 /**
  * Check if the target directory is the user's home directory or filesystem root.
@@ -27,8 +30,12 @@ export function isHomeOrRootDirectory(dirPath: string): boolean {
 			if (compareEqual(realResolved, realHome)) {
 				return true;
 			}
-		} catch {
-			// Ignore filesystem resolution failures for virtual or unmounted paths
+		} catch (e) {
+			log.debug('Realpath resolution failed for path comparison', {
+				resolved,
+				home,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 
 		const root = path.parse(resolved).root;

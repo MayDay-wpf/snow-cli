@@ -23,6 +23,9 @@ import {
 	pickModel,
 	saveOAuthProfile,
 } from './profileStore.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('oauth:login');
 import type {
 	OAuthLoginOutcome,
 	OAuthLoginStartResult,
@@ -201,8 +204,11 @@ async function ensureChatGptHostId(): Promise<string> {
 		if (hostId) {
 			return hostId;
 		}
-	} catch {
-		// 文件缺失或内容损坏：走下面的重新生成分支
+	} catch (e) {
+		log.debug('ChatGPT host id file missing or invalid, generating fresh id', {
+			path,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 
 	const hostId = `urn:uuid:${generateSessionId()}`;
@@ -212,7 +218,7 @@ async function ensureChatGptHostId(): Promise<string> {
 	} catch (error) {
 		console.error(
 			'[oauth] failed to persist the ChatGPT host id:',
-			error instanceof Error ? error.message : error,
+			{error: error instanceof Error ? error.message : error},
 		);
 	}
 	return hostId;

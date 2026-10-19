@@ -5,6 +5,9 @@ import {homedir} from 'os';
 import matter from 'gray-matter';
 import {getDisabledSkills} from '../utils/config/disabledSkills.js';
 import {resolveBuiltInSkillsRoot} from '../utils/docs/snowDocs.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:skills');
 
 export interface SkillMetadata {
 	name: string;
@@ -362,8 +365,8 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 			if (entry.isDirectory()) {
 				lines.push(`${prefix} ${entry.name}/`);
 				// Recursively list directory contents (one level deep only)
+				const subPath = join(skillPath, entry.name);
 				try {
-					const subPath = join(skillPath, entry.name);
 					const subEntries = readdirSync(subPath, {withFileTypes: true});
 					const sortedSubEntries = subEntries.sort((a, b) =>
 						a.name.localeCompare(b.name),
@@ -380,8 +383,12 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 							`${connector}  ${subPrefix} ${fileType} ${subEntry.name}`,
 						);
 					}
-				} catch {
+				} catch (error) {
 					// Ignore subdirectory read errors
+					log.debug('Failed to read skill subdirectory tree', {
+						subPath,
+						error,
+					});
 				}
 			} else {
 				const fileType = entry.name === 'SKILL.md' ? '[MAIN]' : '[FILE]';
@@ -391,6 +398,10 @@ async function generateSkillTree(skillPath: string): Promise<string> {
 
 		return lines.join('\n');
 	} catch (error) {
+		log.debug('Failed to generate skill directory tree', {
+			skillPath,
+			error,
+		});
 		return '(Unable to generate directory tree)';
 	}
 }

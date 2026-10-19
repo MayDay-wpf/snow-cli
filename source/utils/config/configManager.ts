@@ -20,9 +20,13 @@ import {
 	type AppConfig,
 	type RequestMethod,
 } from './apiConfig.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config:configManager');
 import {codebaseReviewAgent} from '../../agents/codebaseReviewAgent.js';
 import {reviewAgent} from '../../agents/reviewAgent.js';
 import {summaryAgent} from '../../agents/summaryAgent.js';
+
 import {bashOutputSummaryAgent} from '../../agents/bashOutputSummaryAgent.js';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 
@@ -86,8 +90,9 @@ export function getActiveProfileName(): string {
 			// Delete old .txt file
 			unlinkSync(LEGACY_ACTIVE_PROFILE_FILE);
 			return profileName;
-		} catch {
+		} catch (error) {
 			// If migration fails, continue with default
+			log.debug('getActiveProfileName legacy profile migration failed', {error});
 		}
 	}
 
@@ -298,8 +303,9 @@ export function getAllProfiles(): ConfigProfile[] {
 				}
 			}
 		}
-	} catch {
+	} catch (error) {
 		// If reading fails, return empty array
+		log.debug('getAllProfiles readDir or profile load failed', {error});
 	}
 
 	// Ensure at least a default profile exists
@@ -353,7 +359,7 @@ export function switchProfile(profileName: string): void {
 			saveProfile(profileName, profileConfig);
 		} catch (error) {
 			console.error(
-				'Failed to migrate proxy config during profile switch:',
+				'Failed to migrate proxy config during profile switch',
 				error,
 			);
 		}

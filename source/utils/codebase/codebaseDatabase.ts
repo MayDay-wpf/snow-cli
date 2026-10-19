@@ -3,6 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('codebase:codebaseDatabase');
+
 /**
  * sql.js singleton cache
  * Prevents loading multiple WASM instances which can cause conflicts
@@ -26,7 +28,7 @@ async function getSqlJs(): Promise<any> {
 	sqlJsInitPromise = initSqlJs().then(SQL => {
 		sqlJsStatic = SQL;
 		sqlJsInitPromise = null;
-		logger.debug('sql.js WASM module loaded');
+		log.debug('sql.js WASM module loaded');
 		return SQL;
 	});
 
@@ -101,9 +103,9 @@ export class CodebaseDatabase {
 			this.createTables();
 
 			this.initialized = true;
-			logger.info('Codebase database initialized', {path: this.dbPath});
+			log.info('Codebase database initialized', {path: this.dbPath});
 		} catch (error) {
-			logger.error('Failed to initialize codebase database', error);
+			log.error('Failed to initialize codebase database', error);
 			throw error;
 		}
 	}

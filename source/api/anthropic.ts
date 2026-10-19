@@ -22,6 +22,8 @@ import {
 } from '../utils/core/streamGuards.js';
 import type {ChatMessage, ChatCompletionTool, UsageInfo} from './types.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:anthropic');
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {saveUsageToFile} from '../utils/core/usageLogger.js';
 import {isDevMode, getDevUserId} from '../utils/core/devMode.js';
@@ -604,7 +606,7 @@ async function* parseSSEStream(
 					};
 
 					const errorMessage = `[API_ERROR] [RETRIABLE] Anthropic stream terminated unexpectedly with incomplete data`;
-					logger.error(errorMessage, errorContext);
+					log.error(errorMessage, errorContext);
 					throw new Error(
 						`${errorMessage}. Context: ${JSON.stringify(errorContext)}`,
 					);
@@ -668,8 +670,6 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/core/logger.js');
-
 		// 增强错误日志,包含断点状态
 		const errorContext = {
 			error: error instanceof Error ? error.message : 'Unknown error',
@@ -678,7 +678,7 @@ async function* parseSSEStream(
 			bufferLength: buffer.length,
 			bufferPreview: buffer.substring(0, 200),
 		};
-		logger.error(
+		log.error(
 			'[API_ERROR] [RETRIABLE] Anthropic SSE stream parsing error with checkpoint context:',
 			errorContext,
 		);
@@ -711,14 +711,14 @@ export async function* createStreamingAnthropicCompletion(
 			} else {
 				// Profile not found, fallback to main config
 				config = getSnowConfig();
-				logger.warn(
+				log.warn(
 					`Profile ${options.configProfile} not found, using main config`,
 				);
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
 			config = getSnowConfig();
-			logger.warn(
+			log.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
 				error,
 			);
@@ -792,7 +792,7 @@ export async function* createStreamingAnthropicCompletion(
 				// Note: agents and other internal tools should set disableThinking=true
 				// Debug: Log thinking decision for troubleshooting
 				if (config.thinking) {
-					// logger.debug('Thinking config check:', {
+					// log.debug('Thinking config check:', {
 					// 	configThinking: !!config.thinking,
 					// 	disableThinking: options.disableThinking,
 					// 	willEnableThinking: config.thinking && !options.disableThinking,
@@ -1117,7 +1117,7 @@ export async function* createStreamingAnthropicCompletion(
 							});
 
 							if (!parseResult.success) {
-								logger.warn(
+								log.warn(
 									`Warning: Tool call ${toolCall.function.name} (${toolCall.id}) was incomplete. Using fallback data.`,
 								);
 							}

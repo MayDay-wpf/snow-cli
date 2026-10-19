@@ -8,6 +8,9 @@ import {useI18n} from '../../../i18n/index.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {cleanIDEContext} from '../../../utils/core/fileUtils.js';
 import fs from 'fs/promises';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:DiffReviewPanel');
 
 type Props = {
 	messages: Array<{
@@ -346,8 +349,11 @@ export default function DiffReviewPanel({
 								newContent: currentContent,
 							});
 						}
-					} catch {
-						// skip
+					} catch (e) {
+						log.debug('Failed to read file preview for diff review', {
+							relativeFile,
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 				}
 
@@ -357,8 +363,10 @@ export default function DiffReviewPanel({
 					skipCloseOnUnmountRef.current = true;
 					await vscodeConnection.showDiffReview(diffFiles);
 				}
-			} catch {
-				// silently fail
+			} catch (e) {
+				log.debug('Failed to show diff review in vscode connection', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			} finally {
 				onClose();
 			}

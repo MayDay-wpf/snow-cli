@@ -1,11 +1,15 @@
-import {homedir} from 'os';
-import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
+import {join} from 'path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config.language');
 
 export type Language = 'en' | 'zh' | 'zh-TW';
 
-const CONFIG_DIR = join(homedir(), '.snow');
-const LANGUAGE_CONFIG_FILE = join(CONFIG_DIR, 'language.json');
+function getLanguageConfigFile(): string {
+	return join(getGlobalSnowDir().native, 'language.json');
+}
 
 interface LanguageConfig {
 	language: Language;
@@ -16,8 +20,9 @@ const DEFAULT_CONFIG: LanguageConfig = {
 };
 
 function ensureConfigDirectory(): void {
-	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, {recursive: true});
+	const dir = getGlobalSnowDir().native;
+	if (!existsSync(dir)) {
+		mkdirSync(dir, {recursive: true});
 	}
 }
 
@@ -26,14 +31,15 @@ function ensureConfigDirectory(): void {
  */
 export function loadLanguageConfig(): LanguageConfig {
 	ensureConfigDirectory();
+	const configFile = getLanguageConfigFile();
 
-	if (!existsSync(LANGUAGE_CONFIG_FILE)) {
+	if (!existsSync(configFile)) {
 		saveLanguageConfig(DEFAULT_CONFIG);
 		return DEFAULT_CONFIG;
 	}
 
 	try {
-		const configData = readFileSync(LANGUAGE_CONFIG_FILE, 'utf-8');
+		const configData = readFileSync(configFile, 'utf-8');
 		const config = JSON.parse(configData);
 		return {
 			...DEFAULT_CONFIG,
@@ -41,6 +47,7 @@ export function loadLanguageConfig(): LanguageConfig {
 		};
 	} catch (error) {
 		// If config file is corrupted, return default config
+		log.warn('Corrupted language config, falling back to default', error);
 		return DEFAULT_CONFIG;
 	}
 }
@@ -50,10 +57,11 @@ export function loadLanguageConfig(): LanguageConfig {
  */
 export function saveLanguageConfig(config: LanguageConfig): void {
 	ensureConfigDirectory();
+	const configFile = getLanguageConfigFile();
 
 	try {
 		const configData = JSON.stringify(config, null, 2);
-		writeFileSync(LANGUAGE_CONFIG_FILE, configData, 'utf-8');
+		writeFileSync(configFile, configData, 'utf-8');
 	} catch (error) {
 		console.error('Failed to save language config:', error);
 	}

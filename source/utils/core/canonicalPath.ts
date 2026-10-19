@@ -109,3 +109,90 @@ export function toNativePath(canonicalPath: string): string {
 	if (!canonicalPath) return '';
 	return path.normalize(canonicalPath);
 }
+
+export class CanonicalPath {
+	readonly posix: string;
+	readonly root: string;
+	readonly segments: string[];
+	readonly isAbsolute: boolean;
+
+	constructor(rawPath: string) {
+		const canonical = toCanonicalPath(rawPath);
+		this.posix = canonical;
+		const split = splitCanonicalPath(canonical);
+		this.root = split.root;
+		this.segments = split.segments;
+		this.isAbsolute = split.isAbsolute;
+	}
+
+	get native(): string {
+		return toNativePath(this.posix);
+	}
+
+	get fileName(): string {
+		if (this.segments.length === 0) return '';
+		return this.segments[this.segments.length - 1] ?? '';
+	}
+
+	get ext(): string {
+		const fn = this.fileName;
+		const lastDot = fn.lastIndexOf('.');
+		return lastDot >= 0 ? fn.slice(lastDot) : '';
+	}
+
+	get stem(): string {
+		const fn = this.fileName;
+		const lastDot = fn.lastIndexOf('.');
+		return lastDot >= 0 ? fn.slice(0, lastDot) : fn;
+	}
+
+	parent(): CanonicalPath {
+		if (this.segments.length === 0) {
+			return this;
+		}
+		const newSegments = this.segments.slice(0, -1);
+		if (newSegments.length === 0) {
+			return new CanonicalPath(this.root || '.');
+		}
+		const joined = (this.root ? this.root : '') + newSegments.join('/');
+		return new CanonicalPath(joined);
+	}
+
+	join(...parts: string[]): CanonicalPath {
+		const additions: string[] = [];
+		for (const part of parts) {
+			const cleaned = toCanonicalPath(part);
+			if (cleaned) additions.push(cleaned);
+		}
+		const full = [this.posix, ...additions].filter(Boolean).join('/');
+		return new CanonicalPath(full);
+	}
+
+	isChildOf(parent: CanonicalPath | string): boolean {
+		const p = typeof parent === 'string' ? new CanonicalPath(parent) : parent;
+		if (this.posix === p.posix) return false;
+		if (this.root !== p.root) return false;
+		if (this.segments.length <= p.segments.length) return false;
+		for (let i = 0; i < p.segments.length; i++) {
+			if (this.segments[i] !== p.segments[i]) return false;
+		}
+		return true;
+	}
+
+	relativeFrom(base: CanonicalPath | string): string {
+		const b = typeof base === 'string' ? new CanonicalPath(base) : base;
+		if (this.posix === b.posix) return '.';
+		const rel = path.relative(b.native, this.native);
+		return toCanonicalPath(rel);
+	}
+
+	toString(): string {
+		return this.posix;
+	}
+}
+
+export type StructuredPath = CanonicalPath;
+
+export function parseCanonicalPath(rawPath: string): CanonicalPath {
+	return new CanonicalPath(rawPath);
+}

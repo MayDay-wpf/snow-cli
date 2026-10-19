@@ -6,6 +6,9 @@ import {formatToolTitleLine} from '../../../ui/components/special/toolIcons.js';
 import {isToolNeedTwoStepDisplay} from '../../../utils/config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
 import {extractThinkingContent} from '../utils/thinkingExtractor.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:toolCallProcessor');
 
 export type ProcessToolCallsOptions = {
 	receivedToolCalls: ToolCall[];
@@ -102,6 +105,7 @@ export async function processToolCallsAfterStream(
 		try {
 			toolArgs = JSON.parse(toolCall.function.arguments);
 		} catch (e) {
+			log.debug('Failed to parse tool call arguments:', e);
 			toolArgs = {};
 		}
 

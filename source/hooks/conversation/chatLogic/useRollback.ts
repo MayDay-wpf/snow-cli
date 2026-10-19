@@ -33,6 +33,9 @@ import {
 } from '../core/subAgentMessageHandler.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import type {ChatMessage} from '../../../api/chat.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic:useRollback');
 
 /**
  * Convert a live messages array index to a snapshot-compatible index.
@@ -541,8 +544,8 @@ export function useRollback(props: UseChatLogicProps) {
 			let detail: any = undefined;
 			try {
 				detail = await response.json();
-			} catch {
-				// ignore
+			} catch (parseError) {
+				log.debug('Failed to parse rollback response error detail:', parseError);
 			}
 			throw new Error(
 				`Rollback request failed: ${response.status} ${response.statusText}` +

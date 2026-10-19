@@ -4,15 +4,18 @@ import {
 } from '../execution/commandExecutor.js';
 import fs from 'fs/promises';
 import path from 'path';
-import {homedir} from 'os';
 import {existsSync, readdirSync} from 'fs';
 import crypto from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {
 	readSettings,
 	updateSettings,
 	type SettingsScope,
 	type UnifiedSettings,
 } from '../config/unifiedSettings.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('commands:role');
 
 // Role location type
 export type RoleLocation = 'global' | 'project';
@@ -80,7 +83,7 @@ export function getRoleFilePath(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow', 'ROLE.md');
+		return path.join(getGlobalSnowDir().native, 'ROLE.md');
 	}
 	const root = projectRoot || process.cwd();
 	return path.join(root, 'ROLE.md');
@@ -192,7 +195,7 @@ export function getRoleDirectory(
 	projectRoot?: string,
 ): string {
 	if (location === 'global') {
-		return path.join(homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return projectRoot || process.cwd();
 }
@@ -255,8 +258,9 @@ export function listRoles(
 				path: path.join(dir, item.filename),
 			});
 		}
-	} catch {
+	} catch (error) {
 		// Directory read error, return empty
+		log.debug('Failed to read roles directory', {dir, location, error});
 	}
 
 	// Sort by filename only to keep list stable when switching active role

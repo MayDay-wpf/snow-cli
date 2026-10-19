@@ -23,6 +23,9 @@ import {
 	STREAM_IDLE_TIMEOUT_MS,
 	StreamIdleTimeoutError,
 } from '../utils/core/streamGuards.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:responsesWebSocket');
 
 /** WebSocket 握手超时（毫秒）。 */
 const WEB_SOCKET_HANDSHAKE_TIMEOUT_MS = 30000;
@@ -136,8 +139,10 @@ export async function* streamResponsesWebSocket(
 			) {
 				socket.terminate();
 			}
-		} catch {
-			// 终止失败不影响错误传播
+		} catch (e) {
+			log.debug('Failed to terminate websocket cleanly', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	};
 
@@ -189,8 +194,10 @@ export async function* streamResponsesWebSocket(
 			) {
 				socket.close();
 			}
-		} catch {
-			// 忽略关闭异常
+		} catch (e) {
+			log.debug('Failed to close websocket cleanly on cleanup', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	};
 

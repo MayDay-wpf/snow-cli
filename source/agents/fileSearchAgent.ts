@@ -1,5 +1,7 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:fileSearchAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -125,7 +127,7 @@ export class FileSearchAgent {
 			this.initialized = true;
 			return true;
 		} catch (error) {
-			logger.warn('Failed to initialize file search agent:', error);
+			log.warn('Failed to initialize file search agent:', error);
 			return false;
 		}
 	}
@@ -290,7 +292,7 @@ export class FileSearchAgent {
 		try {
 			tools = await this.getSearchTools();
 		} catch (error) {
-			logger.warn('File search agent: failed to collect tools:', error);
+			log.warn('File search agent: failed to collect tools:', error);
 		}
 		if (tools.length === 0) {
 			yield {
@@ -917,8 +919,10 @@ Example output:
 			// extracted as partials — they would flood the list with every file in
 			// a directory. Only targeted ace-search hits are surfaced mid-loop;
 			// the model's final structured answer remains the source of truth.
-		} catch {
-			// Extraction is purely a UX nicety; ignore failures.
+		} catch (extractError) {
+			log.debug('Failed to extract partial file matches from tool results', {
+				error: extractError instanceof Error ? extractError.message : String(extractError),
+			});
 		}
 		return results.slice(0, MAX_RESULTS);
 	}

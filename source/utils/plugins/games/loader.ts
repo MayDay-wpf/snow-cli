@@ -13,6 +13,8 @@ import {pathToFileURL} from 'node:url';
 
 import {GAMES_PLUGIN_DIR} from '../../config/apiConfig.js';
 import {logger} from '../../core/logger.js';
+
+const log = logger.child('plugins:games.loader');
 import {snakeGamePlugin} from './builtin/snake.js';
 import type {GamePlugin, GamePluginModule} from './types.js';
 
@@ -78,7 +80,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 	try {
 		entries = readdirSync(GAMES_PLUGIN_DIR, {withFileTypes: true});
 	} catch (error) {
-		logger.warn('Failed to read games plugin directory', {
+		log.warn('Failed to read games plugin directory', {
 			directory: GAMES_PLUGIN_DIR,
 			error,
 		});
@@ -100,7 +102,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 			const mod = (await import(moduleUrl)) as GamePluginModule;
 			const collected = collectFromModule(mod);
 			if (collected.length === 0) {
-				logger.warn(
+				log.warn(
 					`[games] plugin "${file.name}" did not export a valid GamePlugin`,
 				);
 				continue;
@@ -110,7 +112,7 @@ export async function loadExternalGamePlugins(): Promise<GamePlugin[]> {
 				plugins.push(plugin);
 			}
 		} catch (error) {
-			logger.warn(`[games] failed to load plugin "${file.name}":`, {error});
+			log.warn(`[games] failed to load plugin "${file.name}":`, {error});
 		}
 	}
 

@@ -35,6 +35,9 @@ import {
 	recordChatUsage,
 	startChatSpan,
 } from '../utils/telemetry/otel.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:chat');
 
 export type {
 	ChatMessage,
@@ -637,8 +640,6 @@ async function* parseSSEStream(
 			}
 		}
 	} catch (error) {
-		const {logger} = await import('../utils/core/logger.js');
-
 		// 增强错误日志,包含断点状态
 		const errorContext = {
 			error: error instanceof Error ? error.message : 'Unknown error',
@@ -647,7 +648,7 @@ async function* parseSSEStream(
 			bufferLength: buffer.length,
 			bufferPreview: buffer.substring(0, 200),
 		};
-		logger.error(
+		log.error(
 			'[API_ERROR] [RETRIABLE] OpenAI SSE stream parsing error with checkpoint context:',
 			errorContext,
 		);
@@ -678,16 +679,14 @@ export async function* createStreamingChatCompletion(
 			} else {
 				// Profile not found, fallback to main config
 				config = getSnowConfig();
-				const {logger} = await import('../utils/core/logger.js');
-				logger.warn(
+				log.warn(
 					`Profile ${options.configProfile} not found, using main config`,
 				);
 			}
 		} catch (error) {
 			// If loading profile fails, fallback to main config
 			config = getSnowConfig();
-			const {logger} = await import('../utils/core/logger.js');
-			logger.warn(
+			log.warn(
 				`Failed to load profile ${options.configProfile}, using main config:`,
 				error,
 			);

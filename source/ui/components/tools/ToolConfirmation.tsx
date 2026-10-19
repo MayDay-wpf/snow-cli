@@ -18,6 +18,9 @@ import {
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import {collectDiffPreviewEntries} from '../../../utils/ui/diffPreview.js';
 import fs from 'fs';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:components');
 
 export type ConfirmationResult =
 	| 'approve'
@@ -167,8 +170,11 @@ export default function ToolConfirmation({
 			if (command && typeof command === 'string') {
 				return isSensitiveCommand(command);
 			}
-		} catch {
-			// Ignore parse errors
+		} catch (e) {
+			log.debug('Failed to parse tool arguments for sensitive command check', {
+				toolName,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 
 		return {isSensitive: false};
@@ -584,8 +590,10 @@ export default function ToolConfirmation({
 						});
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (e) {
+				log.debug('Failed to parse tool arguments for diff preview', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 			return entries;
 		};

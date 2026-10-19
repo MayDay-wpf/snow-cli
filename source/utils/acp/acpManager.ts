@@ -30,6 +30,9 @@ import {
 	ndJsonStream,
 } from '@agentclientprotocol/sdk';
 import {Readable, Writable} from 'stream';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('acp:acpManager');
 import {sessionManager} from '../session/sessionManager.js';
 import {
 	loadPermissionsConfig,
@@ -159,7 +162,11 @@ class AcpManager {
 				if (req.cwd) {
 					try {
 						process.chdir(req.cwd);
-					} catch {
+					} catch (error) {
+						log.debug(
+							'Failed to change directory for new ACP session',
+							{cwd: req.cwd, sessionId, error},
+						);
 						// 忽略错误
 					}
 				}
@@ -201,7 +208,11 @@ class AcpManager {
 				if (req.cwd) {
 					try {
 						process.chdir(req.cwd);
-					} catch {
+					} catch (error) {
+						log.debug(
+							'Failed to change directory for loaded ACP session',
+							{cwd: req.cwd, sessionId, error},
+						);
 						// 忽略错误
 					}
 				}
@@ -346,7 +357,12 @@ class AcpManager {
 						content: {type: 'text', text: chunk},
 					} as SessionUpdate,
 				})
-				.catch(() => {});
+				.catch(error => {
+					log.debug(
+						'Failed to send agent_message_chunk sessionUpdate',
+						{error},
+					);
+				});
 		};
 
 		// 思考内容缓冲区
@@ -369,7 +385,12 @@ class AcpManager {
 						content: {type: 'text', text: chunk},
 					} as SessionUpdate,
 				})
-				.catch(() => {});
+				.catch(error => {
+					log.debug(
+						'Failed to send agent_thought_chunk sessionUpdate',
+						{error},
+					);
+				});
 		};
 
 		// 根据配置的 requestMethod 选择正确的 API 链路
@@ -416,7 +437,12 @@ class AcpManager {
 								status: 'pending',
 							} as SessionUpdate,
 						})
-						.catch(() => {});
+						.catch(error => {
+							log.debug('Failed to send tool_call sessionUpdate', {
+								toolCallId: tc.id,
+								error,
+							});
+						});
 				}
 			}
 			// 处理完成信号 - 捕获 thinking 对象（Anthropic/Gemini 需要）
@@ -674,7 +700,12 @@ class AcpManager {
 				sessionId,
 				update,
 			})
-			.catch(() => {});
+			.catch(error => {
+				log.debug('Failed to send tool_call_update sessionUpdate', {
+					toolCallId: toolCall.id,
+					error,
+				});
+			});
 	}
 
 	/**
@@ -699,7 +730,11 @@ class AcpManager {
 					const result = isSensitiveCommand(args.command);
 					isSensitive = result.isSensitive;
 				}
-			} catch {
+			} catch (error) {
+				log.debug(
+					'Failed to parse terminal arguments for sensitivity check',
+					{toolCallId: toolCall.id, error},
+				);
 				// 忽略解析错误
 			}
 		}
@@ -752,7 +787,11 @@ class AcpManager {
 				// reject 或 reject_with_reply 均拒绝
 				return false;
 			}
-		} catch {
+		} catch (error) {
+			log.debug(
+				'Failed to execute toolConfirmation hook in ACP permission check',
+				{toolCallId: toolCall.id, error},
+			);
 			// Hook 执行失败时回退到权限请求
 		}
 
@@ -784,7 +823,11 @@ class AcpManager {
 			}
 
 			return approved;
-		} catch {
+		} catch (error) {
+			log.debug(
+				'Failed to request tool permission via ACP connection',
+				{toolCallId: toolCall.id, error},
+			);
 			return false;
 		}
 	}
@@ -797,7 +840,8 @@ class AcpManager {
 			// eslint-disable-next-line @typescript-eslint/no-var-requires
 			const packageJson = require('../../../package.json');
 			return packageJson.version || '0.0.0';
-		} catch {
+		} catch (error) {
+			log.debug('Failed to read package version in ACP manager', {error});
 			return '0.0.0';
 		}
 	}

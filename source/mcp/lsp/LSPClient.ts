@@ -25,7 +25,10 @@ import type {
 	CompletionParams,
 } from 'vscode-languageserver-protocol';
 import {processManager} from '../../utils/core/processManager.js';
+import {logger} from '../../utils/core/logger.js';
 import type {LSPServerConfig} from './LSPServerRegistry.js';
+
+const log = logger.child('mcp:lsp-client');
 
 export interface LSPClientConfig extends LSPServerConfig {
 	language: string;
@@ -101,8 +104,9 @@ export class LSPClient {
 		if (this.connection) {
 			try {
 				this.connection.dispose();
-			} catch {
+			} catch (error) {
 				// Connection may already be disposed
+				log.debug('Failed to dispose LSP connection during stream teardown', {error});
 			}
 		}
 	}
@@ -357,8 +361,8 @@ export class LSPClient {
 		if (this.connection) {
 			try {
 				this.connection.dispose();
-			} catch {
-				// Connection may already be disposed or broken
+			} catch (disposeErr) {
+				log.debug('Suppressed error during connection disposal:', {error: disposeErr});
 			}
 			this.connection = undefined;
 		}
@@ -368,8 +372,9 @@ export class LSPClient {
 				if (!this.process.killed) {
 					this.process.kill();
 				}
-			} catch {
+			} catch (error) {
 				// Process may already be dead
+				log.debug('Failed to kill LSP process during stop', {error});
 			}
 			this.process = undefined;
 		}

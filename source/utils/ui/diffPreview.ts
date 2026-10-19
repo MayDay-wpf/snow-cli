@@ -1,5 +1,8 @@
 import fs from 'fs';
 import {calculateSimilarity} from '../../mcp/utils/filesystem/similarity.utils.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('ui:diffPreview');
 
 /**
  * Read the original content of a file, returning null if the file
@@ -9,7 +12,8 @@ export function readOriginalFile(filePath: string): string | null {
 	try {
 		if (!filePath || !fs.existsSync(filePath)) return null;
 		return fs.readFileSync(filePath, 'utf-8');
-	} catch {
+	} catch (error) {
+		log.debug('Failed to read original file for diff preview', {filePath, error});
 		return null;
 	}
 }
@@ -316,8 +320,9 @@ export function collectDiffPreviewEntries(
 		) {
 			try {
 				parsed.filePath = JSON.parse(parsed.filePath);
-			} catch {
+			} catch (error) {
 				// Not valid JSON — leave as-is (single file path string)
+				log.debug('Failed to parse filePath JSON in computePendingDiffPreviewEntries', {error});
 			}
 		}
 
@@ -473,8 +478,9 @@ export function collectDiffPreviewEntries(
 				}
 			}
 		}
-	} catch {
+	} catch (error) {
 		// Ignore parse errors
+		log.debug('Failed to parse copy segments in computeCopySegmentPreviewEntries', {error});
 	}
 	// Drop entries that represent no actual change so the pending UI never
 	// renders an empty diff. Edit calls with identical search/replace are
@@ -516,8 +522,9 @@ export function enrichPendingEditArgs(
 	) {
 		try {
 			toolArgs = {...toolArgs, filePath: JSON.parse(rawFilePath)};
-		} catch {
+		} catch (error) {
 			// Not valid JSON — leave as-is (single file path string)
+			log.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {error});
 		}
 	}
 

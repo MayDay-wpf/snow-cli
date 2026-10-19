@@ -3,6 +3,9 @@ import {promises as fs} from 'fs';
 import {tmpdir} from 'os';
 import {join} from 'path';
 import {readFileWithEncoding} from '../../mcp/utils/filesystem/encoding.utils.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('ui:externalEditor');
 
 type StdinLike = NodeJS.ReadStream & {
 	isRaw?: boolean;
@@ -27,8 +30,9 @@ function pauseStdinForExternalEditor(): () => void {
 		if (typeof stdin.setRawMode === 'function') {
 			try {
 				stdin.setRawMode(wasRaw ?? true);
-			} catch {
+			} catch (error) {
 				// 恢复 raw mode 失败时不应影响主流程
+				log.debug('Failed to restore stdin rawMode after external editor', {error});
 			}
 		}
 	};
@@ -81,8 +85,11 @@ export async function editTextWithNotepad(initialText: string): Promise<string> 
 
 		try {
 			await fs.unlink(tempFile);
-		} catch {
-			// 临时文件清理失败不应阻断主流程
+		} catch (e) {
+			log.debug('Failed to unlink external editor temp file', {
+				tempFile,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }

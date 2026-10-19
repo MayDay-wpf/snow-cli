@@ -17,6 +17,9 @@ import {
 	listDescendantProcesses,
 	sampleProcessResources,
 } from '../../utils/core/processResourceMonitor.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:pages');
 
 /**
  * Resource Manager Screen
@@ -327,7 +330,8 @@ export default function ResourceManagerScreen({onBack, terminalWidth}: Props) {
 		try {
 			const next = sortEntries(await collectResourceEntries());
 			setEntries(next);
-		} catch {
+		} catch (error) {
+			log.debug('Failed to collect resource entries', {error});
 			// 采样失败时保留上一帧快照，避免界面闪空
 		} finally {
 			setIsLoading(false);

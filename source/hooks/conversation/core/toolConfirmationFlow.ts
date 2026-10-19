@@ -4,6 +4,9 @@ import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {filterToolsBySensitivity} from '../../../utils/execution/yoloPermissionChecker.js';
 import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {handleToolRejection} from './toolRejectionHandler.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('hooks:toolConfirmationFlow');
 
 export type ToolConfirmationFlowOptions = {
 	receivedToolCalls: ToolCall[];
@@ -127,8 +130,11 @@ export async function resolveToolConfirmations(
 				).then(m => ({isSensitiveCommand: m.isSensitiveCommand}));
 				const sensitiveCheck = checkSensitiveCommand(args.command);
 				isSensitiveCommand = sensitiveCheck.isSensitive;
-			} catch {
-				// treat as normal command
+			} catch (e) {
+				log.debug('Failed to evaluate sensitive command status for tool call', {
+					toolCallId: toolCall.id,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		}
 

@@ -9,6 +9,8 @@
 
 import {logger} from './logger.js';
 
+const log = logger.child('core:globalCleanup');
+
 /**
  * Lightweight cleanup executed on /clear and session resets.
  * Preserves MCP connections and tool caches to ensure zero-latency subsequent requests.
@@ -21,8 +23,9 @@ export async function cleanupSessionResources(): Promise<void> {
 			'./subAgentContextCompressor.js'
 		);
 		freeSubAgentEncoder();
-	} catch {
+	} catch (error) {
 		// Module may not be loaded yet — nothing to free
+		log.debug('[SessionCleanup] freeSubAgentEncoder skipped', {error});
 	}
 
 	// 2. Clear sub-agent stream state maps
@@ -31,8 +34,9 @@ export async function cleanupSessionResources(): Promise<void> {
 			await import('../../hooks/conversation/core/subAgentMessageHandler.js');
 		clearAllTeammateStreamEntries();
 		clearAllSubAgentStreamEntries();
-	} catch {
+	} catch (error) {
 		// Not loaded
+		log.debug('[SessionCleanup] clearAllStreamEntries skipped', {error});
 	}
 
 	// 3. Clear runningSubAgentTracker
@@ -41,8 +45,9 @@ export async function cleanupSessionResources(): Promise<void> {
 			'../execution/runningSubAgentTracker.js'
 		);
 		runningSubAgentTracker.clear();
-	} catch {
+	} catch (error) {
 		// Not loaded
+		log.debug('[SessionCleanup] runningSubAgentTracker.clear skipped', {error});
 	}
 
 	// 4. Clear conversation context
@@ -51,8 +56,9 @@ export async function cleanupSessionResources(): Promise<void> {
 			'../codebase/conversationContext.js'
 		);
 		clearConversationContext();
-	} catch {
+	} catch (error) {
 		// Not loaded
+		log.debug('[SessionCleanup] clearConversationContext skipped', {error});
 	}
 
 	// 5. Clear Ink fullStaticOutput buffer
@@ -61,15 +67,16 @@ export async function cleanupSessionResources(): Promise<void> {
 		if (typeof ink.clearInkStaticOutput === 'function') {
 			ink.clearInkStaticOutput(process.stdout);
 		}
-	} catch {
+	} catch (error) {
 		// Ink module not loaded
+		log.debug('[SessionCleanup] clearInkStaticOutput skipped', {error});
 	}
 
 	// Note: We intentionally DO NOT call global.gc() here.
 	// Running a full STW GC on a ~1GB V8 heap freezes the event loop for 1-5 seconds.
 	// V8 idle GC handles memory reclamation naturally without blocking user interaction.
 
-	logger.info('[SessionCleanup] Session resources reset (MCP connections preserved)');
+	log.info('[SessionCleanup] Session resources reset (MCP connections preserved)');
 }
 
 /**
@@ -83,16 +90,18 @@ export async function cleanupGlobalResources(): Promise<void> {
 	try {
 		const {webSearchService} = await import('../../mcp/websearch.js');
 		await webSearchService.closeBrowser();
-	} catch {
+	} catch (error) {
 		// websearch module not loaded or already closed
+		log.debug('[GlobalCleanup] webSearchService.closeBrowser skipped', {error});
 	}
 
 	// 3. Dispose ACECodeSearchService caches
 	try {
 		const {aceCodeSearchService} = await import('../../mcp/aceCodeSearch.js');
 		aceCodeSearchService.dispose();
-	} catch {
+	} catch (error) {
 		// ACE module not loaded
+		log.debug('[GlobalCleanup] aceCodeSearchService.dispose skipped', {error});
 	}
 
 	// 4. Close persistent MCP clients + drop tools cache (prevents orphaned children on exit)
@@ -105,8 +114,9 @@ export async function cleanupGlobalResources(): Promise<void> {
 			new Promise<void>(resolve => setTimeout(resolve, 2000)),
 		]);
 		clearMCPToolsCache();
-	} catch {
+	} catch (error) {
 		// MCP manager not loaded
+		log.debug('[GlobalCleanup] closeAllMCPConnections skipped', {error});
 	}
 
 	// 5. Flush OpenTelemetry (process.exit bypasses beforeExit)
@@ -116,10 +126,11 @@ export async function cleanupGlobalResources(): Promise<void> {
 			shutdownTelemetry(),
 			new Promise<void>(resolve => setTimeout(resolve, 2000)),
 		]);
-	} catch {
+	} catch (error) {
 		// OTEL not started
+		log.debug('[GlobalCleanup] shutdownTelemetry skipped', {error});
 	}
 
-	logger.info('[GlobalCleanup] Global resources fully cleaned up for exit');
+	log.info('[GlobalCleanup] Global resources fully cleaned up for exit');
 }
 

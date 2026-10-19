@@ -8,16 +8,19 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from 'fs';
-import {homedir} from 'os';
 import {join} from 'path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('task:loopManager');
 import {taskManager} from './taskManager.js';
 import {executeTaskInBackground} from './taskExecutor.js';
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_ACTIVE_LOOPS = 50;
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'running', 'paused']);
-const LOOP_DAEMON_DIR = join(homedir(), '.snow', 'loop-daemons');
-const LOOP_DAEMON_LOG_DIR = join(homedir(), '.snow', 'loop-logs');
+const LOOP_DAEMON_DIR = join(getGlobalSnowDir().native, 'loop-daemons');
+const LOOP_DAEMON_LOG_DIR = join(getGlobalSnowDir().native, 'loop-logs');
 
 type LoopExecutionTaskStatus =
 	| 'pending'
@@ -116,10 +119,13 @@ function readLoopDaemonState(filePath: string): LoopDaemonState | null {
 			...state,
 			scheduleKind: state.scheduleKind ?? 'interval',
 		};
-	} catch {
+	} catch (error) {
+		log.debug('readLoopDaemonState failed to read state', {error, filePath});
 		try {
 			unlinkSync(filePath);
-		} catch {}
+		} catch (unlinkError) {
+			log.debug('readLoopDaemonState failed to unlink invalid file', {error: unlinkError, filePath});
+		}
 
 		return null;
 	}
@@ -138,7 +144,9 @@ function writeLoopDaemonLog(loopId: string, message: string): void {
 		writeFileSync(getLoopDaemonLogPath(loopId), `[${timestamp}] ${message}\n`, {
 			flag: 'a',
 		});
-	} catch {}
+	} catch (error) {
+		log.debug('writeLoopDaemonLog failed to write log', {error, loopId});
+	}
 }
 
 function clampPositiveInteger(value: number): number {
@@ -462,7 +470,9 @@ class LoopManager {
 			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGTERM.');
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
-			} catch {}
+			} catch (error) {
+				log.debug('SIGTERM failed to unlink daemon file', {error, loopId: loop.id});
+			}
 
 			process.exit(0);
 		});
@@ -471,7 +481,9 @@ class LoopManager {
 			writeLoopDaemonLog(loop.id, 'Loop daemon received SIGINT.');
 			try {
 				unlinkSync(getLoopDaemonFilePath(loop.id));
-			} catch {}
+			} catch (error) {
+				log.debug('SIGINT failed to unlink daemon file', {error, loopId: loop.id});
+			}
 
 			process.exit(0);
 		});
@@ -607,7 +619,9 @@ class LoopManager {
 
 		try {
 			unlinkSync(filePath);
-		} catch {}
+		} catch (error) {
+			log.debug('stopDaemonLoop failed to unlink daemon file', {error, filePath});
+		}
 
 		return state;
 	}

@@ -27,6 +27,9 @@ import {checkAndApproveTools, executeMcpTools} from './subAgentToolApproval.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {withAgentSpan} from '../telemetry/otel.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution.subAgent');
 import type {
 	SubAgentExecutionContext,
 	SubAgentMessage,
@@ -305,7 +308,11 @@ export async function executeSubAgent(
 		if (ctx) {
 			try {
 				emitSubAgentMessage(ctx, {type: 'done'});
-			} catch {
+			} catch (error) {
+				log.debug(
+					'Failed to emit final done message for sub-agent',
+					{instanceId: ctx.instanceId, error},
+				);
 				/* noop */
 			}
 		}
@@ -364,7 +371,7 @@ async function resolveConfig(
 			}
 		} catch (error) {
 			console.warn(
-				`Failed to load profile ${agent.configProfile} for sub-agent, using main config:`,
+				`Failed to load profile ${agent.configProfile} for sub-agent, using main config`,
 				error,
 			);
 		}

@@ -1,3 +1,7 @@
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:terminal');
+
 type WritableStreamLike =
 	| Pick<NodeJS.WriteStream, 'write'>
 	| {
@@ -73,8 +77,10 @@ export function emitTerminalExitSequence(stream?: WritableStreamLike): void {
 	if (target && typeof target.write === 'function') {
 		try {
 			target.write(TERMINAL_EXIT_SEQUENCES);
-		} catch {
-			// Best-effort during process teardown
+		} catch (e) {
+			log.debug('Failed to emit terminal exit sequence (stream error)', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }

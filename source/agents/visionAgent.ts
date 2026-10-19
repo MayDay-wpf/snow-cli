@@ -4,6 +4,8 @@ import {
 	type RequestMethod,
 } from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:visionAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -230,7 +232,7 @@ export class VisionAgent {
 			);
 			return description || null;
 		} catch (error) {
-			logger.warn('Vision agent: failed to describe images', error);
+			log.warn('Vision agent: failed to describe images', error);
 			return null;
 		}
 	}

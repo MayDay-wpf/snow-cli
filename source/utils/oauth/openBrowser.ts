@@ -3,6 +3,9 @@
  */
 
 import {spawn} from 'child_process';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('oauth:openBrowser');
 
 /**
  * 构造 Windows 下通过 `cmd start` 打开链接的命令行。
@@ -48,7 +51,10 @@ export function openExternalUrl(url: string): void {
 
 		const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
 		spawn(command, [trimmed], {detached: true, stdio: 'ignore'}).unref();
-	} catch {
-		// 打不开浏览器不影响流程：用户可以手动复制链接
+	} catch (e) {
+		log.debug('Failed to open authorization URL in system browser', {
+			url: trimmed,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 }

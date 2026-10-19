@@ -1,7 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('session:commandUsageManager');
 
 /**
  * 命令使用频率数据结构
@@ -30,7 +32,7 @@ class CommandUsageManager {
 	private readonly saveDelay = 1000; // 1秒延迟写入
 
 	constructor() {
-		const snowDir = path.join(os.homedir(), '.snow');
+		const snowDir = getGlobalSnowDir().native;
 		this.usageFile = path.join(snowDir, 'command-usage.json');
 	}
 
@@ -41,8 +43,9 @@ class CommandUsageManager {
 		try {
 			const snowDir = path.dirname(this.usageFile);
 			await fs.mkdir(snowDir, {recursive: true});
-		} catch {
+		} catch (error) {
 			// 目录已存在或其他错误
+			log.debug('ensureSnowDir mkdir failed or already exists', {error, usageFile: this.usageFile});
 		}
 	}
 
@@ -94,7 +97,7 @@ class CommandUsageManager {
 			);
 			this.isDirty = false;
 		} catch (error) {
-			logger.error('Failed to save command usage:', error);
+			log.error('Failed to save command usage:', error);
 		}
 	}
 

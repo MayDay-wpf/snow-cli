@@ -1,6 +1,9 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config.proxy');
 
 /**
  * Supported search engine identifiers. Keep in sync with
@@ -56,7 +59,7 @@ export function sanitizeProxyHost(host: string | undefined): string {
 	return host.trim().replace(/^https?:\/\//i, '') || DEFAULT_PROXY_HOST;
 }
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = getGlobalSnowDir().native;
 const PROXY_CONFIG_FILE = join(CONFIG_DIR, 'proxy-config.json');
 
 function ensureConfigDirectory(): void {
@@ -138,8 +141,8 @@ export async function updateProxyConfig(
 				saveProfile(activeProfileName, profileConfig);
 			}
 		}
-	} catch {
-		// Profiles system not available yet (during initialization), skip sync
+	} catch (error) {
+		log.debug('Profiles system not available yet, skipped sync', {error});
 	}
 }
 
@@ -181,8 +184,8 @@ export function compileBlockedPatterns(
 
 		try {
 			compiled.push(new RegExp(trimmed, 'i'));
-		} catch {
-			// Ignore invalid regex patterns
+		} catch (error) {
+			log.debug('Ignored invalid regex pattern in blocked patterns', {pattern: trimmed, error});
 		}
 	}
 
@@ -207,8 +210,8 @@ export function isUrlBlocked(
 	const candidates = [url];
 	try {
 		candidates.push(new URL(url).host);
-	} catch {
-		// 非标准 URL 直接匹配原文
+	} catch (error) {
+		log.debug('URL host extraction fallback to raw text matching', {url, error});
 	}
 
 	return compiledPatterns.some(regex =>

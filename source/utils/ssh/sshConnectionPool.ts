@@ -26,6 +26,8 @@ import {SSHClient} from './sshClient.js';
 import type {SSHConfig} from '../config/workingDirConfig.js';
 import {logger} from '../core/logger.js';
 
+const log = logger.child('ssh:sshConnectionPool');
+
 const IDLE_DISCONNECT_MS = 60 * 1000;
 
 interface PoolEntry {
@@ -115,7 +117,7 @@ class SSHConnectionPool {
 			try {
 				entry.client.disconnect();
 			} catch (err) {
-				logger.warn('SSH pool: error while disconnecting idle client', err);
+				log.warn('SSH pool: error while disconnecting idle client', err);
 			}
 			entry.connected = false;
 			this.entries.delete(key);
@@ -160,7 +162,7 @@ class SSHConnectionPool {
 			try {
 				entry.client.disconnect();
 			} catch (err) {
-				logger.warn('SSH pool: error while closing client during shutdown', err);
+				log.warn('SSH pool: error while closing client during shutdown', err);
 			}
 			entry.connected = false;
 		}

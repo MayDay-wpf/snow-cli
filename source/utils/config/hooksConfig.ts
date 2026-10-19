@@ -1,4 +1,3 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {
 	existsSync,
@@ -8,6 +7,7 @@ import {
 	readdirSync,
 	unlinkSync,
 } from 'fs';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 /**
  * Hook 类型
@@ -145,7 +145,7 @@ export type HookScope = 'global' | 'project';
  * 获取全局 hooks 目录
  */
 function getGlobalHooksDir(): string {
-	return join(homedir(), '.snow', 'hooks');
+	return join(getGlobalSnowDir().native, 'hooks');
 }
 
 /**

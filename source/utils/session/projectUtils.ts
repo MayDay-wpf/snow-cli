@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import crypto from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('session:projectUtils');
 
 /**
  * 项目工具函数 - 用于获取项目标识
@@ -112,7 +115,7 @@ export function sanitizeProjectName(name: string): string {
 }
 
 function getSnowDir(): string {
-	return path.join(os.homedir(), '.snow');
+	return getGlobalSnowDir().native;
 }
 
 function getProjectRegistryPath(): string {
@@ -272,8 +275,9 @@ function writeProjectRegistry(registry: ProjectRegistry): void {
 		const registryPath = getProjectRegistryPath();
 		fs.mkdirSync(path.dirname(registryPath), {recursive: true});
 		fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf-8');
-	} catch {
+	} catch (error) {
 		// 项目注册表只是兼容性加速索引，写入失败不应影响主流程。
+		log.debug('writeProjectRegistry failed to write project registry', {error});
 	}
 }
 
@@ -300,8 +304,9 @@ function discoverProjectIdsByName(projectNames: string[]): string[] {
 					discovered.add(file.name);
 				}
 			}
-		} catch {
+		} catch (error) {
 			// 目录不存在或不可读时跳过，保持完全无感。
+			log.debug('discoverProjectIdsByName directory read skipped', {error, parentDir});
 		}
 	}
 

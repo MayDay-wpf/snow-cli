@@ -61,6 +61,8 @@ import {
 	isMCPToolEnabled,
 } from '../config/disabledMCPTools.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:mcpToolsManager');
 import {resourceMonitor} from '../core/resourceMonitor.js';
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
 import {
@@ -68,8 +70,8 @@ import {
 	executeMCPApiTool,
 	isMCPApiServer,
 } from './mcpApiClient.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
-import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
@@ -183,7 +185,7 @@ export function getTodoService(): TodoService {
 	if (!todoService) {
 		// 获取当前项目ID，与 Session 路径结构保持一致
 		const projectId = sessionManager.getProjectId();
-		const basePath = path.join(os.homedir(), '.snow', 'todos', projectId);
+		const basePath = path.join(getGlobalSnowDir().native, 'todos', projectId);
 
 		todoService = new TodoService(basePath, () => {
 			const session = sessionManager.getCurrentSession();
@@ -241,7 +243,8 @@ export function getRegisteredServicePrefixes(): string[] {
 			name => `${name}-`,
 		);
 		return [...builtInPrefixes, ...externalPrefixes];
-	} catch {
+	} catch (error) {
+		log.debug('Failed to get external MCP prefixes from config', {error});
 		return [...builtInPrefixes];
 	}
 }
@@ -249,7 +252,7 @@ export function getRegisteredServicePrefixes(): string[] {
 // In-flight refresh promise to prevent duplicate concurrent discovery runs
 let inFlightRefreshPromise: Promise<void> | null = null;
 
-const CATALOG_FILE_PATH = path.join(os.homedir(), '.snow', 'mcp-catalog.json');
+const CATALOG_FILE_PATH = path.join(getGlobalSnowDir().native, 'mcp-catalog.json');
 
 interface MCPCatalogDiskFormat {
 	version: number;
@@ -272,11 +275,11 @@ function loadDiskCatalog(expectedHash: string): MCPCatalogDiskFormat | null {
 			data.configHash === expectedHash &&
 			Array.isArray(data.servicesInfo)
 		) {
-			logger.debug('[MCP] Loaded valid external MCP catalog from disk cache');
+			log.debug('[MCP] Loaded valid external MCP catalog from disk cache');
 			return data;
 		}
 	} catch (e) {
-		logger.debug('[MCP] Failed to load disk catalog:', e);
+		log.debug('[MCP] Failed to load disk catalog:', e);
 	}
 	return null;
 }
@@ -295,9 +298,9 @@ function saveDiskCatalog(catalog: MCPCatalogDiskFormat): void {
 			JSON.stringify(catalog, null, 2),
 			'utf8',
 		);
-		logger.debug('[MCP] Saved external MCP catalog to disk cache');
+		log.debug('[MCP] Saved external MCP catalog to disk cache');
 	} catch (e) {
-		logger.warn('[MCP] Failed to save disk catalog:', e);
+		log.warn('[MCP] Failed to save disk catalog:', e);
 	}
 }
 
@@ -333,7 +336,8 @@ async function generateConfigHash(): Promise<string> {
 			teamMode: getTeamMode(),
 			ultraTodoEnabled: getUltraTodoEnabled(),
 		});
-	} catch {
+	} catch (error) {
+		log.debug('Failed to generate config hash for MCP tools cache', {error});
 		return '';
 	}
 }
@@ -370,7 +374,7 @@ async function getCachedTools(): Promise<MCPTool[]> {
  */
 async function refreshToolsCache(): Promise<void> {
 	if (inFlightRefreshPromise) {
-		logger.debug('[MCP] Joining in-flight tools cache refresh');
+		log.debug('[MCP] Joining in-flight tools cache refresh');
 		return inFlightRefreshPromise;
 	}
 
@@ -655,7 +659,7 @@ async function doRefreshToolsCache(): Promise<void> {
 		}
 	} catch (error) {
 		// Silently ignore if codebase search tools are not available
-		logger.debug('Codebase search tools not available:', error);
+		log.debug('Codebase search tools not available:', error);
 	}
 
 	// Add user-configured MCP server tools (read disk catalog first to achieve 0ms, or probe if missing)
@@ -764,7 +768,7 @@ async function doRefreshToolsCache(): Promise<void> {
 			});
 		}
 	} catch (error) {
-		logger.warn('Failed to load MCP config:', error);
+		log.warn('Failed to load MCP config:', error);
 	}
 
 	// Update cache (includes 2026-07-28 cache hints)
@@ -1174,7 +1178,7 @@ async function connectAndGetTools(
 			const {url, requestInit} = getHttpTransportConfig(server);
 
 			try {
-				logger.debug(
+				log.debug(
 					`[MCP] Attempting StreamableHTTP connection to ${serviceName}...`,
 				);
 
@@ -1186,7 +1190,7 @@ async function connectAndGetTools(
 					'StreamableHTTP connection timeout',
 				);
 
-				logger.debug(
+				log.debug(
 					`[MCP] Successfully connected to ${serviceName} using StreamableHTTP`,
 				);
 			} catch (httpError) {
@@ -1194,7 +1198,12 @@ async function connectAndGetTools(
 
 				try {
 					await client.close();
-				} catch {}
+				} catch (closeError) {
+					log.debug('Failed to close client on StreamableHTTP error', {
+						serviceName,
+						error: closeError,
+					});
+				}
 
 				if (connectionAborted) {
 					throw new Error('Connection aborted due to timeout');
@@ -1207,7 +1216,7 @@ async function connectAndGetTools(
 				// [MCP 2026-07-28] Legacy HTTP+SSE transport is officially
 				// deprecated (SEP-2577) with a 12-month deprecation window.
 				// This fallback is kept for backward compatibility only.
-				logger.debug(
+				log.debug(
 					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to legacy SSE (deprecated, removal ~2027-07)...`,
 				);
 
@@ -1221,7 +1230,7 @@ async function connectAndGetTools(
 						'SSE connection timeout',
 					);
 
-					logger.debug(
+					log.debug(
 						`[MCP] Successfully connected to ${serviceName} using legacy SSE (deprecated, removal ~2027-07)`,
 					);
 				} catch (sseError) {
@@ -1271,7 +1280,7 @@ async function connectAndGetTools(
 					ttlMs: typeof ttlMs === 'number' ? ttlMs : undefined,
 					cacheScope: typeof cacheScope === 'string' ? cacheScope : undefined,
 				};
-				logger.debug(
+				log.debug(
 					`[MCP] Cache hints from ${serviceName}: ttlMs=${cacheHints.ttlMs}, cacheScope=${cacheHints.cacheScope} (SEP-2549)`,
 				);
 			}
@@ -1298,7 +1307,7 @@ async function connectAndGetTools(
 			]);
 			resourceMonitor.trackMCPConnectionClosed(serviceName);
 		} catch (error) {
-			logger.warn(`Failed to close client for ${serviceName}:`, error);
+			log.warn(`Failed to close client for ${serviceName}:`, error);
 			resourceMonitor.trackMCPConnectionClosed(serviceName);
 		}
 	}
@@ -1339,14 +1348,19 @@ async function getPersistentClient(
 
 				try {
 					await client.close();
-				} catch {}
+				} catch (closeError) {
+					log.debug('Failed to close client before SSE fallback', {
+						serviceName,
+						error: closeError,
+					});
+				}
 
 				if (!shouldFallbackToSSE(httpError)) {
 					throw httpError;
 				}
 
 				// [MCP 2026-07-28] Legacy SSE deprecated (SEP-2577), removal ~2027-07
-				logger.debug(
+				log.debug(
 					`[MCP] StreamableHTTP is not supported for ${serviceName} (${streamableHttpErrorMessage}), falling back to legacy SSE (deprecated, removal ~2027-07)...`,
 				);
 
@@ -1383,7 +1397,12 @@ async function getPersistentClient(
 	} catch (error) {
 		try {
 			await client.close();
-		} catch {}
+		} catch (closeError) {
+			log.debug('Failed to close client on MCP connection error', {
+				serviceName,
+				error: closeError,
+			});
+		}
 
 		resourceMonitor.trackMCPConnectionClosed(serviceName);
 		throw error;
@@ -1395,7 +1414,7 @@ async function getPersistentClient(
 		lastUsed: Date.now(),
 	});
 
-	logger.info(`Created persistent MCP connection for ${serviceName}`);
+	log.info(`Created persistent MCP connection for ${serviceName}`);
 
 	return client;
 }
@@ -1419,9 +1438,9 @@ export async function cleanupIdleMCPConnections(): Promise<void> {
 			try {
 				await clientInfo.client.close();
 				resourceMonitor.trackMCPConnectionClosed(serviceName);
-				logger.info(`Closed idle MCP connection for ${serviceName}`);
+				log.info(`Closed idle MCP connection for ${serviceName}`);
 			} catch (error) {
-				logger.warn(`Failed to close idle client for ${serviceName}:`, error);
+				log.warn(`Failed to close idle client for ${serviceName}:`, error);
 			}
 			persistentClients.delete(serviceName);
 		}
@@ -1436,9 +1455,9 @@ export async function closeAllMCPConnections(): Promise<void> {
 		try {
 			await clientInfo.client.close();
 			resourceMonitor.trackMCPConnectionClosed(serviceName);
-			logger.info(`Closed MCP connection for ${serviceName}`);
+			log.info(`Closed MCP connection for ${serviceName}`);
 		} catch (error) {
-			logger.warn(`Failed to close client for ${serviceName}:`, error);
+			log.warn(`Failed to close client for ${serviceName}:`, error);
 		}
 	}
 	persistentClients.clear();
@@ -1494,7 +1513,11 @@ export async function executeMCPTool(
 						) {
 							args[key] = parsed;
 						}
-					} catch {
+					} catch (parseError) {
+						log.debug(
+							'Failed to parse string argument as JSON in MCP tool call',
+							{toolName, key, error: parseError},
+						);
 						// Keep original value if parsing fails
 					}
 				}
@@ -1584,7 +1607,11 @@ export async function executeMCPTool(
 						break;
 					}
 				}
-			} catch {
+			} catch (configError) {
+				log.debug(
+					'Failed to match tool against configured MCP servers',
+					{toolName, error: configError},
+				);
 				// Ignore config errors, will handle below
 			}
 		}
@@ -2345,7 +2372,7 @@ export async function executeMCPTool(
 				throw new Error(`MCP service not found: ${serviceName}`);
 			}
 			// Connect to service and execute tool
-			logger.info(
+			log.info(
 				`Executing tool ${actualToolName} on MCP service ${serviceName}... args: ${
 					args ? JSON.stringify(args) : 'none'
 				}`,
@@ -2456,7 +2483,7 @@ async function executeOnExternalMCPService(
 	const attemptCall = async (): Promise<any> => {
 		const client = await getPersistentClient(serviceName, server);
 
-		logger.debug(
+		log.debug(
 			`Using persistent MCP client for ${serviceName} tool ${toolName}`,
 		);
 
@@ -2485,13 +2512,13 @@ async function executeOnExternalMCPService(
 			},
 			callOptions,
 		);
-		logger.debug(`result from ${serviceName} tool ${toolName}:`, result);
+		log.debug(`result from ${serviceName} tool ${toolName}:`, result);
 
 		// [MCP 2026-07-28] MRTR (SEP-2322): With inputRequired.autoFulfill=true,
 		// SDK v2 handles input_required responses transparently inside callTool().
 		// If server returned structured error result (isError: true), preserve content for model reasoning.
 		if ((result as any).isError) {
-			logger.warn(
+			log.warn(
 				`MCP service ${serviceName} tool ${toolName} reported error:`,
 				result,
 			);
@@ -2505,14 +2532,18 @@ async function executeOnExternalMCPService(
 		// If it's a connection error, remove stale client and retry once
 		if (!retried && isConnectionError(error)) {
 			retried = true;
-			logger.info(
+			log.info(
 				`Connection error for ${serviceName}, reconnecting and retrying...`,
 			);
 			const clientInfo = persistentClients.get(serviceName);
 			if (clientInfo) {
 				try {
 					await clientInfo.client.close();
-				} catch {
+				} catch (closeError) {
+					log.debug(
+						'Failed to close stale client before reconnect retry',
+						{serviceName, error: closeError},
+					);
 					// Ignore close errors on stale client
 				}
 				resourceMonitor.trackMCPConnectionClosed(serviceName);
@@ -2532,7 +2563,7 @@ async function executeOnExternalMCPService(
 			(error instanceof Error && error.name === 'AbortError');
 
 		if (isTimeout || isAborted) {
-			logger.warn(
+			log.warn(
 				`MCP service ${serviceName} tool ${toolName} ${
 					isAborted ? 'aborted' : 'timed out'
 				}:`,

@@ -1,9 +1,12 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {existsSync} from 'fs';
 import {mkdir, rm, readFile, writeFile, readdir} from 'fs/promises';
 import {writeFile as writeJsonFile} from 'fs/promises';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {SkillLocation} from '../commands/skills.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('skills:githubSkillInstaller');
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,7 +163,7 @@ export function parseGitHubUrl(input: string): ParsedGitHubUrl | null {
 
 function getRegistryPath(): string {
 	// Registry is stored at ~/.snow/skills-registry.json
-	return join(homedir(), '.snow', 'skills-registry.json');
+	return join(getGlobalSnowDir().native, 'skills-registry.json');
 }
 
 export async function loadInstalledSkills(): Promise<InstalledSkillRecord[]> {
@@ -184,7 +187,7 @@ async function saveInstalledSkills(
 	records: InstalledSkillRecord[],
 ): Promise<void> {
 	const registryPath = getRegistryPath();
-	await mkdir(join(homedir(), '.snow'), {recursive: true});
+	await mkdir(getGlobalSnowDir().native, {recursive: true});
 	await writeJsonFile(registryPath, JSON.stringify(records, null, 2), 'utf-8');
 }
 
@@ -222,7 +225,7 @@ function getSkillDirectory(
 ): string {
 	const segments = skillId.split('/').filter(Boolean);
 	if (location === 'global') {
-		return join(homedir(), '.snow', 'skills', ...segments);
+		return join(getGlobalSnowDir().native, 'skills', ...segments);
 	}
 	const root = projectRoot || process.cwd();
 	return join(root, '.snow', 'skills', ...segments);
@@ -343,8 +346,11 @@ async function downloadAndExtract(
 				gzip: true,
 			});
 			extracted = true;
-		} catch {
-			// tar package not available or extraction failed; try next strategy
+		} catch (e) {
+			log.debug('Tar npm package extraction failed or not available, falling back to system tar', {
+				tarballPath,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 

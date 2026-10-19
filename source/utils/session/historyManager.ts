@@ -1,7 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('session:historyManager');
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {resolveProjectIdentity} from './projectUtils.js';
 
 export interface HistoryEntry {
@@ -30,7 +32,7 @@ class HistoryManager {
 	private readonly projectAliasIds: string[];
 
 	constructor() {
-		const snowDir = path.join(os.homedir(), '.snow');
+		const snowDir = getGlobalSnowDir().native;
 		const identity = resolveProjectIdentity();
 		this.currentProjectId = identity.projectId;
 		this.projectAliasIds = identity.projectAliasIds;
@@ -49,6 +51,7 @@ class HistoryManager {
 			await fs.mkdir(snowDir, {recursive: true});
 		} catch (error) {
 			// Directory already exists or other error
+			log.debug('ensureSnowDir mkdir failed or already exists', {error, historyFile: this.historyFile});
 		}
 	}
 
@@ -60,7 +63,7 @@ class HistoryManager {
 			files.add(path.join(this.historyRootDir, projectId, 'history.json'));
 		}
 
-		files.add(path.join(os.homedir(), '.snow', 'history.json'));
+		files.add(path.join(getGlobalSnowDir().native, 'history.json'));
 		return [...files];
 	}
 
@@ -130,7 +133,7 @@ class HistoryManager {
 			};
 
 			if (legacyCount > 0) {
-				logger.debug(
+				log.debug(
 					`Loaded ${legacyCount} legacy or moved-project history entries as read-only backup`,
 				);
 			}
@@ -226,7 +229,7 @@ class HistoryManager {
 		// Save if we removed any entries
 		if (this.historyData.entries.length < originalLength) {
 			await this.saveHistory();
-			logger.debug(
+			log.debug(
 				`Cleaned up ${
 					originalLength - this.historyData.entries.length
 				} old history entries`,
@@ -250,7 +253,7 @@ class HistoryManager {
 				'utf-8',
 			);
 		} catch (error) {
-			logger.error('Failed to save history:', error);
+			log.error('Failed to save history:', error);
 		}
 	}
 

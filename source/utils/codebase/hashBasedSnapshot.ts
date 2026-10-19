@@ -3,6 +3,8 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('codebase:hashBasedSnapshot');
 import {getProjectId} from '../session/projectUtils.js';
 
 /**
@@ -223,11 +225,11 @@ class HashBasedSnapshotManager {
 		const releaseLock = await this.acquireLock(snapshotPath);
 
 		try {
-			// logger.info(
+			// log.info(
 			// 	`[Snapshot] backupFile called: sessionId=${sessionId}, messageIndex=${messageIndex}, filePath=${filePath}, existed=${existed}`,
 			// );
 			await this.ensureSnapshotsDir();
-			// logger.info(`[Snapshot] snapshotPath=${snapshotPath}`);
+			// log.info(`[Snapshot] snapshotPath=${snapshotPath}`);
 
 			// Calculate relative path (always store with forward slashes
 			// to keep cross-platform consistency, especially for later
@@ -273,13 +275,13 @@ class HashBasedSnapshotManager {
 				// No existing backup, add new
 				metadata.backups.push(backup);
 				await this.saveSnapshotMetadata(metadata);
-				logger.info(
+				log.info(
 					`[Snapshot] Backed up file ${relativePath} for session ${sessionId} message ${messageIndex}`,
 				);
 			}
 			// If backup already exists, keep the original (first backup wins)
 		} catch (error) {
-			logger.warn(`[Snapshot] Failed to backup file ${filePath}:`, error);
+			log.warn(`[Snapshot] Failed to backup file ${filePath}:`, error);
 		} finally {
 			// Always release the lock
 			releaseLock();
@@ -327,22 +329,26 @@ class HashBasedSnapshotManager {
 					// If no backups left, delete entire snapshot file
 					if (metadata.backups.length === 0) {
 						await fs.unlink(snapshotPath);
-						logger.info(
+						log.info(
 							`[Snapshot] Deleted empty snapshot ${sessionId}_${messageIndex}`,
 						);
 					} else {
 						// Otherwise save updated metadata
 						await this.saveSnapshotMetadata(metadata);
-						logger.info(
+						log.info(
 							`[Snapshot] Removed backup for ${relativePath} from snapshot ${sessionId}_${messageIndex}`,
 						);
 					}
 				}
 			} catch (error) {
-				// Snapshot doesn't exist, nothing to remove
+				log.debug('Snapshot metadata does not exist during removeFileBackup, nothing to remove', {
+					sessionId,
+					messageIndex,
+					error: error instanceof Error ? error.message : String(error),
+				});
 			}
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				`[Snapshot] Failed to remove file backup ${filePath}:`,
 				error,
 			);
@@ -397,7 +403,7 @@ class HashBasedSnapshotManager {
 				}
 			}
 		} catch (error) {
-			logger.error('Failed to list snapshots:', error);
+			log.error('Failed to list snapshots:', error);
 		}
 
 		return snapshots.sort((a, b) => b.messageIndex - a.messageIndex);
@@ -435,7 +441,7 @@ class HashBasedSnapshotManager {
 
 			return Array.from(filesToRollback).sort();
 		} catch (error) {
-			logger.error('Failed to get files to rollback:', error);
+			log.error('Failed to get files to rollback:', error);
 			return [];
 		}
 	}
@@ -514,12 +520,15 @@ class HashBasedSnapshotManager {
 							try {
 								await fs.unlink(fullPath);
 								totalFilesRolledBack++;
-							} catch {
-								// File may not exist
+							} catch (unlinkErr) {
+								log.debug('Failed to unlink newly created file during rollback (file may not exist)', {
+									fullPath,
+									error: unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr),
+								});
 							}
 						}
 					} catch (error) {
-						logger.error(`Failed to restore file ${backup.path}:`, error);
+						log.error(`Failed to restore file ${backup.path}:`, error);
 					}
 				}
 
@@ -528,7 +537,7 @@ class HashBasedSnapshotManager {
 
 			return totalFilesRolledBack;
 		} catch (error) {
-			logger.error('Failed to rollback to message index:', error);
+			log.error('Failed to rollback to message index:', error);
 			return 0;
 		}
 	}
@@ -557,7 +566,7 @@ class HashBasedSnapshotManager {
 							await fs.unlink(snapshotPath);
 							deletedCount++;
 						} catch (error) {
-							logger.error(
+							log.error(
 								`Failed to delete snapshot file ${snapshotPath}:`,
 								error,
 							);
@@ -568,7 +577,7 @@ class HashBasedSnapshotManager {
 
 			return deletedCount;
 		} catch (error) {
-			logger.error('Failed to delete snapshots from index:', error);
+			log.error('Failed to delete snapshots from index:', error);
 			return 0;
 		}
 	}
@@ -587,7 +596,7 @@ class HashBasedSnapshotManager {
 				}
 			}
 		} catch (error) {
-			logger.error('Failed to clear snapshots:', error);
+			log.error('Failed to clear snapshots:', error);
 		}
 	}
 }

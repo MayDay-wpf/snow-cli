@@ -12,6 +12,9 @@ import {
 	type GeneratedSkillDraft,
 	type SkillLocation,
 } from '../../../utils/commands/skills.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:SkillsCreationPanel');
 
 type CreationMode = 'manual' | 'ai';
 
@@ -63,8 +66,10 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 	const handleCancel = useCallback(() => {
 		try {
 			abortControllerRef.current?.abort();
-		} catch {
-			// Ignore abort errors
+		} catch (e) {
+			log.debug('Error aborting skill creation on cancel', {
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 		onCancel();
 	}, [onCancel]);
@@ -214,8 +219,10 @@ export const SkillsCreationPanel: React.FC<Props> = ({
 		return () => {
 			try {
 				controller.abort();
-			} catch {
-				// Ignore abort errors
+			} catch (e) {
+				log.debug('Error aborting skill creation AI generator on unmount', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		};
 	}, [step, requirement, projectRoot, t.skillsCreation.errorGeneration]);

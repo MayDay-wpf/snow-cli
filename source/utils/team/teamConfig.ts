@@ -1,7 +1,10 @@
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
 import {join} from 'path';
-import {homedir} from 'os';
 import {randomUUID} from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('team:config');
 
 export type TeamMemberStatus = 'pending' | 'active' | 'idle' | 'shutdown';
 export type TeamStatus = 'active' | 'cleanup' | 'disbanded';
@@ -25,7 +28,7 @@ export interface TeamConfig {
 	status: TeamStatus;
 }
 
-const SNOW_DIR = join(homedir(), '.snow');
+const SNOW_DIR = getGlobalSnowDir().native;
 const TEAMS_DIR = join(SNOW_DIR, 'teams');
 
 function ensureDir(dir: string): void {
@@ -93,8 +96,8 @@ export function getActiveTeam(): TeamConfig | null {
 				}
 			}
 		}
-	} catch {
-		// ignore
+	} catch (error) {
+		log.debug('Failed to read teams directory for active team check', {error});
 	}
 	return null;
 }

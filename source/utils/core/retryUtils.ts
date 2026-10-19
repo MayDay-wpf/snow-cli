@@ -8,6 +8,8 @@
 
 import {logger} from './logger.js';
 
+const log = logger.child('core:retryUtils');
+
 export interface RetryOptions {
 	maxRetries?: number; // 最大重试次数，默认5次
 	baseDelay?: number; // 基础延迟时间(ms)，默认3000ms
@@ -448,7 +450,7 @@ export function parseJsonWithFix<T = any>(
 		try {
 			const data = JSON.parse(fixedJson) as T;
 			if (wasFixed && logWarning) {
-				logger.warn(`Warning: Fixed malformed JSON for ${toolName}`);
+				log.warn(`Warning: Fixed malformed JSON for ${toolName}`);
 			}
 			return {
 				success: true,
@@ -460,12 +462,12 @@ export function parseJsonWithFix<T = any>(
 		} catch (fixError) {
 			// 修复失败
 			if (logError) {
-				logger.error(`Error: Failed to parse JSON for ${toolName}`);
-				logger.error(`Original: ${jsonString}`);
+				log.error(`Error: Failed to parse JSON for ${toolName}`);
+				log.error(`Original: ${jsonString}`);
 				if (wasFixed) {
-					logger.error(`After fixes: ${fixedJson}`);
+					log.error(`After fixes: ${fixedJson}`);
 				}
-				logger.error(
+				log.error(
 					`Parse error: ${
 						fixError instanceof Error ? fixError.message : 'Unknown'
 					}`,

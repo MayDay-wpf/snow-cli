@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type {TodoList} from '../../types/todo.types.js';
 import {getProjectId} from '../../../utils/session/projectUtils.js';
+import {getGlobalSnowDir} from '../../../utils/core/snowContext.js';
 
 export interface TodoSnapshotOperation {
 	beforeList: TodoList | null;
@@ -18,7 +18,7 @@ interface TodoSnapshotRecord {
 }
 
 function getTodoSnapshotDir(): string {
-	return path.join(os.homedir(), '.snow', 'todo-snapshots');
+	return path.join(getGlobalSnowDir().native, 'todo-snapshots');
 }
 
 function getTodoSnapshotFilePath(): string {

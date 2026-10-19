@@ -1,8 +1,8 @@
 import {exec} from 'child_process';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
-import {homedir} from 'os';
 import {join} from 'path';
 import {promisify} from 'util';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
 
 const execAsync = promisify(exec);
 
@@ -19,7 +19,7 @@ export interface LSPConfigFile {
 	servers: Record<string, LSPServerConfig>;
 }
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = getGlobalSnowDir().native;
 const LSP_CONFIG_FILE = join(CONFIG_DIR, 'lsp-config.json');
 
 export const DEFAULT_LSP_SERVERS: Record<string, LSPServerConfig> = {

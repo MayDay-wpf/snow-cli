@@ -1,6 +1,6 @@
 import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'fs';
 import {join} from 'path';
-import {homedir} from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import {getAllBuiltinAgentDefinitions} from '../execution/subagents/index.js';
 import {loadGlobalAgents, loadProjectAgents} from './projectAgents.js';
 
@@ -23,7 +23,7 @@ export interface SubAgentsConfig {
 	agents: SubAgent[];
 }
 
-const CONFIG_DIR = join(homedir(), '.snow');
+const CONFIG_DIR = getGlobalSnowDir().native;
 const SUB_AGENTS_CONFIG_FILE = join(CONFIG_DIR, 'sub-agents.json');
 
 /**

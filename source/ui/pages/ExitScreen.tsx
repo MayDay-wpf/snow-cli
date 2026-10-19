@@ -8,10 +8,13 @@ import {useTerminalSize} from '../../hooks/ui/useTerminalSize.js';
 import {gracefulExit} from '../../utils/core/processManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {readFile} from 'fs/promises';
-import {homedir} from 'os';
 import {join} from 'path';
+import {getGlobalSnowDir} from '../../utils/core/snowContext.js';
 import type {PixelGrid} from '../components/pixel-editor/types.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:pages');
 
 type Props = {
 	version?: string;
@@ -22,7 +25,7 @@ function dotLine(width: number): string {
 	return Array.from({length: count}, () => '·').join('  ');
 }
 
-const EXIT_IMAGE_PATH = join(homedir(), '.snow', 'exit-image.json');
+const EXIT_IMAGE_PATH = join(getGlobalSnowDir().native, 'exit-image.json');
 const BLOCK_CHAR = '\u2580';
 
 export default function ExitScreen({version = '1.0.0'}: Props) {
@@ -58,7 +61,8 @@ export default function ExitScreen({version = '1.0.0'}: Props) {
 				} else {
 					setExitImageGrid(undefined);
 				}
-			} catch {
+			} catch (error) {
+				log.debug('Failed to load exit image', {error});
 				if (active) {
 					setExitImageGrid(undefined);
 				}

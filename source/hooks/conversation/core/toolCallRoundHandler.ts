@@ -24,6 +24,9 @@ import type {MCPTool} from '../../../utils/execution/mcpToolsManager.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import {visionAgent} from '../../../agents/visionAgent.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:toolCallRoundHandler');
 
 export async function handleToolCallRound(ctx: {
 	streamResult: StreamRoundResult;
@@ -326,8 +329,8 @@ export async function handleToolCallRound(ctx: {
 						activeTools.push(tool);
 					}
 				}
-			} catch {
-				// Ignore parse errors
+			} catch (e) {
+				log.debug('Failed to parse tool_search arguments:', e);
 			}
 		}
 	}

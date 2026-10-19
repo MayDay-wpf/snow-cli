@@ -4,6 +4,9 @@
 
 import {promises as fs} from 'fs';
 import * as path from 'path';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:aceCodeSearch.filesystem');
 
 /**
  * Default exclusion directories
@@ -243,8 +246,11 @@ export async function loadExclusionPatterns(
 				}
 			}
 		}
-	} catch {
-		// .gitignore doesn't exist or cannot be read, skip
+	} catch (e) {
+		log.debug('.gitignore does not exist or cannot be read, skipping', {
+			basePath,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 
 	// Load .snowignore if exists
@@ -263,8 +269,11 @@ export async function loadExclusionPatterns(
 				}
 			}
 		}
-	} catch {
-		// .snowignore doesn't exist or cannot be read, skip
+	} catch (e) {
+		log.debug('.snowignore does not exist or cannot be read, skipping', {
+			basePath,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 
 	return patterns;

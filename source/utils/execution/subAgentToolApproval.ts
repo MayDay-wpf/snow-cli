@@ -17,6 +17,9 @@ import type {
 	ChatMessage,
 	SubAgentResult,
 } from './subAgentTypes.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution.subAgentApproval');
 
 export interface ApprovalResult {
 	approvedToolCalls: any[];
@@ -43,7 +46,11 @@ export async function checkAndApproveTools(
 		let args: any;
 		try {
 			args = JSON.parse(toolCall.function.arguments);
-		} catch {
+		} catch (error) {
+			log.debug(
+				'Failed to parse sub-agent tool call arguments JSON for approval check',
+				{toolName, error},
+			);
 			args = {};
 		}
 
@@ -235,7 +242,7 @@ export async function executeMcpTools(
 				}
 			} catch (hookError) {
 				console.warn(
-					'Failed to execute beforeToolCall hook in sub-agent:',
+					'Failed to execute beforeToolCall hook in sub-agent',
 					hookError,
 				);
 			}
@@ -348,7 +355,7 @@ export async function executeMcpTools(
 				}
 			} catch (hookError) {
 				console.warn(
-					'Failed to execute afterToolCall hook in sub-agent:',
+					'Failed to execute afterToolCall hook in sub-agent',
 					hookError,
 				);
 			}
@@ -401,7 +408,7 @@ export async function executeMcpTools(
 				});
 			} catch (hookError) {
 				console.warn(
-					'Failed to execute afterToolCall hook in sub-agent:',
+					'Failed to execute afterToolCall hook in sub-agent',
 					hookError,
 				);
 			}

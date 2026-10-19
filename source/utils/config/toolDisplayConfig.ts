@@ -3,6 +3,10 @@
  * 用于判断哪些工具需要显示两步状态(进行中+完成)，哪些工具只需要显示完成状态
  */
 
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config:toolDisplayConfig');
+
 /**
  * 需要显示两步状态的工具(进行中 → 完成)
  * 这些通常是耗时较长的工具，用户需要看到执行进度
@@ -164,8 +168,11 @@ export function extractFilesystemEditDiffDataForPersistence(
 	try {
 		const resultData = JSON.parse(content);
 		return extractFilesystemEditDiffFromRawResult(toolName, resultData);
-	} catch {
-		// ignore
+	} catch (e) {
+		log.debug('Failed to parse result content JSON for diff extraction', {
+			toolName,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 	return undefined;
 }

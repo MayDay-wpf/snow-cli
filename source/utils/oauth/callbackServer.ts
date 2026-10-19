@@ -9,6 +9,9 @@ import {createServer, type Server} from 'http';
 import type {AddressInfo} from 'net';
 import {OAUTH_PROVIDERS} from './constants.js';
 import type {OAuthProviderId} from './types.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('oauth:callbackServer');
 
 export interface CallbackServerHandle {
 	server: Server;
@@ -93,8 +96,11 @@ function tryListen(
 			settled = true;
 			try {
 				server.close();
-			} catch {
-				// ignore
+			} catch (e) {
+				log.debug('Failed to close server on listen error', {
+					port,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 			resolve(null);
 		});
@@ -111,8 +117,10 @@ function tryListen(
 				close: () => {
 					try {
 						server.close();
-					} catch {
-						// ignore close errors
+					} catch (e) {
+						log.debug('Failed to close server via handle close', {
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 				},
 			});
