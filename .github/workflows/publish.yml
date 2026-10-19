@@ -125,10 +125,7 @@ jobs:
 
             ### What's New
 
-            - Tool-call correction: the new `/tool-correction` command (`on` / `off` / `status`) enables automatic repair of failed tool arguments by the active profile's basic model (falling back to the advanced model). Only argument-level failures are retried, up to 3 repairs per failed invocation; permission, network, timeout and user-cancellation errors pass through unchanged. Repaired `terminal-execute` commands are re-checked against sensitive-command rules, `askuser-ask_question` is never auto-corrected, and a live repairing / retrying / repaired / gave-up indicator is shown in the status line. The setting is project-scoped (`toolCorrectionEnabled`) and enabled by default
-            - OAuth identity headers as editable schemes: fixed provider identity headers (Codex, Claude, Antigravity) are no longer hardcoded in request code; sign-in now creates and binds same-named custom header schemes (`Codex` / `Claude` / `Antigravity`), so you can inspect and adjust them in the Custom Headers settings while account-level dynamic headers such as `chatgpt-account-id` are still injected per request. A one-time startup migration creates and binds schemes for legacy OAuth profiles
-            - No-op edit protection: edit-by-search and hashline edit tools now reject edits that would leave the file unchanged instead of reporting success with an empty diff, and the DiffViewer plus the pending diff collector drop no-change entries, including results restored from older sessions or logs
-            - Docs and i18n: command panel documentation and the en / zh / zh-TW strings are updated for the new tool-correction command and OAuth header scheme behavior
+            - feat: add privacy custom rules management via session commands
 
             ### Installation
             ```bash
