@@ -13,6 +13,9 @@ import {
 	updateSettings,
 	type SettingsScope,
 } from '../../utils/config/unifiedSettings.js';
+import PrivacyCustomRulesView, {
+	loadCustomRules,
+} from './PrivacyCustomRulesView.js';
 
 const DEFAULT_PRIVACY_MODEL = 'openai/privacy-filter';
 const DEFAULT_TOOL_RESULT_TOOLS = [
@@ -26,7 +29,7 @@ type Props = {
 	inlineMode?: boolean;
 };
 
-type View = 'menu' | 'api-form' | 'tool-results';
+type View = 'menu' | 'api-form' | 'tool-results' | 'custom-rules';
 type ApiField = 'url' | 'apiKey' | 'model';
 type PrivacyMode = 'api' | 'local';
 
@@ -93,6 +96,10 @@ export default function PrivacySettingsScreen({
 	const [privacyMenuIndex, setPrivacyMenuIndex] = useState(0);
 	const [infoText, setInfoText] = useState(t.privacySettings.apiConfigInfo);
 	const settingsPath = getSettingsPath(scope);
+	const customRuleCount = useMemo(
+		() => loadCustomRules(scope).length,
+		[scope, view],
+	);
 
 	useTerminalTitle(`Snow CLI - ${t.privacySettings.title}`);
 
@@ -316,6 +323,11 @@ export default function PrivacySettingsScreen({
 				infoText: t.privacySettings.toolResultsConfigInfo,
 			},
 			{
+				label: `${t.privacySettings.customRules} (${customRuleCount})`,
+				value: 'custom-rules',
+				infoText: t.privacySettings.customRulesInfo,
+			},
+			{
 				label: t.privacySettings.back,
 				value: 'back',
 				color: theme.colors.menuSecondary,
@@ -325,6 +337,7 @@ export default function PrivacySettingsScreen({
 
 		return options;
 	}, [
+		customRuleCount,
 		enabled,
 		privacyMode,
 		scope,
@@ -431,6 +444,9 @@ export default function PrivacySettingsScreen({
 				openApiForm();
 			} else if (value === 'tool-results-config') {
 				openToolResults();
+			} else if (value === 'custom-rules') {
+				setInfoText(t.privacySettings.customRulesInfo);
+				setView('custom-rules');
 			}
 		},
 		[
@@ -442,6 +458,7 @@ export default function PrivacySettingsScreen({
 			saveEnabled,
 			savePrivacyMode,
 			scope,
+			t.privacySettings.customRulesInfo,
 		],
 	);
 
@@ -455,6 +472,11 @@ export default function PrivacySettingsScreen({
 		saveToolResults();
 		setPrivacyMenuIndex(privacyMode === 'api' ? 4 : 3);
 	}, [privacyMode, saveToolResults]);
+
+	const returnToMenuFromCustomRules = useCallback(() => {
+		setView('menu');
+		setPrivacyMenuIndex(privacyMode === 'api' ? 5 : 4);
+	}, [privacyMode]);
 
 	const handleApiFormSelect = useCallback(
 		(value: string) => {
@@ -479,6 +501,9 @@ export default function PrivacySettingsScreen({
 	}, []);
 
 	useInput((input, key) => {
+		// 自定义规则视图自行处理按键
+		if (view === 'custom-rules') return;
+
 		if (view === 'tool-results') {
 			if (key.escape) {
 				returnToMenuFromToolResults();
@@ -754,6 +779,14 @@ export default function PrivacySettingsScreen({
 				)}
 
 				{view === 'tool-results' && renderToolResults()}
+
+				{view === 'custom-rules' && (
+					<PrivacyCustomRulesView
+						scope={scope}
+						onBack={returnToMenuFromCustomRules}
+						onInfoChange={handleSelectionChange}
+					/>
+				)}
 			</Box>
 		</Box>
 	);

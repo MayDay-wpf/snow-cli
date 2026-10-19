@@ -1426,7 +1426,8 @@ function privacyPublic(scope: SettingsScope) {
 	const settings = readSettings(scope);
 	const enabled = settings.privacy?.enabled === true;
 	const mode = settings.privacy?.mode === 'local' ? 'local' : 'api';
-	return {scope, enabled, mode};
+	const customRules = settings.privacy?.customRules?.length ?? 0;
+	return {scope, enabled, mode, customRules};
 }
 
 function handlePrivacy(
@@ -2155,6 +2156,12 @@ export async function executeSessionCommandHandler(
 			return handleShowThinking(meta, normalizedArgs);
 		case 'privacy':
 			return handlePrivacy(meta, normalizedArgs);
+		case 'privacy-rules': {
+			const {handlePrivacyRules} = await import(
+				'./sessionCommandPrivacyRules.js'
+			);
+			return handlePrivacyRules(meta, normalizedArgs);
+		}
 		case 'telemetry':
 			return handleTelemetry(meta, normalizedArgs);
 		case 'usage':
@@ -2255,9 +2262,10 @@ function normalizeArgsForMeta(
 	if (!meta.subcommand) {
 		return args;
 	}
-	// If first token equals subcommand, drop it (e.g. "hatch Mochi" stays, "status" becomes "")
+	// If first token equals subcommand, drop it (e.g. "hatch Mochi" stays, "status" becomes "").
+	// Slice the raw string instead of re-joining tokens so JSON / regex payloads keep their whitespace.
 	if (tokens[0]?.toLowerCase() === meta.subcommand.toLowerCase()) {
-		return tokens.slice(1).join(' ');
+		return args.trim().slice(tokens[0].length).trim();
 	}
 	return args;
 }

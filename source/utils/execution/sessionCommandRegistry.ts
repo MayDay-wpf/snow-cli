@@ -270,6 +270,41 @@ export const SESSION_COMMAND_ALLOWLIST: SessionCommandMeta[] = [
 		'Get or set privacy enabled/mode (no secrets)',
 		{requiresConfirm: true},
 	),
+	meta(
+		'privacy-rules.list',
+		'privacy-rules',
+		'read',
+		'List privacy custom masking rules (optional --scope=project|global)',
+		{subcommand: 'list'},
+	),
+	meta(
+		'privacy-rules.test',
+		'privacy-rules',
+		'read',
+		'Dry-run a custom masking rule against sample text (JSON: {sample, pattern, group?, replacement?} or {sample, id})',
+		{subcommand: 'test'},
+	),
+	meta(
+		'privacy-rules.upsert',
+		'privacy-rules',
+		'medium_write',
+		'Add or update privacy custom rules by id/name (JSON rule object or array; optional --scope=project|global)',
+		{subcommand: 'upsert', requiresConfirm: true},
+	),
+	meta(
+		'privacy-rules.set',
+		'privacy-rules',
+		'medium_write',
+		'Replace all privacy custom rules of a scope (JSON array; optional --scope=project|global)',
+		{subcommand: 'set', requiresConfirm: true},
+	),
+	meta(
+		'privacy-rules.remove',
+		'privacy-rules',
+		'medium_write',
+		'Remove privacy custom rules by id or name (optional --scope=project|global)',
+		{subcommand: 'remove', requiresConfirm: true},
+	),
 	meta('telemetry', 'telemetry', 'medium_write', 'Telemetry status/toggle', {
 		requiresConfirm: true,
 	}),
@@ -489,6 +524,7 @@ export function resolveSessionCommandMeta(
 		loop: 'loop.list',
 		skills: 'skills.list',
 		config: 'config.snapshot',
+		'privacy-rules': 'privacy-rules.list',
 		'session-command': 'session-command.list',
 	};
 	if (!sub && bareDefaults[top]) {

@@ -482,6 +482,95 @@ test('runSessionCommand privacy status/mode with confirm', async t => {
 	}
 });
 
+test('runSessionCommand privacy-rules test/upsert/remove (global sandbox)', async t => {
+	t.is(resolveSessionCommandMeta('privacy-rules')?.id, 'privacy-rules.list');
+	t.is(
+		resolveSessionCommandMeta('privacy-rules', 'upsert {}')?.id,
+		'privacy-rules.upsert',
+	);
+
+	// test is read-only: no confirm needed, JSON whitespace preserved
+	const dryRun = await runSessionCommand({
+		command: 'privacy-rules',
+		args: 'test {"sample":"id  EMP-1234 end","pattern":"id  (EMP-\\\\d{4})","group":1,"replacement":"[EMP]"}',
+		mode: 'agent',
+	});
+	t.true(dryRun.ok, dryRun.message);
+	const dryData = dryRun.data as {masked?: string; matchCount?: number};
+	t.is(dryData.masked, 'id  [EMP] end');
+	t.is(dryData.matchCount, 1);
+
+	const invalid = await runSessionCommand({
+		command: 'privacy-rules.test',
+		args: '{"sample":"x","pattern":"(abc"}',
+		mode: 'agent',
+	});
+	t.false(invalid.ok);
+	t.is(invalid.code, 'INVALID_ARGS');
+
+	// writes require confirmation
+	const unconfirmed = await runSessionCommand({
+		command: 'privacy-rules.upsert',
+		args: '--scope=global {"name":"Emp","pattern":"EMP-\\\\d+"}',
+		mode: 'agent',
+	});
+	t.is(unconfirmed.code, 'CONFIRMATION_REQUIRED');
+
+	const upsert = await runSessionCommand({
+		command: 'privacy-rules.upsert',
+		args: '--scope=global {"name":"Emp id","pattern":"EMP-\\\\d+"}',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.true(upsert.ok, upsert.message);
+	const upsertData = upsert.data as {
+		scope?: string;
+		rules?: Array<{id: string; name: string; enabled?: boolean}>;
+	};
+	t.is(upsertData.scope, 'global');
+	const created = upsertData.rules?.find(rule => rule.name === 'Emp id');
+	t.truthy(created?.id);
+	t.true(created?.enabled);
+
+	// update by name keeps id, disables rule
+	const update = await runSessionCommand({
+		command: 'privacy-rules',
+		args: 'upsert --scope=global {"name":"Emp id","enabled":false}',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.true(update.ok, update.message);
+	const updated = (
+		update.data as {rules?: Array<{id: string; enabled?: boolean}>}
+	).rules?.find(rule => rule.id === created?.id);
+	t.false(updated?.enabled);
+
+	const list = await runSessionCommand({
+		command: 'privacy-rules.list',
+		args: '--scope=global',
+		mode: 'agent',
+	});
+	t.true(list.ok, list.message);
+	t.is((list.data as {total?: number}).total, 1);
+
+	const remove = await runSessionCommand({
+		command: 'privacy-rules.remove',
+		args: '--scope=global Emp id',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.true(remove.ok, remove.message);
+	t.is((remove.data as {total?: number}).total, 0);
+
+	const missing = await runSessionCommand({
+		command: 'privacy-rules.remove',
+		args: '--scope=global not-exist',
+		mode: 'agent',
+		confirm: true,
+	});
+	t.is(missing.code, 'NOT_FOUND');
+});
+
 test('runSessionCommand codebase agent-review/reranking toggles', async t => {
 	const status = await runSessionCommand({
 		command: 'codebase',

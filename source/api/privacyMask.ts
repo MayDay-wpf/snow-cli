@@ -1,6 +1,17 @@
 import {Blindfold, EntityType} from '@blindfold/sdk';
 import {readSettings} from '../utils/config/unifiedSettings.js';
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
+import {
+	collectDbConnectionMatches,
+	DB_CONNECTION_MATCH_TYPE,
+} from './privacyMaskDbConnection.js';
+import {
+	collectCustomRuleMatches,
+	compileCustomRules,
+	maskCustomRuleValue,
+	type CompiledCustomRule,
+	type PrivacyCustomRule,
+} from './privacyMaskCustomRules.js';
 
 const DEFAULT_TOOL_RESULT_TOOLS = [
 	'filesystem-read',
@@ -35,6 +46,8 @@ export interface PrivacyMaskConfig {
 	url?: string;
 	apiKey?: string;
 	model?: string;
+	/** 用户自定义正则规则；本地模式与 API 模式均会叠加执行 */
+	customRules?: PrivacyCustomRule[];
 }
 
 interface PrivacyMaskResponse {
@@ -79,7 +92,7 @@ function getLocalBlindfold(): Blindfold {
 	return localBlindfold;
 }
 
-interface SensitiveMatch {
+export interface SensitiveMatch {
 	start: number;
 	end: number;
 	type: string;
@@ -183,7 +196,7 @@ function maskSecretValue(
 	)}${visibleSuffixLength > 0 ? value.slice(-visibleSuffixLength) : ''}`;
 }
 
-function isPlaceholderSecret(value: string): boolean {
+export function isPlaceholderSecret(value: string): boolean {
 	const normalized = value.trim();
 	return (
 		!normalized ||
@@ -205,7 +218,7 @@ function isStrongSensitiveKey(keyName: string): boolean {
  * 仅匹配绝不会出现在真实密钥中的结构（函数调用、new 构造、代码关键字、$变量），
  * 用于强敏感键名的安全优先判定——宁可多脱敏代码引用，也不漏脱敏真实密钥。
  */
-function isDefinitelyCode(value: string): boolean {
+export function isDefinitelyCode(value: string): boolean {
 	// 代码关键字作为右值（如 "new" 被空格截断为独立值），几乎一定是代码
 	if (
 		/^(?:new|return|await|yield|throw|typeof|void|delete|class|function|async|this|super|self)$/i.test(
@@ -262,7 +275,10 @@ function isCodeLikeValue(value: string): boolean {
 	return false;
 }
 
-function shouldMaskContextValue(value: string, keyName: string): boolean {
+export function shouldMaskContextValue(
+	value: string,
+	keyName: string,
+): boolean {
 	const normalized = value.trim();
 	if (isPlaceholderSecret(normalized)) {
 		return false;
@@ -288,7 +304,7 @@ function shouldMaskContextValue(value: string, keyName: string): boolean {
 	return normalized.length >= 8;
 }
 
-function addSensitiveMatch(
+export function addSensitiveMatch(
 	matches: SensitiveMatch[],
 	start: number,
 	end: number,
@@ -486,7 +502,10 @@ function collectValidatedMatches(
 	}
 }
 
-function collectLocalSensitiveMatches(text: string): SensitiveMatch[] {
+function collectLocalSensitiveMatches(
+	text: string,
+	customRules: CompiledCustomRule[] = [],
+): SensitiveMatch[] {
 	const matches: SensitiveMatch[] = [];
 
 	for (const {type, pattern, confidence} of DIRECT_SECRET_VALUE_PATTERNS) {
@@ -535,7 +554,9 @@ function collectLocalSensitiveMatches(text: string): SensitiveMatch[] {
 		0.85,
 		3,
 	);
+	collectDbConnectionMatches(text, matches);
 	collectValidatedMatches(text, matches);
+	collectCustomRuleMatches(text, customRules, matches);
 
 	return matches;
 }
@@ -589,6 +610,11 @@ function maskPaymentCard(value: string): string {
 }
 
 function maskSensitiveValueByType(type: string, value: string): string {
+	const customMasked = maskCustomRuleValue(type, value);
+	if (customMasked !== null) {
+		return customMasked;
+	}
+
 	if (type === 'private_key_block') {
 		const lines = value.split(/\r?\n/);
 		if (lines.length >= 2) {
@@ -634,6 +660,11 @@ function maskSensitiveValueByType(type: string, value: string): string {
 		return maskSecretValue(value, 6, 4);
 	}
 
+	// 连接串的主机/用户/密码整段遮罩，不留前缀
+	if (type === DB_CONNECTION_MATCH_TYPE) {
+		return '*'.repeat(value.length);
+	}
+
 	return maskSecretValue(value);
 }
 
@@ -653,11 +684,33 @@ function applySensitiveMatches(
 	return maskedText;
 }
 
-function maskApiKeyLikeSecrets(text: string): string {
-	return applySensitiveMatches(text, collectLocalSensitiveMatches(text));
+function maskApiKeyLikeSecrets(
+	text: string,
+	customRules: CompiledCustomRule[],
+): string {
+	return applySensitiveMatches(
+		text,
+		collectLocalSensitiveMatches(text, customRules),
+	);
 }
 
-async function maskWithBlindfoldLocalRules(text: string): Promise<string> {
+/** 仅应用自定义规则（API 模式远端脱敏后补充执行）。 */
+function maskCustomRulesOnly(
+	text: string,
+	customRules: CompiledCustomRule[],
+): string {
+	if (customRules.length === 0) {
+		return text;
+	}
+	const matches: SensitiveMatch[] = [];
+	collectCustomRuleMatches(text, customRules, matches);
+	return applySensitiveMatches(text, matches);
+}
+
+async function maskWithBlindfoldLocalRules(
+	text: string,
+	customRules: CompiledCustomRule[],
+): Promise<string> {
 	const client = getLocalBlindfold();
 	const result = (await client.mask(text, {
 		entities: BLINDFOLD_LOCAL_ENTITIES,
@@ -671,14 +724,17 @@ async function maskWithBlindfoldLocalRules(text: string): Promise<string> {
 			? result.text
 			: text;
 
-	return maskApiKeyLikeSecrets(maskedText);
+	return maskApiKeyLikeSecrets(maskedText, customRules);
 }
 
-async function maskWithLocalFallback(text: string): Promise<string> {
+async function maskWithLocalFallback(
+	text: string,
+	customRules: CompiledCustomRule[],
+): Promise<string> {
 	try {
-		return await maskWithBlindfoldLocalRules(text);
+		return await maskWithBlindfoldLocalRules(text, customRules);
 	} catch {
-		return maskApiKeyLikeSecrets(text);
+		return maskApiKeyLikeSecrets(text, customRules);
 	}
 }
 
@@ -725,6 +781,10 @@ function resolvePrivacyToolResultMaskConfig(
 			projectPrivacy?.toolResults?.tools,
 			globalPrivacy?.toolResults?.tools,
 		) ?? DEFAULT_TOOL_RESULT_TOOLS;
+	const customRules = pickProjectFirst(
+		projectPrivacy?.customRules,
+		globalPrivacy?.customRules,
+	);
 
 	return {
 		enabled: true,
@@ -732,6 +792,7 @@ function resolvePrivacyToolResultMaskConfig(
 		url: mode === 'api' ? url || undefined : undefined,
 		apiKey: apiKey || undefined,
 		model: model || undefined,
+		customRules,
 		tools,
 	};
 }
@@ -745,13 +806,15 @@ export async function maskPrivacyText(
 		return text;
 	}
 
+	const customRules = compileCustomRules(config.customRules);
+
 	try {
 		if (config.mode === 'local') {
-			return maskWithLocalFallback(text);
+			return maskWithLocalFallback(text, customRules);
 		}
 
 		if (!config.url) {
-			return maskWithLocalFallback(text);
+			return maskWithLocalFallback(text, customRules);
 		}
 
 		const headers: Record<string, string> = {
@@ -781,7 +844,7 @@ export async function maskPrivacyText(
 		}
 
 		if (!response.ok) {
-			return maskWithLocalFallback(text);
+			return maskWithLocalFallback(text, customRules);
 		}
 
 		const data = (await response.json()) as PrivacyMaskResponse;
@@ -790,17 +853,17 @@ export async function maskPrivacyText(
 		}
 
 		if (typeof data.masked_text === 'string') {
-			return data.masked_text;
+			return maskCustomRulesOnly(data.masked_text, customRules);
 		}
 
-		return maskWithLocalFallback(text);
+		return maskWithLocalFallback(text, customRules);
 	} catch (error) {
 		const errorName = error instanceof Error ? error.name : undefined;
 		if (abortSignal?.aborted || errorName === 'AbortError') {
 			return text;
 		}
 
-		return maskWithLocalFallback(text);
+		return maskWithLocalFallback(text, customRules);
 	}
 }
 

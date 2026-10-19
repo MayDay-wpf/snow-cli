@@ -173,6 +173,15 @@ export interface UnifiedSettings {
 		toolResults?: {
 			tools?: string[];
 		};
+		/** 用户自定义正则脱敏规则（本地与 API 模式均生效） */
+		customRules?: Array<{
+			id: string;
+			name: string;
+			pattern: string;
+			group?: number;
+			replacement?: string;
+			enabled?: boolean;
+		}>;
 	};
 
 	// === Goal 默认预算（单位：百万 tokens） ===

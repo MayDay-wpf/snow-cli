@@ -28,7 +28,7 @@ export const mcpTools = [
 	{
 		name: 'session-command-run',
 		description:
-			'Execute an allowlisted Snow session/slash control command without requiring the user to type /slash in the TUI. Examples: command="buddy.hatch" args with name/species; command="buddy" args="status"; command="tool-display" args="compact"; command="mcp" args="status". Medium/high risk writes require confirm=true. Returns stable JSON {ok, command, data, code, message}.',
+			'Execute an allowlisted Snow session/slash control command without requiring the user to type /slash in the TUI. Examples: command="buddy.hatch" args with name/species; command="buddy" args="status"; command="tool-display" args="compact"; command="mcp" args="status"; command="privacy-rules.test" args=\'{"sample":"...","pattern":"..."}\'; command="privacy-rules.upsert" args=\'{"name":"...","pattern":"..."}\' confirm=true. JSON payloads in args are passed through verbatim. Medium/high risk writes require confirm=true. Returns stable JSON {ok, command, data, code, message}.',
 		inputSchema: {
 			type: 'object',
 			properties: {
