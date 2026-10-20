@@ -125,7 +125,8 @@ jobs:
 
             ### What's New
 
-            - feat: add privacy custom rules management via session commands
+            - MCP custom API mode: MCP servers now support `type: "api"` (plus an explicit `sse` transport), mapping plain HTTP endpoints to MCP tools without spawning a subprocess or keeping a persistent connection. Endpoint definitions cover method/path, per-endpoint headers, shared cookies, parameters in query/path/header/body with types, required flags and default values, and `none`/`json`/`form`/`multipart`/`raw` bodies with `{{param}}` templates (typed placeholders, missing optional params pruned automatically). Configs copied from Snow APP's API-type MCP servers work as-is, including the `args: {cookies, endpoints}` database format; validation requires a URL and at least one endpoint
+            - Safer tool-call correction: automatic argument repair is now limited to tools shipped by Snow. User-configured MCP server tools are excluded because retrying unknown side effects could duplicate writes, and `terminal-execute`, `session-command-run`, `scheduler-schedule_task` plus every `team-` / `subagent-` tool are never silently repaired. Built-in tool prefixes are centralized in a single allowlist shared by tool discovery and correction
 
             ### Installation
             ```bash
