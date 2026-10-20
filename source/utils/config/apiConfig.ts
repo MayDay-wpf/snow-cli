@@ -90,14 +90,45 @@ export interface ApiConfig {
 	oauth?: OAuthProfileMetadata;
 }
 
+/**
+ * 自定义 API 类型 MCP 的接口参数（与 Snow APP 的接口定义保持一致）。
+ */
+export interface MCPServerApiParam {
+	name?: string;
+	type?: string; // string | number | integer | boolean | object | array
+	required?: boolean;
+	description?: string;
+	location?: string; // query | path | header | body
+	defaultValue?: string;
+}
+
+/**
+ * 自定义 API 类型 MCP 的单个接口定义。
+ * 每个接口会被暴露为一个 MCP 工具，工具名取 `name`（缺省为 endpoint_<序号>）。
+ */
+export interface MCPServerApiEndpoint {
+	name?: string;
+	description?: string;
+	method?: string; // GET | POST | PUT | PATCH | DELETE | HEAD | OPTIONS
+	path?: string; // 相对 Base URL 的路径，支持 {{param}} 占位符
+	headers?: Record<string, unknown>;
+	params?: MCPServerApiParam[];
+	bodyType?: string; // none | json | form | multipart | raw
+	bodyTemplate?: string;
+	rawContentType?: string;
+}
+
 export interface MCPServer {
-	type?: 'http' | 'stdio' | 'local'; // 传输类型，未指定时根据 url/command 自动推断。'local' 是 'stdio' 的别名
+	type?: 'http' | 'stdio' | 'local' | 'sse' | 'api'; // 传输类型，未指定时根据 url/command 自动推断。'local' 是 'stdio' 的别名；'api' 为自定义 API
 	url?: string;
 	command?: string;
-	args?: string[];
+	// stdio 的命令参数；'api' 类型时也可能是 {cookies, endpoints} 规格对象（Snow APP 同步格式）
+	args?: string[] | Record<string, unknown> | string;
 	env?: Record<string, string>; // 环境变量
 	environment?: Record<string, string>; // 环境变量的别名，与 env 等价
 	headers?: Record<string, string>; // HTTP 请求头
+	cookies?: Record<string, unknown>; // 'api' 类型的公共 Cookie
+	endpoints?: MCPServerApiEndpoint[]; // 'api' 类型的接口定义
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
 	timeout?: number; // 工具调用超时时间（毫秒），默认 1200000 (20分钟)
 }
@@ -666,8 +697,47 @@ export function getMCPConfigByScope(scope: MCPConfigScope): MCPConfig {
 	return scope === 'project' ? getProjectMCPConfig() : getGlobalMCPConfig();
 }
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * 解析 'api' 类型服务的接口规格候选值。
+ * Snow APP 会把规格序列化为 `{cookies, endpoints}`（可能存在于 `args`，
+ * 可能是对象或 JSON 字符串），这里做兼容解析。
+ */
+function parseMCPServerApiSpec(
+	value: unknown,
+): Record<string, unknown> | null {
+	if (typeof value === 'string') {
+		try {
+			const parsed: unknown = JSON.parse(value);
+			return isPlainRecord(parsed) ? parsed : null;
+		} catch {
+			return null;
+		}
+	}
+
+	return isPlainRecord(value) ? value : null;
+}
+
+/** 统计 'api' 类型服务定义的接口数量（兼容顶层 endpoints 与 args 规格） */
+function countMCPServerApiEndpoints(server: MCPServer): number {
+	const fromTopLevel = Array.isArray(server.endpoints)
+		? server.endpoints.length
+		: 0;
+	if (fromTopLevel > 0) {
+		return fromTopLevel;
+	}
+
+	const spec = parseMCPServerApiSpec(server.args);
+	return spec && Array.isArray(spec['endpoints'])
+		? spec['endpoints'].length
+		: 0;
+}
+
 export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 	const errors: string[] = [];
+	const supportedTypes = new Set(['http', 'stdio', 'local', 'sse', 'api']);
 
 	if (config.mcpServers) {
 		Object.entries(config.mcpServers).forEach(([name, server]) => {
@@ -677,8 +747,7 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 
 			if (
 				server.type !== undefined &&
-				server.type !== 'http' &&
-				server.type !== 'stdio'
+				!supportedTypes.has(server.type)
 			) {
 				errors.push(`Server "${name}" has unsupported type "${server.type}"`);
 			}
@@ -689,6 +758,16 @@ export function validateMCPConfig(config: Partial<MCPConfig>): string[] {
 
 			if (server.type === 'stdio' && !server.command) {
 				errors.push(`Stdio server "${name}" must have a command`);
+			}
+
+			if (server.type === 'api') {
+				if (!server.url) {
+					errors.push(`API server "${name}" must have a URL`);
+				}
+
+				if (countMCPServerApiEndpoints(server) === 0) {
+					errors.push(`API server "${name}" must define at least one endpoint`);
+				}
 			}
 
 			if (server.url && !isValidUrl(server.url)) {

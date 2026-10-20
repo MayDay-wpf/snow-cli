@@ -63,6 +63,11 @@ import {
 import {logger} from '../core/logger.js';
 import {resourceMonitor} from '../core/resourceMonitor.js';
 import {addProxyToFetchOptions} from '../core/proxyUtils.js';
+import {
+	buildMCPApiTools,
+	executeMCPApiTool,
+	isMCPApiServer,
+} from './mcpApiClient.js';
 
 import os from 'os';
 import path from 'path';
@@ -919,6 +924,11 @@ async function probeServiceTools(
 	serviceName: string,
 	server: MCPServer,
 ): Promise<ProbeServiceResult> {
+	// 自定义 API 服务不需要建立连接，接口定义直接映射为工具
+	if (getMCPServerTransportType(server) === 'api') {
+		return {tools: buildMCPApiTools(server)};
+	}
+
 	// HTTP 服务需要更长超时时间
 	const timeout = getMCPServerTransportType(server) === 'http' ? 15000 : 5000;
 	return await connectAndGetTools(serviceName, server, timeout);
@@ -926,13 +936,23 @@ async function probeServiceTools(
 
 const MCP_ENV_VAR_PATTERN = /\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 
-function getMCPServerTransportType(server: MCPServer): 'http' | 'stdio' | null {
+function getMCPServerTransportType(
+	server: MCPServer,
+): 'http' | 'stdio' | 'api' | null {
+	// 'api' = 自定义 API 传输（Snow APP 兼容），每个 endpoint 映射为一个工具
+	if (isMCPApiServer(server)) {
+		return 'api';
+	}
+
 	if (server.type) {
-		// 'local' 是 'stdio' 的别名
-		if (server.type === 'local') {
+		// 'local' 是 'stdio' 的别名；'sse' 走 HTTP 传输（SDK 会自动降级到 SSE）
+		if (server.type === 'local' || server.type === 'stdio') {
 			return 'stdio';
 		}
-		return server.type as 'http' | 'stdio';
+
+		if (server.type === 'http' || server.type === 'sse') {
+			return 'http';
+		}
 	}
 
 	if (server.url) {
@@ -1211,7 +1231,7 @@ async function connectAndGetTools(
 
 			transport = new StdioClientTransport({
 				command: server.command,
-				args: server.args || [],
+				args: Array.isArray(server.args) ? server.args : [],
 				env: getServerProcessEnv(server),
 				stderr: 'ignore', // 屏蔽第三方MCP服务的stderr输出,避免干扰CLI界面
 			});
@@ -1344,7 +1364,7 @@ async function getPersistentClient(
 
 			transport = new StdioClientTransport({
 				command: server.command,
-				args: server.args || [],
+				args: Array.isArray(server.args) ? server.args : [],
 				env: getServerProcessEnv(server),
 				stderr: 'pipe', // Persistent services need stderr for process communication
 			});
@@ -2413,6 +2433,14 @@ async function executeOnExternalMCPService(
 	args: any,
 	abortSignal?: AbortSignal,
 ): Promise<any> {
+	// 自定义 API 类型：按接口定义直接发起 HTTP 请求，无需建立持久 MCP 连接
+	if (getMCPServerTransportType(server) === 'api') {
+		logger.debug(
+			`Executing custom API endpoint ${toolName} on ${serviceName}...`,
+		);
+		return await executeMCPApiTool(server, toolName, args, abortSignal);
+	}
+
 	// Always use persistent connection for external MCP services
 	// MCP protocol supports multiple calls - no need to reconnect each time
 	let retried = false;
