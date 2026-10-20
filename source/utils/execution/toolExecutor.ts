@@ -625,9 +625,8 @@ export async function executeToolCall(
 				}
 			} else {
 				// Regular tool execution, with optional argument repair on failure.
-				let correctionModule:
-					| typeof import('./toolCorrection.js')
-					| null = null;
+				let correctionModule: typeof import('./toolCorrection.js') | null =
+					null;
 				let correctionAllowed = false;
 				try {
 					correctionModule = await import('./toolCorrection.js');
@@ -748,29 +747,6 @@ export async function executeToolCall(
 						repairedArguments = parsedArguments;
 					} catch {
 						break;
-					}
-
-					// terminal-execute: a repaired command must still pass the
-					// sensitive-command check, otherwise automatic correction would
-					// bypass the confirmation gate.
-					if (toolCall.function.name === 'terminal-execute') {
-						try {
-							const {isSensitiveCommand} = await import(
-								'./sensitiveCommandManager.js'
-							);
-							const sensitiveCheck = isSensitiveCommand(
-								String(repairedArguments['command'] ?? ''),
-							);
-							if (sensitiveCheck.isSensitive) {
-								lastRepairReasoning =
-									'repaired command requires confirmation';
-								break;
-							}
-						} catch {
-							lastRepairReasoning =
-								'unable to verify repaired command safety';
-							break;
-						}
 					}
 
 					pendingRepairArguments = decision.argumentsJson;

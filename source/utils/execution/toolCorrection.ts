@@ -25,7 +25,7 @@ import {
 } from '../config/apiConfig.js';
 import {getToolCorrectionEnabled} from '../config/projectSettings.js';
 import {logger} from '../core/logger.js';
-import {collectAllMCPTools} from './mcpToolsManager.js';
+import {BUILT_IN_TOOL_PREFIXES, collectAllMCPTools} from './mcpToolsManager.js';
 
 /** Maximum number of repaired executions the executor is allowed to perform. */
 export const MAX_TOOL_CORRECTION_ATTEMPTS = 3;
@@ -43,11 +43,33 @@ const MAX_ATTEMPT_ERROR_CHARS = 1_500;
 
 /**
  * Tools whose arguments must not be silently mutated by the repair agent.
- * `terminal-execute` is handled specially by the executor (repaired commands
- * still go through the sensitive-command check).
+ *
+ * - `askuser-ask_question`: the arguments are the user's own answer; rewriting
+ *   them would fabricate user input.
+ * - `terminal-execute`: stderr and the exit code are diagnostic output the main
+ *   model must see verbatim. Auto-repairing the command would hide the original
+ *   failure and break the "run, read the error, then decide" debugging loop.
+ * - `session-command-run`: mutates session/config state (yolo, profile, privacy
+ *   rules, buddy reset...). A silent retry can repeat medium/high-risk writes
+ *   and bypass the confirmation semantics.
+ * - `scheduler-schedule_task`: blocking wait. Retrying after a failure makes the
+ *   user wait twice and breaks the "schedule exactly once" semantics.
  */
 export const TOOL_CORRECTION_BLOCKED_TOOLS: readonly string[] = [
 	'askuser-ask_question',
+	'terminal-execute',
+	'session-command-run',
+	'scheduler-schedule_task',
+];
+
+/**
+ * Tool-name prefixes that must never be auto-corrected. Team and sub-agent
+ * tools own their execution pipelines (child processes, confirmations,
+ * multi-agent side effects), so a silent retry is unsafe.
+ */
+const TOOL_CORRECTION_BLOCKED_PREFIXES: readonly string[] = [
+	'team-',
+	'subagent-',
 ];
 
 const CORRECTION_SYSTEM_PROMPT = `You are a tool-call repair agent inside a coding assistant. A tool invocation failed. Your job is to repair ONLY the arguments of the SAME tool call so it can succeed.
@@ -135,12 +157,26 @@ export type ToolCorrectionDecision = {
 
 /**
  * Whether automatic correction is enabled and allowed for this tool.
+ *
+ * Only tools shipped by Snow participate. User-configured MCP server tools are
+ * excluded because their side effects are unknown: automatically repairing
+ * arguments and retrying could duplicate a write (send a message, create a
+ * ticket, issue a refund...). The main model still sees the failure and can
+ * decide on a corrected call itself.
  */
 export function isToolCorrectionEnabledForTool(toolName: string): boolean {
 	if (!getToolCorrectionEnabled()) {
 		return false;
 	}
-	return !TOOL_CORRECTION_BLOCKED_TOOLS.includes(toolName);
+	if (TOOL_CORRECTION_BLOCKED_TOOLS.includes(toolName)) {
+		return false;
+	}
+	if (
+		TOOL_CORRECTION_BLOCKED_PREFIXES.some(prefix => toolName.startsWith(prefix))
+	) {
+		return false;
+	}
+	return BUILT_IN_TOOL_PREFIXES.some(prefix => toolName.startsWith(prefix));
 }
 
 /**
@@ -348,7 +384,10 @@ function buildCorrectionUserContent(input: ToolCorrectionInput): string {
 		`Failure:\n${truncateText(input.failure.trim(), MAX_FAILURE_CHARS)}`,
 	);
 	lines.push(
-		`Repair attempt: ${Math.max(1, input.attempt)}/${MAX_TOOL_CORRECTION_ATTEMPTS}`,
+		`Repair attempt: ${Math.max(
+			1,
+			input.attempt,
+		)}/${MAX_TOOL_CORRECTION_ATTEMPTS}`,
 	);
 
 	if (input.attempts.length > 0) {
@@ -428,9 +467,7 @@ export function parseCorrectionResponse(
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return (
-		value !== null && typeof value === 'object' && !Array.isArray(value)
-	);
+	return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function truncateText(value: string, maxLength: number): string {

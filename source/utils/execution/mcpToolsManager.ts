@@ -194,29 +194,37 @@ export function getTodoService(): TodoService {
 }
 
 /**
+ * Prefixes of tool names shipped by Snow itself.
+ * Any tool whose name does not start with one of these prefixes comes from a
+ * user-configured MCP server (named `${serviceName}-${tool}` in doRefreshToolsCache).
+ */
+export const BUILT_IN_TOOL_PREFIXES: readonly string[] = [
+	'todo-',
+	'notebook-',
+	'filesystem-',
+	'terminal-',
+	'ace-',
+	'websearch-',
+	'ide-',
+	'codebase-',
+	'askuser-',
+	'scheduler-',
+	'goal-',
+	'skill-',
+	'subagent-',
+	'team-',
+	'snow-docs-',
+	'session-command-',
+];
+
+/**
  * Get all registered service prefixes (synchronous)
  * Used for detecting merged tool names
  * Returns cached service names if available, otherwise returns built-in services
  */
 export function getRegisteredServicePrefixes(): string[] {
 	// 内置服务前缀（始终可用）
-	const builtInPrefixes = [
-		'todo-',
-		'notebook-',
-		'filesystem-',
-		'terminal-',
-		'ace-',
-		'websearch-',
-		'ide-',
-		'codebase-',
-		'askuser-',
-		'scheduler-',
-		'goal-',
-		'skill-',
-		'subagent-',
-		'snow-docs-',
-		'session-command-',
-	];
+	const builtInPrefixes = BUILT_IN_TOOL_PREFIXES;
 
 	// 如果有缓存，从缓存中获取外部 MCP 服务名称
 	if (toolsCache?.servicesInfo) {
@@ -234,7 +242,7 @@ export function getRegisteredServicePrefixes(): string[] {
 		);
 		return [...builtInPrefixes, ...externalPrefixes];
 	} catch {
-		return builtInPrefixes;
+		return [...builtInPrefixes];
 	}
 }
 
