@@ -31,9 +31,12 @@ import {extname, join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 import {SEARCH_ENGINES_DIR} from '../../../utils/config/apiConfig.js';
+import {logger} from '../../../utils/core/logger.js';
 import {DuckDuckGoEngine} from './duckduckgo.engine.js';
 import {BingEngine} from './bing.engine.js';
 import type {SearchEngine, SearchEngineId} from './types.js';
+
+const log = logger.child('mcp:websearch');
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngineId = 'duckduckgo';
 
@@ -126,7 +129,6 @@ async function loadExternalEngines(): Promise<void> {
 	try {
 		entries = readdirSync(SEARCH_ENGINES_DIR, {withFileTypes: true});
 	} catch (error) {
-		// eslint-disable-next-line no-console
 		console.warn('[websearch] failed to read plugin dir', error);
 		return;
 	}
@@ -146,9 +148,9 @@ async function loadExternalEngines(): Promise<void> {
 			const mod = (await import(moduleUrl)) as SearchEngineModule;
 			const engines = collectFromModule(mod);
 			if (engines.length === 0) {
-				// eslint-disable-next-line no-console
 				console.warn(
 					`[websearch] plugin "${file.name}" did not export a valid SearchEngine`,
+					{file: file.name},
 				);
 				continue;
 			}
@@ -163,10 +165,9 @@ async function loadExternalEngines(): Promise<void> {
 				ENGINES.set(engine.id, engine);
 			}
 		} catch (error) {
-			// eslint-disable-next-line no-console
 			console.warn(
 				`[websearch] failed to load search engine plugin "${file.name}":`,
-				error,
+				{error, file: file.name},
 			);
 		}
 	}
@@ -201,13 +202,18 @@ function ensurePluginWatcher(): void {
 			pluginWatcher.on('error', () => {
 				try {
 					pluginWatcher?.close();
-				} catch {
+				} catch (error) {
 					// ignore
+					log.debug('Failed to close pluginWatcher on error', {error});
 				}
 				pluginWatcher = null;
 				setTimeout(startWatch, 300);
 			});
-		} catch {
+		} catch (error) {
+			log.debug('Failed to start watching search engines directory', {
+				dir: SEARCH_ENGINES_DIR,
+				error,
+			});
 			setTimeout(startWatch, 400);
 		}
 	};

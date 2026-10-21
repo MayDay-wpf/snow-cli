@@ -5,6 +5,9 @@ import type {
 	CommandHookResult,
 } from './unifiedHooksExecutor.js';
 import {hookStrategies} from './hookStrategies.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:hookResultInterpreter');
 import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 
 /**
@@ -123,7 +126,11 @@ export function parseAdditionalContextOutput(rawOutput: string): {
 		}
 
 		return {context, display, prompt};
-	} catch {
+	} catch (error) {
+		log.debug(
+			'Hook stdout is not JSON, ignoring for context extraction',
+			{error},
+		);
 		return null;
 	}
 }
@@ -300,7 +307,9 @@ export function interpretHookResult(
 					promptOverride: interpreted.promptOverride,
 				});
 			})
-			.catch(() => {});
+			.catch(error => {
+				log.debug('Failed to record hook inject debug info', {error});
+			});
 	}
 
 	return interpreted;
@@ -372,7 +381,11 @@ export function extractHookProvidedConfirmation(
 					};
 				}
 			}
-		} catch {
+		} catch (error) {
+			log.debug(
+				'Hook confirmation output is not JSON, falling back to keyword matching',
+				{error, rawOutput},
+			);
 			// 不是有效的 JSON，按纯文本关键词处理
 			const lowerOutput = rawOutput.toLowerCase().trim();
 

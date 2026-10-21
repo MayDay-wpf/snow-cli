@@ -8,9 +8,12 @@ import {
 	mkdirSync,
 } from 'fs';
 import {join} from 'path';
-import {homedir} from 'os';
 import {getCurrentLanguage} from '../config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
+import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+
+const log = logger.child('sse:daemon');
 
 /**
  * SSE 守护进程管理器
@@ -31,16 +34,20 @@ function formatMessage(template: string, params: Record<string, any>): string {
 }
 
 // PID 文件存储目录
-const SNOW_DIR = join(homedir(), '.snow');
+const SNOW_DIR = getGlobalSnowDir().native;
 const DAEMON_DIR = join(SNOW_DIR, 'sse-daemons');
 const LOG_DIR = join(SNOW_DIR, 'sse-logs');
 
 // 确保目录存在
-if (!existsSync(DAEMON_DIR)) {
-	mkdirSync(DAEMON_DIR, {recursive: true});
-}
-if (!existsSync(LOG_DIR)) {
-	mkdirSync(LOG_DIR, {recursive: true});
+try {
+	if (!existsSync(DAEMON_DIR)) {
+		mkdirSync(DAEMON_DIR, {recursive: true});
+	}
+	if (!existsSync(LOG_DIR)) {
+		mkdirSync(LOG_DIR, {recursive: true});
+	}
+} catch (err) {
+	log.debug('Failed to create daemon directories:', err);
 }
 
 interface DaemonInfo {
@@ -90,13 +97,23 @@ export function startDaemon(
 				console.error(formatMessage(t.stopExistingByPort, {port}));
 				console.error(formatMessage(t.stopExistingByPid, {pid}));
 				process.exit(1);
-			} catch {
+			} catch (err) {
 				// 进程不存在，清理旧文件
-				unlinkSync(pidFile);
+				log.debug(`Process ${pid} is not running, unlinking stale pid file ${pidFile}:`, err);
+				try {
+					unlinkSync(pidFile);
+				} catch (unlinkErr) {
+					log.debug(`Failed to unlink stale pid file ${pidFile}:`, unlinkErr);
+				}
 			}
-		} catch {
+		} catch (err) {
 			// PID文件损坏，删除它
-			unlinkSync(pidFile);
+			log.debug(`Corrupted PID file ${pidFile}, deleting:`, err);
+			try {
+				unlinkSync(pidFile);
+			} catch (unlinkErr) {
+				log.debug(`Failed to unlink corrupted pid file ${pidFile}:`, unlinkErr);
+			}
 		}
 	}
 
@@ -185,7 +202,9 @@ export function startDaemon(
 		// 杀死子进程
 		try {
 			process.kill(child.pid!);
-		} catch {}
+		} catch (killErr) {
+			log.debug(`Failed to kill child ${child.pid} after pid save failure:`, killErr);
+		}
 		process.exit(1);
 	}
 
@@ -193,14 +212,17 @@ export function startDaemon(
 	setTimeout(() => {
 		try {
 			process.kill(child.pid!, 0); // 检查进程是否存在
-		} catch {
+		} catch (err) {
 			const t = getTranslation();
 			console.error(t.daemonStartFailed);
 			console.error(`  ${logFile}`);
+			log.debug(`Daemon process ${child.pid} terminated shortly after spawn:`, err);
 			// 清理 PID 文件
 			try {
 				unlinkSync(pidFile);
-			} catch {}
+			} catch (unlinkErr) {
+				log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+			}
 		}
 	}, 1000);
 }
@@ -231,7 +253,9 @@ export function stopDaemon(target?: number): void {
 			console.log(t.tryRemoveInvalidPid);
 			try {
 				unlinkSync(pidFile);
-			} catch {}
+			} catch (unlinkErr) {
+				log.debug(`Failed to unlink invalid pid file ${pidFile}:`, unlinkErr);
+			}
 		}
 	} else {
 		// 通过PID停止
@@ -248,7 +272,9 @@ export function stopDaemon(target?: number): void {
 					killProcess(daemonInfo.pid, pidFile);
 					break;
 				}
-			} catch {}
+			} catch (err) {
+				log.debug(`Failed to read pid file ${pidFile}:`, err);
+			}
 		}
 
 		if (!found) {
@@ -272,12 +298,14 @@ function killProcess(pid: number, pidFile: string): void {
 				execSync(`taskkill /PID ${pid} /T /F`, {stdio: 'ignore'});
 				console.log(t.daemonStopped);
 			} catch (error: any) {
+				log.debug(`taskkill failed for pid ${pid}, falling back to process.kill:`, error);
 				// taskkill 失败时尝试使用 process.kill
 				try {
 					process.kill(pid, 'SIGTERM');
 					console.log(t.daemonStopped);
-				} catch {
+				} catch (killErr) {
 					console.error(t.stopProcessFailed);
+					log.debug(`process.kill fallback failed for pid ${pid}:`, killErr);
 				}
 			}
 		} else {
@@ -289,15 +317,20 @@ function killProcess(pid: number, pidFile: string): void {
 		// 删除 PID 文件
 		try {
 			unlinkSync(pidFile);
-		} catch {}
+		} catch (unlinkErr) {
+			log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+		}
 	} catch (error: any) {
 		if (error.code === 'ESRCH') {
 			console.log(t.processNotExists);
 			try {
 				unlinkSync(pidFile);
-			} catch {}
+			} catch (unlinkErr) {
+				log.debug(`Failed to unlink pid file ${pidFile}:`, unlinkErr);
+			}
 		} else {
 			console.error(`${t.stopProcessError}:`, error.message);
+			log.debug(`Error stopping process ${pid}:`, error);
 		}
 	}
 }
@@ -310,7 +343,8 @@ function getAllPidFiles(): string[] {
 		return readdirSync(DAEMON_DIR)
 			.filter(file => file.endsWith('.pid'))
 			.map(file => join(DAEMON_DIR, file));
-	} catch {
+	} catch (err) {
+		log.debug(`Failed to read pid directory ${DAEMON_DIR}:`, err);
 		return [];
 	}
 }
@@ -340,12 +374,14 @@ export function daemonStatus(): void {
 			try {
 				process.kill(pid, 0);
 				runningDaemons.push(daemonInfo);
-			} catch {
+			} catch (err) {
 				// 进程已停止，记录待清理的文件
+				log.debug(`Daemon process ${pid} is not alive:`, err);
 				stoppedPidFiles.push(pidFile);
 			}
-		} catch {
+		} catch (err) {
 			// PID文件损坏，记录待清理的文件
+			log.debug(`Corrupted PID file ${pidFile}:`, err);
 			stoppedPidFiles.push(pidFile);
 		}
 	}

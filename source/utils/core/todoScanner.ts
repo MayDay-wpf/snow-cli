@@ -1,5 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import {logger} from './logger.js';
+
+const log = logger.child('core:todoScanner');
 
 export interface TodoItem {
 	id: string;
@@ -160,6 +163,7 @@ function scanDirectory(dir: string, rootDir: string): TodoItem[] {
 		}
 	} catch (error) {
 		// Ignore directories that can't be read
+		log.debug('todoScanner scanDirectory skipped unreadable directory', {error, dir});
 	}
 
 	return todos;

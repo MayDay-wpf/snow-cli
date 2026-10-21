@@ -18,8 +18,11 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('config:legacyConfigMigration');
 import {
 	readSettings,
 	writeSettings,
@@ -42,7 +45,7 @@ const LEGACY_FILES = {
 
 function getSnowDir(scope: SettingsScope, workingDirectory?: string): string {
 	if (scope === 'global') {
-		return path.join(os.homedir(), '.snow');
+		return getGlobalSnowDir().native;
 	}
 	return path.join(workingDirectory || process.cwd(), '.snow');
 }
@@ -63,8 +66,9 @@ function safeUnlink(filePath: string): void {
 		if (fs.existsSync(filePath)) {
 			fs.unlinkSync(filePath);
 		}
-	} catch {
+	} catch (error) {
 		// ignore
+		log.debug('safeUnlink failed to unlink legacy file', {error, filePath});
 	}
 }
 

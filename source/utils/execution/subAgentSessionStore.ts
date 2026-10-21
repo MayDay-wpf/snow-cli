@@ -9,9 +9,11 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 import type {ChatMessage} from '../../api/chat.js';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:subAgentSessionStore');
 
 export type SubAgentSessionStatus =
 	| 'running'
@@ -43,7 +45,7 @@ export interface SubAgentSessionRecord {
 const MAX_PER_SESSION = 20;
 const MAX_TOTAL = 200;
 /** 旧版存储根目录（兼容读取历史数据）：~/.snow/subagents/ */
-const LEGACY_STORAGE_ROOT = path.join(os.homedir(), '.snow', 'subagents');
+const LEGACY_STORAGE_ROOT = path.join(getGlobalSnowDir().native, 'subagents');
 
 class SubAgentSessionStore {
 	private records: Map<string, SubAgentSessionRecord> = new Map();
@@ -58,7 +60,7 @@ class SubAgentSessionStore {
 		if (record.sessionId) {
 			this.loadedSessionIds.add(record.sessionId);
 			this.persist(record.sessionId).catch(error => {
-				logger.error('Failed to persist sub-agent sessions:', {
+				log.error('Failed to persist sub-agent sessions:', {
 					sessionId: record.sessionId,
 					error: error instanceof Error ? error.message : String(error),
 				});
@@ -84,7 +86,11 @@ class SubAgentSessionStore {
 				if (typeof record.key !== 'string') continue;
 				this.records.set(record.key, this.normalize(record));
 			}
-		} catch {
+		} catch (error) {
+			log.debug('Failed to read or parse sub-agent session file', {
+				filePath,
+				error,
+			});
 			// 文件损坏：视为无记录，忽略
 		}
 	}
@@ -100,14 +106,22 @@ class SubAgentSessionStore {
 		if (filePath) {
 			try {
 				await fs.unlink(filePath);
-			} catch {
+			} catch (error) {
+				log.debug('Failed to unlink sub-agent session file', {
+					filePath,
+					error,
+				});
 				// 文件不存在则忽略
 			}
 		}
 		// 删除旧版路径文件（兼容历史版本写盘的数据）
 		try {
 			await fs.unlink(this.getLegacySessionFilePath(sessionId));
-		} catch {
+		} catch (error) {
+			log.debug('Failed to unlink legacy sub-agent session file', {
+				sessionId,
+				error,
+			});
 			// 文件不存在则忽略
 		}
 	}
@@ -165,7 +179,8 @@ class SubAgentSessionStore {
 		try {
 			const {sessionManager} = await import('../session/sessionManager.js');
 			return sessionManager.getSubAgentSessionsDir();
-		} catch {
+		} catch (error) {
+			log.debug('Failed to resolve sub-agent sessions directory', {error});
 			return undefined;
 		}
 	}
@@ -199,7 +214,11 @@ class SubAgentSessionStore {
 					);
 					if (await this.exists(candidate)) return candidate;
 				}
-			} catch {
+			} catch (error) {
+				log.debug(
+					'Failed to read project directory for sub-agent sessions',
+					{projectDir, error},
+				);
 				// 项目目录不存在
 			}
 		}
@@ -213,7 +232,11 @@ class SubAgentSessionStore {
 		try {
 			await fs.access(filePath);
 			return true;
-		} catch {
+		} catch (error) {
+			log.debug('Sub-agent session file does not exist', {
+				filePath,
+				error,
+			});
 			return false;
 		}
 	}
@@ -222,7 +245,13 @@ class SubAgentSessionStore {
 	private persist(sessionId: string): Promise<void> {
 		const previous = this.persistQueues.get(sessionId) ?? Promise.resolve();
 		const next = previous
-			.catch(() => undefined)
+			.catch(error => {
+				log.debug('Previous sub-agent persist queue task failed', {
+					sessionId,
+					error,
+				});
+				return undefined;
+			})
 			.then(async () => {
 				const sessionRecords = Array.from(this.records.values()).filter(
 					r => r.sessionId === sessionId,

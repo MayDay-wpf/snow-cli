@@ -1,11 +1,11 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
 import type {ThemeType, ThemeColors} from '../../ui/themes/index.js';
 import {configEvents} from './configEvents.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 export function getThemeConfigDir(): string {
-	return process.env['SNOW_CONFIG_DIR'] || join(homedir(), '.snow');
+	return getGlobalSnowDir().native;
 }
 
 export function getThemeConfigFile(): string {

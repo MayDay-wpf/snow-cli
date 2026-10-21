@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import ignore, {type Ignore} from 'ignore';
 import chokidar from 'chokidar';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:codebaseIndex');
 import {
 	CodebaseDatabase,
 	type CodeChunk,
@@ -117,14 +119,14 @@ export class CodebaseIndexAgent {
 	 */
 	async start(progressCallback?: ProgressCallback): Promise<void> {
 		if (this.isRunning) {
-			logger.warn('Indexing already in progress');
+			log.warn('Indexing already in progress');
 			return;
 		}
 
 		// Reload config to check if it was changed
 		this.config = loadCodebaseConfig();
 		if (!this.config.enabled) {
-			logger.info('Codebase indexing is disabled');
+			log.info('Codebase indexing is disabled');
 			return;
 		}
 
@@ -140,7 +142,7 @@ export class CodebaseIndexAgent {
 			const t = translations[currentLanguage];
 			const errorMessage = t.codebaseConfig.gitignoreNotFound;
 
-			logger.error(errorMessage);
+			log.error(errorMessage);
 
 			if (progressCallback) {
 				progressCallback({
@@ -166,7 +168,7 @@ export class CodebaseIndexAgent {
 
 			// Check if stopped before starting
 			if (this.shouldStop) {
-				logger.info('Indexing cancelled before start');
+				log.info('Indexing cancelled before start');
 				return;
 			}
 
@@ -175,7 +177,7 @@ export class CodebaseIndexAgent {
 			const isResuming = progress.status === 'indexing';
 
 			if (isResuming) {
-				logger.info('Resuming previous indexing session');
+				log.info('Resuming previous indexing session');
 			}
 
 			// Scan files first
@@ -188,7 +190,7 @@ export class CodebaseIndexAgent {
 			});
 
 			const files = await this.scanFiles();
-			logger.info(`Found ${files.length} code files to index`);
+			log.info(`Found ${files.length} code files to index`);
 
 			// Reset progress if file count changed (project structure changed)
 			// or if previous session was interrupted abnormally
@@ -198,7 +200,7 @@ export class CodebaseIndexAgent {
 					progress.processedFiles > files.length);
 
 			if (shouldReset) {
-				logger.info(
+				log.info(
 					'File count changed or progress corrupted, resetting progress',
 				);
 				this.db.updateProgress({
@@ -220,7 +222,7 @@ export class CodebaseIndexAgent {
 
 			// Check if stopped after initialization
 			if (this.shouldStop) {
-				logger.info('Indexing cancelled after initialization');
+				log.info('Indexing cancelled after initialization');
 				return;
 			}
 
@@ -243,9 +245,9 @@ export class CodebaseIndexAgent {
 					status: 'completed',
 				});
 
-				logger.info('Indexing completed successfully');
+				log.info('Indexing completed successfully');
 			} else {
-				logger.info('Indexing paused by user, progress saved');
+				log.info('Indexing paused by user, progress saved');
 			}
 		} catch (error) {
 			const errorMessage = this.extractDetailedError(error);
@@ -264,7 +266,7 @@ export class CodebaseIndexAgent {
 				error: errorMessage,
 			});
 
-			logger.error('Indexing failed', error);
+			log.error('Indexing failed', error);
 			throw error;
 		} finally {
 			this.isRunning = false;
@@ -290,7 +292,7 @@ export class CodebaseIndexAgent {
 			return;
 		}
 
-		logger.info('Stopping indexing...');
+		log.info('Stopping indexing...');
 		this.shouldStop = true;
 
 		// Also stop file watcher to ensure everything is stopped
@@ -353,14 +355,14 @@ export class CodebaseIndexAgent {
 	 */
 	startWatching(progressCallback?: ProgressCallback): void {
 		if (this.fileWatcher) {
-			logger.debug('File watcher already running');
+			log.debug('File watcher already running');
 			return;
 		}
 
 		// Reload config to check if it was changed
 		this.config = loadCodebaseConfig();
 		if (!this.config.enabled) {
-			logger.info('Codebase indexing is disabled, not starting watcher');
+			log.info('Codebase indexing is disabled, not starting watcher');
 			return;
 		}
 
@@ -396,7 +398,7 @@ export class CodebaseIndexAgent {
 				}
 
 				const relativePath = path.relative(this.projectRoot, filePath);
-				logger.debug(`File created, indexing: ${relativePath}`);
+				log.debug(`File created, indexing: ${relativePath}`);
 				this.debounceFileChange(filePath, relativePath);
 			});
 
@@ -410,7 +412,7 @@ export class CodebaseIndexAgent {
 				}
 
 				const relativePath = path.relative(this.projectRoot, filePath);
-				logger.debug(`File modified, reindexing: ${relativePath}`);
+				log.debug(`File modified, reindexing: ${relativePath}`);
 				this.debounceFileChange(filePath, relativePath);
 			});
 
@@ -425,7 +427,7 @@ export class CodebaseIndexAgent {
 				}
 
 				const relativePath = path.relative(this.projectRoot, filePath);
-				logger.debug(`File deleted, removing from index: ${relativePath}`);
+				log.debug(`File deleted, removing from index: ${relativePath}`);
 				this.db.deleteChunksByFile(relativePath);
 			});
 
@@ -433,19 +435,19 @@ export class CodebaseIndexAgent {
 			this.fileWatcher.on('error', (error: Error) => {
 				// Ignore ELOOP errors (circular symlinks) - common in some project structures
 				if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
-					logger.debug('Skipping circular symlink during file watching');
+					log.debug('Skipping circular symlink during file watching');
 					return;
 				}
 				// Log other errors but don't crash the watcher
-				logger.warn('File watcher error', error);
+				log.warn('File watcher error', error);
 			});
 
 			// Persist watcher state to database
 			this.db.setWatcherEnabled(true);
 
-			logger.info('File watcher started successfully');
+			log.info('File watcher started successfully');
 		} catch (error) {
-			logger.error('Failed to start file watcher', error);
+			log.error('Failed to start file watcher', error);
 		}
 	}
 
@@ -460,7 +462,7 @@ export class CodebaseIndexAgent {
 			// Persist watcher state to database
 			this.db.setWatcherEnabled(false);
 
-			logger.info('File watcher stopped');
+			log.info('File watcher stopped');
 		}
 
 		// Clear all pending debounce timers
@@ -536,7 +538,7 @@ export class CodebaseIndexAgent {
 				status: 'completed',
 			});
 		} catch (error) {
-			logger.error(`Failed to reindex file: ${relativePath}`, error);
+			log.error(`Failed to reindex file: ${relativePath}`, error);
 		}
 	}
 
@@ -588,11 +590,11 @@ export class CodebaseIndexAgent {
 			} catch (error: any) {
 				// 处理权限不足等错误，跳过该目录而不是崩溃
 				if (error.code === 'EPERM' || error.code === 'EACCES') {
-					logger.warn(`跳过无权限访问的目录: ${dir}`);
+					log.warn(`跳过无权限访问的目录: ${dir}`);
 					return;
 				}
 				// 其他错误也记录但不中断扫描
-				logger.warn(`扫描目录失败 (${error.code || 'unknown'}): ${dir}`);
+				log.warn(`扫描目录失败 (${error.code || 'unknown'}): ${dir}`);
 				return;
 			}
 
@@ -647,7 +649,7 @@ export class CodebaseIndexAgent {
 		// Process files in batches
 		for (let i = 0; i < files.length; i += concurrency) {
 			if (this.shouldStop) {
-				logger.info('Indexing stopped by user');
+				log.info('Indexing stopped by user');
 				break;
 			}
 
@@ -689,7 +691,7 @@ export class CodebaseIndexAgent {
 				// Parse Office document to extract text
 				const docContent = await readOfficeDocument(filePath);
 				if (!docContent) {
-					logger.warn(`Failed to parse Office document: ${relativePath}`);
+					log.warn(`Failed to parse Office document: ${relativePath}`);
 					return;
 				}
 				content = docContent.text;
@@ -703,7 +705,7 @@ export class CodebaseIndexAgent {
 
 			// Check if file has been indexed and unchanged
 			if (this.db.hasFileHash(fileHash)) {
-				logger.debug(`File unchanged, skipping: ${relativePath}`);
+				log.debug(`File unchanged, skipping: ${relativePath}`);
 				return;
 			}
 
@@ -716,7 +718,7 @@ export class CodebaseIndexAgent {
 				: this.splitIntoChunks(content, relativePath);
 
 			if (chunks.length === 0) {
-				logger.debug(`No chunks generated for: ${relativePath}`);
+				log.debug(`No chunks generated for: ${relativePath}`);
 				return;
 			}
 
@@ -736,7 +738,7 @@ export class CodebaseIndexAgent {
 					// Check if codebase feature was disabled
 					this.config = loadCodebaseConfig();
 					if (!this.config.enabled) {
-						logger.info('Codebase feature disabled, stopping indexing');
+						log.info('Codebase feature disabled, stopping indexing');
 						this.shouldStop = true;
 						break;
 					}
@@ -762,7 +764,7 @@ export class CodebaseIndexAgent {
 							maxRetries: 3,
 							baseDelay: 2000,
 							onRetry: (error, attempt, nextDelay) => {
-								logger.warn(
+								log.warn(
 									`Embedding API failed for ${relativePath} (attempt ${attempt}/3), retrying in ${nextDelay}ms...`,
 									error.message,
 								);
@@ -800,14 +802,14 @@ export class CodebaseIndexAgent {
 				} catch (error) {
 					this.consecutiveFailures++;
 					const detailedError = this.extractDetailedError(error);
-					logger.error(
+					log.error(
 						`Failed to process batch for ${relativePath} (consecutive failures: ${this.consecutiveFailures}):`,
 						detailedError,
 					);
 
 					// Stop indexing if too many consecutive failures
 					if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-						logger.error(
+						log.error(
 							`Stopping indexing after ${this.MAX_CONSECUTIVE_FAILURES} consecutive failures`,
 						);
 						this.db.updateProgress({
@@ -824,9 +826,9 @@ export class CodebaseIndexAgent {
 				}
 			}
 
-			logger.debug(`Indexed ${chunks.length} chunks from: ${relativePath}`);
+			log.debug(`Indexed ${chunks.length} chunks from: ${relativePath}`);
 		} catch (error) {
-			logger.error(`Failed to process file: ${filePath}`, error);
+			log.error(`Failed to process file: ${filePath}`, error);
 			// Continue with next file
 		}
 	}
@@ -972,7 +974,7 @@ export class CodebaseIndexAgent {
 			}
 		}
 
-		logger.debug(
+		log.debug(
 			`Document split into ${chunks.length} semantic chunks for: ${filePath}`,
 		);
 		return chunks;

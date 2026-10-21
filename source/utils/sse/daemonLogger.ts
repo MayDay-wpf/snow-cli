@@ -5,8 +5,13 @@ import {
 	writeFileSync,
 	appendFileSync,
 	mkdirSync,
+	readdirSync,
+	unlinkSync,
 } from 'fs';
 import {join, dirname, basename} from 'path';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('sse:daemon');
 
 /**
  * 守护进程专用日志记录器
@@ -37,11 +42,15 @@ export class DaemonLogger {
 		const logDir = dirname(this.logFilePath);
 		const archiveDir = join(logDir, 'archive');
 
-		if (!existsSync(logDir)) {
-			mkdirSync(logDir, {recursive: true});
-		}
-		if (!existsSync(archiveDir)) {
-			mkdirSync(archiveDir, {recursive: true});
+		try {
+			if (!existsSync(logDir)) {
+				mkdirSync(logDir, {recursive: true});
+			}
+			if (!existsSync(archiveDir)) {
+				mkdirSync(archiveDir, {recursive: true});
+			}
+		} catch (err) {
+			log.debug('Failed to ensure log directories exist:', err);
 		}
 	}
 
@@ -71,7 +80,7 @@ export class DaemonLogger {
 		try {
 			appendFileSync(this.logFilePath, logLine, 'utf-8');
 		} catch (error) {
-			// 日志写入失败时静默失败，避免影响守护进程运行
+			// 日志写入失败时记录错误，避免影响守护进程运行
 			console.error('日志写入失败:', error);
 		}
 	}
@@ -95,7 +104,7 @@ export class DaemonLogger {
 			// 执行日志轮转
 			this.rotate();
 		} catch (error) {
-			// 轮转失败时静默失败
+			// 轮转失败时记录错误
 			console.error('日志轮转失败:', error);
 		}
 	}
@@ -111,8 +120,12 @@ export class DaemonLogger {
 		const archiveDateDir = join(logDir, 'archive', dateDir);
 
 		// 确保归档日期目录存在
-		if (!existsSync(archiveDateDir)) {
-			mkdirSync(archiveDateDir, {recursive: true});
+		try {
+			if (!existsSync(archiveDateDir)) {
+				mkdirSync(archiveDateDir, {recursive: true});
+			}
+		} catch (err) {
+			log.debug('Failed to create archive date directory:', err);
 		}
 
 		// 获取归档文件名，添加时间戳避免重复
@@ -127,10 +140,13 @@ export class DaemonLogger {
 			// 清理旧归档文件（保留最近 maxBackupFiles 个）
 			this.cleanupOldArchives(archiveDateDir, logFileName);
 		} catch (error) {
+			log.debug('Failed to rename log file during rotation, attempting truncation:', error);
 			// 如果重命名失败，直接清空当前日志文件
 			try {
 				writeFileSync(this.logFilePath, '', 'utf-8');
-			} catch {}
+			} catch (err) {
+				log.debug('Failed to truncate log file after rotation failure:', err);
+			}
 		}
 	}
 
@@ -139,7 +155,6 @@ export class DaemonLogger {
 	 */
 	private cleanupOldArchives(dateDir: string, baseName: string): void {
 		try {
-			const {readdirSync} = require('fs');
 			const files = readdirSync(dateDir)
 				.filter((f: string) => f.startsWith(baseName))
 				.map((f: string) => ({
@@ -156,12 +171,15 @@ export class DaemonLogger {
 				const filesToDelete = files.slice(this.maxBackupFiles);
 				for (const file of filesToDelete) {
 					try {
-						require('fs').unlinkSync(file.path);
-					} catch {}
+						unlinkSync(file.path);
+					} catch (err) {
+						log.debug(`Failed to unlink old archive file ${file.path}:`, err);
+					}
 				}
 			}
 		} catch (error) {
-			// 清理失败时静默失败
+			// 清理失败时记录诊断信息
+			log.debug('Failed to cleanup old archives in daemon logger:', error);
 		}
 	}
 

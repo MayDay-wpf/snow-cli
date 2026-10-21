@@ -35,6 +35,9 @@ import {copyToClipboard} from '../../utils/core/clipboard.js';
 import {useI18n} from '../../i18n/index.js';
 import {getCurrentLanguage} from '../../utils/config/languageConfig.js';
 import {translations} from '../../i18n/index.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('conversation:handlers');
 
 /**
  * Helper function to get export command messages
@@ -441,7 +444,7 @@ export async function executeContextCompression(
 					clearMCPToolsCache();
 				} catch (err) {
 					console.error(
-						'[goal] Failed to migrate goal after hybrid compression:',
+						'[goal] Failed to migrate goal after hybrid compression',
 						err,
 					);
 				}
@@ -451,8 +454,13 @@ export async function executeContextCompression(
 			try {
 				const todoService = getTodoService();
 				await todoService.copyTodoList(currentSession.id, compressedSession.id);
-			} catch {
+			} catch (err) {
 				// Non-critical
+				log.debug('Failed to inherit TODO list after hybrid compression', {
+					error: err,
+					fromSessionId: currentSession.id,
+					toSessionId: compressedSession.id,
+				});
 			}
 
 			// Reload session
@@ -584,7 +592,7 @@ export async function executeContextCompression(
 					clearMCPToolsCache();
 				} catch (err) {
 					console.error(
-						'[goal] Failed to migrate goal after image compression:',
+						'[goal] Failed to migrate goal after image compression',
 						err,
 					);
 				}
@@ -594,8 +602,13 @@ export async function executeContextCompression(
 			try {
 				const todoService = getTodoService();
 				await todoService.copyTodoList(currentSession.id, compressedSession.id);
-			} catch {
+			} catch (err) {
 				// Non-critical
+				log.debug('Failed to inherit TODO list after image compression', {
+					error: err,
+					fromSessionId: currentSession.id,
+					toSessionId: compressedSession.id,
+				});
 			}
 
 			// Reload session
@@ -760,7 +773,7 @@ export async function executeContextCompression(
 				clearMCPToolsCache();
 			} catch (err) {
 				console.error(
-					'[goal] Failed to migrate goal after standard compression:',
+					'[goal] Failed to migrate goal after standard compression',
 					err,
 				);
 			}
@@ -777,6 +790,10 @@ export async function executeContextCompression(
 			});
 		} catch (error) {
 			// TODO 继承失败不应该影响压缩流程，记录日志即可
+			log.debug('Failed to inherit TODO list after standard compression', {
+				sessionId: compressedSession.id,
+				error,
+			});
 			onStatusUpdate?.({
 				step: 'skipped',
 				message: 'Failed to inherit TODO list',
@@ -1070,7 +1087,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 
 				import('../../utils/core/globalCleanup.js')
 					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
-					.catch(() => {});
+					.catch(err => {
+						log.debug(
+							'Failed to cleanup global resources on session delete',
+							{error: err},
+						);
+					});
 
 				const commandMessage: Message = {
 					role: 'command',
@@ -1143,7 +1165,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// Clean up global singleton resources to reclaim memory
 						import('../../utils/core/globalCleanup.js')
 							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
-							.catch(() => {});
+							.catch(err => {
+								log.debug(
+									'Failed to cleanup global resources on session clear',
+									{error: err},
+								);
+							});
 
 						// Add command message
 						const commandMessage: Message = {
@@ -1179,7 +1206,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						// Clean up global singleton resources to reclaim memory
 						import('../../utils/core/globalCleanup.js')
 							.then(({cleanupGlobalResources}) => cleanupGlobalResources())
-							.catch(() => {});
+							.catch(err => {
+								log.debug(
+									'Failed to cleanup global resources after onSessionStart failure',
+									{error: err},
+								);
+							});
 
 						const commandMessage: Message = {
 							role: 'command',
@@ -1523,8 +1555,12 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						);
 						const todoService = getTodoService();
 						await todoService.copyTodoList(currentSession.id, forkedSession.id);
-					} catch {
-						// Non-critical
+					} catch (e) {
+						log.debug('Failed to copy todo list to forked session (non-critical)', {
+							sourceSessionId: currentSession.id,
+							forkedSessionId: forkedSession.id,
+							error: e instanceof Error ? e.message : String(e),
+						});
 					}
 
 					if (options.onResumeSessionById) {

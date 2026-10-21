@@ -1,3 +1,7 @@
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:filesystem.backup');
+
 type BackupFileParams = {
 	filePath: string;
 	basePath: string;
@@ -32,7 +36,10 @@ export async function backupFileBeforeMutation(
 			params.fileExisted,
 			params.originalContent,
 		);
-	} catch {
-		// non-fatal
+	} catch (e) {
+		log.debug('Failed to backup file before mutation (non-fatal)', {
+			filePath: params.filePath,
+			error: e instanceof Error ? e.message : String(e),
+		});
 	}
 }

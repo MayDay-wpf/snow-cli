@@ -13,6 +13,9 @@ import {isSensitiveCommand} from '../execution/sensitiveCommandManager.js';
 import {randomUUID} from 'crypto';
 import {unifiedHooksExecutor} from '../execution/unifiedHooksExecutor.js';
 import {extractHookProvidedConfirmation} from '../execution/hookResultInterpreter.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('sse:manager');
 
 /**
  * 待处理的交互请求
@@ -104,7 +107,11 @@ class SSEManager {
 			return;
 		}
 
-		await this.server.stop();
+		try {
+			await this.server.stop();
+		} catch (err) {
+			log.debug('Failed to cleanly stop SSE server in sseManager:', err);
+		}
 		this.server = null;
 		this.isRunning = false;
 		this.log('SSE service has stopped', 'info');
@@ -145,6 +152,7 @@ class SSEManager {
 				await this.handleChatMessage(message, sendEvent, connectionId);
 			}
 		} catch (error) {
+			log.debug('Error in SSE client message handling:', error);
 			// 发送错误事件
 			sendEvent({
 				type: 'error',
@@ -302,6 +310,7 @@ class SSEManager {
 				requestId: message.requestId,
 			});
 		} catch (error) {
+			log.debug('Rollback failed in SSE manager:', error);
 			sendEvent({
 				type: 'rollback_result',
 				data: {
@@ -355,6 +364,7 @@ class SSEManager {
 					}
 				}
 			} catch (error) {
+				log.debug('Failed to load session, creating new session:', error);
 				this.log('Load session failed, create new session', 'error');
 				currentSession = await sessionManager.createNewSession();
 				// 绑定 session 到当前连接
@@ -413,6 +423,7 @@ class SSEManager {
 				await sessionManager.addMessage(msg);
 				// 不记录每条消息，避免日志过多
 			} catch (error) {
+				log.debug('Failed to save message in SSE session:', error);
 				this.log('保存消息失败', 'error');
 			}
 		};
@@ -523,8 +534,9 @@ class SSEManager {
 							};
 						}
 					}
-				} catch {
-					// 忽略解析错误
+				} catch (err) {
+					// 记录解析诊断信息
+					log.debug('Failed to parse arguments for sensitive command check:', err);
 				}
 			}
 
@@ -570,8 +582,9 @@ class SSEManager {
 				if (autoResult) {
 					return autoResult;
 				}
-			} catch {
+			} catch (err) {
 				// Hook 执行失败时回退到客户端交互
+				log.debug('Tool confirmation hook execution failed, falling back to client interaction:', err);
 			}
 
 			// 发送工具确认请求
@@ -680,6 +693,7 @@ class SSEManager {
 				(error.message === 'Request aborted' ||
 					error.message === 'User cancelled the interaction')
 			) {
+				log.debug('Conversation interaction aborted by user:', error);
 				// 发送中断确认事件
 				sendEvent({
 					type: 'message',
@@ -706,6 +720,7 @@ class SSEManager {
 				});
 			} else {
 				// 其他错误继续抛出，由外层的 handleClientMessage 处理
+				log.debug('Unhandled conversation execution error in SSE manager:', error);
 				throw error;
 			}
 		}
@@ -721,6 +736,7 @@ class SSEManager {
 		return new Promise((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				this.pendingInteractions.delete(requestId);
+				log.debug(`Interactive request timed out: ${requestId} (${type})`);
 				reject(new Error(`Interactive timeout: ${requestId}`));
 			}, this.interactionTimeout);
 

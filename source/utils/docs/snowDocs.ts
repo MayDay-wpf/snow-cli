@@ -3,6 +3,9 @@ import {dirname, join, relative, sep} from 'path';
 import {fileURLToPath} from 'url';
 import {getCurrentLanguage, type Language} from '../config/languageConfig.js';
 import {getPackageVersion} from '../core/version.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('docs:snowDocs');
 
 export type DocsLocale = 'zh' | 'en';
 
@@ -86,8 +89,8 @@ export function resolveSnowDocsRoot(): string | null {
 				candidates.push(join(parent, 'docs', 'usage'));
 			}
 		}
-	} catch {
-		// ignore import.meta resolution failures
+	} catch (error) {
+		log.debug('Failed to resolve docs candidates from moduleDir', {error});
 	}
 
 	for (const parent of walkParents(process.cwd())) {
@@ -118,8 +121,8 @@ export function resolveBuiltInSkillsRoot(): string | null {
 			candidates.push(join(parent, 'source', 'skills'));
 			candidates.push(join(parent, 'bundle', 'skills'));
 		}
-	} catch {
-		// ignore
+	} catch (error) {
+		log.debug('Failed to resolve skills candidates from moduleDir', {error});
 	}
 
 	for (const parent of walkParents(process.cwd())) {
@@ -283,8 +286,8 @@ function loadCatalog(docsRoot: string): Map<string, SnowDocEntry> {
 					keywords: buildKeywords(base, content),
 				};
 				map.set(`${locale}:${id}`, entry);
-			} catch {
-				// skip unreadable docs
+			} catch (error) {
+				log.debug('Skipping unreadable doc file during catalog build', {absPath, error});
 			}
 		}
 	}
@@ -428,8 +431,8 @@ export function searchSnowDocs(options: {
 		try {
 			const content = readFileSync(entry.absPath, 'utf-8');
 			snippet = findSnippet(content, query, tokens);
-		} catch {
-			// ignore snippet errors
+		} catch (error) {
+			log.debug('Failed to read doc file for snippet search', {absPath: entry.absPath, error});
 		}
 		hits.push({
 			id: entry.id,

@@ -75,6 +75,9 @@ import {
 	setTelemetryEnabled,
 	getTelemetryConfig,
 } from '../config/projectSettings.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:sessionCommandHandlers');
 import {tpsTracker} from '../../hooks/conversation/core/tpsTracker.js';
 import {
 	getActiveProfileName,
@@ -1760,7 +1763,12 @@ async function handleCompact(
 		try {
 			const {getTodoService} = await import('./mcpToolsManager.js');
 			await getTodoService().copyTodoList(session.id, compressedSession.id);
-		} catch {
+		} catch (error) {
+			log.debug('Failed to inherit todo list during session compact', {
+				sessionId: session.id,
+				compressedSessionId: compressedSession.id,
+				error,
+			});
 			// Non-fatal for headless compact.
 		}
 
@@ -1772,7 +1780,12 @@ async function handleCompact(
 					session.id,
 					compressedSession.id,
 				);
-			} catch {
+			} catch (error) {
+				log.debug('Failed to migrate goal during session compact', {
+					sessionId: session.id,
+					compressedSessionId: compressedSession.id,
+					error,
+				});
 				// Non-fatal for headless compact.
 			}
 		}
@@ -1929,7 +1942,10 @@ async function handleReindex(
 		// Headless path awaits full rebuild; stop watching so process can exit cleanly.
 		try {
 			agent.stopWatching?.();
-		} catch {
+		} catch (error) {
+			log.debug('Failed to stop watching codebase in session command handler', {
+				error,
+			});
 			// ignore
 		}
 

@@ -4,6 +4,9 @@ import TextInput from 'ink-text-input';
 import {useTheme} from '../../contexts/ThemeContext.js';
 import {useI18n} from '../../../i18n/I18nContext.js';
 import {execSync} from 'node:child_process';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:BranchPanel');
 
 interface BranchInfo {
 	name: string;
@@ -128,8 +131,10 @@ function stashAndCheckout(
 		// Checkout still failed, pop stash to restore original state
 		try {
 			execSync('git stash pop', {stdio: 'pipe', encoding: 'utf-8'});
-		} catch {
-			// Ignore pop failure
+		} catch (popErr) {
+			log.debug('Failed to pop git stash after checkout error', {
+				error: popErr instanceof Error ? popErr.message : String(popErr),
+			});
 		}
 
 		const msg = getGitError(error);

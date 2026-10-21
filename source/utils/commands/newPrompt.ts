@@ -9,6 +9,9 @@ import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import {getSystemEnvironmentInfo} from '../../prompt/shared/promptHelpers.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('commands:newPrompt');
 import fs from 'fs';
 import path from 'path';
 import {execSync} from 'child_process';
@@ -30,7 +33,8 @@ function readFileSafe(filePath: string, maxLen = 8192): string | null {
 		const bytesRead = fs.readSync(fd, buf, 0, maxLen, 0);
 		fs.closeSync(fd);
 		return buf.toString('utf-8', 0, bytesRead);
-	} catch {
+	} catch (error) {
+		log.debug('readFileSafe failed', {filePath, error});
 		return null;
 	}
 }
@@ -108,7 +112,8 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 			if (depNames.length) deps.push(`Node deps: ${depNames.join(', ')}`);
 			if (pkg.scripts)
 				deps.push(`Scripts: ${Object.keys(pkg.scripts).join(', ')}`);
-		} catch {
+		} catch (error) {
+			log.debug('Failed to parse package.json for tech stack detection', {error});
 			languages.push('JavaScript/TypeScript');
 		}
 	}
@@ -305,8 +310,8 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 				frameworks.push('Symfony');
 			if (phpDeps.length)
 				deps.push(`PHP deps: ${phpDeps.join(', ')}`);
-		} catch {
-			// ignore
+		} catch (error) {
+			log.debug('Failed to parse composer.json for tech stack detection', {error});
 		}
 	}
 
@@ -391,8 +396,8 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 						const ext = path.extname(f).toLowerCase();
 						if (ext) exts.set(ext, (exts.get(ext) || 0) + 1);
 					}
-				} catch {
-					// ignore
+				} catch (error) {
+					log.debug('Failed to read directory for language detection', {dir, error});
 				}
 			}
 			const extToLang: Record<string, string> = {
@@ -420,8 +425,8 @@ function detectTechStack(cwd: string, rootFileSet: Set<string>): string {
 				}
 				if (detected.size >= 3) break;
 			}
-		} catch {
-			// ignore
+		} catch (error) {
+			log.debug('Fallback language detection failed', {error});
 		}
 	}
 
@@ -446,7 +451,8 @@ function gatherProjectContext(): string {
 	let rootFileSet: Set<string>;
 	try {
 		rootFileSet = new Set(fs.readdirSync(cwd));
-	} catch {
+	} catch (error) {
+		log.debug('Failed to read root directory for project context', {cwd, error});
 		rootFileSet = new Set();
 	}
 
@@ -463,8 +469,8 @@ function gatherProjectContext(): string {
 			stdio: ['pipe', 'pipe', 'pipe'],
 		}).trim();
 		if (branch) sections.push(`[Git] Branch: ${branch}`);
-	} catch {
-		// ignore
+	} catch (error) {
+		log.debug('Failed to get current git branch', {cwd, error});
 	}
 
 	// AGENTS.md
@@ -482,8 +488,8 @@ function gatherProjectContext(): string {
 				);
 			}
 		}
-	} catch {
-		// ignore
+	} catch (error) {
+		log.debug('Failed to read AGENTS.md', {error});
 	}
 
 	// Top-level directory structure
@@ -500,8 +506,8 @@ function gatherProjectContext(): string {
 			.slice(0, 40);
 		if (items.length)
 			sections.push(`[Project Structure (root)]\n${items.join('\n')}`);
-	} catch {
-		// ignore
+	} catch (error) {
+		log.debug('Failed to read project root structure', {cwd, error});
 	}
 
 	// System environment

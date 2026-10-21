@@ -19,6 +19,9 @@ import {isSensitiveCommand} from '../../utils/execution/sensitiveCommandManager.
 import {getCurrentTheme} from '../../utils/config/themeConfig.js';
 import {themes} from '../themes/index.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:HeadlessModeScreen');
 
 type Props = {
 	prompt: string;
@@ -298,8 +301,11 @@ async function askHeadlessConfirmation(
 			if (args.command) {
 				command = args.command;
 			}
-		} catch {
-			// Ignore parsing errors
+		} catch (e) {
+			log.debug('Failed to parse tool arguments in headless confirmation', {
+				toolArguments,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 
 		// Check if it's a sensitive command
@@ -622,8 +628,10 @@ export default function HeadlessModeScreen({
 							const args = JSON.parse(toolCall.function.arguments);
 							const sensitiveCheck = isSensitiveCommand(args.command);
 							needsConfirmation = sensitiveCheck.isSensitive;
-						} catch {
-							// If parsing fails, treat as normal command
+						} catch (e) {
+							log.debug('Failed to parse YOLO terminal-execute args for sensitive check', {
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 					}
 

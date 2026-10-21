@@ -18,6 +18,9 @@ import {interpretHookResult} from './hookResultInterpreter.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution.teamExecutor');
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -692,11 +695,16 @@ ${role ? `Your role: ${role}` : ''}
 							console.log(
 								`[Teammate:${memberName}] Context compressed: ` +
 									`${compressionResult.beforeTokens} → ~${compressionResult.afterTokensEstimate} tokens`,
+								{
+									memberName,
+									beforeTokens: compressionResult.beforeTokens,
+									afterTokens: compressionResult.afterTokensEstimate,
+								},
 							);
 						}
 					} catch (compressError) {
 						console.error(
-							`[Teammate:${memberName}] Context compression failed after retries:`,
+							`[Teammate:${memberName}] Context compression failed after retries`,
 							compressError,
 						);
 					} finally {
@@ -760,8 +768,8 @@ ${role ? `Your role: ${role}` : ''}
 				let args: any = {};
 				try {
 					args = JSON.parse(tc.function.arguments);
-				} catch {
-					/* empty */
+				} catch (error) {
+					log.debug('Failed to parse synthetic tool arguments', {callId: tc.id, toolName: tc.function.name, error});
 				}
 
 				let resultContent = '';
@@ -876,8 +884,8 @@ ${role ? `Your role: ${role}` : ''}
 				let waitArgs: any = {};
 				try {
 					waitArgs = JSON.parse(waitCall.function.arguments);
-				} catch {
-					/* empty */
+				} catch (error) {
+					log.debug('Failed to parse wait_for_messages arguments', {callId: waitCall.id, error});
 				}
 
 				const summary = waitArgs.summary || 'Work completed.';
@@ -1024,8 +1032,8 @@ ${role ? `Your role: ${role}` : ''}
 										});
 										continue;
 									}
-								} catch {
-									/* best effort */
+								} catch (error) {
+									log.debug('beforeToolCall hook failed for customTool', {toolName: tc.function.name, error});
 								}
 
 								const result = await executeMCPTool(
@@ -1064,8 +1072,8 @@ ${role ? `Your role: ${role}` : ''}
 									if (aInterp.action === 'replace' && aInterp.replacedContent) {
 										resultContent = aInterp.replacedContent;
 									}
-								} catch {
-									/* best effort */
+								} catch (error) {
+									log.debug('afterToolCall hook failed for customTool', {toolName: tc.function.name, error});
 								}
 
 								messages.push({
@@ -1100,8 +1108,8 @@ ${role ? `Your role: ${role}` : ''}
 										},
 										error: e,
 									});
-								} catch {
-									/* best effort */
+								} catch (error) {
+									log.debug('afterToolCall error-handler hook failed for customTool', {toolName: tc.function.name, error});
 								}
 							}
 						}
@@ -1114,8 +1122,8 @@ ${role ? `Your role: ${role}` : ''}
 					let toolArgs: any = {};
 					try {
 						toolArgs = JSON.parse(tc.function.arguments || '{}');
-					} catch {
-						/* empty */
+					} catch (error) {
+						log.debug('Failed to parse regular tool arguments', {toolName, error});
 					}
 
 					let approved = yoloMode || false;
@@ -1191,8 +1199,8 @@ ${role ? `Your role: ${role}` : ''}
 								});
 								continue;
 							}
-						} catch {
-							/* best effort */
+						} catch (error) {
+							log.debug('beforeToolCall hook failed for regular tool', {toolName, error});
 						}
 
 						try {
@@ -1228,8 +1236,8 @@ ${role ? `Your role: ${role}` : ''}
 								if (aInterp.action === 'replace' && aInterp.replacedContent) {
 									resultContent = aInterp.replacedContent;
 								}
-							} catch {
-								/* best effort */
+							} catch (error) {
+								log.debug('afterToolCall hook failed for regular tool', {toolName, error});
 							}
 
 							messages.push({
@@ -1259,8 +1267,8 @@ ${role ? `Your role: ${role}` : ''}
 									},
 									error: e,
 								});
-							} catch {
-								/* best effort */
+							} catch (error) {
+								log.debug('afterToolCall error-handler hook failed for regular tool', {toolName, error});
 							}
 						}
 					}
@@ -1323,8 +1331,8 @@ ${role ? `Your role: ${role}` : ''}
 					agentName: memberName,
 					message: {type: 'done'},
 				});
-			} catch {
-				/* noop */
+			} catch (error) {
+				log.debug('Failed to emit teammate done message', {memberId, error});
 			}
 		}
 
@@ -1334,8 +1342,8 @@ ${role ? `Your role: ${role}` : ''}
 				'../team/teamWorktree.js'
 			);
 			autoCommitWorktreeChanges(worktreePath, memberName);
-		} catch {
-			/* best effort */
+		} catch (error) {
+			log.debug('Failed to auto-commit worktree changes on shutdown', {worktreePath, error});
 		}
 
 		updateMember(teamName, memberId, {

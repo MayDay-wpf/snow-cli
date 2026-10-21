@@ -1,11 +1,14 @@
 import {spawnSync} from 'child_process';
 import fs from 'fs';
 import {createRequire} from 'module';
-import os from 'os';
 import path from 'path';
 import {translations} from '../../i18n/translations.js';
 import type {TranslationKeys} from '../../i18n/types.js';
 import {getCurrentLanguage} from '../config/languageConfig.js';
+import {getGlobalSnowDir} from './snowContext.js';
+import {logger} from './logger.js';
+
+const log = logger.child('cli:doctor');
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -174,7 +177,8 @@ function countJsonFiles(directoryPath: string): number {
 		return fs
 			.readdirSync(directoryPath)
 			.filter(fileName => fileName.endsWith('.json')).length;
-	} catch {
+	} catch (error) {
+		log.debug('Failed to count profiles in directory:', {error, directoryPath});
 		return 0;
 	}
 }
@@ -205,7 +209,9 @@ function getActiveProfileName(snowDir: string): string {
 				fs.readFileSync(legacyActiveProfileFile, 'utf8').trim() || 'default'
 			);
 		}
-	} catch {}
+	} catch (error) {
+		log.debug('Failed to read legacy active-profile.txt:', {error});
+	}
 
 	return 'default';
 }
@@ -272,7 +278,8 @@ function getAliveSseDaemonCount(snowDir: string): {
 				stale++;
 			}
 		}
-	} catch {
+	} catch (error) {
+		log.debug('Failed to count running daemons in daemon registry:', {error});
 		return {total, alive, stale};
 	}
 
@@ -478,7 +485,7 @@ export function runDoctorAndExit(
 ): never {
 	const checks: DoctorCheck[] = [];
 	const t = getDoctorTranslations();
-	const snowDir = path.join(os.homedir(), '.snow');
+	const snowDir = getGlobalSnowDir().native;
 	const projectSnowDir = path.join(process.cwd(), '.snow');
 	const globalSettingsPath = path.join(snowDir, 'settings.json');
 	const projectSettingsPath = path.join(projectSnowDir, 'settings.json');

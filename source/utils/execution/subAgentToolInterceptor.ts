@@ -14,6 +14,9 @@ import {interpretHookResult} from './hookResultInterpreter.js';
 import {connectionManager} from '../connection/ConnectionManager.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import type {SubAgentExecutionContext, ChatMessage} from './subAgentTypes.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution.subAgentInterceptor');
 
 export interface InterceptResult {
 	remainingToolCalls: any[];
@@ -116,7 +119,7 @@ export async function interceptSendMessage(
 					msgContent = args.message || '';
 				} catch (error) {
 					console.error(
-						'Failed to parse send_message_to_agent arguments:',
+						'Failed to parse send_message_to_agent arguments',
 						error,
 					);
 				}
@@ -332,7 +335,11 @@ export async function interceptSpawnSubAgent(
 					if (agentConfig) {
 						spawnAgentName = agentConfig.name;
 					}
-				} catch {
+				} catch (error) {
+					log.debug(
+						'Failed to resolve sub-agent configuration for spawn, falling back to builtin name',
+						{spawnAgentId, error},
+					);
 					const builtinNames: Record<string, string> = {
 						agent_explore: 'Explore Agent',
 						agent_plan: 'Plan Agent',
@@ -517,7 +524,7 @@ export async function interceptAskUser(
 				}
 			} catch (hookError) {
 				console.warn(
-					'Failed to execute beforeToolCall hook for askuser in sub-agent:',
+					'Failed to execute beforeToolCall hook for askuser in sub-agent',
 					hookError,
 				);
 			}
@@ -579,7 +586,7 @@ export async function interceptAskUser(
 				});
 			} catch (hookError) {
 				console.warn(
-					'Failed to execute afterToolCall hook for askuser in sub-agent:',
+					'Failed to execute afterToolCall hook for askuser in sub-agent',
 					hookError,
 				);
 			}

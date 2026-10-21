@@ -3,6 +3,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import {logger} from '../core/logger.js';
+
+const log = logger.child('ssh:sshClient');
 import type {SSHConfig} from '../config/workingDirConfig.js';
 
 // ---------------------------------------------------------------------------
@@ -115,7 +117,7 @@ export class SSHClient {
 			client = await this.ensureClient();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			logger.error('Failed to load ssh2 module', error);
+			log.error('Failed to load ssh2 module', error);
 			return {success: false, error: message};
 		}
 
@@ -171,7 +173,7 @@ export class SSHClient {
 			});
 
 			client.on('error', err => {
-				logger.error('SSH connection error', err);
+				log.error('SSH connection error', err);
 				resolve({
 					success: false,
 					error: `Connection failed: ${err.message}`,
@@ -432,8 +434,10 @@ export class SSHClient {
 							try {
 								stream.close();
 								stream.destroy();
-							} catch {
-								// Ignore.
+							} catch (e) {
+								log.debug('Failed to close SSH stream on abort', {
+									error: e instanceof Error ? e.message : String(e),
+								});
 							}
 							safeReject(abortError);
 					  }
@@ -459,8 +463,11 @@ export class SSHClient {
 						try {
 							stream.close();
 							stream.destroy();
-						} catch {
-							// Ignore.
+						} catch (e) {
+							log.debug('Failed to close SSH stream on timeout', {
+								timeoutMs,
+								error: e instanceof Error ? e.message : String(e),
+							});
 						}
 						safeReject(timeoutError);
 					}, timeoutMs);

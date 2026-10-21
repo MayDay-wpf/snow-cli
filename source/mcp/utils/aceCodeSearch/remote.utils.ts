@@ -18,6 +18,8 @@
 import type {SSHClient} from '../../../utils/ssh/sshClient.js';
 import type {CodeSymbol, SymbolType} from '../../types/aceCodeSearch.types.js';
 import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('mcp:utils.aceCodeSearch.remote.utils');
 import {TEXT_SEARCH_TIMEOUT_MS} from './constants.utils.js';
 import {detectLanguage} from './language.utils.js';
 
@@ -153,7 +155,7 @@ export async function detectRemoteTools(
 	} catch (err) {
 		// If even the probe failed, the remote shell is unusable. Fall through with
 		// a minimal toolset; the action methods will downgrade or refuse cleanly.
-		logger.warn('detectRemoteTools: probe exec failed', err);
+		log.warn('detectRemoteTools: probe exec failed', err);
 	}
 
 	const flag = (key: string) => new RegExp(`^${key}=1\\b`, 'm').test(stdout);

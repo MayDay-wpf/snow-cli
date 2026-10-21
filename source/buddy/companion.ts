@@ -1,7 +1,6 @@
 import {randomUUID} from 'crypto';
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
-import {homedir} from 'os';
-import {join} from 'path';
+import {getGlobalSnowDir, getSnowPath} from '../utils/core/snowContext.js';
 import {loadConfig, saveConfig} from '../utils/config/apiConfig.js';
 import type {AppConfig} from '../utils/config/apiConfig.js';
 import type {
@@ -22,8 +21,10 @@ import {
 
 const SALT = 'snow-cli-buddy-v1';
 const BUDDY_STATE_VERSION = 1;
-const CONFIG_DIR = join(homedir(), '.snow');
-const BUDDY_STATE_FILE = join(CONFIG_DIR, 'buddy.json');
+
+function getBuddyStateFile(): string {
+	return getSnowPath('buddy.json', 'global').native;
+}
 
 interface BuddyState {
 	version: number;
@@ -85,8 +86,9 @@ export function hashString(value: string): number {
 }
 
 function ensureBuddyDirectory(): void {
-	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, {recursive: true});
+	const dir = getGlobalSnowDir().native;
+	if (!existsSync(dir)) {
+		mkdirSync(dir, {recursive: true});
 	}
 }
 
@@ -231,12 +233,13 @@ function isStoredCompanion(value: unknown): value is StoredCompanion {
 
 function readBuddyStateFile(): BuddyState {
 	ensureBuddyDirectory();
-	if (!existsSync(BUDDY_STATE_FILE)) {
+	const filePath = getBuddyStateFile();
+	if (!existsSync(filePath)) {
 		return {version: BUDDY_STATE_VERSION};
 	}
 	try {
 		const parsed = JSON.parse(
-			readFileSync(BUDDY_STATE_FILE, 'utf8'),
+			readFileSync(filePath, 'utf8'),
 		) as Partial<BuddyState>;
 		const aiProfile =
 			typeof parsed.aiProfile === 'string' && parsed.aiProfile.trim()
@@ -258,7 +261,7 @@ function readBuddyStateFile(): BuddyState {
 function writeBuddyStateFile(state: BuddyState): void {
 	ensureBuddyDirectory();
 	writeFileSync(
-		BUDDY_STATE_FILE,
+		getBuddyStateFile(),
 		JSON.stringify({...state, version: BUDDY_STATE_VERSION}, null, 2),
 		'utf8',
 	);

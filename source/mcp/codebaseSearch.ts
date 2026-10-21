@@ -2,6 +2,9 @@ import {CodebaseDatabase} from '../utils/codebase/codebaseDatabase.js';
 import {createEmbedding} from '../api/embedding.js';
 import {rerankDocuments} from '../api/rerank.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:codebaseSearch');
+
 import {codebaseReviewAgent} from '../agents/codebaseReviewAgent.js';
 import {codebaseSearchEvents} from '../utils/codebase/codebaseSearchEvents.js';
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
@@ -56,7 +59,7 @@ class CodebaseSearchService {
 
 			return {available: true};
 		} catch (error) {
-			logger.error('Error checking codebase index availability:', error);
+			log.error('Error checking codebase index availability:', error);
 			return {
 				available: false,
 				reason: `Error checking codebase index: ${
@@ -197,7 +200,7 @@ class CodebaseSearchService {
 						originalResultsCount: formattedResults.length,
 					});
 
-					logger.info(
+					log.info(
 						`Reranking ${formattedResults.length} search results (attempt ${searchAttempt})`,
 					);
 
@@ -231,11 +234,11 @@ class CodebaseSearchService {
 						removedCount = formattedResults.length - finalResults.length;
 						reviewFailed = false;
 
-						logger.info(
+						log.info(
 							`Reranking complete: ${formattedResults.length} → ${finalResults.length} results`,
 						);
 					} catch (rerankError) {
-						logger.error('Reranking failed, falling back to raw results:', rerankError);
+						log.error('Reranking failed, falling back to raw results:', rerankError);
 						finalResults = formattedResults;
 						reviewFailed = true;
 						removedCount = 0;
@@ -253,7 +256,7 @@ class CodebaseSearchService {
 						originalResultsCount: formattedResults.length,
 					});
 
-					logger.info(
+					log.info(
 						`Reviewing ${formattedResults.length} search results (attempt ${searchAttempt})`,
 					);
 
@@ -292,7 +295,7 @@ class CodebaseSearchService {
 					removedCount = 0;
 					suggestion = undefined;
 
-					logger.info(
+					log.info(
 						`Agent review & reranking disabled, returning all ${finalResults.length} search results`,
 					);
 				}
@@ -343,7 +346,7 @@ class CodebaseSearchService {
 
 				// If review/reranking failed, return immediately (no point retrying)
 				if (reviewFailed) {
-					logger.info('Review/reranking failed, returning all results without retry');
+					log.info('Review/reranking failed, returning all results without retry');
 
 					codebaseSearchEvents.emitSearchEvent({
 						type: 'search-complete',
@@ -361,7 +364,7 @@ class CodebaseSearchService {
 
 				// Check if we have enough results
 				if (finalResults.length >= MIN_RESULTS_THRESHOLD) {
-					logger.info(
+					log.info(
 						`Found ${finalResults.length} results (>= ${MIN_RESULTS_THRESHOLD} threshold), search complete`,
 					);
 
@@ -389,7 +392,7 @@ class CodebaseSearchService {
 
 					// Priority 1: Try AI suggested query if available and not yet tried
 					if (suggestion && !queriedTerms.has(suggestion.toLowerCase())) {
-						logger.info(
+						log.info(
 							`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Trying AI suggested query: "${suggestion}"...`,
 						);
 
@@ -406,7 +409,7 @@ class CodebaseSearchService {
 						!deepExploreFiles
 					) {
 						// Try deep exploration in high confidence files
-						logger.info(
+						log.info(
 							`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Trying deep exploration in ${highConfidenceFiles.length} high-confidence files...`,
 						);
 
@@ -422,7 +425,7 @@ class CodebaseSearchService {
 					}
 
 					// Priority 3: Expand search range (fallback)
-					logger.warn(
+					log.warn(
 						`Only ${finalResults.length} results after filtering (${removedPercentage}% removed, threshold: ${MIN_RESULTS_THRESHOLD}). Retrying with more candidates...`,
 					);
 
@@ -432,7 +435,7 @@ class CodebaseSearchService {
 				}
 
 				// Last attempt exhausted
-				logger.warn(
+				log.warn(
 					`Search attempt ${searchAttempt} complete. Only ${finalResults.length} results found (threshold: ${MIN_RESULTS_THRESHOLD}). Returning last results.`,
 				);
 			}
@@ -450,7 +453,7 @@ class CodebaseSearchService {
 
 			return lastResults;
 		} catch (error) {
-			logger.error('Codebase search failed:', error);
+			log.error('Codebase search failed:', error);
 
 			// Emit search complete event with error to reset UI state
 			if (enableAgentReview || enableReranking) {
@@ -468,7 +471,11 @@ class CodebaseSearchService {
 
 			throw error;
 		} finally {
-			try { db.close(); } catch { /* ignore close errors */ }
+			try {
+				db.close();
+			} catch (error) {
+				log.debug('Failed to close codebase database', {error});
+			}
 		}
 	}
 }

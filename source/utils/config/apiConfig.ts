@@ -1,4 +1,3 @@
-import {homedir} from 'os';
 import {join} from 'path';
 import {
 	readFileSync,
@@ -9,6 +8,10 @@ import {
 } from 'fs';
 import {readSettings, updateSettings} from './unifiedSettings.js';
 import type {OAuthProfileMetadata} from '../oauth/types.js';
+import {logger} from '../core/logger.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+
+const log = logger.child('config.api');
 
 export type RequestMethod = 'chat' | 'responses' | 'gemini' | 'anthropic';
 export type BaseUrlMode = 'auto' | 'base' | 'endpoint';
@@ -256,8 +259,7 @@ const DEFAULT_MCP_CONFIG: MCPConfig = {
  * 默认 ~/.snow；若设置了 SNOW_CONFIG_DIR（测试/多环境隔离用）则以其为准。
  */
 export function resolveSnowConfigDir(): string {
-	const override = process.env['SNOW_CONFIG_DIR']?.trim();
-	return override ? override : join(homedir(), '.snow');
+	return getGlobalSnowDir().native;
 }
 
 export function getSnowConfigDir(): string {
@@ -551,8 +553,9 @@ export async function updateSnowConfig(
 		if (activeProfileName) {
 			activeProfileConfig = loadProfile(activeProfileName);
 		}
-	} catch {
+	} catch (error) {
 		// Profiles system not available yet (during initialization), skip sync
+		log.debug('updateSnowConfig profiles system not available, skipping sync', {error});
 	}
 
 	const currentConfig = activeProfileConfig ?? loadConfig();
@@ -571,8 +574,9 @@ export async function updateSnowConfig(
 			saveProfile(activeProfileName, updatedConfig);
 			// Clear all agent caches to ensure they reload with new configuration
 			clearAllAgentCaches();
-		} catch {
+		} catch (error) {
 			// Profiles system not available yet (during initialization), skip sync
+			log.debug('updateSnowConfig profile save failed, skipping sync', {error, activeProfileName});
 		}
 	}
 }

@@ -3,6 +3,9 @@ import * as path from 'path';
 import type {Position, Location} from 'vscode-languageserver-protocol';
 import {LSPClient} from './LSPClient.js';
 import {LSPServerRegistry} from './LSPServerRegistry.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('mcp:lsp');
 
 export class LSPManager {
 	private clients: Map<string, LSPClient> = new Map();
@@ -19,8 +22,12 @@ export class LSPManager {
 			// Client is dead or not initialized, clean it up before recreating
 			try {
 				await client.shutdown();
-			} catch {
+			} catch (error) {
 				// Ignore cleanup errors for dead clients
+				log.debug('Failed to shutdown dead LSP client during recreation', {
+					language,
+					error,
+				});
 			}
 			this.clients.delete(language);
 		}
@@ -91,8 +98,8 @@ export class LSPManager {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					log.debug('Suppressed closeDocument error in findDefinition:', {error: closeError, uri});
 				}
 			}
 		}
@@ -140,8 +147,8 @@ export class LSPManager {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					log.debug('Suppressed closeDocument error in findReferences:', {error: closeError, uri});
 				}
 			}
 		}
@@ -183,8 +190,8 @@ export class LSPManager {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					log.debug('Suppressed closeDocument error in getDocumentSymbols:', {error: closeError, uri});
 				}
 			}
 		}
@@ -227,8 +234,8 @@ export class LSPManager {
 			if (uri) {
 				try {
 					await client.closeDocument(uri);
-				} catch {
-					// Suppress close errors — the server may already be dead
+				} catch (closeError) {
+					log.debug('Suppressed closeDocument error in getHoverInfo:', {error: closeError, uri});
 				}
 			}
 		}

@@ -16,6 +16,9 @@ import {
 	getThemeConfigFile,
 } from '../../utils/config/themeConfig.js';
 import {configEvents} from '../../utils/config/configEvents.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:ThemeContext');
 
 interface ThemeContextType {
 	theme: Theme;
@@ -101,8 +104,10 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 				// Always bump custom theme version so custom palette reloads
 				// even when theme type stays "custom".
 				setCustomThemeVersion(v => v + 1);
-			} catch {
-				// ignore corrupt transient writes
+			} catch (err) {
+				log.debug('Error reading theme config on disk update', {
+					error: err instanceof Error ? err.message : String(err),
+				});
 			}
 		};
 
@@ -123,14 +128,18 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 					// File may be replaced atomically; re-arm later.
 					try {
 						watcher?.close();
-					} catch {
-						// ignore
+					} catch (closeErr) {
+						log.debug('Error closing watcher on file error', {
+							error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+						});
 					}
 					watcher = null;
 					setTimeout(startWatch, 200);
 				});
-			} catch {
-				// watch unsupported or race during write — retry
+			} catch (watchErr) {
+				log.debug('Watch unsupported or race during write, retrying', {
+					error: watchErr instanceof Error ? watchErr.message : String(watchErr),
+				});
 				setTimeout(startWatch, 300);
 			}
 		};
@@ -145,8 +154,10 @@ export function ThemeProvider({children}: ThemeProviderProps) {
 			if (debounceTimer) clearTimeout(debounceTimer);
 			try {
 				watcher?.close();
-			} catch {
-				// ignore
+			} catch (closeErr) {
+				log.debug('Error closing watcher on unmount', {
+					error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+				});
 			}
 		};
 	}, []);

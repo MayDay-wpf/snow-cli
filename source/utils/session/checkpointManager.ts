@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('session.checkpoint');
 
 /**
  * File checkpoint data structure
@@ -31,7 +34,7 @@ class CheckpointManager {
 	private activeCheckpoint: ConversationCheckpoint | null = null;
 
 	constructor() {
-		this.checkpointsDir = path.join(os.homedir(), '.snow', 'checkpoints');
+		this.checkpointsDir = path.join(getGlobalSnowDir().native, 'checkpoints');
 	}
 
 	/**
@@ -42,6 +45,7 @@ class CheckpointManager {
 			await fs.mkdir(this.checkpointsDir, { recursive: true });
 		} catch (error) {
 			// Directory already exists or other error
+			log.debug('ensureCheckpointsDir mkdir failed or already exists', {error, dir: this.checkpointsDir});
 		}
 	}
 
@@ -160,7 +164,11 @@ class CheckpointManager {
 					try {
 						await fs.unlink(snapshot.path);
 					} catch (error) {
-						// File may already be deleted, ignore
+						// File may already be deleted, trace safely
+						log.debug('File to unlink already deleted or missing', {
+							path: snapshot.path,
+							error,
+						});
 					}
 				}
 			} catch (error) {
@@ -183,6 +191,7 @@ class CheckpointManager {
 			await fs.unlink(checkpointPath);
 		} catch (error) {
 			// Checkpoint may not exist, ignore
+			log.debug('clearCheckpoint unlink failed or not found', {error, sessionId});
 		}
 
 		if (this.activeCheckpoint?.sessionId === sessionId) {

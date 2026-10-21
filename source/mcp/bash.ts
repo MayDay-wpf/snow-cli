@@ -15,6 +15,9 @@ import {
 	flushOutputBuffer,
 } from '../hooks/execution/useTerminalExecutionState.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:bash');
+
 // SSH support
 import {SSHClient, parseSSHUrl} from '../utils/ssh/sshClient.js';
 import {
@@ -90,7 +93,7 @@ export class TerminalCommandService {
 
 			return summarizedResult;
 		} catch (error) {
-			logger.warn(
+			log.warn(
 				'terminal-execute: summarize in bash service failed, fallback to original',
 				error,
 			);
@@ -239,8 +242,12 @@ export class TerminalCommandService {
 				if (!probe.error) {
 					return {shell: candidate, isPowerShell: true};
 				}
-			} catch {
+			} catch (error) {
 				// Ignore probe errors and continue fallback.
+				log.debug('Failed to probe PowerShell candidate shell', {
+					candidate,
+					error,
+				});
 			}
 		}
 
@@ -587,7 +594,7 @@ export class TerminalCommandService {
 
 					// Enhanced error logging for debugging spawn failures
 					const errnoError = error as NodeJS.ErrnoException;
-					logger.error('Spawn process failed', {
+					log.error('Spawn process failed', {
 						command,
 						errorMessage: error.message,
 						errorCode: errnoError.code,

@@ -1,5 +1,7 @@
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:rerank');
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {getVersionHeader} from '../utils/core/version.js';
 
@@ -100,7 +102,7 @@ interface FitResult {
  * 3. If a single document exceeds 30% of context, truncate it
  * 4. Drop documents that no longer fit
  */
-async function fitDocumentsToContext(
+export async function fitDocumentsToContext(
 	query: string,
 	documents: string[],
 	contextLength: number,
@@ -111,7 +113,7 @@ async function fitDocumentsToContext(
 	let remaining = budgetTotal - queryTokens - overhead;
 
 	if (remaining <= 0) {
-		logger.warn(
+		log.warn(
 			`Rerank context budget exhausted by query alone (${queryTokens} tokens, budget ${budgetTotal})`,
 		);
 		return {
@@ -157,7 +159,7 @@ async function fitDocumentsToContext(
 	}
 
 	if (droppedCount > 0 || truncatedCount > 0) {
-		logger.info(
+		log.info(
 			`Rerank context fitting: ${documents.length} docs → ${fitted.length} kept, ${truncatedCount} truncated, ${droppedCount} dropped (context ${contextLength} tokens)`,
 		);
 	}
@@ -165,7 +167,7 @@ async function fitDocumentsToContext(
 	return {documents: fitted, originalIndices, droppedCount, truncatedCount};
 }
 
-function resolveRerankEndpoint(baseUrl: string): string {
+export function resolveRerankEndpoint(baseUrl: string): string {
 	const trimmed = baseUrl.trim().replace(/\/+$/, '');
 
 	if (trimmed.endsWith('/rerank')) {
@@ -184,7 +186,7 @@ function resolveRerankEndpoint(baseUrl: string): string {
  * Normalize various rerank API response formats into a unified structure.
  * Supports Jina, Cohere, and OpenAI-compatible rerank responses.
  */
-function normalizeRerankResponse(data: any): RerankResponse {
+export function normalizeRerankResponse(data: any): RerankResponse {
 	if (data && Array.isArray(data.results)) {
 		return {
 			results: data.results.map((r: any) => ({
@@ -293,7 +295,7 @@ export async function rerankDocuments(
 	);
 
 	if (fitResult.documents.length === 0) {
-		logger.warn(
+		log.warn(
 			'All documents dropped during context fitting, returning empty results',
 		);
 		return {
@@ -311,7 +313,7 @@ export async function rerankDocuments(
 
 	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 		try {
-			logger.info(
+			log.info(
 				`Rerank API call attempt ${attempt}/${MAX_RETRIES} (${fitResult.documents.length}/${documents.length} docs, context ${contextLength})`,
 			);
 
@@ -330,7 +332,7 @@ export async function rerankDocuments(
 				relevanceScore: r.relevanceScore,
 			}));
 
-			logger.info(
+			log.info(
 				`Rerank API succeeded on attempt ${attempt}, got ${mappedResults.length} results`,
 			);
 
@@ -341,7 +343,7 @@ export async function rerankDocuments(
 			};
 		} catch (error) {
 			lastError = error instanceof Error ? error : new Error(String(error));
-			logger.warn(
+			log.warn(
 				`Rerank API attempt ${attempt}/${MAX_RETRIES} failed: ${lastError.message}`,
 			);
 

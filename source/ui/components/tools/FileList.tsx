@@ -29,6 +29,9 @@ import {
 	type FileSearchPreviewLabels,
 	type FileSearchResult,
 } from '../../../agents/fileSearchAgent.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:FileList');
 
 type FileItem = {
 	name: string;
@@ -578,8 +581,11 @@ const FileList = memo(
 							}
 
 							sshClient.disconnect();
-						} catch {
-							// SSH connection failed, skip this directory
+						} catch (sshError) {
+							log.debug('SSH connection failed, skipping directory', {
+								path: dirPath,
+								error: sshError instanceof Error ? sshError.message : String(sshError),
+							});
 						}
 
 						continue;
@@ -603,8 +609,11 @@ const FileList = memo(
 							gitignorePath,
 							'utf-8',
 						);
-					} catch {
-						// No .gitignore or read error
+					} catch (gitErr) {
+						log.debug('No .gitignore or error reading it', {
+							gitignorePath,
+							error: gitErr instanceof Error ? gitErr.message : String(gitErr),
+						});
 					}
 
 					// Native fast path: the whole BFS walk (readdir + metadata +
@@ -800,7 +809,10 @@ const FileList = memo(
 									}
 								}
 							} catch (error) {
-								// Skip files that can't be read (binary or encoding issues)
+								log.debug('Skipping file due to read/encoding error in content search', {
+									filePath: file.path,
+									error: error instanceof Error ? error.message : String(error),
+								});
 							}
 
 							return fileResults;

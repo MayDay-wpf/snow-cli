@@ -1,7 +1,7 @@
 import {existsSync, mkdirSync, readFileSync, writeFileSync, renameSync} from 'fs';
 import {join, dirname} from 'path';
-import {homedir} from 'os';
 import {randomUUID} from 'crypto';
+import {getGlobalSnowDir} from '../core/snowContext.js';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -23,7 +23,7 @@ interface TaskListData {
 	updatedAt: string;
 }
 
-const SNOW_DIR = join(homedir(), '.snow');
+const SNOW_DIR = getGlobalSnowDir().native;
 const TEAMS_DIR = join(SNOW_DIR, 'teams');
 
 function getTaskListPath(teamName: string): string {

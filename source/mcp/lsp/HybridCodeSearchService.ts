@@ -3,6 +3,10 @@ import {ACECodeSearchService} from '../aceCodeSearch.js';
 import {LSPManager} from './LSPManager.js';
 import type {CodeSymbol, CodeReference} from '../types/aceCodeSearch.types.js';
 import {MAX_FILE_OUTLINE_SYMBOLS} from '../utils/aceCodeSearch/constants.utils.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('mcp:hybridCodeSearch');
+
 
 export class HybridCodeSearchService {
 	private lspManager: LSPManager;
@@ -34,6 +38,11 @@ export class HybridCodeSearchService {
 				}
 			} catch (error) {
 				// LSP failed, fallback to regex
+				log.debug('LSP findDefinition failed, falling back to regex search', {
+					symbolName,
+					contextFile,
+					error,
+				});
 			}
 		}
 
@@ -194,6 +203,10 @@ export class HybridCodeSearchService {
 			}
 		} catch (error) {
 			// LSP failed, fallback to regex
+			log.debug('LSP getFileOutline failed, falling back to regex search', {
+				filePath,
+				error,
+			});
 		}
 
 		return this.regexSearch.getFileOutline(filePath, options);

@@ -2,7 +2,10 @@ import {
 	getSnowConfig,
 	getCustomSystemPrompt,
 } from '../utils/config/apiConfig.js';
+import {registerCacheClearer} from '../utils/config/cacheRegistry.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:reviewAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -35,7 +38,7 @@ export class ReviewAgent {
 
 			return true;
 		} catch (error) {
-			logger.warn('Failed to initialize review agent:', error);
+			log.warn('Failed to initialize review agent:', error);
 			return false;
 		}
 	}
@@ -149,8 +152,11 @@ export class ReviewAgent {
 					stdio: 'pipe',
 				});
 				stagedFileCount = stagedFiles.trim().split('\n').filter(Boolean).length;
-			} catch {
-				// Ignore errors
+			} catch (e) {
+				log.debug('Failed to get staged file count via git diff', {
+					gitRoot,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		}
 
@@ -172,8 +178,11 @@ export class ReviewAgent {
 					.trim()
 					.split('\n')
 					.filter(Boolean).length;
-			} catch {
-				// Ignore errors
+			} catch (e) {
+				log.debug('Failed to get unstaged file count via git diff', {
+					gitRoot,
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		}
 
@@ -200,7 +209,7 @@ export class ReviewAgent {
 
 			return '# Staged Changes\n\n' + stagedDiff;
 		} catch (error) {
-			logger.error('Failed to get staged diff:', error);
+			log.error('Failed to get staged diff:', error);
 			throw new Error(
 				'Failed to get staged changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -228,7 +237,7 @@ export class ReviewAgent {
 
 			return '# Unstaged Changes\n\n' + unstagedDiff;
 		} catch (error) {
-			logger.error('Failed to get unstaged diff:', error);
+			log.error('Failed to get unstaged diff:', error);
 			throw new Error(
 				'Failed to get unstaged changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -272,7 +281,7 @@ export class ReviewAgent {
 
 			return combinedDiff;
 		} catch (error) {
-			logger.error('Failed to get git diff:', error);
+			log.error('Failed to get git diff:', error);
 			throw new Error(
 				'Failed to get git changes: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -386,7 +395,7 @@ export class ReviewAgent {
 
 			return stdout;
 		} catch (error) {
-			logger.error('Failed to get commit patch:', error);
+			log.error('Failed to get commit patch:', error);
 			throw new Error(
 				'Failed to get commit patch: ' +
 					(error instanceof Error ? error.message : 'Unknown error'),
@@ -548,3 +557,4 @@ Please provide your review in a clear, structured format.`;
 
 // Export singleton instance
 export const reviewAgent = new ReviewAgent();
+registerCacheClearer(() => reviewAgent.clearCache());

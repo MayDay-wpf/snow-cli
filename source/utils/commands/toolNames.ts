@@ -26,7 +26,7 @@ type Pair = {toolName: string; displayName: string};
  * Display may contain spaces only when a single pair uses the first `:`
  * (legacy single-pair form with spaces after colon).
  */
-function parsePairs(raw: string): Pair[] | null {
+export function parsePairs(raw: string): Pair[] | null {
 	const trimmed = raw.trim();
 	if (!trimmed) {
 		return [];

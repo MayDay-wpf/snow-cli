@@ -7,6 +7,9 @@ import {
 } from '../../../utils/config/toolDisplayConfig.js';
 import {enrichPendingEditArgs} from '../../../utils/ui/diffPreview.js';
 import {cleanThinkingContent} from '../utils/thinkingExtractor.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('conversation:core:subAgentMessageHandler');
 
 // ── Module-level store: per-teammate streaming data (useSyncExternalStore compatible) ──
 
@@ -47,8 +50,8 @@ function notifyTeammateStreamListeners(): void {
 	for (const listener of _teammateStreamListeners) {
 		try {
 			listener();
-		} catch {
-			/* noop */
+		} catch (err) {
+			log.debug('Failed to execute teammate stream listener:', err);
 		}
 	}
 }
@@ -57,8 +60,8 @@ function notifySubAgentStreamListeners(): void {
 	for (const listener of _subAgentStreamListeners) {
 		try {
 			listener();
-		} catch {
-			/* noop */
+		} catch (err) {
+			log.debug('Failed to execute sub-agent stream listener:', err);
 		}
 	}
 }
@@ -385,8 +388,8 @@ export class SubAgentUIHandler {
 		try {
 			const deltaTokens = this.encoder.encode(text);
 			state.tokenCount += deltaTokens.length;
-		} catch {
-			// Ignore encoding errors
+		} catch (err) {
+			log.debug('Failed to encode tokens for stream count:', err);
 		}
 	}
 
@@ -1006,7 +1009,8 @@ export class SubAgentUIHandler {
 			let toolArgs;
 			try {
 				toolArgs = JSON.parse(toolCall.function.arguments);
-			} catch {
+			} catch (err) {
+				log.debug('Failed to parse sub-agent tool arguments:', err);
 				toolArgs = {};
 			}
 
@@ -1220,7 +1224,8 @@ export class SubAgentUIHandler {
 						command: resultData.command,
 					};
 				}
-			} catch {
+			} catch (err) {
+				log.debug('Failed to parse terminal result JSON:', err);
 				// show regular result
 			}
 		}
@@ -1292,7 +1297,8 @@ export class SubAgentUIHandler {
 						},
 					};
 				}
-			} catch {
+			} catch (err) {
+				log.debug('Failed to parse file tool result JSON:', err);
 				// show regular result
 			}
 		}

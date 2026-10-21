@@ -15,6 +15,9 @@ import type {
 	ChildProcessRequestMessage,
 } from './agentChildProcess.js';
 import {vscodeConnection} from '../ui/vscodeConnection.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('execution:agentChildProcessWorker');
 
 interface PendingRequest {
 	resolve: (value: any) => void;
@@ -53,7 +56,11 @@ let ideConnectionReady: Promise<void> | undefined;
 
 function ensureIdeConnection(): Promise<void> {
 	if (!ideConnectionReady) {
-		ideConnectionReady = vscodeConnection.start().catch(() => {
+		ideConnectionReady = vscodeConnection.start().catch(error => {
+			log.debug(
+				'Failed to start vscodeConnection in agent worker, continuing without IDE',
+				{error},
+			);
 			// No matching IDE / workspace — leave the connection disconnected.
 			// Tools depending on the IDE handle the disconnected state themselves.
 		});

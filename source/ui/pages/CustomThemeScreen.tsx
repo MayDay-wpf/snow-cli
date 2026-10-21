@@ -24,6 +24,9 @@ import {
 } from '../../utils/config/configManager.js';
 import UserMessagePreview from '../components/chat/UserMessagePreview.js';
 import DiffViewer from '../components/tools/DiffViewer.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: (nextSelectedTheme?: ThemeType) => void;
@@ -88,7 +91,8 @@ export default function CustomThemeScreen({onBack}: Props) {
 	const initialOklch = useMemo(() => {
 		try {
 			return hexToOklch(initialCustom.text || '#ffffff');
-		} catch {
+		} catch (error) {
+			log.debug('Failed to parse hex to oklch', {error});
 			return {h: 215, c: 0.16, l: 0.85};
 		}
 	}, [initialCustom]);
@@ -113,7 +117,8 @@ export default function CustomThemeScreen({onBack}: Props) {
 				profile?.snowcfg?.basicModel ||
 				activeProfileName
 			);
-		} catch {
+		} catch (error) {
+			log.debug('Failed to load profile for active model name', {error});
 			return 'default';
 		}
 	}, [activeProfileName]);

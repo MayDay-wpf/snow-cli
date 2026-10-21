@@ -1,5 +1,7 @@
 import {loadCodebaseConfig} from '../utils/config/codebaseConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('api:embedding');
 import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {getVersionHeader} from '../utils/core/version.js';
 
@@ -147,7 +149,7 @@ function warnOnDimensionMismatch(params: {
 		return;
 	}
 
-	logger.warn(
+	log.warn(
 		`Embedding dimension mismatch (expected ${expectedDimensions}, got ${actualDimensions}). Some providers ignore 'dimensions'.`,
 		{
 			model,
@@ -237,7 +239,7 @@ function normalizeGeminiResponse(params: {
 		const actualDimensions = data.embedding.values.length;
 
 		if (expectedDimensions && actualDimensions !== expectedDimensions) {
-			logger.warn(
+			log.warn(
 				`Gemini embedding dimension mismatch (expected ${expectedDimensions}, got ${actualDimensions})`,
 				{model, expectedDimensions, actualDimensions},
 			);
@@ -272,7 +274,7 @@ function normalizeGeminiResponse(params: {
 			actualDimensions &&
 			actualDimensions !== expectedDimensions
 		) {
-			logger.warn(
+			log.warn(
 				`Gemini embedding dimension mismatch (expected ${expectedDimensions}, got ${actualDimensions})`,
 				{model, expectedDimensions, actualDimensions},
 			);

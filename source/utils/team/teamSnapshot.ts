@@ -8,8 +8,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import {getProjectId} from '../session/projectUtils.js';
+import {getGlobalSnowDir} from '../core/snowContext.js';
+import {logger} from '../core/logger.js';
+
+const log = logger.child('team:snapshot');
 
 // ── Types ──
 
@@ -24,7 +27,7 @@ interface TeamSnapshotData {
 // ── File I/O ──
 
 function getTeamSnapshotDir(): string {
-	return path.join(os.homedir(), '.snow', 'team-snapshots');
+	return path.join(getGlobalSnowDir().native, 'team-snapshots');
 }
 
 function getTeamSnapshotFilePath(): string {
@@ -174,8 +177,8 @@ export async function rollbackTeamState(
 		}
 		try {
 			disbandTeam(teamName);
-		} catch {
-			// May already be disbanded
+		} catch (disbandError) {
+			log.debug(`Team ${teamName} may already be disbanded during snapshot cleanup`, {error: disbandError});
 		}
 	}
 

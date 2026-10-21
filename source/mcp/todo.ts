@@ -14,6 +14,9 @@ import {recordTodoSnapshot} from './utils/todo/rollback.utils.js';
 // Event emitter
 import {todoEvents} from '../utils/events/todoEvents.js';
 import {getConversationContext} from '../utils/codebase/conversationContext.js';
+import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('mcp:todo');
 
 /**
  * TODO 管理服务 - 支持创建、查询、更新 TODO
@@ -51,7 +54,7 @@ export class TodoService {
 				await fs.mkdir(todoDir, {recursive: true});
 			}
 		} catch (error) {
-			// Directory already exists or other error
+			log.debug('ensureTodoDir directory creation suppressed error', {error, date});
 		}
 	}
 
@@ -85,8 +88,8 @@ export class TodoService {
 		try {
 			const content = await fs.readFile(todoPath, 'utf-8');
 			persistedList = JSON.parse(content);
-		} catch {
-			// 文件不存在,创建新的
+		} catch (error) {
+			log.debug('saveTodoList initial read failed or file absent, initializing new list', {sessionId, todoPath, error});
 		}
 
 		// 调用方传入的 existingList 可能已经在内存中更新过 phases/currentPhaseId。
@@ -125,7 +128,7 @@ export class TodoService {
 			const content = await fs.readFile(oldTodoPath, 'utf-8');
 			return JSON.parse(content);
 		} catch (error) {
-			// 旧格式不存在，搜索日期文件夹
+			log.debug('getTodoList legacy path read missed, falling back to date folders', {sessionId, error});
 		}
 
 		// 在日期文件夹中查找 TODO
@@ -133,7 +136,7 @@ export class TodoService {
 			const todo = await this.findTodoInDateFolders(sessionId);
 			return todo;
 		} catch (error) {
-			// 搜索失败
+			log.debug('getTodoList date folders search encountered error', {sessionId, error});
 		}
 
 		return null;
@@ -156,13 +159,13 @@ export class TodoService {
 						const content = await fs.readFile(todoPath, 'utf-8');
 						return JSON.parse(content);
 					} catch (error) {
-						// 文件不存在或读取失败，继续搜索
+						log.debug('findTodoInDateFolders item read skipped', {todoPath, error});
 						continue;
 					}
 				}
 			}
 		} catch (error) {
-			// 目录读取失败
+			log.debug('findTodoInDateFolders failed to read todo directory', {todoDir: this.todoDir, error});
 		}
 
 		return null;
@@ -350,8 +353,8 @@ export class TodoService {
 				context.messageIndex,
 				await this.getTodoList(sessionId),
 			);
-		} catch {
-			// Snapshot tracking is best-effort and must not block TODO mutations.
+		} catch (error) {
+			log.debug('recordSnapshotBeforeMutation suppressed non-blocking error', {sessionId, error});
 		}
 	}
 
@@ -445,7 +448,8 @@ export class TodoService {
 				) {
 					return parsed.map(item => item.trim()).filter(Boolean);
 				}
-			} catch {
+			} catch (error) {
+				log.debug('normalizeStringArray json parse fallback to raw string', {value, error});
 				return [value.trim()].filter(Boolean);
 			}
 		}
@@ -478,8 +482,8 @@ export class TodoService {
 					) {
 						return parsed;
 					}
-				} catch {
-					// JSON 解析失败，当作单个 ID 处理
+				} catch (error) {
+					log.debug('normalizeTodoId json parse fallback to single id string', {trimmed, error});
 				}
 			}
 			return [trimmed];
@@ -833,7 +837,7 @@ export class TodoService {
 			await fs.unlink(oldTodoPath);
 			deleted = true;
 		} catch (error) {
-			// 旧格式不存在，搜索日期文件夹
+			log.debug('deleteTodoList legacy path unlink missed, falling back to date folders', {sessionId, error});
 		}
 
 		// 在日期文件夹中查找并删除 TODO
@@ -851,13 +855,13 @@ export class TodoService {
 						await fs.unlink(todoPath);
 						deleted = true;
 					} catch (error) {
-						// 文件不存在，继续搜索
+						log.debug('deleteTodoList item unlink skipped', {todoPath, error});
 						continue;
 					}
 				}
 			}
 		} catch (error) {
-			// 目录读取失败
+			log.debug('deleteTodoList failed to read directory', {todoDir: this.todoDir, error});
 		}
 
 		return deleted;
@@ -1189,8 +1193,8 @@ EXAMPLES:
 								parsedContent = parsed;
 							}
 							// 如果解析结果不是数组，保持原字符串作为单个 TODO
-						} catch {
-							// 解析失败，保持原字符串
+						} catch (error) {
+							log.debug('todo-manage add content parse fallback to raw string', {content, error});
 						}
 					}
 

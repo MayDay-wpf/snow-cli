@@ -1,5 +1,7 @@
 import {getSnowConfig} from '../utils/config/apiConfig.js';
 import {logger} from '../utils/core/logger.js';
+
+const log = logger.child('agents:compactAgent');
 import {createStreamingChatCompletion, type ChatMessage} from '../api/chat.js';
 import {createStreamingResponse} from '../api/responses.js';
 import {createStreamingGeminiCompletion} from '../api/gemini.js';
@@ -50,7 +52,7 @@ export class CompactAgent {
 
 			return true;
 		} catch (error) {
-			logger.warn('Failed to initialize compact agent:', error);
+			log.warn('Failed to initialize compact agent:', error);
 			return false;
 		}
 	}
@@ -170,11 +172,16 @@ export class CompactAgent {
 				const {encoding_for_model} = await import('tiktoken');
 				try {
 					encoder = encoding_for_model('gpt-5');
-				} catch {
+				} catch (modelErr) {
+					log.debug('Model gpt-5 not in tiktoken, falling back to gpt-3.5-turbo', {
+						error: modelErr instanceof Error ? modelErr.message : String(modelErr),
+					});
 					encoder = encoding_for_model('gpt-3.5-turbo');
 				}
 			} catch (e) {
-				// tiktoken unavailable, token counting will be skipped
+				log.debug('tiktoken unavailable, token counting will be skipped', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 
 			try {
@@ -196,7 +203,9 @@ export class CompactAgent {
 								const tokens = encoder.encode(completeContent);
 								onTokenUpdate(tokens.length);
 							} catch (e) {
-								// Ignore encoding errors
+								log.debug('Token encoding error in streaming progress', {
+									error: e instanceof Error ? e.message : String(e),
+								});
 							}
 						}
 					}
@@ -204,7 +213,7 @@ export class CompactAgent {
 			} catch (streamError) {
 				// Log streaming error with details
 				if (streamError instanceof Error) {
-					logger.error('Compact agent: Streaming error:', {
+					log.error('Compact agent: Streaming error:', {
 						error: streamError.message,
 						stack: streamError.stack,
 						name: streamError.name,
@@ -212,7 +221,7 @@ export class CompactAgent {
 						contentLength: completeContent.length,
 					});
 				} else {
-					logger.error('Compact agent: Unknown streaming error:', {
+					log.error('Compact agent: Unknown streaming error:', {
 						error: streamError,
 						chunkCount,
 						contentLength: completeContent.length,
@@ -230,7 +239,7 @@ export class CompactAgent {
 		} catch (error) {
 			// Log detailed error from API call setup or streaming
 			if (error instanceof Error) {
-				logger.error('Compact agent: API call failed:', {
+				log.error('Compact agent: API call failed:', {
 					error: error.message,
 					stack: error.stack,
 					name: error.name,
@@ -238,7 +247,7 @@ export class CompactAgent {
 					modelName: this.modelName,
 				});
 			} else {
-				logger.error('Compact agent: Unknown API error:', {
+				log.error('Compact agent: Unknown API error:', {
 					error,
 					requestMethod: this.requestMethod,
 					modelName: this.modelName,
@@ -308,7 +317,7 @@ Provide the extracted content below:`;
 			);
 
 			if (!extractedContent || extractedContent.trim().length === 0) {
-				logger.warn(
+				log.warn(
 					'Compact agent returned empty response, using original content',
 				);
 				return content;
@@ -318,7 +327,7 @@ Provide the extracted content below:`;
 		} catch (error) {
 			// Log detailed error information
 			if (error instanceof Error) {
-				logger.warn(
+				log.warn(
 					'Compact agent extraction failed, using original content:',
 					{
 						error: error.message,
@@ -327,7 +336,7 @@ Provide the extracted content below:`;
 					},
 				);
 			} else {
-				logger.warn(
+				log.warn(
 					'Compact agent extraction failed with unknown error:',
 					error,
 				);

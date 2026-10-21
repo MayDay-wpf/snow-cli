@@ -14,6 +14,9 @@ import {
 } from './core/subAgentMessageHandler.js';
 import {goalManager} from '../../utils/task/goalManager.js';
 import {abortActiveCompression} from '../../utils/core/autoCompress.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('conversation:chatLogic');
 
 export type {UseChatLogicProps};
 
@@ -106,6 +109,7 @@ export function useChatLogic(props: UseChatLogicProps) {
 					await vscodeConnection.start();
 				} catch (error) {
 					// Workspace mismatch or connection failure — stay disconnected quietly
+					log.debug('VS Code connection attempt failed', {error});
 					vscodeState.setVscodeConnectionStatus('disconnected');
 				}
 			})();

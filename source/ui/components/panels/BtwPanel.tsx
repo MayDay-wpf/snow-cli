@@ -7,6 +7,9 @@ import {streamBtwResponse} from '../../../utils/commands/btwStream.js';
 import {waitForPendingSendSignal} from '../../../hooks/conversation/core/pendingMessagesHandler.js';
 import {visualWidth} from '../../../utils/core/textUtils.js';
 import {renderMarkdownToLines} from '../common/MarkdownRenderer.js';
+import {logger} from '../../../utils/core/logger.js';
+
+const log = logger.child('ui:BtwPanel');
 
 type Step = 'streaming' | 'done' | 'error';
 
@@ -135,8 +138,10 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 			}
 			try {
 				abortControllerRef.current?.abort();
-			} catch {
-				// ignore
+			} catch (e) {
+				log.debug('Error aborting BtwPanel stream on cleanup', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 		};
 	}, [startStream]);
@@ -149,8 +154,10 @@ export const BtwPanel: React.FC<Props> = ({prompt, onClose}) => {
 		if (key.escape) {
 			try {
 				abortControllerRef.current?.abort();
-			} catch {
-				// ignore
+			} catch (e) {
+				log.debug('Error aborting BtwPanel stream on escape key', {
+					error: e instanceof Error ? e.message : String(e),
+				});
 			}
 			onClose();
 			return;

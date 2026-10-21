@@ -20,6 +20,9 @@ import {
 import {useI18n} from '../../i18n/I18nContext.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {logger} from '../../utils/core/logger.js';
+
+const log = logger.child('ui:pages');
 
 type Props = {
 	onBack: () => void;
@@ -34,7 +37,8 @@ function checkCommandExists(command: string): boolean {
 				windowsHide: true,
 			});
 			return true;
-		} catch {
+		} catch (error) {
+			log.debug('where command check failed', {error, command});
 			return false;
 		}
 	}
@@ -48,7 +52,8 @@ function checkCommandExists(command: string): boolean {
 				env: process.env,
 			});
 			return true;
-		} catch {
+		} catch (error) {
+			log.debug('shell command check failed', {error, command, shell});
 			// Try next shell
 		}
 	}
@@ -200,7 +205,7 @@ function openEditorForScope(
 					);
 					console.error(i18nMessages.reverted);
 				}
-			} catch {
+			} catch (error) {
 				console.error(i18nMessages.invalidJson);
 			}
 
@@ -208,8 +213,8 @@ function openEditorForScope(
 			// Clean it up so it doesn't show up in the project tree.
 			try {
 				unlinkSync(configFilePath);
-			} catch {
-				// ignore cleanup errors
+			} catch (error) {
+				log.debug('Failed to unlink temporary config file', {error});
 			}
 		}
 

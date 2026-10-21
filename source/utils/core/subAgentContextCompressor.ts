@@ -18,6 +18,9 @@ import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
 import type {ChatMessage} from '../../api/types.js';
 import type {RequestMethod} from '../config/apiConfig.js';
 import {cleanOrphanedToolCalls} from './contextCompressor.js';
+import {logger} from './logger.js';
+
+const log = logger.child('core.subAgentContextCompressor');
 
 /** Threshold percentage to trigger compression */
 const COMPRESS_THRESHOLD = 80;
@@ -89,8 +92,9 @@ export function freeSubAgentEncoder(): void {
 	if (_encoder) {
 		try {
 			_encoder.free();
-		} catch {
+		} catch (error) {
 			// already freed or unavailable
+			log.debug('freeSubAgentEncoder free() failed or already freed', {error});
 		}
 		_encoder = null;
 	}
@@ -725,7 +729,7 @@ export async function compressSubAgentContext(
 	// Fallback: AI compression returned original messages (failed or nothing to compress).
 	// Try smart truncation as a last resort to free some context space.
 	console.warn(
-		`[SubAgentCompressor] AI compression ineffective, falling back to truncation`,
+		'AI compression ineffective, falling back to truncation',
 	);
 	const truncatedMessages = truncateToolResults(messages, keepRounds);
 	const afterTokens = countMessagesTokens(truncatedMessages);
