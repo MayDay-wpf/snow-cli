@@ -14,6 +14,14 @@ import {
 	registerInputCallback,
 	flushOutputBuffer,
 } from '../hooks/execution/useTerminalExecutionState.js';
+// Static import is required here: the background process id must be captured
+// synchronously so the child process 'close'/'error' handler can always update
+// its status. A dynamic import().then() can resolve after 'close' has already
+// fired, leaving a permanently "running" zombie entry in the panel.
+import {
+	addBackgroundProcess,
+	updateBackgroundProcessStatus,
+} from '../hooks/execution/useBackgroundProcesses.js';
 import {logger} from '../utils/core/logger.js';
 
 const log = logger.child('mcp:bash');
@@ -33,12 +41,20 @@ import {getTerminalShellPreference} from '../utils/config/unifiedSettings.js';
 
 // Global flag to track if command should be moved to background
 let shouldMoveToBackground = false;
+// Number of local command executions currently alive. The Ctrl+B handler is
+// dispatched through a dynamic import, so the request can arrive after the
+// target command already exited. Ignoring requests when nothing is running
+// prevents the stale flag from backgrounding the NEXT command.
+let activeLocalExecutionCount = 0;
 
 /**
  * Mark command to be moved to background
  * Called from UI when Ctrl+B is pressed
  */
 export function markCommandAsBackgrounded() {
+	if (activeLocalExecutionCount <= 0) {
+		return;
+	}
 	shouldMoveToBackground = true;
 }
 
@@ -205,13 +221,21 @@ export class TerminalCommandService {
 		shell: 'pwsh' | 'powershell' | 'cmd';
 		isPowerShell: boolean;
 	} {
-		const userPref = getTerminalShellPreference(this.workingDirectory).toLowerCase();
+		const userPref = getTerminalShellPreference(
+			this.workingDirectory,
+		).toLowerCase();
 		const primary: 'pwsh' | 'powershell' | 'cmd' =
 			userPref === 'cmd' || userPref === 'pwsh' || userPref === 'powershell'
 				? userPref
-				: (preferred === 'pwsh' ? 'pwsh' : 'powershell');
+				: preferred === 'pwsh'
+				? 'pwsh'
+				: 'powershell';
 
-		const fallbacks: Array<'pwsh' | 'powershell' | 'cmd'> = ['pwsh', 'powershell', 'cmd'];
+		const fallbacks: Array<'pwsh' | 'powershell' | 'cmd'> = [
+			'pwsh',
+			'powershell',
+			'cmd',
+		];
 		const candidates: Array<'pwsh' | 'powershell' | 'cmd'> = [
 			primary,
 			...fallbacks.filter(s => s !== primary),
@@ -377,6 +401,21 @@ export class TerminalCommandService {
 			// Register child process for cleanup
 			processManager.register(childProcess);
 
+			// Track this execution so a delayed Ctrl+B request cannot leak onto
+			// a later command after this one has already finished.
+			activeLocalExecutionCount += 1;
+			let executionCounted = true;
+			const releaseExecutionSlot = () => {
+				if (!executionCounted) {
+					return;
+				}
+				executionCounted = false;
+				activeLocalExecutionCount = Math.max(0, activeLocalExecutionCount - 1);
+				if (activeLocalExecutionCount === 0) {
+					resetBackgroundFlag();
+				}
+			};
+
 			// Setup abort signal handler if provided
 			let abortHandler: (() => void) | undefined;
 			if (abortSignal) {
@@ -497,19 +536,12 @@ export class TerminalCommandService {
 					return null;
 				};
 
-				// Add to background processes if PID available
-				if (childProcess.pid) {
-					import('../hooks/execution/useBackgroundProcesses.js')
-						.then(({addBackgroundProcess}) => {
-							backgroundProcessId = addBackgroundProcess(
-								command,
-								childProcess.pid!,
-							);
-						})
-						.catch(() => {
-							// Ignore error if module not available
-						});
-				}
+				// NOTE: Do NOT register the process here. Every foreground command
+				// (git status, echo, etc.) would otherwise be recorded as a
+				// "background process" and pollute the background panel / busy
+				// indicator. Registration happens only when the user actually
+				// moves the running command to the background (Ctrl+B), see the
+				// backgroundCheckInterval below.
 
 				// Check for input prompt periodically when output stops
 				inputCheckInterval = setInterval(() => {
@@ -545,6 +577,17 @@ export class TerminalCommandService {
 						if (inputCheckInterval) clearInterval(inputCheckInterval);
 
 						resetBackgroundFlag();
+
+						// Register the process ONLY when it is actually moved to
+						// the background. The id is captured synchronously so the
+						// 'close'/'error' handlers below can always update status.
+						if (childProcess.pid) {
+							backgroundProcessId = addBackgroundProcess(
+								command,
+								childProcess.pid,
+							);
+						}
+
 						// Resolve immediately with partial output
 						resolve({
 							stdout:
@@ -591,6 +634,7 @@ export class TerminalCommandService {
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);
 					setTerminalNeedsInput(false);
+					releaseExecutionSlot();
 
 					// Enhanced error logging for debugging spawn failures
 					const errnoError = error as NodeJS.ErrnoException;
@@ -603,17 +647,9 @@ export class TerminalCommandService {
 						cwd: this.workingDirectory,
 					});
 
-					// Update process status
+					// Update process status (only registered when backgrounded)
 					if (backgroundProcessId) {
-						import('../hooks/execution/useBackgroundProcesses.js')
-							.then(({updateBackgroundProcessStatus}) => {
-								updateBackgroundProcessStatus(
-									backgroundProcessId!,
-									'failed',
-									1,
-								);
-							})
-							.catch(() => {});
+						updateBackgroundProcessStatus(backgroundProcessId, 'failed', 1);
 					}
 					reject(error);
 				});
@@ -624,22 +660,19 @@ export class TerminalCommandService {
 					if (inputCheckInterval) clearInterval(inputCheckInterval);
 					registerInputCallback(null);
 					setTerminalNeedsInput(false);
+					releaseExecutionSlot();
 
 					// PERFORMANCE: Flush any remaining buffered output before command ends
 					flushOutputBuffer();
 
-					// Update process status
+					// Update process status (only registered when backgrounded)
 					if (backgroundProcessId) {
 						const status = code === 0 ? 'completed' : 'failed';
-						import('../hooks/execution/useBackgroundProcesses.js')
-							.then(({updateBackgroundProcessStatus}) => {
-								updateBackgroundProcessStatus(
-									backgroundProcessId!,
-									status,
-									code || undefined,
-								);
-							})
-							.catch(() => {});
+						updateBackgroundProcessStatus(
+							backgroundProcessId,
+							status,
+							code || undefined,
+						);
 					}
 
 					// Clean up abort handlers

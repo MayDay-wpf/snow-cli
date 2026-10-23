@@ -1,8 +1,26 @@
-import {useState, useCallback} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {exec} from 'child_process';
 import {logger} from '../../utils/core/logger.js';
 
 const log = logger.child('hooks:useBackgroundProcesses');
+
+/** 僵尸进程自检间隔（毫秒）。 */
+const PROCESS_LIVENESS_CHECK_INTERVAL_MS = 5000;
+/** 已完成进程在后台面板中的保留时长（毫秒），超时自动清理。 */
+const COMPLETED_PROCESS_RETENTION_MS = 60_000;
+
+/**
+ * 判断 PID 是否仍然存活。
+ * signal 0 不实际发送信号，仅做存在性探测；EPERM 表示进程存在但无权限，仍视为存活。
+ */
+function isProcessAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === 'EPERM';
+	}
+}
 
 export interface BackgroundProcess {
 	id: string;
@@ -31,6 +49,58 @@ export function useBackgroundProcesses() {
 	// Always update global setters
 	globalSetProcesses = setProcesses;
 	globalSetShowPanel = setShowPanel;
+
+	// 自愈：进程的 close/error 事件可能因异常路径丢失，定期用 PID 存活探测兜底，
+	// 避免僵尸 running 条目让 busy 指示（后台任务运行中...）永久驻留。
+	// 同时自动清理已完成条目，防止面板无限累积。
+	useEffect(() => {
+		const timer = setInterval(() => {
+			if (globalProcesses.length === 0) {
+				return;
+			}
+
+			const now = Date.now();
+			const staleRunningIds: string[] = [];
+			let changed = false;
+
+			const nextProcesses = globalProcesses
+				.filter(p => {
+					if (p.status !== 'completed' || !p.completedAt) {
+						return true;
+					}
+					if (now - p.completedAt.getTime() < COMPLETED_PROCESS_RETENTION_MS) {
+						return true;
+					}
+					changed = true;
+					return false;
+				})
+				.map(p => {
+					if (p.status !== 'running' || isProcessAlive(p.pid)) {
+						return p;
+					}
+					changed = true;
+					staleRunningIds.push(p.id);
+					return {...p, status: 'completed' as const, completedAt: new Date()};
+				});
+
+			if (!changed) {
+				return;
+			}
+
+			if (staleRunningIds.length > 0) {
+				log.debug('Marked stale background processes as completed', {
+					ids: staleRunningIds,
+				});
+			}
+
+			globalProcesses = nextProcesses;
+			if (globalSetProcesses) {
+				globalSetProcesses(globalProcesses);
+			}
+		}, PROCESS_LIVENESS_CHECK_INTERVAL_MS);
+
+		return () => clearInterval(timer);
+	}, []);
 
 	const addProcess = useCallback((command: string, pid: number) => {
 		const process: BackgroundProcess = {
@@ -99,10 +169,13 @@ export function useBackgroundProcesses() {
 							// If we get here, process is still alive, send SIGKILL
 							global.process.kill(pid, 'SIGKILL');
 						} catch (e) {
-							log.debug('Process already dead or no permission on SIGKILL follow-up', {
-								pid,
-								error: e instanceof Error ? e.message : String(e),
-							});
+							log.debug(
+								'Process already dead or no permission on SIGKILL follow-up',
+								{
+									pid,
+									error: e instanceof Error ? e.message : String(e),
+								},
+							);
 						}
 					}, 100);
 
