@@ -998,8 +998,6 @@ export const zh: TranslationKeys = {
 				'自定义工具显示名（官方路径，勿整文件改 theme.json）。用法: /tool-names|/tool-name [status|clear|<tool>:<名> …]',
 			thinkDisplay:
 				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
-			fullMsg:
-				'切换消息裁剪开关，开启后保留完整会话历史。用法: /full-msg [on|off|status]',
 			speedometer:
 				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
 			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
@@ -1116,16 +1114,6 @@ export const zh: TranslationKeys = {
 						: '（缩减思考内容后移入静态区）'),
 				set: (mode: string) => `思考显示模式已设置为: ${mode}`,
 				invalid: '无效的模式。用法: /think-display [full|compact|status]',
-			},
-			// 消息裁剪开关命令消息
-			fullMsg: {
-				status: (enabled: boolean) =>
-					`消息裁剪: ${enabled ? '已关闭（保留完整会话历史）' : '已开启'}`,
-				set: (enabled: boolean) =>
-					enabled
-						? '已关闭消息裁剪，将保留完整会话历史'
-						: '已开启消息裁剪，超出预算的历史将被回收',
-				invalid: '无效的参数。用法: /full-msg [on|off|status]',
 			},
 			// 测速仪命令消息
 			speedometer: {

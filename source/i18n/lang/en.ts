@@ -1066,7 +1066,6 @@ export const en: TranslationKeys = {
 				'Override tool display names (prefer this over editing theme.json). Usage: /tool-names|/tool-name [status|clear|<tool>:<name> …]',
 			thinkDisplay:
 				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
-			fullMsg: 'Toggle UI message trimming. Usage: /full-msg [on|off|status]',
 			speedometer:
 				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
@@ -1188,18 +1187,6 @@ export const en: TranslationKeys = {
 						: ' (compact thinking content then move to static area)'),
 				set: (mode: string) => `Think display mode set to: ${mode}`,
 				invalid: 'Invalid mode. Usage: /think-display [full|compact|status]',
-			},
-			// Full message mode command messages (toggle UI message trimming)
-			fullMsg: {
-				status: (enabled: boolean) =>
-					`Message trimming: ${
-						enabled ? 'disabled (full history kept)' : 'enabled'
-					}`,
-				set: (enabled: boolean) =>
-					enabled
-						? 'Message trimming disabled; the full conversation history will be kept'
-						: 'Message trimming enabled; history beyond the budget will be reclaimed',
-				invalid: 'Invalid argument. Usage: /full-msg [on|off|status]',
 			},
 			// Speedometer command messages
 			speedometer: {

@@ -66,9 +66,6 @@ export default function ChatScreen({
 	const {
 		messages,
 		setMessages,
-		feed,
-		trimmedUserMessageCount,
-		committedMessageCount,
 		isSaving,
 		pendingMessages,
 		setPendingMessages,
@@ -138,7 +135,7 @@ export default function ChatScreen({
 	} = useChatScreenModes({enableYolo, enablePlan});
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
-	const snapshotState = useSnapshotState(committedMessageCount);
+	const snapshotState = useSnapshotState(messages.length);
 	const bashMode = useBashMode();
 	const terminalExecutionState = useTerminalExecutionState();
 	const schedulerExecutionState = useSchedulerExecutionState();
@@ -214,7 +211,6 @@ export default function ChatScreen({
 	} = useChatLogic({
 		messages,
 		setMessages,
-		trimmedUserMessageCount,
 		pendingMessages,
 		setPendingMessages,
 		streamingState,
@@ -667,7 +663,7 @@ export default function ChatScreen({
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}
 				simpleMode={simpleMode}
-				feed={feed}
+				messages={messages}
 				showThinking={showThinking}
 				toolDisplayMode={toolDisplayMode}
 				thinkDisplayMode={thinkDisplayMode}

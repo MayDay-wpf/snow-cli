@@ -63,7 +63,6 @@ export function useChatScreenCommands(workingDirectory: string) {
 			import('../../../utils/commands/toolIcons.js'),
 			import('../../../utils/commands/toolNames.js'),
 			import('../../../utils/commands/thinkDisplay.js'),
-			import('../../../utils/commands/fullMsg.js'),
 			import('../../../utils/commands/speedometer.js'),
 			import('../../../utils/commands/interrupt.js'),
 			import('../../../utils/commands/taskmanager.js'),

@@ -92,8 +92,6 @@ export interface Message {
 	subAgentDirected?: {
 		targets: Array<{agentName: string; promptSnippet: string}>;
 	};
-	/** 该消息已被内存裁剪（内容已进入终端 scrollback），渲染时跳过。 */
-	trimmed?: boolean;
 }
 
 interface Props {

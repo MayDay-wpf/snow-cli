@@ -65,11 +65,6 @@ function MessageRendererImpl({
 		return null;
 	}
 
-	// 已被内存裁剪的消息：内容早已写入终端 scrollback，这里不再渲染。
-	if (message.trimmed === true) {
-		return null;
-	}
-
 	if (message.streamingLine) {
 		if (message.isThinkingLine && !showThinking) return null;
 
@@ -553,12 +548,9 @@ function MessageRendererImpl({
 													);
 												}
 											} catch (e) {
-												log.debug(
-													'Tool result content is not HookError JSON, rendering standard output',
-													{
-														error: e instanceof Error ? e.message : String(e),
-													},
-												);
+												log.debug('Tool result content is not HookError JSON, rendering standard output', {
+													error: e instanceof Error ? e.message : String(e),
+												});
 											}
 
 											// For tool messages with status, render as plain text with color

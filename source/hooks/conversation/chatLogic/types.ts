@@ -5,11 +5,6 @@ export type {Message};
 export interface UseChatLogicProps {
 	messages: Message[];
 	setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-	/**
-	 * 已被内存裁剪掉的用户消息数量。
-	 * messages 现在是有界窗口，回滚序号需要加上该偏移才能对齐 session 消息。
-	 */
-	trimmedUserMessageCount?: number;
 	pendingMessages: Array<{
 		text: string;
 		images?: Array<{data: string; mimeType: string}>;

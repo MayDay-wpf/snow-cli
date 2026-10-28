@@ -16,40 +16,8 @@ import instances from './instances.js';
 import App from './components/App.js';
 import {type CursorRegistration} from './components/CursorContext.js';
 import {type DOMElement} from './dom.js';
+
 const noop = () => {};
-
-/**
- * CSI 3J — Erase Saved Lines：只清空终端自身的回滚缓冲区（scrollback），
- * 不移动光标、不清可见屏幕，因此不会产生闪烁或跳动。
- */
-const ERASE_SAVED_LINES = '\u001B[3J';
-
-/** 终端 scrollback 自动裁剪的默认行数上限。 */
-const DEFAULT_MAX_SCROLLBACK_LINES = 5000;
-
-function readScrollbackLineLimit(): number {
-	const raw = process.env['SNOW_TUI_SCROLLBACK_LINES'];
-	if (raw === undefined || raw === '') {
-		return DEFAULT_MAX_SCROLLBACK_LINES;
-	}
-
-	const parsed = Number.parseInt(raw, 10);
-	// 0 表示关闭自动裁剪。
-	return Number.isFinite(parsed) && parsed >= 0
-		? parsed
-		: DEFAULT_MAX_SCROLLBACK_LINES;
-}
-
-function countLines(text: string): number {
-	let count = 0;
-	for (let i = 0; i < text.length; i++) {
-		if (text.charCodeAt(i) === 10) {
-			count++;
-		}
-	}
-
-	return count;
-}
 
 export type Options = {
 	stdout: NodeJS.WriteStream;
@@ -92,16 +60,11 @@ export default class Ink {
 	private restoreConsole?: () => void;
 	private readonly unsubscribeResize?: () => void;
 	private cursorRegistration?: CursorRegistration;
-	/** 已写入静态区（并进入终端 scrollback）的累计行数。 */
-	private staticLineCount = 0;
-	/** 终端 scrollback 行数上限；0 表示关闭自动裁剪。 */
-	private readonly maxScrollbackLines: number;
 
 	constructor(options: Options) {
 		autoBind(this);
 
 		this.options = options;
-		this.maxScrollbackLines = readScrollbackLineLimit();
 		this.rootNode = dom.createNode('ink-root');
 		this.renderFrame = createRenderer(this.rootNode);
 		this.rootNode.onComputeLayout = this.calculateLayout;
@@ -265,15 +228,12 @@ export default class Ink {
 			if (hasStaticOutput) {
 				writeSafely(this.options.stdout, staticOutput);
 			}
-			// clearTerminal 已包含 CSI 3J，会清空终端 scrollback。
 			writeSafely(this.options.stdout, ansiEscapes.clearTerminal + output);
-			this.staticLineCount = 0;
 			this.lastOutput = output;
 			return;
 		}
 
 		if (hasStaticOutput) {
-			this.trimScrollbackIfNeeded(staticOutput);
 			this.log.clear();
 			writeSafely(this.options.stdout, staticOutput);
 			this.log(output);
@@ -289,27 +249,6 @@ export default class Ink {
 
 		this.lastOutput = output;
 	};
-
-	/**
-	 * 终端 scrollback 自动裁剪。
-	 *
-	 * 静态内容会持续累积到终端自身的回滚缓冲区，应用侧无法回收。这里按累计写入
-	 * 行数触发 CSI 3J（Erase Saved Lines）：只清空回滚缓冲区，不移动光标、不清
-	 * 可见屏幕，因此不会闪烁或跳动。设置 SNOW_TUI_SCROLLBACK_LINES=0 可关闭。
-	 */
-	private trimScrollbackIfNeeded(staticOutput: string): void {
-		if (this.maxScrollbackLines <= 0) {
-			return;
-		}
-
-		this.staticLineCount += countLines(staticOutput);
-		if (this.staticLineCount < this.maxScrollbackLines) {
-			return;
-		}
-
-		writeSafely(this.options.stdout, ERASE_SAVED_LINES);
-		this.staticLineCount = 0;
-	}
 
 	render(node: ReactNode): void {
 		const tree = (

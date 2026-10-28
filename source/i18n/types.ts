@@ -953,7 +953,6 @@ export type TranslationKeys = {
 			toolIcons: string;
 			toolNames: string;
 			thinkDisplay: string;
-			fullMsg: string;
 			speedometer: string;
 			cut: string;
 			pause: string;
@@ -1024,12 +1023,6 @@ export type TranslationKeys = {
 			thinkDisplay: {
 				status: (mode: string) => string;
 				set: (mode: string) => string;
-				invalid: string;
-			};
-			// Full message mode command messages (toggle UI message trimming)
-			fullMsg: {
-				status: (enabled: boolean) => string;
-				set: (enabled: boolean) => string;
 				invalid: string;
 			};
 			// Speedometer command messages
