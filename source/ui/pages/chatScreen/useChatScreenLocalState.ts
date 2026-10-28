@@ -1,10 +1,25 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	type Dispatch,
+	type SetStateAction,
+} from 'react';
 import type {Message} from '../../components/chat/MessageList.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
 import type {CompressionStatus} from '../../components/compression/CompressionStatus.js';
 import type {ThinkingStatus} from '../../components/chat/ThinkingStatus.js';
 import type {HookStatusEvent} from '../../../utils/execution/hookStatusEvents.js';
 import {onHookStatus} from '../../../utils/execution/hookStatusEvents.js';
+import {
+	StaticFeed,
+	MAX_LIVE_BYTES,
+	MAX_LIVE_MESSAGES,
+	isAppendUpdate,
+} from './staticFeed.js';
+import {configEvents} from '../../../utils/config/configEvents.js';
+import {getFullMessageMode} from '../../../utils/config/themeConfig.js';
 import type {
 	BashSensitiveCommandState,
 	CustomCommandExecutionState,
@@ -16,7 +31,7 @@ import type {
 } from './types.js';
 
 export function useChatScreenLocalState() {
-	const [messages, setMessages] = useState<Message[]>([]);
+	const [messages, setMessagesRaw] = useState<Message[]>([]);
 	const [isSaving] = useState(false);
 	const [pendingMessages, setPendingMessages] = useState<PendingMessageInput[]>(
 		[],
@@ -25,6 +40,78 @@ export function useChatScreenLocalState() {
 	const userInterruptedRef = useRef(false);
 	const cutInterruptRef = useRef(false);
 	const [remountKey, setRemountKey] = useState(0);
+
+	// 面向 <Static> 的单调长度投喂流：内存里只保留有界的尾部窗口，
+	// 被裁掉的内容早已写入终端 scrollback，因此裁剪对显示无影响。
+	const feedRef = useRef<StaticFeed | null>(null);
+	if (!feedRef.current) {
+		feedRef.current = new StaticFeed();
+	}
+
+	const feed = feedRef.current;
+	const messagesRef = useRef<Message[]>([]);
+	// /full-msg：开启后不再裁剪，保留完整会话历史。
+	const fullMessageModeRef = useRef(getFullMessageMode());
+
+	const setMessages = useCallback<Dispatch<SetStateAction<Message[]>>>(
+		updater => {
+			const previous = messagesRef.current;
+			const next =
+				typeof updater === 'function'
+					? (updater as (prev: Message[]) => Message[])(previous)
+					: updater;
+
+			if (next === previous) {
+				return;
+			}
+
+			if (next.length === 0) {
+				feed.reset();
+			} else if (isAppendUpdate(previous, next)) {
+				feed.appendMessages(next.slice(previous.length));
+			} else {
+				// 收缩 / 原地更新 / 全量替换：统一重建窗口。
+				// 用户消息（回滚锚点）在 trim 中永不裁剪，因此无需区分裁剪历史。
+				feed.replaceWindow(next);
+			}
+
+			// /full-msg 开启时跳过裁剪，保留完整会话历史。
+			if (!fullMessageModeRef.current) {
+				feed.trim(MAX_LIVE_MESSAGES, MAX_LIVE_BYTES);
+			}
+
+			const bounded = feed.liveMessages();
+			messagesRef.current = bounded;
+			setMessagesRaw(bounded);
+		},
+		[feed],
+	);
+
+	// /full-msg 切换后即时生效：关闭裁剪时立刻收敛窗口。
+	useEffect(() => {
+		const handleConfigChange = (event: {type: string; value: any}) => {
+			if (event.type !== 'fullMessageMode') {
+				return;
+			}
+
+			const enabled = Boolean(event.value);
+			fullMessageModeRef.current = enabled;
+
+			if (!enabled) {
+				feed.trim(MAX_LIVE_MESSAGES, MAX_LIVE_BYTES);
+				const bounded = feed.liveMessages();
+				messagesRef.current = bounded;
+				setMessagesRaw(bounded);
+			}
+		};
+
+		configEvents.onConfigChange(handleConfigChange);
+
+		return () => {
+			configEvents.removeConfigChangeListener(handleConfigChange);
+		};
+	}, [feed]);
+
 	const [currentContextPercentage, setCurrentContextPercentage] = useState(0);
 	const currentContextPercentageRef = useRef(0);
 	const [isExecutingTerminalCommand, setIsExecutingTerminalCommand] =
@@ -151,6 +238,9 @@ export function useChatScreenLocalState() {
 	return {
 		messages,
 		setMessages,
+		feed,
+		trimmedUserMessageCount: feed.trimmedUserMessages,
+		committedMessageCount: feed.committed,
 		isSaving,
 		pendingMessages,
 		setPendingMessages,

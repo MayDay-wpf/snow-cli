@@ -77,6 +77,7 @@ export const COMMAND_ARGS_HINTS: Record<string, string> = {
 	'tool-names': '[status|clear|<tool>:<name> …]',
 	'tool-name': '[status|clear|<tool>:<name> …]',
 	'think-display': '[full|compact|status]',
+	'full-msg': '[on|off|status]',
 	speedometer: '[on|off|status]',
 };
 
@@ -113,6 +114,7 @@ export const COMMAND_ARGS_OPTIONS: Record<string, CommandArgOption[]> = {
 	'tool-names': ['status', 'clear'],
 	'tool-name': ['status', 'clear'],
 	'think-display': ['full', 'compact', 'status'],
+	'full-msg': ['on', 'off', 'status'],
 	speedometer: ['on', 'off', 'status'],
 };
 
@@ -140,10 +142,7 @@ export function getCommandArgsOptions(
 		return getBuddyProfileArgOptions();
 	}
 
-	if (
-		commandName === 'config' &&
-		/^\/config\s+set\s*$/.test(inputText ?? '')
-	) {
+	if (commandName === 'config' && /^\/config\s+set\s*$/.test(inputText ?? '')) {
 		return [
 			'terminalShell=auto',
 			'terminalShell=pwsh',
@@ -528,6 +527,12 @@ export function useCommandPanel(
 				description:
 					t.commandPanel.commands.thinkDisplay ||
 					'Control thinking content display mode. Usage: /think-display [full|compact|status]',
+			},
+			{
+				name: 'full-msg',
+				description:
+					t.commandPanel.commands.fullMsg ||
+					'Toggle UI message trimming. Usage: /full-msg [on|off|status]',
 			},
 			{
 				name: 'speedometer',

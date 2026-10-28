@@ -54,10 +54,12 @@ function resolveSnapshotIndex(
 	liveMessages: Message[],
 	liveIndex: number,
 	sessionMessages: ChatMessage[],
+	trimmedUserCount: number,
 ): number {
 	const uiMessages = convertSessionMessagesToUI(sessionMessages);
 
-	let userMsgOrdinal = 0;
+	// liveMessages 现在是有界窗口，窗口之前被裁掉的用户消息需要计入序号偏移。
+	let userMsgOrdinal = trimmedUserCount;
 	for (let i = 0; i <= liveIndex && i < liveMessages.length; i++) {
 		const msg = liveMessages[i];
 		if (msg?.role === 'user' && msg.content?.trim() && !msg.subAgentDirected) {
@@ -95,6 +97,7 @@ export function useRollback(props: UseChatLogicProps) {
 	const {
 		messages,
 		setMessages,
+		trimmedUserMessageCount,
 		snapshotState,
 		clearSavedMessages,
 		setRemountKey,
@@ -124,9 +127,14 @@ export function useRollback(props: UseChatLogicProps) {
 		(liveIndex: number) => {
 			const currentSession = sessionManager.getCurrentSession();
 			if (!currentSession) return liveIndex;
-			return resolveSnapshotIndex(messages, liveIndex, currentSession.messages);
+			return resolveSnapshotIndex(
+				messages,
+				liveIndex,
+				currentSession.messages,
+				trimmedUserMessageCount ?? 0,
+			);
 		},
-		[messages],
+		[messages, trimmedUserMessageCount],
 	);
 
 	const performRollback = async (
@@ -545,7 +553,10 @@ export function useRollback(props: UseChatLogicProps) {
 			try {
 				detail = await response.json();
 			} catch (parseError) {
-				log.debug('Failed to parse rollback response error detail:', parseError);
+				log.debug(
+					'Failed to parse rollback response error detail:',
+					parseError,
+				);
 			}
 			throw new Error(
 				`Rollback request failed: ${response.status} ${response.statusText}` +

@@ -1,6 +1,6 @@
-import React, {useMemo} from 'react';
+import React from 'react';
 import {Box, Static} from 'ink';
-import type {Message} from '../../components/chat/MessageList.js';
+import type {FeedItem, StaticFeed} from './staticFeed.js';
 import PendingMessages from '../../components/chat/PendingMessages.js';
 import ToolConfirmation from '../../components/tools/ToolConfirmation.js';
 import AskUserQuestion from '../../components/special/AskUserQuestion.js';
@@ -10,9 +10,7 @@ import {
 } from '../../components/bash/BashCommandConfirmation.js';
 import {CustomCommandExecutionDisplay} from '../../components/bash/CustomCommandExecutionDisplay.js';
 import {SchedulerCountdown} from '../../components/scheduler/SchedulerCountdown.js';
-import MessageRenderer, {
-	computeParallelGroupEdges,
-} from '../../components/chat/MessageRenderer.js';
+import MessageRenderer from '../../components/chat/MessageRenderer.js';
 import ChatHeader from '../../components/special/ChatHeader.js';
 import {HookErrorDisplay} from '../../components/special/HookErrorDisplay.js';
 import {HookStatusDisplay} from '../../components/special/HookStatusDisplay.js';
@@ -33,7 +31,7 @@ type Props = {
 	terminalWidth: number;
 	workingDirectory: string;
 	simpleMode: boolean;
-	messages: Message[];
+	feed: StaticFeed;
 	showThinking: boolean;
 	toolDisplayMode: 'full' | 'compact' | 'hidden';
 	thinkDisplayMode: ThinkDisplayMode;
@@ -57,7 +55,7 @@ export default function ChatScreenConversationView({
 	terminalWidth,
 	workingDirectory,
 	simpleMode,
-	messages,
+	feed,
 	showThinking,
 	toolDisplayMode,
 	thinkDisplayMode,
@@ -75,44 +73,41 @@ export default function ChatScreenConversationView({
 	setHookError,
 	compressionStatus,
 }: Props) {
-	// Pre-compute parallel group edges for non-streaming messages.
-	// This replaces the old index-based lookups inside MessageRenderer,
-	// enabling React.memo to skip re-renders for unchanged messages.
-	const staticMessages = useMemo(
-		() => messages.filter(m => !m.streaming),
-		[messages],
-	);
-	const {isFirstInGroup, isLastInGroup} = useMemo(
-		() => computeParallelGroupEdges(staticMessages),
-		[staticMessages],
-	);
+	// 单调长度视图：<Static> 只渲染 items.slice(index)，而裁剪不改变 length，
+	// 因此不会重渲染任何已提交项（无闪烁、无跳动）。
+	const items = feed.view();
 
 	return (
 		<>
-			<Static
-				key={remountKey}
-				items={[
-					<ChatHeader
-						key="header"
-						terminalWidth={terminalWidth}
-						simpleMode={simpleMode}
-						workingDirectory={workingDirectory}
-					/>,
-					...staticMessages.map((message, index) => (
+			<Static key={remountKey} items={items}>
+				{(item: FeedItem) => {
+					if (item.kind === 'header') {
+						return (
+							<ChatHeader
+								key="header"
+								terminalWidth={terminalWidth}
+								simpleMode={simpleMode}
+								workingDirectory={workingDirectory}
+							/>
+						);
+					}
+
+					const {isFirstInGroup, isLastInGroup} = feed.parallelEdgesAt(
+						item.index,
+					);
+					return (
 						<MessageRenderer
-							key={`msg-${index}`}
-							message={message}
+							key={`msg-${item.index}`}
+							message={item.message}
 							terminalWidth={terminalWidth}
-							isFirstInGroup={isFirstInGroup[index]}
-							isLastInGroup={isLastInGroup[index]}
+							isFirstInGroup={isFirstInGroup}
+							isLastInGroup={isLastInGroup}
 							showThinking={showThinking}
 							toolDisplayMode={toolDisplayMode}
 							thinkDisplayMode={thinkDisplayMode}
 						/>
-					)),
-				]}
-			>
-				{item => item}
+					);
+				}}
 			</Static>
 
 			<Box paddingX={1} width={terminalWidth}>

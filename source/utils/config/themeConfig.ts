@@ -66,6 +66,11 @@ interface ThemeConfig {
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
 	thinkDisplayMode?: ThinkDisplayMode;
+	/**
+	 * 关闭 UI 消息裁剪、保留完整会话历史（/full-msg 切换）。
+	 * 开启后内存不再受 MAX_LIVE_MESSAGES / MAX_LIVE_BYTES 约束。
+	 */
+	fullMessageMode?: boolean;
 	/** Tool category symbols + optional status prefixes; default true. */
 	toolIcons?: ToolIconsConfig;
 	/**
@@ -84,6 +89,7 @@ const DEFAULT_CONFIG: ThemeConfig = {
 	diffOpacity: 1,
 	toolDisplayMode: 'full',
 	thinkDisplayMode: 'compact',
+	fullMessageMode: false,
 	toolIcons: true,
 };
 
@@ -214,6 +220,23 @@ export function getToolDisplayMode(): ToolDisplayMode {
 export function setToolDisplayMode(mode: ToolDisplayMode): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, toolDisplayMode: mode});
+}
+
+/**
+ * Get full message mode setting.
+ * 开启后不再裁剪 UI 消息，保留完整会话历史。
+ */
+export function getFullMessageMode(): boolean {
+	const config = loadThemeConfig();
+	return config.fullMessageMode ?? false;
+}
+
+/**
+ * Set full message mode and persist to file system
+ */
+export function setFullMessageMode(fullMessageMode: boolean): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, fullMessageMode});
 }
 
 /**

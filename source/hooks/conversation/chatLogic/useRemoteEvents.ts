@@ -37,6 +37,7 @@ export function useRemoteEvents(
 	const {
 		messages,
 		setMessages,
+		trimmedUserMessageCount,
 		setPendingMessages,
 		streamingState,
 		snapshotState,
@@ -136,10 +137,13 @@ export function useRemoteEvents(
 								selected = parsed.filter(item => typeof item === 'string');
 							}
 						} catch (e) {
-							log.debug('Failed to parse remote selected array JSON, keeping original string', {
-								trimmed,
-								error: e instanceof Error ? e.message : String(e),
-							});
+							log.debug(
+								'Failed to parse remote selected array JSON, keeping original string',
+								{
+									trimmed,
+									error: e instanceof Error ? e.message : String(e),
+								},
+							);
 						}
 					}
 				}
@@ -258,7 +262,11 @@ export function useRemoteEvents(
 				const userMessageEntries = messages
 					.map((msg, index) => ({msg, index}))
 					.filter(entry => entry.msg.role === 'user');
-				const targetEntry = userMessageEntries[userMessageOrder - 1];
+				// messages 是有界窗口，userMessageOrder 是全局 1-based 序号，
+				// 需要减去窗口之前被裁掉的用户消息数量。
+				const windowIndex =
+					userMessageOrder - 1 - (trimmedUserMessageCount ?? 0);
+				const targetEntry = userMessageEntries[windowIndex];
 				if (!targetEntry) {
 					return;
 				}

@@ -12,6 +12,7 @@ export interface CommandResult {
 		| 'toggleSimple'
 		| 'toggleToolDisplay'
 		| 'toggleThinkDisplay'
+		| 'toggleFullMessage'
 		| 'toggleVulnerabilityHunting'
 		| 'toggleToolSearch'
 		| 'initProject'

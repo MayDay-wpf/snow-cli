@@ -92,9 +92,7 @@ function prependActiveAndInitialUserPromptBlock(
 	);
 	const firstUserMessage = messages[firstUserIndex];
 	if (firstUserMessage) {
-		firstUserMessage.content = `${block}\n\n${
-			firstUserMessage.content ?? ''
-		}`;
+		firstUserMessage.content = `${block}\n\n${firstUserMessage.content ?? ''}`;
 		return;
 	}
 
@@ -1088,10 +1086,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				import('../../utils/core/globalCleanup.js')
 					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
 					.catch(err => {
-						log.debug(
-							'Failed to cleanup global resources on session delete',
-							{error: err},
-						);
+						log.debug('Failed to cleanup global resources on session delete', {
+							error: err,
+						});
 					});
 
 				const commandMessage: Message = {
@@ -1556,11 +1553,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const todoService = getTodoService();
 						await todoService.copyTodoList(currentSession.id, forkedSession.id);
 					} catch (e) {
-						log.debug('Failed to copy todo list to forked session (non-critical)', {
-							sourceSessionId: currentSession.id,
-							forkedSessionId: forkedSession.id,
-							error: e instanceof Error ? e.message : String(e),
-						});
+						log.debug(
+							'Failed to copy todo list to forked session (non-critical)',
+							{
+								sourceSessionId: currentSession.id,
+								forkedSessionId: forkedSession.id,
+								error: e instanceof Error ? e.message : String(e),
+							},
+						);
 					}
 
 					if (options.onResumeSessionById) {
@@ -1808,6 +1808,11 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'toggleThinkDisplay') {
 				// /think-display 切换思考显示模式后，<Static> 区域中的历史思考消息
 				// 不会随 thinkDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。
+				resetTerminal(stdout);
+				options.setRemountKey(prev => prev + 1);
+			} else if (result.success && result.action === 'toggleFullMessage') {
+				// /full-msg 切换消息裁剪开关后，清屏 + 重挂载会触发会话消息重新载入，
+				// 从而把完整会话历史重新铺到 <Static> 区域（开启时）或收敛到裁剪窗口（关闭时）。
 				resetTerminal(stdout);
 				options.setRemountKey(prev => prev + 1);
 			} else if (
