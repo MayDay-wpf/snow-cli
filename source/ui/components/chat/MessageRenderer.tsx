@@ -548,9 +548,12 @@ function MessageRendererImpl({
 													);
 												}
 											} catch (e) {
-												log.debug('Tool result content is not HookError JSON, rendering standard output', {
-													error: e instanceof Error ? e.message : String(e),
-												});
+												log.debug(
+													'Tool result content is not HookError JSON, rendering standard output',
+													{
+														error: e instanceof Error ? e.message : String(e),
+													},
+												);
 											}
 
 											// For tool messages with status, render as plain text with color
@@ -739,7 +742,8 @@ function MessageRendererImpl({
 										message.toolCall.name === 'filesystem-create' &&
 										!message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.content &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.restoredFromSession === true) && (
 											<Box marginTop={1}>
 												<DiffViewer
 													newContent={message.toolCall.arguments.content}
@@ -753,7 +757,8 @@ function MessageRendererImpl({
 											message.toolCall.name === 'filesystem-copy') &&
 										typeof message.toolCall.arguments.oldContent === 'string' &&
 										typeof message.toolCall.arguments.newContent === 'string' &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.restoredFromSession === true) && (
 											<Box marginTop={1}>
 												<DiffViewer
 													oldContent={message.toolCall.arguments.oldContent}
@@ -771,7 +776,7 @@ function MessageRendererImpl({
 												/>
 											</Box>
 										)}
-									{/* Show batch edit results (pending only — success uses tool result) */}
+									{/* Show batch edit results (pending, or restored from session history) */}
 									{message.toolCall &&
 										(message.toolCall.name === 'filesystem-edit' ||
 											message.toolCall.name === 'filesystem-replaceedit' ||
@@ -779,7 +784,8 @@ function MessageRendererImpl({
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.restoredFromSession === true) && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {
@@ -820,13 +826,14 @@ function MessageRendererImpl({
 												)}
 											</Box>
 										)}
-									{/* Show batch create results (pending only — success uses tool result) */}
+									{/* Show batch create results (pending, or restored from session history) */}
 									{message.toolCall &&
 										message.toolCall.name === 'filesystem-create' &&
 										message.toolCall.arguments.isBatch &&
 										message.toolCall.arguments.batchResults &&
 										Array.isArray(message.toolCall.arguments.batchResults) &&
-										message.messageStatus === 'pending' && (
+										(message.messageStatus === 'pending' ||
+											message.restoredFromSession === true) && (
 											<Box marginTop={1} flexDirection="column">
 												{message.toolCall.arguments.batchResults.map(
 													(fileResult: any, index: number) => {

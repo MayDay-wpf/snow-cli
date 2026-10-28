@@ -63,6 +63,7 @@ export interface Message {
 	};
 	subAgentInternal?: boolean; // Mark internal sub-agent messages to filter from API requests
 	subAgentContent?: boolean; // Persisted sub-agent thinking/content replay message
+	restoredFromSession?: boolean; // Message rebuilt from persisted session history (resume/compression replay)
 	subAgentUsage?: {
 		inputTokens: number;
 		outputTokens: number;

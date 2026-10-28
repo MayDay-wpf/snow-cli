@@ -83,7 +83,6 @@ function findToolNameForToolCall(
 	return tc?.function.name;
 }
 
-
 function hasSubsequentToolResult(
 	sessionMessages: ChatMessage[],
 	startIndex: number,
@@ -195,7 +194,11 @@ export function convertSessionMessagesToUI(
 
 			// Display time-consuming tools individually (only if not yet completed)
 			for (const toolCall of timeConsumingTools) {
-				const hasResult = hasSubsequentToolResult(sessionMessages, i, toolCall.id);
+				const hasResult = hasSubsequentToolResult(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
 				if (hasResult) {
 					processedToolCalls.add(toolCall.id);
 					continue;
@@ -349,7 +352,10 @@ export function convertSessionMessagesToUI(
 						}
 					} catch (e) {
 						// Ignore parse errors
-						log.debug('sessionConverter failed to parse terminal-execute result JSON', {error: e, toolName});
+						log.debug(
+							'sessionConverter failed to parse terminal-execute result JSON',
+							{error: e, toolName},
+						);
 					}
 				}
 
@@ -415,7 +421,10 @@ export function convertSessionMessagesToUI(
 						}
 					} catch (e) {
 						// Ignore parse errors
-						log.debug('sessionConverter failed to parse fileToolData result JSON', {error: e, toolName});
+						log.debug(
+							'sessionConverter failed to parse fileToolData result JSON',
+							{error: e, toolName},
+						);
 					}
 				}
 
@@ -437,6 +446,7 @@ export function convertSessionMessagesToUI(
 						? fileToolData
 						: undefined,
 					messageStatus: status,
+					restoredFromSession: fileToolData ? true : undefined,
 					subAgentInternal: true,
 				});
 			} else {
@@ -500,7 +510,11 @@ export function convertSessionMessagesToUI(
 
 				// Only add "in progress" message for tools that need two-step display AND have not completed yet
 				const needTwoSteps = isToolNeedTwoStepDisplay(toolCall.function.name);
-				const hasResult = hasSubsequentToolResult(sessionMessages, i, toolCall.id);
+				const hasResult = hasSubsequentToolResult(
+					sessionMessages,
+					i,
+					toolCall.id,
+				);
 				if (needTwoSteps && !hasResult) {
 					// When resuming a session, only genuinely unfinished tool calls (interrupted
 					// before result) should show pending diffs. Completed tools are rendered by
@@ -667,7 +681,10 @@ export function convertSessionMessagesToUI(
 								}
 							} catch (e) {
 								// Ignore parse errors
-								log.debug('sessionConverter failed to parse editDiffData result JSON', {error: e, toolName});
+								log.debug(
+									'sessionConverter failed to parse editDiffData result JSON',
+									{error: e, toolName},
+								);
 							}
 						}
 
@@ -688,7 +705,10 @@ export function convertSessionMessagesToUI(
 								}
 							} catch (e) {
 								// Ignore parse errors
-								log.debug('sessionConverter failed to parse terminal result JSON', {error: e, toolName});
+								log.debug(
+									'sessionConverter failed to parse terminal result JSON',
+									{error: e, toolName},
+								);
 							}
 						}
 
@@ -735,6 +755,7 @@ export function convertSessionMessagesToUI(
 						: undefined,
 				terminalResult: terminalResultData,
 				messageStatus: status,
+				restoredFromSession: editDiffData ? true : undefined,
 				// Add toolDisplay for non-time-consuming tools
 				toolDisplay:
 					isNonTimeConsuming && !editDiffData
