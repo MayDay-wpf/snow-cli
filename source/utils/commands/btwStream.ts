@@ -1,5 +1,8 @@
 import {getSnowConfig} from '../config/apiConfig.js';
-import {createStreamingChatCompletion, type ChatMessage} from '../../api/chat.js';
+import {
+	createStreamingChatCompletion,
+	type ChatMessage,
+} from '../../api/chat.js';
 import {createStreamingResponse} from '../../api/responses.js';
 import {createStreamingGeminiCompletion} from '../../api/gemini.js';
 import {createStreamingAnthropicCompletion} from '../../api/anthropic.js';
@@ -19,14 +22,81 @@ function buildContextMessages(): ChatMessage[] {
 	const session = sessionManager.getCurrentSession();
 	if (!session || session.messages.length === 0) return [];
 
-	const mapped = session.messages.map(m => ({
+	const mapped: ChatMessage[] = session.messages.map(m => ({
 		role: m.role as 'user' | 'assistant' | 'system' | 'tool',
 		content: typeof m.content === 'string' ? m.content : '',
 		...(m.tool_call_id ? {tool_call_id: m.tool_call_id} : {}),
 		...(m.tool_calls ? {tool_calls: m.tool_calls} : {}),
 	}));
 
-	return mapped;
+	return sanitizeMessagesForApi(mapped);
+}
+
+/**
+ * 修复会话快照中的 tool_call 一致性问题。
+ *
+ * btw 侧问在主任务仍在运行时发起，此时会话尾部可能停在一个尚未闭合的
+ * tool_call 轮次上（assistant 已带 tool_calls，但对应的 tool 结果还没写入），
+ * 也可能存在孤立的 tool 结果消息。这类消息直接发给 OpenAI 兼容接口会返回
+ * `invalid_request_error: No tool output found for function call ...`。
+ *
+ * 处理规则：
+ * - 完整的 tool_call 轮次（所有 tool_calls 都有对应结果）原样保留；
+ * - 未闭合的轮次只保留 assistant 的文本内容，丢弃未应答的 tool_calls 与其部分结果；
+ * - 找不到对应 assistant tool_calls 的孤立 tool 消息直接丢弃。
+ */
+export function sanitizeMessagesForApi(messages: ChatMessage[]): ChatMessage[] {
+	const result: ChatMessage[] = [];
+	let openAssistant: ChatMessage | null = null;
+	let openToolResults: ChatMessage[] = [];
+	let pendingCallIds = new Set<string>();
+
+	const flushOpenRound = () => {
+		if (!openAssistant) return;
+
+		if (pendingCallIds.size === 0) {
+			// 完整轮次：assistant 与其全部 tool 结果一起保留
+			result.push(openAssistant, ...openToolResults);
+		} else {
+			// 未闭合轮次：仅保留 assistant 文本，丢弃未应答的 tool_calls
+			const rest: ChatMessage = {...openAssistant};
+			delete (rest as {tool_calls?: unknown}).tool_calls;
+			if (typeof rest.content === 'string' && rest.content.trim().length > 0) {
+				result.push(rest);
+			}
+		}
+
+		openAssistant = null;
+		openToolResults = [];
+		pendingCallIds = new Set<string>();
+	};
+
+	for (const m of messages) {
+		if (!m) continue;
+
+		if (m.role === 'tool') {
+			if (m.tool_call_id && pendingCallIds.has(m.tool_call_id)) {
+				pendingCallIds.delete(m.tool_call_id);
+				openToolResults.push(m);
+			}
+			// 孤立 tool 结果（没有匹配的 assistant tool_calls）直接丢弃
+			continue;
+		}
+
+		if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+			flushOpenRound();
+			openAssistant = m;
+			pendingCallIds = new Set(m.tool_calls.map(tc => tc.id));
+			continue;
+		}
+
+		flushOpenRound();
+		result.push(m);
+	}
+
+	flushOpenRound();
+
+	return result;
 }
 
 /**
@@ -47,7 +117,10 @@ export async function* streamBtwResponse(
 
 	const messages: ChatMessage[] = [
 		...contextMessages,
-		{role: 'user', content: `[BTW Side-Question]\n${question}\n${BTW_SYSTEM_SUFFIX}`},
+		{
+			role: 'user',
+			content: `[BTW Side-Question]\n${question}\n${BTW_SYSTEM_SUFFIX}`,
+		},
 	];
 
 	let stream: AsyncGenerator<any, void, unknown>;
