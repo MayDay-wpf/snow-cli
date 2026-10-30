@@ -529,10 +529,10 @@ export async function executeToolCall(
 						agentName = agentConfig.name;
 					}
 				} catch (error) {
-					log.debug(
-						'Failed to resolve sub-agent configuration',
-						{error, agentId},
-					);
+					log.debug('Failed to resolve sub-agent configuration', {
+						error,
+						agentId,
+					});
 					// Fallback to agentId if lookup fails
 				}
 
@@ -668,6 +668,10 @@ export async function executeToolCall(
 				let corrected = false;
 				let correctionNoticeActive = false;
 				let lastRepairReasoning = '';
+				// Arguments adopted by the last successful repair. Applied to the
+				// original tool call only when the repaired execution succeeds, so
+				// the main flow never sees a failed correction as its own call.
+				let correctedArgumentsJson: string | null = null;
 				let currentArguments: Record<string, any> = args;
 				let toolResult: any = undefined;
 				let lastThrownError: unknown = null;
@@ -773,6 +777,7 @@ export async function executeToolCall(
 					currentArguments = repairedArguments;
 					executedArguments = repairedArguments;
 					corrected = true;
+					correctedArgumentsJson = decision.argumentsJson;
 
 					correctionModule.emitToolCorrectionStatus({
 						phase: 'retrying',
@@ -811,6 +816,14 @@ export async function executeToolCall(
 				if (corrected && correctionModule) {
 					const finalFailure = detectToolResultFailure(toolResult);
 					if (!finalFailure.failed) {
+						// The repaired arguments replace the main flow's original
+						// call, so the conversation history and UI show exactly the
+						// call that actually ran. The tool result still carries a
+						// short note so the main model knows the correction agent
+						// acted; intermediate failed attempts are never injected.
+						if (correctedArgumentsJson) {
+							toolCall.function.arguments = correctedArgumentsJson;
+						}
 						correctionModule.emitToolCorrectionStatus({
 							phase: 'success',
 							toolName: toolCall.function.name,
@@ -820,9 +833,9 @@ export async function executeToolCall(
 						});
 						toolResult = appendToolResultNote(
 							toolResult,
-							`[Tool Correction] This result was produced by a corrected retry after the original invocation failed. Correction note: ${
+							`[Tool Correction] The correction agent repaired this call's arguments after the original invocation failed (repair note: ${
 								lastRepairReasoning || 'arguments repaired'
-							}\nContinue with this result and do not repeat the original failing call.`,
+							}). The call was re-executed with the repaired arguments and succeeded. Continue with this result and do not repeat the original failing call.`,
 						);
 					} else {
 						correctionModule.emitToolCorrectionStatus({
@@ -1116,10 +1129,10 @@ function getResourceIdentifier(toolCall: ToolCall): string {
 				return `independent:${toolCall.id}`;
 			}
 		} catch (error) {
-			log.debug(
-				'Failed to parse todo tool arguments for resource identifier',
-				{error, toolCallId: toolCall.id},
-			);
+			log.debug('Failed to parse todo tool arguments for resource identifier', {
+				error,
+				toolCallId: toolCall.id,
+			});
 			// fall through to serialized todo-state
 		}
 		return 'todo-state';

@@ -260,6 +260,29 @@ export async function handleToolCallRound(ctx: {
 		process.cwd(),
 	);
 
+	// Tool-call correction may have replaced the arguments that actually ran.
+	// Reflect the repaired arguments back into the assistant tool_calls message
+	// so the main-flow context contains exactly one successful call: no repair
+	// note and no failed intermediate attempts. The persisted session message
+	// shares this tool_calls array, so the next saveMessage persists the update.
+	for (const toolCall of receivedToolCalls) {
+		const assistantMessage = conversationMessages.find(
+			message =>
+				message?.role === 'assistant' &&
+				Array.isArray(message.tool_calls) &&
+				message.tool_calls.some((entry: any) => entry?.id === toolCall.id),
+		);
+		const storedCall = assistantMessage?.tool_calls?.find(
+			(entry: any) => entry?.id === toolCall.id,
+		);
+		if (
+			storedCall?.function &&
+			storedCall.function.arguments !== toolCall.function.arguments
+		) {
+			storedCall.function.arguments = toolCall.function.arguments;
+		}
+	}
+
 	const toolResults = await Promise.all(
 		rawToolResults.map(result =>
 			visionAgent.prepareToolResultForNonVisionModel(result, controller.signal),
