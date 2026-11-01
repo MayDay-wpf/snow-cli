@@ -3,6 +3,7 @@ import {Box, Text, Newline, Spacer, useInput} from 'ink';
 import {existsSync, watch} from 'node:fs';
 import {extname} from 'node:path';
 import {useI18n} from '../../i18n/index.js';
+import type {Language, TranslationKeys} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {ANYPANEL_PLUGIN_DIR} from '../../utils/config/apiConfig.js';
 import {
@@ -21,6 +22,83 @@ import {
 import {logger} from '../../utils/core/logger.js';
 
 const log = logger.child('ui:pages');
+
+/**
+ * 可随渲染更新的显示上下文。
+ *
+ * 与实例身份无关：宽度、语言、会话数据变化只影响渲染和"初始化时的初始值"，
+ * 不应触发插件重新加载或 init()，否则会覆盖用户当前状态。
+ */
+type DisplayContext = {
+	terminalWidth: number;
+	language: Language;
+	sessionId: string;
+	sessionJson: string;
+	/** 仅用于加载失败时的本地化文案，不参与实例身份判断 */
+	t: TranslationKeys;
+};
+
+/**
+ * 一次面板打开对应的插件实例。
+ *
+ * plugin / state 会随热更新和输入处理原地更新，instanceRef 始终持有当前实例；
+ * initialized 与 state 的具体取值解耦，插件返回 null 也算初始化成功。
+ */
+type PanelInstance = {
+	/** 实例所属插件 id，用于阻止插件切换后的过期异步结果写回 */
+	pluginId: string;
+	/** 当前插件实现（热更新时替换为最新代码） */
+	plugin: AnyPanelPlugin;
+	/** 插件状态；有效返回值允许为 null / undefined */
+	state: unknown;
+	/** init 是否成功完成——不以 state 是否为 null 判断 */
+	initialized: boolean;
+	/** 是否已失效（关闭或切换后为 true），异步结果不得再写回 */
+	disposed: boolean;
+	/** onUnmount 是否已调用，保证清理幂等 */
+	cleaned: boolean;
+};
+
+/**
+ * 返回与当前 pluginId 匹配、已完成初始化且未被结束的实例。
+ * 插件切换过渡期或关闭后返回 null，避免把旧插件对象与新 state 混用。
+ */
+function getActiveInstance(
+	instance: PanelInstance | null,
+	pluginId: string,
+): PanelInstance | null {
+	if (!instance) return null;
+	if (instance.pluginId !== pluginId) return null;
+	if (!instance.initialized || instance.disposed) return null;
+	return instance;
+}
+
+/**
+ * 结束一个面板实例：按需调用 onBlur，随后调用 onUnmount 并标记失效。
+ *
+ * 幂等且不触发 React 状态更新，供关闭流程、插件切换与组件卸载共用，
+ * 避免同一实例被重复释放。
+ */
+function disposeInstance(instance: PanelInstance, callBlur: boolean): void {
+	if (instance.cleaned) return;
+	instance.cleaned = true;
+	instance.disposed = true;
+	if (!instance.initialized) return;
+
+	if (callBlur) {
+		try {
+			instance.plugin.onBlur?.(instance.state);
+		} catch (error) {
+			log.debug('AnyPanel onBlur failed', {error});
+		}
+	}
+
+	try {
+		instance.plugin.onUnmount?.(instance.state);
+	} catch (error) {
+		log.debug('AnyPanel onUnmount failed', {error});
+	}
+}
 
 type Props = {
 	/** AnyPanel 插件 id，来自自定义指令的 command 字段 */
@@ -63,11 +141,22 @@ export default function AnyPanelScreen({
 	const {theme} = useTheme();
 
 	const [plugin, setPlugin] = useState<AnyPanelPlugin | null>(null);
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [, forceRender] = useState(0);
-	const stateRef = useRef<unknown>(null);
+
+	// 当前实例——生命周期、输入与异步有效性判断的唯一依据
+	const instanceRef = useRef<PanelInstance | null>(null);
+	// 面板是否已请求关闭——阻止关闭后的输入、刷新与异步写回
 	const closedRef = useRef(false);
+
+	// 最新显示上下文：宽度/语言/会话变化只更新此 ref，不重建实例
+	const displayContextRef = useRef<DisplayContext>({
+		terminalWidth,
+		language,
+		sessionId,
+		sessionJson,
+		t,
+	});
 
 	// 上次成功渲染的内容——渲染出错时保留旧画面，不闪退
 	const lastContentRef = useRef<React.ReactNode>(null);
@@ -76,84 +165,154 @@ export default function AnyPanelScreen({
 	// 渲染错误信息（非致命：面板继续运行，下次渲染成功后自动清除）
 	const [renderError, setRenderError] = useState<string | null>(null);
 
-	// 始终持有最新的 plugin 引用——供 onUnmount 兜底 effect 使用，
-	// 避免 effect 依赖 [plugin] 在热重载时误触发 onUnmount（见下方注释）。
-	const pluginRef = useRef<AnyPanelPlugin | null>(null);
-	pluginRef.current = plugin;
+	// 在提交阶段同步最新上下文：本 effect 声明在加载 effect 之前，
+	// 保证加载完成时读到的是最新值；依赖均为稳定原始值，避免每次渲染都写 ref。
+	useEffect(() => {
+		displayContextRef.current = {
+			terminalWidth,
+			language,
+			sessionId,
+			sessionJson,
+			t,
+		};
+	}, [terminalWidth, language, sessionId, sessionJson, t]);
 
-	// 加载插件
-	// 每次打开面板都强制 bustCache=true，绕过 ESM 模块缓存，
+	// 加载并初始化插件实例。
+	//
+	// 触发条件只有 pluginId：宽度、语言、会话等显示上下文变化只更新渲染，
+	// 不重新加载也不重新 init。历史问题正是 terminalWidth 进入依赖后，
+	// init() 的初始状态覆盖了用户当前状态，导致拉伸终端时面板重置。
+	//
+	// 每次打开面板仍强制 bustCache=true，绕过 ESM 模块缓存，
 	// 确保开发期修改的插件代码无需重启 CLI 即可生效。
 	useEffect(() => {
-		let disposed = false;
+		// 已请求关闭后不再建立新实例（父组件随后会卸载本组件）
+		if (closedRef.current) return;
+
+		let cancelled = false;
+
+		// 插件切换：旧实例按"失去焦点 → 退出"结束，避免 A 的 state 传给 B
+		const previous = instanceRef.current;
+		if (previous) {
+			instanceRef.current = null;
+			disposeInstance(previous, true);
+		}
+
+		// 新实例建立前重置宿主 UI 状态，避免沿用上一个插件的画面或错误
+		setPlugin(null);
+		setError(null);
+		lastContentRef.current = null;
+		renderErrorRef.current = null;
+		setRenderError(null);
+
 		(async () => {
 			try {
 				const plugins = await loadAnyPanelPlugins(true);
+				if (cancelled || closedRef.current) return;
+
 				const indexed = indexAnyPanelPlugins(plugins);
 				const found = indexed.get(pluginId);
-				if (disposed) return;
 				if (!found) {
-					setError(t.anyPanel.pluginNotFound.replace('{id}', pluginId));
-					setLoading(false);
+					setError(
+						displayContextRef.current.t.anyPanel.pluginNotFound.replace(
+							'{id}',
+							pluginId,
+						),
+					);
 					return;
 				}
-				// 初始化插件状态
+
+				// 初始化时读取最新上下文，而不是 effect 执行瞬间捕获的值
+				const context = displayContextRef.current;
 				const ctx: AnyPanelInitContext = {
-					terminalWidth,
+					terminalWidth: context.terminalWidth,
 					terminalHeight: 40, // 估算值，ink 无法直接获取终端高度
-					language,
+					language: context.language,
 					cwd: process.cwd(),
-					sessionId,
-					sessionJson,
+					sessionId: context.sessionId,
+					sessionJson: context.sessionJson,
 				};
-				stateRef.current = found.init(ctx);
+
+				const state = found.init(ctx);
+				if (cancelled || closedRef.current) return;
+
+				const instance: PanelInstance = {
+					pluginId,
+					plugin: found,
+					state,
+					initialized: true,
+					disposed: false,
+					cleaned: false,
+				};
+				// 先建立宿主记录，再触发生命周期钩子，保证钩子内抛错也能正常清理
+				instanceRef.current = instance;
 				setPlugin(found);
-				setLoading(false);
+
 				// 调用 onMount 生命周期钩子
 				try {
-					found.onMount?.(stateRef.current);
+					found.onMount?.(state);
 				} catch (error) {
 					log.debug('AnyPanel onMount failed', {error});
 				}
 				// 面板挂载即获得焦点
 				try {
-					found.onFocus?.(stateRef.current);
+					found.onFocus?.(state);
 				} catch (error) {
 					log.debug('AnyPanel onFocus failed', {error});
 				}
 			} catch (err) {
-				if (disposed) return;
+				if (cancelled || closedRef.current) return;
 				setError(
-					t.anyPanel.loadError.replace(
+					displayContextRef.current.t.anyPanel.loadError.replace(
 						'{error}',
 						err instanceof Error ? err.message : String(err),
 					),
 				);
-				setLoading(false);
 			}
 		})();
+
 		return () => {
-			disposed = true;
+			cancelled = true;
 		};
-	}, [pluginId, terminalWidth, language, t.anyPanel]);
+	}, [pluginId]);
 
 	// 热重载：监听插件目录文件变更，自动重新加载插件代码
 	// 编辑器保存（可能触发多次事件）后 debounce 300ms 执行一次
-	// 热重载时保留 stateRef.current 不重新 init()，仅替换 plugin 引用
+	// 热重载时保留当前实例与 state，不重新 init()，仅替换 plugin 引用
 	useEffect(() => {
 		if (closedRef.current) return;
 		if (!existsSync(ANYPANEL_PLUGIN_DIR)) return;
 
+		let cancelled = false;
 		let timer: ReturnType<typeof setTimeout> | null = null;
+		// 重叠 reload 的请求序号：只允许最新一次结果写回
+		let reloadSeq = 0;
 
 		const reloadPlugin = async () => {
+			const seq = ++reloadSeq;
 			try {
 				// bustCache=true 绕过 ESM 模块缓存，拿到最新代码
 				const plugins = await loadAnyPanelPlugins(true);
+				if (cancelled || closedRef.current || seq !== reloadSeq) return;
+
 				const indexed = indexAnyPanelPlugins(plugins);
 				const found = indexed.get(pluginId);
 				if (!found) return; // 插件被删除或暂时不可用，保持现状
-				// 保留 stateRef.current，仅热替换插件代码
+
+				const instance = instanceRef.current;
+				// 初始化未完成、已结束或已切到其他插件时不得发布新代码
+				if (
+					!instance ||
+					instance.pluginId !== pluginId ||
+					!instance.initialized ||
+					instance.disposed ||
+					instance.cleaned
+				) {
+					return;
+				}
+
+				// 热重载保留当前 state，只热替换插件代码
+				instance.plugin = found;
 				setPlugin(found);
 				forceRender(n => n + 1);
 			} catch (error) {
@@ -180,6 +339,7 @@ export default function AnyPanelScreen({
 		});
 
 		return () => {
+			cancelled = true;
 			if (timer) clearTimeout(timer);
 			watcher.close();
 		};
@@ -193,27 +353,23 @@ export default function AnyPanelScreen({
 		const interval = Math.max(100, plugin.refreshIntervalMs);
 		const timer = setInterval(() => {
 			if (closedRef.current) return;
+			// 热更新可能已替换 plugin，只有当前实例仍指向该实现时才重绘
+			const instance = instanceRef.current;
+			if (!instance || instance.plugin !== plugin || instance.disposed) return;
 			forceRender(n => n + 1);
 		}, interval);
 		return () => clearInterval(timer);
 	}, [plugin]);
 
-	// 组件卸载时调用 onUnmount 生命周期钩子（兜底）
-	// 如果已经通过 handleClose() 调用过则跳过，避免双重调用。
-	// 关键：此 effect 不依赖 [plugin]，而是读取 pluginRef.current。
-	// 若依赖 [plugin]，热重载（setPlugin）会触发 cleanup → 误调用旧插件 onUnmount，
-	// 违背"onUnmount 仅在面板关闭时调用一次"的生命周期契约。
+	// 组件卸载兜底：关闭流程未执行时释放当前实例（仅 onUnmount，不调用 onBlur）。
+	// 关键：不依赖 [plugin]，否则热更新替换插件实现会误触发清理；
+	// 清理本身也通过实例幂等标记去重，不会与 handleClose 重复调用。
 	useEffect(() => {
 		return () => {
-			if (closedRef.current) return; // handleClose 已调用过 onUnmount
-			const currentPlugin = pluginRef.current;
-			if (currentPlugin?.onUnmount && stateRef.current !== null) {
-				try {
-					currentPlugin.onUnmount(stateRef.current);
-				} catch (error) {
-					log.debug('AnyPanel cleanup onUnmount failed', {error});
-				}
-			}
+			const instance = instanceRef.current;
+			if (!instance) return;
+			instanceRef.current = null;
+			disposeInstance(instance, false);
 		};
 	}, []);
 
@@ -228,26 +384,21 @@ export default function AnyPanelScreen({
 	const handleClose = useCallback(() => {
 		if (closedRef.current) return;
 		closedRef.current = true;
-		// 关闭前调用 onBlur → onUnmount 生命周期钩子
-		if (plugin && stateRef.current !== null) {
-			try {
-				plugin.onBlur?.(stateRef.current);
-			} catch (error) {
-				log.debug('AnyPanel onBlur failed', {error});
-			}
-			try {
-				plugin.onUnmount?.(stateRef.current);
-			} catch (error) {
-				log.debug('AnyPanel onUnmount failed', {error});
-			}
+		// 关闭前调用 onBlur → onUnmount 生命周期钩子（disposeInstance 内部保证幂等）
+		const instance = instanceRef.current;
+		if (instance) {
+			instanceRef.current = null;
+			disposeInstance(instance, true);
 		}
 		onClose();
-	}, [onClose, plugin]);
+	}, [onClose]);
 
 	// 处理输入
 	useInput(
 		(input: string, key: any) => {
-			if (!plugin || loading || error) {
+			// 只处理与当前 pluginId 匹配的有效实例，避免切换过渡期串用旧实例
+			const instance = getActiveInstance(instanceRef.current, pluginId);
+			if (!instance || error) {
 				if (key.escape) {
 					handleClose();
 				}
@@ -285,11 +436,14 @@ export default function AnyPanelScreen({
 			};
 
 			try {
-				stateRef.current = plugin.handleInput(stateRef.current, panelInput);
+				instance.state = instance.plugin.handleInput(
+					instance.state,
+					panelInput,
+				);
 				// handleInput 成功后清除渲染错误状态（写 ref，由 useEffect 同步到 state）
 				renderErrorRef.current = null;
 				// 检查插件是否请求关闭
-				const status = plugin.getStatus(stateRef.current);
+				const status = instance.plugin.getStatus(instance.state);
 				if (status === 'done') {
 					handleClose();
 					return;
@@ -323,17 +477,17 @@ export default function AnyPanelScreen({
 		);
 	}
 
-	// 加载状态
-	if (loading) {
+	// 渲染只使用与当前 pluginId 匹配、已完成初始化的实例；
+	// 插件切换过渡期与关闭后不再显示旧插件内容
+	const activeInstance = getActiveInstance(instanceRef.current, pluginId);
+
+	// 加载中（含尚未就绪与插件切换过渡）
+	if (!activeInstance || !plugin) {
 		return (
 			<Box paddingX={1} flexDirection="column">
 				<Text color={theme.colors.menuInfo}>{t.anyPanel.loading}</Text>
 			</Box>
 		);
-	}
-
-	if (!plugin) {
-		return null;
 	}
 
 	// 渲染插件画面
@@ -357,14 +511,14 @@ export default function AnyPanelScreen({
 			forceRerender: () => forceRender(n => n + 1),
 		};
 		try {
-			pluginContent = plugin.render(stateRef.current, renderCtx);
+			pluginContent = plugin.render(activeInstance.state, renderCtx);
 		} catch (err) {
 			currentRenderError = err instanceof Error ? err.message : String(err);
 		}
 	} else if (typeof plugin.getRenderLines === 'function') {
 		// 纯文本模式（向后兼容）
 		try {
-			const renderLines = plugin.getRenderLines(stateRef.current) || [];
+			const renderLines = plugin.getRenderLines(activeInstance.state) || [];
 			pluginContent = renderLines.map((line, index) => (
 				<Text key={index}>{safeText(line)}</Text>
 			));
@@ -393,7 +547,7 @@ export default function AnyPanelScreen({
 	// 提示文本
 	let hint: string | undefined;
 	try {
-		hint = plugin.getHint?.(stateRef.current);
+		hint = plugin.getHint?.(activeInstance.state);
 	} catch (error) {
 		log.debug('AnyPanel getHint failed', {error});
 		hint = undefined;
