@@ -1,8 +1,67 @@
 import fs from 'fs';
-import {calculateSimilarity} from '../../mcp/utils/filesystem/similarity.utils.js';
+import {
+	calculateSimilarity,
+	normalizeWhitespace,
+} from '../../mcp/utils/filesystem/similarity.utils.js';
 import {logger} from '../core/logger.js';
 
 const log = logger.child('ui:diffPreview');
+
+/**
+ * Locate the Nth exact occurrence of `search` in `content` at line boundaries.
+ * Exact matches are by far the common case for edit tools and avoid the
+ * expensive sliding-window similarity scan.
+ */
+function findExactMatchLineRange(
+	content: string,
+	search: string,
+	occurrence: number,
+): {startLine: number; endLine: number} | null {
+	if (search.length === 0) {
+		return null;
+	}
+
+	const searchLineCount = search.split('\n').length;
+	let found = 0;
+	let searchFrom = 0;
+	let maxIterations = 5000;
+
+	while (maxIterations-- > 0) {
+		const index = content.indexOf(search, searchFrom);
+		if (index === -1) {
+			return null;
+		}
+
+		searchFrom = index + 1;
+
+		const atLineStart = index === 0 || content[index - 1] === '\n';
+		const endIndex = index + search.length;
+		const atLineEnd =
+			endIndex === content.length ||
+			content[endIndex] === '\n' ||
+			content[endIndex] === '\r';
+
+		if (!atLineStart || !atLineEnd) {
+			continue;
+		}
+
+		found++;
+		if (found < occurrence) {
+			continue;
+		}
+
+		let startLine = 1;
+		for (let i = 0; i < index; i++) {
+			if (content.charCodeAt(i) === 10) {
+				startLine++;
+			}
+		}
+
+		return {startLine, endLine: startLine + searchLineCount - 1};
+	}
+
+	return null;
+}
 
 /**
  * Read the original content of a file, returning null if the file
@@ -13,7 +72,10 @@ export function readOriginalFile(filePath: string): string | null {
 		if (!filePath || !fs.existsSync(filePath)) return null;
 		return fs.readFileSync(filePath, 'utf-8');
 	} catch (error) {
-		log.debug('Failed to read original file for diff preview', {filePath, error});
+		log.debug('Failed to read original file for diff preview', {
+			filePath,
+			error,
+		});
 		return null;
 	}
 }
@@ -105,45 +167,78 @@ export function computeReplaceEditPreview(
 		return originalContent;
 	}
 
-	const matches: Array<{
-		startLine: number;
-		endLine: number;
-		similarity: number;
-	}> = [];
-	const threshold = 0.85;
-	const usePreFilter = searchLines.length >= 5;
+	// Fast path: an exact match (the common case) does not require the O(n*m)
+	// sliding-window similarity scan, which would block the UI on large files.
+	const exactMatch =
+		occurrence > 0
+			? findExactMatchLineRange(normalizedContent, normalizedSearch, occurrence)
+			: null;
 
-	for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
-		if (usePreFilter) {
-			const firstLineSimilarity = calculateSimilarity(
-				searchLines[0]?.replace(/\s+/g, ' ').trim() || '',
-				contentLines[i]?.replace(/\s+/g, ' ').trim() || '',
-				0.2,
+	let selectedMatch: {startLine: number; endLine: number} | undefined =
+		exactMatch ?? undefined;
+
+	if (!selectedMatch) {
+		const matches: Array<{
+			startLine: number;
+			endLine: number;
+			similarity: number;
+		}> = [];
+		const threshold = 0.85;
+
+		// The cheap length-ratio rejection that `calculateSimilarity` performs
+		// internally is hoisted out of the loop and answered in O(1) per window
+		// using prefix sums. That leaves the expensive O(m*n) Levenshtein work
+		// for the handful of windows that could actually pass the threshold, so
+		// huge files no longer block the UI while still producing exact results.
+		const normalizedSearchText = normalizeWhitespace(normalizedSearch);
+		const searchLength = normalizedSearchText.length;
+		const lineLengths: number[] = new Array(contentLines.length);
+		for (let i = 0; i < contentLines.length; i++) {
+			lineLengths[i] = normalizeWhitespace(contentLines[i] ?? '').length;
+		}
+
+		const prefixLengths: number[] = new Array(contentLines.length + 1);
+		prefixLengths[0] = 0;
+		for (let i = 0; i < contentLines.length; i++) {
+			prefixLengths[i + 1] = prefixLengths[i]! + lineLengths[i]!;
+		}
+
+		const windowSeparators = Math.max(0, searchLines.length - 1);
+
+		for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+			const windowLength =
+				prefixLengths[i + searchLines.length]! -
+				prefixLengths[i]! +
+				windowSeparators;
+			const longest = Math.max(windowLength, searchLength);
+			const shortest = Math.min(windowLength, searchLength);
+			if (longest === 0 || shortest / longest < threshold) {
+				continue;
+			}
+
+			const similarity = calculateSimilarity(
+				normalizedSearch,
+				contentLines.slice(i, i + searchLines.length).join('\n'),
+				threshold,
 			);
-			if (firstLineSimilarity < 0.2) continue;
+			if (similarity >= threshold) {
+				matches.push({
+					startLine: i + 1,
+					endLine: i + searchLines.length,
+					similarity,
+				});
+			}
 		}
 
-		const similarity = calculateSimilarity(
-			normalizedSearch,
-			contentLines.slice(i, i + searchLines.length).join('\n'),
-			threshold,
-		);
-		if (similarity >= threshold) {
-			matches.push({
-				startLine: i + 1,
-				endLine: i + searchLines.length,
-				similarity,
-			});
-		}
+		matches.sort((a, b) => b.similarity - a.similarity);
+		selectedMatch =
+			occurrence === -1 && matches.length === 1
+				? matches[0]
+				: occurrence > 0
+				? matches[occurrence - 1]
+				: undefined;
 	}
 
-	matches.sort((a, b) => b.similarity - a.similarity);
-	const selectedMatch =
-		occurrence === -1 && matches.length === 1
-			? matches[0]
-			: occurrence > 0
-			? matches[occurrence - 1]
-			: undefined;
 	if (!selectedMatch) return originalContent;
 
 	const replaceLines = replaceContent
@@ -322,7 +417,10 @@ export function collectDiffPreviewEntries(
 				parsed.filePath = JSON.parse(parsed.filePath);
 			} catch (error) {
 				// Not valid JSON — leave as-is (single file path string)
-				log.debug('Failed to parse filePath JSON in computePendingDiffPreviewEntries', {error});
+				log.debug(
+					'Failed to parse filePath JSON in computePendingDiffPreviewEntries',
+					{error},
+				);
 			}
 		}
 
@@ -480,7 +578,10 @@ export function collectDiffPreviewEntries(
 		}
 	} catch (error) {
 		// Ignore parse errors
-		log.debug('Failed to parse copy segments in computeCopySegmentPreviewEntries', {error});
+		log.debug(
+			'Failed to parse copy segments in computeCopySegmentPreviewEntries',
+			{error},
+		);
 	}
 	// Drop entries that represent no actual change so the pending UI never
 	// renders an empty diff. Edit calls with identical search/replace are
@@ -524,7 +625,9 @@ export function enrichPendingEditArgs(
 			toolArgs = {...toolArgs, filePath: JSON.parse(rawFilePath)};
 		} catch (error) {
 			// Not valid JSON — leave as-is (single file path string)
-			log.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {error});
+			log.debug('Failed to parse filePath JSON in enrichPendingEditArgs', {
+				error,
+			});
 		}
 	}
 

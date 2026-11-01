@@ -16,8 +16,10 @@ import {
 	extractHookProvidedConfirmation,
 } from '../../../utils/execution/hookResultInterpreter.js';
 import type {HookErrorDetails} from '../../../utils/execution/hookResultInterpreter.js';
-import {collectDiffPreviewEntries} from '../../../utils/ui/diffPreview.js';
-import fs from 'fs';
+import {
+	collectDiffPreviewEntries,
+	readOriginalFile,
+} from '../../../utils/ui/diffPreview.js';
 import {logger} from '../../../utils/core/logger.js';
 
 const log = logger.child('ui:components');
@@ -455,14 +457,10 @@ export default function ToolConfirmation({
 			label: string;
 		};
 
-		const readOriginal = (filePath: string): string | null => {
-			try {
-				if (!filePath || !fs.existsSync(filePath)) return null;
-				return fs.readFileSync(filePath, 'utf-8');
-			} catch {
-				return null;
-			}
-		};
+		// Share the reader used by the terminal preview path so both produce the
+		// same diff for the same file.
+		const readOriginal = (filePath: string): string | null =>
+			readOriginalFile(filePath);
 
 		const collectHashlineEntries = (
 			filePath: string,

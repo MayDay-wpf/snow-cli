@@ -48,10 +48,23 @@ function expandTabsForDisplay(line: string, tabWidth = 2): string {
 	return out;
 }
 
+const HASHLINE_PREFIX_PROBE = /^\s*\d+:[0-9a-fA-F]{2}→/m;
+const LINE_NUMBER_PREFIX_PROBE = /^\s*\d+→/m;
+
 function stripLineNumbers(content: string): string {
 	if (typeof content !== 'string') {
 		return '';
 	}
+
+	// Fast path: ordinary file content never carries hashline anchors, so the
+	// per-line regex scan below (expensive on huge files) is skipped entirely.
+	if (
+		!HASHLINE_PREFIX_PROBE.test(content) &&
+		!LINE_NUMBER_PREFIX_PROBE.test(content)
+	) {
+		return content;
+	}
+
 	const hashlineRe = /^\s*\d+:[0-9a-fA-F]{2}→(.*)$/;
 	const lineNumArrowRe = /^\s*\d+→(.*)$/;
 	return content
@@ -76,6 +89,24 @@ function stripLineNumbers(content: string): string {
 }
 
 const MIN_SIDE_BY_SIDE_WIDTH = 120;
+
+/**
+ * Performance constants. Nothing here hides diff content — they only choose
+ * between equivalent algorithms so large files do not block the render loop:
+ *
+ * - DIFF_CONTEXT_LINES_TO_KEEP: unchanged lines kept around the changed region
+ *   before handing content to jsdiff. Hunks only ever display 3 context lines,
+ *   so this produces exactly the same output while avoiding materialising a
+ *   Change object for every line of a huge file.
+ * - SIMPLE_DIFF_TOTAL_LINE_LIMIT / SIMPLE_DIFF_MIN_OVERLAP: when a changed
+ *   region is enormous *and* almost completely rewritten, Myers diff becomes
+ *   O(N*D) and stalls the UI. Such a region is diffed as "all removed lines
+ *   followed by all added lines" — every line is still displayed, only the
+ *   alignment of a full rewrite is skipped.
+ */
+const DIFF_CONTEXT_LINES_TO_KEEP = 6;
+const SIMPLE_DIFF_TOTAL_LINE_LIMIT = 6000;
+const SIMPLE_DIFF_MIN_OVERLAP = 0.5;
 
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
 	js: 'javascript',
@@ -138,7 +169,8 @@ function hexToTrueColorFg(hex: string): (text: string) => string {
 	if (!rgb) {
 		return text => chalk.white(text);
 	}
-	return (text: string) => `\u001b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[39m`;
+	return (text: string) =>
+		`\u001b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[39m`;
 }
 
 function hexToTrueColorBg(hex: string): (text: string) => string {
@@ -146,14 +178,22 @@ function hexToTrueColorBg(hex: string): (text: string) => string {
 	if (!rgb) {
 		return text => text;
 	}
-	return (text: string) => `\u001b[48;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[49m`;
+	return (text: string) =>
+		`\u001b[48;2;${rgb.r};${rgb.g};${rgb.b}m${text}\u001b[49m`;
 }
 
 function sRgbToRelativeLuminance(hex: string): number {
 	const rgb = hexToRgb(hex);
 	if (!rgb) return 0;
-	const toLinear = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : Math.pow((c / 255 + 0.055) / 1.055, 2.4));
-	return 0.2126729 * toLinear(rgb.r) + 0.7151522 * toLinear(rgb.g) + 0.072175 * toLinear(rgb.b);
+	const toLinear = (c: number) =>
+		c / 255 <= 0.04045
+			? c / 255 / 12.92
+			: Math.pow((c / 255 + 0.055) / 1.055, 2.4);
+	return (
+		0.2126729 * toLinear(rgb.r) +
+		0.7151522 * toLinear(rgb.g) +
+		0.072175 * toLinear(rgb.b)
+	);
 }
 
 function boostContrastToTarget(hexColor: string, isLightBg: boolean): string {
@@ -201,16 +241,30 @@ function highlightCodeContent(
 		// [Perceptual Syntax Polarizer]
 		// 严禁依赖终端默认颜色（防止 cli-highlight 回退到 \x1b[34m 深蓝）
 		// 根据当前主题背景的明度自动选择极性，100% 保护现有浅色主题 (Light, Tiffany, Macaron)
-		const isLightTheme = themeColors ? sRgbToRelativeLuminance(themeColors.background) > 0.45 : false;
+		const isLightTheme = themeColors
+			? sRgbToRelativeLuminance(themeColors.background) > 0.45
+			: false;
 
-		const rawKeyword = isLightTheme ? '#0969da' : (themeColors?.cyan ?? '#38bdf8');
-		const rawType = isLightTheme ? '#953800' : (themeColors?.diffModified ?? '#f59e0b');
-		const rawLiteral = isLightTheme ? '#0550ae' : (themeColors?.diffModified ?? '#fbbf24');
-		const rawNumber = isLightTheme ? '#116329' : (themeColors?.diffAddedForeground ?? '#4ade80');
-		const rawString = isLightTheme ? '#0a3069' : (themeColors?.diffAddedForeground ?? '#34d399');
-		const rawComment = isLightTheme ? '#6e7781' : (themeColors?.lineNumber ?? '#94a3b8');
-		const rawTitle = isLightTheme ? '#24292f' : (themeColors?.text ?? '#f8fafc');
-		const rawParams = isLightTheme ? '#57606a' : (themeColors?.text ?? '#e2e8f0');
+		const rawKeyword = isLightTheme
+			? '#0969da'
+			: themeColors?.cyan ?? '#38bdf8';
+		const rawType = isLightTheme
+			? '#953800'
+			: themeColors?.diffModified ?? '#f59e0b';
+		const rawLiteral = isLightTheme
+			? '#0550ae'
+			: themeColors?.diffModified ?? '#fbbf24';
+		const rawNumber = isLightTheme
+			? '#116329'
+			: themeColors?.diffAddedForeground ?? '#4ade80';
+		const rawString = isLightTheme
+			? '#0a3069'
+			: themeColors?.diffAddedForeground ?? '#34d399';
+		const rawComment = isLightTheme
+			? '#6e7781'
+			: themeColors?.lineNumber ?? '#94a3b8';
+		const rawTitle = isLightTheme ? '#24292f' : themeColors?.text ?? '#f8fafc';
+		const rawParams = isLightTheme ? '#57606a' : themeColors?.text ?? '#e2e8f0';
 
 		const keywordHex = boostContrastToTarget(rawKeyword, isLightTheme);
 		const typeHex = boostContrastToTarget(rawType, isLightTheme);
@@ -352,6 +406,124 @@ function applyThemeForeground(text: string, color: string): string {
 	return INK_FOREGROUND_STYLES[color.trim().toLowerCase()]?.(text) ?? text;
 }
 
+interface BoundedDiff {
+	oldText: string;
+	newText: string;
+	lineOffset: number;
+	/**
+	 * True when the changed region is huge and almost fully rewritten. The
+	 * caller then renders it as "all removed lines, then all added lines"
+	 * instead of running the O(N*D) Myers diff. No line is dropped.
+	 */
+	simpleReplacement: boolean;
+}
+
+function countCommonPrefix(oldLines: string[], newLines: string[]): number {
+	const maxPrefix = Math.min(oldLines.length, newLines.length);
+	let prefix = 0;
+	while (prefix < maxPrefix && oldLines[prefix] === newLines[prefix]) {
+		prefix++;
+	}
+
+	return prefix;
+}
+
+function countCommonSuffix(
+	oldLines: string[],
+	newLines: string[],
+	prefix: number,
+): number {
+	const maxSuffix = Math.min(
+		oldLines.length - prefix,
+		newLines.length - prefix,
+	);
+	let suffix = 0;
+	while (
+		suffix < maxSuffix &&
+		oldLines[oldLines.length - 1 - suffix] ===
+			newLines[newLines.length - 1 - suffix]
+	) {
+		suffix++;
+	}
+
+	return suffix;
+}
+
+/**
+ * Shrink the two sides of a diff down to the changed region plus a little
+ * context. This does not change what is displayed: hunks only ever render
+ * changed lines with 3 context lines, so trimming the identical head/tail
+ * produces the exact same output while keeping the work proportional to the
+ * size of the change instead of the size of the file.
+ */
+function boundDiffContent(oldText: string, newText: string): BoundedDiff {
+	const oldLines = oldText.split('\n');
+	const newLines = newText.split('\n');
+
+	const prefix = countCommonPrefix(oldLines, newLines);
+	const suffix = countCommonSuffix(oldLines, newLines, prefix);
+
+	const prefixKeep = Math.min(prefix, DIFF_CONTEXT_LINES_TO_KEEP);
+	const suffixKeep = Math.min(suffix, DIFF_CONTEXT_LINES_TO_KEEP);
+	const sliceStart = prefix - prefixKeep;
+	const oldSliceEnd = oldLines.length - suffix + suffixKeep;
+	const newSliceEnd = newLines.length - suffix + suffixKeep;
+
+	const oldMiddle = oldLines.slice(sliceStart, oldSliceEnd);
+	const newMiddle = newLines.slice(sliceStart, newSliceEnd);
+
+	let simpleReplacement = false;
+	const totalMiddleLines = oldMiddle.length + newMiddle.length;
+	if (totalMiddleLines > SIMPLE_DIFF_TOTAL_LINE_LIMIT) {
+		const smallerSide = Math.min(oldMiddle.length, newMiddle.length);
+		if (smallerSide > 0) {
+			const newLineSet = new Set(newMiddle);
+			let sharedLines = 0;
+			for (const line of oldMiddle) {
+				if (newLineSet.has(line)) {
+					sharedLines++;
+				}
+			}
+
+			simpleReplacement = sharedLines / smallerSide < SIMPLE_DIFF_MIN_OVERLAP;
+		}
+	}
+
+	return {
+		oldText: oldMiddle.join('\n'),
+		newText: newMiddle.join('\n'),
+		lineOffset: prefix - prefixKeep,
+		simpleReplacement,
+	};
+}
+
+interface DiffPart {
+	value: string;
+	added?: boolean;
+	removed?: boolean;
+}
+
+/**
+ * Complete "removed block, then added block" view for a changed region that is
+ * too large and too different for Myers diff. Every line is still rendered;
+ * only the alignment inside the rewritten block is skipped.
+ */
+function buildSimpleReplacementHunks(
+	bounded: BoundedDiff,
+	startLineNumber: number,
+): DiffHunk[] {
+	const parts: DiffPart[] = [];
+	if (bounded.oldText.length > 0) {
+		parts.push({value: `${bounded.oldText}\n`, removed: true});
+	}
+
+	if (bounded.newText.length > 0) {
+		parts.push({value: `${bounded.newText}\n`, added: true});
+	}
+
+	return buildHunks(parts, startLineNumber + bounded.lineOffset);
+}
+
 /**
  * Compute diff hunks from old and new content.
  * Pure function — no React dependencies.
@@ -361,8 +533,16 @@ function computeHunks(
 	diffNewContent: string,
 	startLineNumber: number,
 ): DiffHunk[] {
-	const diffResult = Diff.diffLines(diffOldContent, diffNewContent);
+	return buildHunks(
+		Diff.diffLines(diffOldContent, diffNewContent),
+		startLineNumber,
+	);
+}
 
+function buildHunks(
+	diffResult: DiffPart[],
+	startLineNumber: number,
+): DiffHunk[] {
 	interface Change {
 		type: 'added' | 'removed' | 'unchanged';
 		content: string;
@@ -500,12 +680,21 @@ export default function DiffViewer({
 
 	const useSideBySide = columns >= MIN_SIDE_BY_SIDE_WIDTH;
 
-	const diffOldContent = stripLineNumbers(
-		completeOldContent && completeNewContent ? completeOldContent : oldContent,
-	);
-	const diffNewContent = stripLineNumbers(
-		completeOldContent && completeNewContent ? completeNewContent : newContent,
-	);
+	// Strip hashline anchors once per content change: doing it on every render
+	// is expensive for large files (it splits and regex-scans the whole text).
+	const {diffOldContent, diffNewContent} = useMemo(() => {
+		const useCompleteContent = Boolean(
+			completeOldContent && completeNewContent,
+		);
+		return {
+			diffOldContent: stripLineNumbers(
+				useCompleteContent ? completeOldContent! : oldContent,
+			),
+			diffNewContent: stripLineNumbers(
+				useCompleteContent ? completeNewContent! : newContent,
+			),
+		};
+	}, [oldContent, newContent, completeOldContent, completeNewContent]);
 
 	const renderedOutput = useMemo(() => {
 		// A no-change edit (identical old/new content) must not render as an
@@ -601,7 +790,16 @@ export default function DiffViewer({
 		}
 
 		// --- Modified file ---
-		const hunks = computeHunks(diffOldContent, diffNewContent, startLineNumber);
+		// Diff only the region between the common prefix and suffix. This keeps
+		// edits inside huge files fast while still producing accurate hunks.
+		const bounded = boundDiffContent(diffOldContent, diffNewContent);
+		const hunks = bounded.simpleReplacement
+			? buildSimpleReplacementHunks(bounded, startLineNumber)
+			: computeHunks(
+					bounded.oldText,
+					bounded.newText,
+					startLineNumber + bounded.lineOffset,
+			  );
 		const addedCount = hunks.reduce(
 			(count, hunk) =>
 				count + hunk.changes.filter(change => change.type === 'added').length,
@@ -711,68 +909,144 @@ function fitAnsiToWidth(str: string, width: number): string {
 	return str + ' '.repeat(width - measuredWidth);
 }
 
-function stripAnsiEscapes(str: string): string {
-	return str.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '');
+/**
+ * Return the end index (exclusive) of the ANSI escape sequence starting at
+ * `index`. Escape sequences occupy zero terminal columns and are copied into
+ * the current row verbatim.
+ */
+function readAnsiSequenceEnd(str: string, index: number): number {
+	if (str.charCodeAt(index) !== 0x1b) {
+		return index + 1;
+	}
+
+	let cursor = index + 1;
+	if (cursor >= str.length) {
+		return cursor;
+	}
+
+	const introducer = str.charCodeAt(cursor);
+
+	// CSI: ESC [ ... final-byte
+	if (introducer === 0x5b) {
+		cursor++;
+		while (cursor < str.length) {
+			const code = str.charCodeAt(cursor);
+			cursor++;
+			if (code >= 0x40 && code <= 0x7e) {
+				break;
+			}
+		}
+
+		return cursor;
+	}
+
+	// OSC: ESC ] ... BEL or ESC \
+	if (introducer === 0x5d) {
+		cursor++;
+		while (cursor < str.length) {
+			const code = str.charCodeAt(cursor);
+			if (code === 0x07) {
+				cursor++;
+				break;
+			}
+
+			if (code === 0x1b && str.charCodeAt(cursor + 1) === 0x5c) {
+				cursor += 2;
+				break;
+			}
+
+			cursor++;
+		}
+
+		return cursor;
+	}
+
+	// Two-byte escape sequence.
+	return Math.min(str.length, cursor + 1);
 }
 
-function getWordWrapWidth(piece: string): number | null {
-	const visiblePiece = stripAnsiEscapes(piece);
-	let lastBreakIndex = -1;
+function chunkVisibleWidth(chunk: string): number {
+	if (chunk.length === 1) {
+		const code = chunk.charCodeAt(0);
+		if (code >= 0x20 && code < 0x7f) {
+			return 1;
+		}
 
-	for (let index = 1; index < visiblePiece.length; index++) {
-		if (
-			/\s/.test(visiblePiece[index] ?? '') &&
-			!/^\s+$/.test(visiblePiece.slice(0, index))
-		) {
-			lastBreakIndex = index;
+		if (code < 0x20) {
+			return 0;
 		}
 	}
 
-	if (lastBreakIndex <= 0) {
-		return null;
-	}
-
-	const breakWidth = stringWidth(visiblePiece.slice(0, lastBreakIndex));
-	return breakWidth > 0 ? breakWidth : null;
+	return stringWidth(chunk);
 }
 
-function getLeadingWhitespaceWidth(str: string): number {
-	const visibleStr = stripAnsiEscapes(str);
-	const leadingWhitespace = visibleStr.match(/^\s+/)?.[0] ?? '';
-	return stringWidth(leadingWhitespace);
-}
-
+/**
+ * Wrap an ANSI-coloured line into rows of exactly `width` visible columns.
+ *
+ * Implemented as a single forward pass: every escape sequence is copied
+ * verbatim (zero width), every visible code point is measured once and the row
+ * is broken at the last whitespace when possible. The previous implementation
+ * re-sliced the remaining string for every row, which is O(n^2) per line and
+ * made very long lines (minified bundles, one-line JSON) freeze the UI.
+ */
 function wrapAnsiToWidth(str: string, width: number): string[] {
 	if (width <= 0) {
 		return [''];
 	}
 
-	const totalWidth = stringWidth(str);
-	if (totalWidth === 0) {
-		return [' '.repeat(width)];
+	const rows: string[] = [];
+	let row = '';
+	let rowWidth = 0;
+	let lastSpaceIndex = -1;
+
+	const flushRow = () => {
+		rows.push(fitAnsiToWidth(row, width));
+		row = '';
+		rowWidth = 0;
+		lastSpaceIndex = -1;
+	};
+
+	let index = 0;
+	while (index < str.length) {
+		const code = str.charCodeAt(index);
+
+		if (code === 0x1b) {
+			const end = readAnsiSequenceEnd(str, index);
+			row += str.slice(index, end);
+			index = end;
+			continue;
+		}
+
+		// Keep surrogate pairs together so emoji are measured correctly.
+		const chunkSize =
+			code >= 0xd800 && code <= 0xdbff && index + 1 < str.length ? 2 : 1;
+		const chunk = str.slice(index, index + chunkSize);
+		index += chunkSize;
+		const chunkWidth = chunkVisibleWidth(chunk);
+
+		while (rowWidth + chunkWidth > width && rowWidth > 0) {
+			if (lastSpaceIndex > 0) {
+				const head = row.slice(0, lastSpaceIndex);
+				const tail = row.slice(lastSpaceIndex).replace(/^\s+/, '');
+				rows.push(fitAnsiToWidth(head, width));
+				row = tail;
+				rowWidth = stringWidth(tail);
+				const nextSpaceIndex = tail.lastIndexOf(' ');
+				lastSpaceIndex = nextSpaceIndex >= 0 ? nextSpaceIndex + 1 : -1;
+			} else {
+				flushRow();
+			}
+		}
+
+		row += chunk;
+		rowWidth += chunkWidth;
+		if (code === 0x20) {
+			lastSpaceIndex = row.length;
+		}
 	}
 
-	const rows: string[] = [];
-	let offset = 0;
-	while (offset < totalWidth) {
-		const remainingWidth = totalWidth - offset;
-		const hardSliceWidth = Math.min(width, remainingWidth);
-		const hardPiece = sliceAnsi(str, offset, offset + hardSliceWidth);
-		const wrapWidth =
-			remainingWidth > width ? getWordWrapWidth(hardPiece) : null;
-		const sliceWidth = wrapWidth ?? hardSliceWidth;
-		const piece = sliceAnsi(str, offset, offset + sliceWidth);
-		const pieceWidth = stringWidth(piece);
-
-		rows.push(fitAnsiToWidth(piece, width));
-		if (pieceWidth <= 0) {
-			break;
-		}
-
-		offset += pieceWidth;
-		if (wrapWidth !== null) {
-			offset += getLeadingWhitespaceWidth(sliceAnsi(str, offset, totalWidth));
-		}
+	if (row.length > 0) {
+		rows.push(fitAnsiToWidth(row, width));
 	}
 
 	return rows.length > 0 ? rows : [' '.repeat(width)];
@@ -957,28 +1231,6 @@ function formatSideBySide(
 		return str + ' '.repeat(width - w);
 	};
 
-	/**
-	 * Wrap an ANSI string into multiple rows, each padded to exactly `width`
-	 * visible columns. Preserves ANSI escape sequences across slices.
-	 */
-	const wrapToWidth = (str: string, width: number): string[] => {
-		if (width <= 0) return [''];
-		const total = stringWidth(str);
-		if (total === 0) return [' '.repeat(width)];
-		const rows: string[] = [];
-		let offset = 0;
-		while (offset < total) {
-			const piece = sliceAnsi(str, offset, offset + width);
-			const pieceWidth = stringWidth(piece);
-			rows.push(
-				pieceWidth >= width ? piece : piece + ' '.repeat(width - pieceWidth),
-			);
-			if (pieceWidth <= 0) break;
-			offset += pieceWidth;
-		}
-		return rows.length > 0 ? rows : [' '.repeat(width)];
-	};
-
 	const leftHeader = fitToWidth(style.removedSignStyle('OLD'), panelWidth);
 	const rightHeader = fitToWidth(style.addedSignStyle('NEW'), panelWidth);
 	const rule = `${style.sideRule} ${chalk.dim(
@@ -1008,11 +1260,11 @@ function formatSideBySide(
 		const leftRows =
 			pair.left.type === 'empty'
 				? ['']
-				: wrapToWidth(leftContent, contentWidth);
+				: wrapAnsiToWidth(leftContent, contentWidth);
 		const rightRows =
 			pair.right.type === 'empty'
 				? ['']
-				: wrapToWidth(rightContent, contentWidth);
+				: wrapAnsiToWidth(rightContent, contentWidth);
 		const rowCount = Math.max(leftRows.length, rightRows.length);
 
 		for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
@@ -1064,7 +1316,6 @@ function formatSideBySide(
 					panelWidth,
 				);
 			}
-
 			lines.push(`${style.sideRule} ${leftStr}${separator}${rightStr}`);
 		}
 	}
