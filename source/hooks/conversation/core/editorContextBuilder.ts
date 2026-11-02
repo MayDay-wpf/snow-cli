@@ -63,14 +63,8 @@ export function buildEditorContextContent(
 		editorLines.push(`└─ Active File: ${editorContext.activeFile}`);
 	}
 
-	if (editorContext.cursorPosition) {
-		editorLines.push(
-			`└─ Cursor: Line ${editorContext.cursorPosition.line + 1}, Column ${
-				editorContext.cursorPosition.character + 1
-			}`,
-		);
-	}
-
+	// Cursor position is intentionally omitted from user messages: it is not a
+	// reliable instruction target and makes the AI misjudge the user's focus.
 	if (editorContext.selectedText) {
 		editorLines.push(
 			`└─ Selected Code:\n\`\`\`\n${editorContext.selectedText}\n\`\`\``,
