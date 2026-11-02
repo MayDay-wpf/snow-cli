@@ -140,10 +140,7 @@ export function getCommandArgsOptions(
 		return getBuddyProfileArgOptions();
 	}
 
-	if (
-		commandName === 'config' &&
-		/^\/config\s+set\s*$/.test(inputText ?? '')
-	) {
+	if (commandName === 'config' && /^\/config\s+set\s*$/.test(inputText ?? '')) {
 		return [
 			'terminalShell=auto',
 			'terminalShell=pwsh',
@@ -472,7 +469,7 @@ export function useCommandPanel(
 				name: 'ultra-todo',
 				description:
 					t.commandPanel.commands.ultraTodo ||
-					'Toggle Ultra TODO mode with phase-gated task management',
+					'Toggle Ultra TODO mode (enabled by default) with phase-gated task management',
 			},
 			{
 				name: 'pixel',
@@ -533,7 +530,7 @@ export function useCommandPanel(
 				name: 'speedometer',
 				description:
 					t.commandPanel.commands.speedometer ||
-					'Toggle real-time speedometer to monitor token/s output rate',
+					'Toggle real-time speedometer (enabled by default) to monitor token/s output rate',
 			},
 			{
 				name: 'cut',

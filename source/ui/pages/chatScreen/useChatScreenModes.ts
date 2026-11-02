@@ -107,10 +107,12 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		persistUltraTodoEnabled(ultraTodoEnabled);
 	}, [ultraTodoEnabled]);
 
-	// 启动时从持久化设置恢复测速仪状态
+	// 启动时从持久化设置恢复测速仪状态（默认启用）
 	useEffect(() => {
 		if (getSpeedometerEnabled()) {
 			tpsTracker.start();
+		} else {
+			tpsTracker.stop();
 		}
 	}, []);
 

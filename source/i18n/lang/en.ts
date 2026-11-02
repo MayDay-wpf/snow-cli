@@ -1043,7 +1043,7 @@ export const en: TranslationKeys = {
 				'Toggle Image Compress mode (history -> PNG image for /compact and auto-compress)',
 			team: 'Toggle Agent Team mode - orchestrate multiple agents working together in independent Git worktrees',
 			ultraTodo:
-				'Toggle Ultra TODO mode - phase-gated task management with required completion checks',
+				'Toggle Ultra TODO mode (enabled by default) - phase-gated task management with required completion checks',
 			telemetry: 'Configure OpenTelemetry telemetry exporters and endpoint',
 			branch: 'Fork current conversation into a new branch',
 			worktree:
@@ -1067,7 +1067,7 @@ export const en: TranslationKeys = {
 			thinkDisplay:
 				'Control thinking content display mode. Usage: /think-display [full|compact|status]',
 			speedometer:
-				'Toggle real-time speedometer to monitor token/s output rate. Usage: /speedometer [on|off|status]',
+				'Toggle real-time speedometer (enabled by default) to monitor token/s output rate. Usage: /speedometer [on|off|status]',
 			cut: 'Interrupt AI response and immediately send a message. Usage: /cut <message>',
 			pause: 'Pause the AI loop at the next round',
 			continue: 'Resume the AI loop after /pause',

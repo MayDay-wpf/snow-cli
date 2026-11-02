@@ -976,7 +976,8 @@ export const zh: TranslationKeys = {
 			imageCompress:
 				'切换图片压缩模式（历史记录生成 PNG 图片，用于 /compact 和自动压缩）',
 			team: '切换 Agent Team 模式 - 协调多个代理在独立 Git Worktree 中并行工作',
-			ultraTodo: '切换 Ultra TODO 模式 - 按阶段细分任务并在阶段推进前强制校验',
+			ultraTodo:
+				'切换 Ultra TODO 模式（默认启用）- 按阶段细分任务并在阶段推进前强制校验',
 			telemetry: '配置 OpenTelemetry 遥测导出器和端点',
 			branch: '将当前对话分叉为新分支，可用 /resume 返回原会话',
 			worktree: '打开 Git 分支管理面板，支持切换、新建和删除分支',
@@ -999,7 +1000,7 @@ export const zh: TranslationKeys = {
 			thinkDisplay:
 				'控制思考内容显示模式。用法: /think-display [full|compact|status]',
 			speedometer:
-				'切换实时测速仪，监控 token/s 输出速率。用法: /speedometer [on|off|status]',
+				'切换实时测速仪（默认启用），监控 token/s 输出速率。用法: /speedometer [on|off|status]',
 			cut: '打断 AI 回复并立即发送消息。用法: /cut <消息内容>',
 			pause: '在下一轮暂停 AI Loop',
 			continue: '在 /pause 后继续 AI Loop',

@@ -10,6 +10,7 @@
  * - 通过 subscribe / getSnapshot 模式与 React 的 useSyncExternalStore 兼容
  *
  * 生命周期：
+ * - 默认启用，UI 启动时根据持久化设置调用 start()
  * - /speedometer 命令开启时调用 start()
  * - /speedometer 命令关闭时调用 stop()
  * - start() 会自动清理之前的计时器，stop() 会清空数据

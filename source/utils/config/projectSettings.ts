@@ -189,7 +189,7 @@ export function setTeamMode(enabled: boolean): void {
 
 export function getUltraTodoEnabled(): boolean {
 	const settings = loadSettings();
-	return settings.ultraTodoEnabled ?? false;
+	return settings.ultraTodoEnabled ?? true;
 }
 
 export function setUltraTodoEnabled(enabled: boolean): void {
@@ -206,9 +206,13 @@ export function getDisableBashAiSummary(): boolean {
 	return settings.disableBashAiSummary === true;
 }
 
+/**
+ * Whether the real-time speedometer is enabled.
+ * Enabled by default; an explicit `false` (via /speedometer off) disables it.
+ */
 export function getSpeedometerEnabled(): boolean {
 	const settings = loadSettings();
-	return settings.speedometerEnabled === true;
+	return settings.speedometerEnabled ?? true;
 }
 
 export function setSpeedometerEnabled(enabled: boolean): void {
