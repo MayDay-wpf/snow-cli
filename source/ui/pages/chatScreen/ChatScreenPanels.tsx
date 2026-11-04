@@ -22,6 +22,7 @@ import type {
 } from '../../../hooks/ui/usePanelState.js';
 import PixelEditorScreen from '../PixelEditorScreen.js';
 import GamesScreen from '../GamesScreen.js';
+import ConnectScreen from '../ConnectScreen.js';
 import AnyPanelScreen from '../AnyPanelScreen.js';
 const PermissionsPanel = lazy(
 	() => import('../../components/panels/PermissionsPanel.js'),
@@ -135,10 +136,8 @@ export default function ChatScreenPanels({
 				showWorkingDirPanel={panelState.showWorkingDirPanel}
 				showCleanupPanel={panelState.showCleanupPanel}
 				showBranchPanel={panelState.showBranchPanel}
-				showConnectionPanel={panelState.showConnectionPanel}
 				showTelemetryPanel={panelState.showTelemetryPanel}
 				showTodoListPanel={panelState.showTodoListPanel}
-				connectionPanelApiUrl={panelState.connectionPanelApiUrl}
 				setShowSessionPanel={panelState.setShowSessionPanel}
 				setShowGoalSessionPanel={panelState.setShowGoalSessionPanel}
 				setShowMcpPanel={panelState.setShowMcpPanel}
@@ -154,7 +153,6 @@ export default function ChatScreenPanels({
 				setShowWorkingDirPanel={panelState.setShowWorkingDirPanel}
 				setShowCleanupPanel={panelState.setShowCleanupPanel}
 				setShowBranchPanel={panelState.setShowBranchPanel}
-				setShowConnectionPanel={panelState.setShowConnectionPanel}
 				setShowTelemetryPanel={panelState.setShowTelemetryPanel}
 				setShowTodoListPanel={panelState.setShowTodoListPanel}
 				handleSessionPanelSelect={handleSessionPanelSelect}
@@ -513,6 +511,14 @@ export default function ChatScreenPanels({
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<GamesScreen
 						onBack={() => panelState.setShowGamesPanel(false)}
+						terminalWidth={terminalWidth}
+					/>
+				</Box>
+			)}
+			{panelState.showConnectPanel && (
+				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
+					<ConnectScreen
+						onBack={() => panelState.setShowConnectPanel(false)}
 						terminalWidth={terminalWidth}
 					/>
 				</Box>

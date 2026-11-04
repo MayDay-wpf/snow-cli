@@ -1,4 +1,4 @@
-import {useEffect, useCallback} from 'react';
+import {useCallback} from 'react';
 import {useStdout} from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import type {UseChatLogicProps} from './types.js';
@@ -6,7 +6,6 @@ import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfir
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {hashBasedSnapshotManager} from '../../../utils/codebase/hashBasedSnapshot.js';
 import {convertSessionMessagesToUI} from '../../../utils/session/sessionConverter.js';
-import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {cleanIDEContext} from '../../../utils/core/fileUtils.js';
 import {
 	getNotebookRollbackCount,
@@ -104,21 +103,6 @@ export function useRollback(props: UseChatLogicProps) {
 		onResetTerminalTitle,
 	} = props;
 	const {stdout} = useStdout();
-
-	// Notify VSCode/Web when a rollback confirmation is needed
-	useEffect(() => {
-		const pendingRollback = snapshotState.pendingRollback;
-		if (!pendingRollback) {
-			return;
-		}
-
-		void connectionManager.notifyRollbackConfirmationNeeded({
-			filePaths: pendingRollback.filePaths || [],
-			notebookCount: pendingRollback.notebookCount || 0,
-			teamCount: pendingRollback.teamCount || 0,
-			todoCount: pendingRollback.todoCount || 0,
-		});
-	}, [snapshotState.pendingRollback]);
 
 	const getSnapshotIndex = useCallback(
 		(liveIndex: number) => {
@@ -545,7 +529,10 @@ export function useRollback(props: UseChatLogicProps) {
 			try {
 				detail = await response.json();
 			} catch (parseError) {
-				log.debug('Failed to parse rollback response error detail:', parseError);
+				log.debug(
+					'Failed to parse rollback response error detail:',
+					parseError,
+				);
 			}
 			throw new Error(
 				`Rollback request failed: ${response.status} ${response.statusText}` +

@@ -11,7 +11,6 @@ import {
 import {runningSubAgentTracker} from './runningSubAgentTracker.js';
 import {unifiedHooksExecutor} from './unifiedHooksExecutor.js';
 import {interpretHookResult} from './hookResultInterpreter.js';
-import {connectionManager} from '../connection/ConnectionManager.js';
 import {emitSubAgentMessage} from './subAgentTypes.js';
 import type {SubAgentExecutionContext, ChatMessage} from './subAgentTypes.js';
 import {logger} from '../core/logger.js';
@@ -526,16 +525,6 @@ export async function interceptAskUser(
 				console.warn(
 					'Failed to execute beforeToolCall hook for askuser in sub-agent',
 					hookError,
-				);
-			}
-
-			// Notify server that user interaction is needed.
-			if (connectionManager.isConnected()) {
-				await connectionManager.notifyUserInteractionNeeded(
-					question,
-					options,
-					askUserTool.id,
-					multiSelect,
 				);
 			}
 

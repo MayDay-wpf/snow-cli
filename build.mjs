@@ -55,7 +55,7 @@ const __snow_copy_require_properties = (targetRequire, sourceRequire) => {
   targetRequire.main = sourceRequire.main;
   return targetRequire;
 };
-const __snow_wrap_require = (rawRequire, options = {}) => __snow_copy_require_properties((moduleName) => {
+const __snow_wrap_require = rawRequire => __snow_copy_require_properties((moduleName) => {
   if (moduleName === '@napi-rs/canvas') {
     try {
       return rawRequire(moduleName);
@@ -63,13 +63,9 @@ const __snow_wrap_require = (rawRequire, options = {}) => __snow_copy_require_pr
       return __snow_create_canvas_stub();
     }
   }
-  const moduleValue = rawRequire(moduleName);
-  if (options.normalizeFetchCookie && moduleName === 'fetch-cookie' && typeof moduleValue !== 'function' && typeof moduleValue?.default === 'function') {
-    return moduleValue.default;
-  }
-  return moduleValue;
+  return rawRequire(moduleName);
 }, rawRequire);
-const require = __snow_wrap_require(__snow_raw_require, { normalizeFetchCookie: true });
+const require = __snow_wrap_require(__snow_raw_require);
 const __snow_module_builtin = __snow_raw_require('node:module');
 const __snow_original_create_require = __snow_module_builtin.createRequire;
 if (!__snow_module_builtin.__snow_canvas_require_patched) {
@@ -81,32 +77,7 @@ if (!__snow_module_builtin.__snow_canvas_require_patched) {
 const __filename = _fileURLToPath(import.meta.url);
 const __dirname = _fileURLToPath(new URL('.', import.meta.url));
 
-// Pre-load @microsoft/signalr runtime dependencies into require.cache.
-// SignalR uses dynamic require() which esbuild cannot bundle statically.
-// Avoid eager-loading node-fetch on Node 18+, because that triggers
-// DEP0040 through node-fetch -> whatwg-url -> tr46 -> punycode even though
-// SignalR will use the native fetch implementation when it already exists.
-const __signalr_deps = {
-  'abort-controller': require('abort-controller'),
-  'eventsource': require('eventsource'),
-  'fetch-cookie': require('fetch-cookie'),
-  'tough-cookie': require('tough-cookie'),
-  'ws': require('ws')
-};
 
-if (typeof globalThis.fetch === 'undefined') {
-  __signalr_deps['node-fetch'] = require('node-fetch');
-}
-
-// Polyfill for @microsoft/signalr dynamic require
-// SignalR uses: const requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
-// Keep __non_webpack_require__ aligned with our wrapped require for both branches.
-const __non_webpack_require__ = require;
-if (typeof globalThis.__non_webpack_require__ === 'undefined') {
-  globalThis.__non_webpack_require__ = require;
-}
-
-// Polyfill for undici's web API dependencies
 // undici uses File, Blob, etc. which are only available in Node.js 20+
 // For Node.js 16-18, we provide minimal polyfills
 if (typeof globalThis.File === 'undefined') {
@@ -197,8 +168,6 @@ if (typeof globalThis.Path2D === 'undefined') {
 		// @vscode/ripgrep resolves a platform-specific rg binary using package paths
 		'@vscode/ripgrep',
 		// Note: katex and markdown-it-math are bundled (not external)
-		// Note: @microsoft/signalr dependencies (abort-controller, eventsource, fetch-cookie, node-fetch, tough-cookie) are NOT bundled
-		// They are dynamically required at runtime and must be in package.json dependencies
 	],
 	alias: {
 		'ink': resolve('source/vendor/ink/src/index.ts'),

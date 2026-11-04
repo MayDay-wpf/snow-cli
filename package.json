@@ -55,16 +55,10 @@
 		"scripts"
 	],
 	"dependencies": {
-		"@microsoft/signalr": "^10.0.0",
 		"@modelcontextprotocol/client": "^2.0.0",
 		"@modelcontextprotocol/node": "^2.0.0",
 		"@vscode/ripgrep": "^1.18.0",
-		"abort-controller": "^3.0.0",
-		"eventsource": "^2.0.2",
-		"fetch-cookie": "^3.0.1",
-		"node-fetch": "^2.7.0",
 		"ssh2": "^1.17.0",
-		"tough-cookie": "^6.0.0",
 		"ws": "^8.14.2"
 	},
 	"devDependencies": {

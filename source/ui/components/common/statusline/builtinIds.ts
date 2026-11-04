@@ -21,7 +21,6 @@ export const BUILTIN_STATUSLINE_IDS = {
 	telemetry: 'builtin.telemetry',
 	privacy: 'builtin.privacy',
 	ideConnection: 'builtin.ide-connection',
-	backendConnection: 'builtin.backend-connection',
 	codebaseIndexing: 'builtin.codebase-indexing',
 	watcher: 'builtin.watcher',
 	fileUpdate: 'builtin.file-update',

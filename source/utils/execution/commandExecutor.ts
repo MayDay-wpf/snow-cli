@@ -64,7 +64,6 @@ export interface CommandResult {
 		| 'toggleSpeedometer'
 		| 'showBranchPanel'
 		| 'showDiffReviewPanel'
-		| 'showConnectionPanel'
 		| 'showTelemetryPanel'
 		| 'showIdeSelectPanel'
 		| 'sendAsMessage'
@@ -79,8 +78,8 @@ export interface CommandResult {
 		// /goal resume 无参数 -> 打开 goal 会话列表面板
 		| 'showGoalSessionPanel'
 		| 'showGamesPanel'
+		| 'showConnectPanel'
 		| 'quit'
-		| 'disconnect'
 		| 'pause'
 		| 'resume';
 	prompt?: string;
@@ -88,7 +87,6 @@ export interface CommandResult {
 	location?: 'global' | 'project'; // For custom commands to specify location
 	alreadyConnected?: boolean; // For /ide command to indicate if VSCode is already connected
 	forceReindex?: boolean; // For /reindex -force to delete existing database and rebuild
-	apiUrl?: string; // For /connect command to pass API URL
 	exportFormat?: 'txt' | 'md' | 'html' | 'json'; // For /export command to choose output format
 }
 

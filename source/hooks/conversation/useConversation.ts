@@ -1,7 +1,6 @@
 import type {ChatMessage} from '../../api/chat.js';
 import {getSnowConfig} from '../../utils/config/apiConfig.js';
 import type {Message} from '../../ui/components/chat/MessageList.js';
-import {connectionManager} from '../../utils/connection/ConnectionManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {recordTurnContent, withTurnSpan} from '../../utils/telemetry/otel.js';
 import {getCompanion, isCompanionMuted} from '../../buddy/companion.js';
@@ -298,13 +297,6 @@ async function runConversationWithTools(
 		freeEncoder();
 	} finally {
 		options.setIsStreaming?.(false);
-
-		try {
-			await connectionManager.notifyMessageProcessingCompleted();
-		} catch (error) {
-			// Ignore notification errors
-			log.debug('Failed to notify message processing completed', {error});
-		}
 
 		try {
 			const {clearConversationContext} = await import(

@@ -13,7 +13,6 @@ import type {TodoItem} from '../../../mcp/types/todo.types.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
 import {todoEvents} from '../../../utils/events/todoEvents.js';
 import {getTodoService} from '../../../utils/execution/mcpToolsManager.js';
-import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {CompanionSprite} from '../../../buddy/CompanionSprite.js';
 import type {ActiveBusyKind} from './statusVerbs.js';
 import type {ToolCorrectionStatusEvent} from '../../../utils/execution/toolCorrection.js';
@@ -211,28 +210,11 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 	const [todos, setTodos] = useState<TodoItem[]>([]);
 	const [showTodos, setShowTodos] = useState(false);
 
-	// 实例连接状态
-	const [connectionStatus, setConnectionStatus] = useState<
-		'disconnected' | 'connecting' | 'connected' | 'reconnecting'
-	>('disconnected');
-	const [connectionInstanceName, setConnectionInstanceName] =
-		useState<string>('');
 	const [copyStatusMessage, setCopyStatusMessage] = useState<{
 		text: string;
 		isError?: boolean;
 		timestamp: number;
 	} | null>(null);
-
-	// 订阅连接状态变化
-	useEffect(() => {
-		const unsubscribe = connectionManager.onStatusChange(state => {
-			setConnectionStatus(state.status);
-			if (state.instanceName) {
-				setConnectionInstanceName(state.instanceName);
-			}
-		});
-		return unsubscribe;
-	}, []);
 
 	// 使用事件监听 TODO 更新，替代轮询；同时监听当前会话切换，避免压缩后仍绑定旧会话 ID。
 	useEffect(() => {
@@ -462,8 +444,6 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 							telemetryEnabled={props.telemetryEnabled}
 							vscodeConnectionStatus={props.vscodeConnectionStatus}
 							editorContext={props.editorContext}
-							connectionStatus={connectionStatus}
-							connectionInstanceName={connectionInstanceName}
 							contextUsage={props.contextUsage}
 							codebaseIndexing={props.codebaseIndexing}
 							codebaseProgress={props.codebaseProgress}

@@ -6,12 +6,6 @@ export type VSCodeConnectionStatus =
 	| 'connected'
 	| 'error';
 
-export type BackendConnectionStatus =
-	| 'disconnected'
-	| 'connecting'
-	| 'connected'
-	| 'reconnecting';
-
 export interface StatusLineRenderItem {
 	id?: string;
 	text: string;
@@ -99,10 +93,6 @@ export interface StatusLineSystemState {
 		connectionStatus: VSCodeConnectionStatus;
 		editorContext?: StatusLineEditorContext;
 		selectedTextLength: number;
-	};
-	backend: {
-		connectionStatus: BackendConnectionStatus;
-		instanceName?: string;
 	};
 	contextWindow?: StatusLineContextUsage & StatusLineContextWindowMetrics;
 	codebase: {

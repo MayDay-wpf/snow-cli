@@ -4,7 +4,6 @@
  * 历史上，snow-cli 在 `.snow/` 目录下放了多份 JSON 配置：
  *   - settings.json
  *   - codebase.json
- *   - connection.json
  *   - working-dirs.json
  *   - disabled-builtin-tools.json
  *   - disabled-mcp-tools.json
@@ -95,15 +94,6 @@ export interface UnifiedSettings {
 			contextLength?: number;
 			topN?: number;
 		};
-	};
-
-	// === 来自旧 connection.json (仅项目级有效) ===
-	connection?: {
-		apiUrl: string;
-		username: string;
-		password: string;
-		instanceId: string;
-		instanceName: string;
 	};
 
 	// === 来自旧 working-dirs.json ===
@@ -367,12 +357,13 @@ export function getLoggingConfig(workingDirectory?: string): {
 		!Number.isNaN(envBufferSize) && envBufferSize > 0
 			? envBufferSize
 			: merged.logging?.bufferSize && merged.logging.bufferSize > 0
-				? merged.logging.bufferSize
-				: DEFAULT_LOG_BUFFER_SIZE;
+			? merged.logging.bufferSize
+			: DEFAULT_LOG_BUFFER_SIZE;
 
 	const diskArchive =
 		process.env['SNOW_LOG_DISK_ARCHIVE'] !== undefined
-			? process.env['SNOW_LOG_DISK_ARCHIVE'] !== 'false' && process.env['SNOW_LOG_DISK_ARCHIVE'] !== '0'
+			? process.env['SNOW_LOG_DISK_ARCHIVE'] !== 'false' &&
+			  process.env['SNOW_LOG_DISK_ARCHIVE'] !== '0'
 			: merged.logging?.diskArchive ?? true;
 
 	const maxFileSize =

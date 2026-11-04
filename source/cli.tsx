@@ -163,6 +163,7 @@ const isQuickCommand = args.some(
 		arg === '--sse' ||
 		arg === '--sse-daemon' ||
 		arg === '--loop-daemon-execute' ||
+		arg === '--connect-worker' ||
 		arg === '--snow-agent-child-worker',
 );
 
@@ -301,20 +302,21 @@ Usage
   $ snow --loop-daemon-execute <base64-loop-state>
 
 Options
-		--help        Show help
-		--version     Show version
-		--doctor      Run environment diagnostics
-		--update      Update to latest version
-		--update-check Check whether the environment is suitable for updating
-		-c            Skip welcome screen and resume last conversation (optionally specify sessionId)
-		--ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
-		--task        Create a background AI task (headless mode, saves session)
-		--task-list   Show background AI task list
-		--loop-daemon-execute Start or continue a detached loop daemon from encoded state (internal)
-		--yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
-		--yolo-p      Skip welcome screen and enable YOLO+Plan mode
-		--c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
-		--dev         Enable developer mode with persistent userId for testing
+    --help        Show help
+    --version     Show version
+    --doctor      Run environment diagnostics
+    --update      Update to latest version
+    --update-check Check whether the environment is suitable for updating
+    -c            Skip welcome screen and resume last conversation (optionally specify sessionId)
+    --ask         Quick question mode (headless mode with single prompt, optional sessionId for continuous conversation)
+    --task        Create a background AI task (headless mode, saves session)
+    --task-list   Show background AI task list
+    --loop-daemon-execute Start or continue a detached loop daemon from encoded state (internal)
+    --connect-worker <base64> Internal: run one IM Connect turn and emit JSONL events
+    --yolo        Skip welcome screen and enable YOLO mode (auto-approve tools)
+    --yolo-p      Skip welcome screen and enable YOLO+Plan mode
+    --c-yolo      Skip welcome screen, resume last conversation, and enable YOLO mode
+    --dev         Enable developer mode with persistent userId for testing
 
 		cmd           Run allowlisted session/slash control commands headlessly
 		              Example: snow cmd buddy hatch name --species=fox --json
@@ -365,6 +367,10 @@ Options
 			loopDaemonExecute: {
 				type: 'string',
 				alias: 'loop-daemon-execute',
+			},
+			connectWorker: {
+				type: 'string',
+				alias: 'connect-worker',
 			},
 			yolo: {
 				type: 'boolean',
@@ -675,6 +681,37 @@ if (cli.flags.taskExecute) {
 	process.exit(0);
 }
 
+// Handle one IM Connect turn (internal use by /connect worker)
+if (typeof cli.flags.connectWorker === 'string' && cli.flags.connectWorker) {
+	try {
+		const raw = cli.flags.connectWorker;
+		let payload: any;
+		try {
+			payload = JSON.parse(readFileSync(raw, 'utf8'));
+		} catch {
+			// 兼容早期以 base64 传递 payload 的调用方式。
+			payload = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+		}
+		const {initGlobalProxy} = await import('./utils/core/proxyUtils.js');
+		initGlobalProxy();
+		const {initializeProfiles} = await import(
+			'./utils/config/configManager.js'
+		);
+		initializeProfiles();
+		const {runConnectWorker} = await import('./utils/connect/workerMain.js');
+		const code = await runConnectWorker(payload);
+		// 给 stdout 一点刷新时间，避免管道场景下最后一行 JSON 被截断。
+		await new Promise(resolve => setTimeout(resolve, 50));
+		process.exit(code);
+	} catch (error) {
+		console.error(
+			'[connect-worker] 启动失败:',
+			error instanceof Error ? error.message : error,
+		);
+		process.exit(1);
+	}
+}
+
 // Startup component that shows loading spinner during update check
 const Startup = ({
 	version,
@@ -966,7 +1003,9 @@ runFatalExitCleanup = (err: unknown, code: number) => {
 	if (!cleanupPromise) {
 		cleanupPromise = cleanupAsync().catch(error => {
 			// best-effort
-			log.debug('Cleanup async error during uncaught exception handling', {error});
+			log.debug('Cleanup async error during uncaught exception handling', {
+				error,
+			});
 		});
 	}
 	void cleanupPromise.finally(() => {

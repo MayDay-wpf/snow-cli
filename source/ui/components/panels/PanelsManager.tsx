@@ -15,7 +15,6 @@ import {RoleSubagentListPanel} from './RoleSubagentListPanel.js';
 import WorkingDirectoryPanel from './WorkingDirectoryPanel.js';
 import CleanupPanel from './CleanupPanel.js';
 import {BranchPanel} from './BranchPanel.js';
-import {ConnectionPanel} from './ConnectionPanel.js';
 import TelemetryPanel from './TelemetryPanel.js';
 import TodoListPanel from './TodoListPanel.js';
 import HelpPanel from './HelpPanel.js';
@@ -53,10 +52,8 @@ type PanelsManagerProps = {
 	showWorkingDirPanel: boolean;
 	showCleanupPanel: boolean;
 	showBranchPanel: boolean;
-	showConnectionPanel: boolean;
 	showTelemetryPanel: boolean;
 	showTodoListPanel: boolean;
-	connectionPanelApiUrl?: string;
 	setShowSessionPanel: (show: boolean) => void;
 	setShowGoalSessionPanel: (show: boolean) => void;
 	setShowMcpPanel: (show: boolean) => void;
@@ -72,7 +69,6 @@ type PanelsManagerProps = {
 	setShowWorkingDirPanel: (show: boolean) => void;
 	setShowCleanupPanel: (show: boolean) => void;
 	setShowBranchPanel: (show: boolean) => void;
-	setShowConnectionPanel: (show: boolean) => void;
 	setShowTelemetryPanel: (show: boolean) => void;
 	setShowTodoListPanel: (show: boolean) => void;
 	handleSessionPanelSelect: (sessionId: string) => Promise<void>;
@@ -128,10 +124,8 @@ export default function PanelsManager({
 	showWorkingDirPanel,
 	showCleanupPanel,
 	showBranchPanel,
-	showConnectionPanel,
 	showTelemetryPanel,
 	showTodoListPanel,
-	connectionPanelApiUrl,
 	setShowSessionPanel,
 	setShowGoalSessionPanel,
 	setShowMcpPanel,
@@ -147,7 +141,6 @@ export default function PanelsManager({
 	setShowWorkingDirPanel,
 	setShowCleanupPanel,
 	setShowBranchPanel,
-	setShowConnectionPanel,
 	setShowTelemetryPanel,
 	setShowTodoListPanel,
 	handleSessionPanelSelect,
@@ -361,16 +354,6 @@ export default function PanelsManager({
 			{showBranchPanel && (
 				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
 					<BranchPanel onClose={() => setShowBranchPanel(false)} />
-				</Box>
-			)}
-
-			{/* Show connection panel if active */}
-			{showConnectionPanel && (
-				<Box paddingX={1} flexDirection="column" width={terminalWidth}>
-					<ConnectionPanel
-						onClose={() => setShowConnectionPanel(false)}
-						initialApiUrl={connectionPanelApiUrl}
-					/>
 				</Box>
 			)}
 

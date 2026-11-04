@@ -11,7 +11,6 @@ import {handleAutoCompression} from './autoCompressHandler.js';
 import {buildToolResultMessages} from './toolResultDisplay.js';
 import {SubAgentUIHandler} from './subAgentMessageHandler.js';
 import {handlePendingMessages} from './pendingMessagesHandler.js';
-import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import type {
 	ConversationHandlerOptions,
 	StreamRoundResult,
@@ -200,32 +199,12 @@ export async function handleToolCallRound(ctx: {
 			setMessages(prev => subAgentHandler.handleMessage(prev, subAgentMessage));
 		},
 		async (toolCall, batchToolNames, allTools) => {
-			if (connectionManager.isConnected()) {
-				await connectionManager.notifyToolConfirmationNeeded(
-					toolCall.function.name,
-					toolCall.function.arguments,
-					toolCall.id,
-					allTools?.map(tool => ({
-						name: tool.function.name,
-						arguments: tool.function.arguments,
-					})),
-				);
-			}
 			return requestToolConfirmation(toolCall, batchToolNames, allTools);
 		},
 		isToolAutoApproved,
 		yoloModeRef.current,
 		addToAlwaysApproved,
 		async (question: string, opts: string[], multiSelect?: boolean) => {
-			if (connectionManager.isConnected()) {
-				await connectionManager.notifyUserInteractionNeeded(
-					question,
-					opts,
-					'fake-tool-call',
-					multiSelect,
-				);
-			}
-
 			if (controller.signal.aborted) {
 				return {selected: '', cancelled: true};
 			}

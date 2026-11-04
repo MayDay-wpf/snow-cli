@@ -20,8 +20,6 @@ import {useTerminalExecutionState} from '../../hooks/execution/useTerminalExecut
 import {useSchedulerExecutionState} from '../../hooks/execution/useSchedulerExecutionState.js';
 import {useBackgroundProcesses} from '../../hooks/execution/useBackgroundProcesses.js';
 import {usePanelState} from '../../hooks/ui/usePanelState.js';
-import {connectionManager} from '../../utils/connection/ConnectionManager.js';
-import {updateGlobalTokenUsage} from '../../utils/connection/contextManager.js';
 import {sessionManager} from '../../utils/session/sessionManager.js';
 import {getProjectName} from '../../utils/session/projectUtils.js';
 import {formatTerminalTitle} from '../../utils/ui/terminal-title-formatter.js';
@@ -40,6 +38,7 @@ import {useElapsedSeconds} from '../../hooks/ui/useElapsedSeconds.js';
 import type {ActiveBusyKind} from '../components/chat/statusVerbs.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
 import {useBuddyNotification} from '../../buddy/useBuddyNotification.js';
+import {connectService} from '../../utils/connect/service.js';
 
 const MIN_TERMINAL_HEIGHT = 10;
 
@@ -62,6 +61,13 @@ export default function ChatScreen({
 	const {theme} = useTheme();
 	const {columns: terminalWidth, rows: terminalHeight} = useTerminalSize();
 	useBuddyNotification();
+
+	useEffect(() => {
+		void connectService.start();
+		return () => {
+			void connectService.stop();
+		};
+	}, []);
 
 	const {
 		messages,
@@ -173,10 +179,6 @@ export default function ChatScreen({
 	const handleCommandExecutionRef = useRef<
 		((command: string, result: any) => void) | undefined
 	>(undefined);
-
-	useEffect(() => {
-		connectionManager.setStreamingState(streamingState.streamStatus);
-	}, [streamingState.streamStatus]);
 
 	useChatScreenSessionLifecycle({
 		autoResume,
@@ -427,8 +429,6 @@ export default function ChatScreen({
 		setShowCleanupPanel: panelState.setShowCleanupPanel,
 		setShowReviewCommitPanel: panelState.setShowReviewCommitPanel,
 		setShowDiffReviewPanel: panelState.setShowDiffReviewPanel,
-		setShowConnectionPanel: panelState.setShowConnectionPanel,
-		setConnectionPanelApiUrl: panelState.setConnectionPanelApiUrl,
 		setShowTelemetryPanel: panelState.setShowTelemetryPanel,
 		setShowPermissionsPanel,
 		setShowBranchPanel: panelState.setShowBranchPanel,
@@ -439,6 +439,7 @@ export default function ChatScreen({
 		setShowResourceManagerPanel: panelState.setShowResourceManagerPanel,
 		setShowPixelEditor: panelState.setShowPixelEditor,
 		setShowGamesPanel: panelState.setShowGamesPanel,
+		setShowConnectPanel: panelState.setShowConnectPanel,
 		setShowAnyPanel: panelState.setShowAnyPanel,
 		setActiveAnyPanelPluginId: panelState.setActiveAnyPanelPluginId,
 		onSwitchProfile: handleSwitchProfile,
@@ -476,20 +477,7 @@ export default function ChatScreen({
 
 	useEffect(() => {
 		if (streamingState.contextUsage) {
-			updateGlobalTokenUsage({
-				prompt_tokens: streamingState.contextUsage.prompt_tokens || 0,
-				completion_tokens: streamingState.contextUsage.completion_tokens || 0,
-				total_tokens: streamingState.contextUsage.total_tokens || 0,
-				cache_creation_input_tokens:
-					streamingState.contextUsage.cache_creation_input_tokens,
-				cache_read_input_tokens:
-					streamingState.contextUsage.cache_read_input_tokens,
-				cached_tokens: streamingState.contextUsage.cached_tokens,
-				max_tokens: getSnowConfig().maxContextTokens || 128000,
-			});
 			sessionManager.updateContextUsage(streamingState.contextUsage);
-		} else {
-			updateGlobalTokenUsage(null);
 		}
 	}, [streamingState.contextUsage]);
 
@@ -552,7 +540,6 @@ export default function ChatScreen({
 		panelState.showWorkingDirPanel ||
 		panelState.showCleanupPanel ||
 		panelState.showBranchPanel ||
-		panelState.showConnectionPanel ||
 		panelState.showTelemetryPanel ||
 		panelState.showNewPromptPanel ||
 		panelState.showTodoListPanel ||
@@ -560,6 +547,7 @@ export default function ChatScreen({
 		panelState.showResourceManagerPanel ||
 		panelState.showPixelEditor ||
 		panelState.showGamesPanel ||
+		panelState.showConnectPanel ||
 		panelState.showAnyPanel ||
 		showPermissionsPanel ||
 		showSubAgentDepthPanel;

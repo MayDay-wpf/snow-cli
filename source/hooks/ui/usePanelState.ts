@@ -34,7 +34,6 @@ export type PanelState = {
 	showModelsPanel: boolean;
 	showOAuthPanel: boolean;
 	showDiffReviewPanel: boolean;
-	showConnectionPanel: boolean;
 	showTelemetryPanel: boolean;
 	showNewPromptPanel: boolean;
 	showTodoListPanel: boolean;
@@ -42,10 +41,10 @@ export type PanelState = {
 	showResourceManagerPanel: boolean;
 	showPixelEditor: boolean;
 	showGamesPanel: boolean;
+	showConnectPanel: boolean;
 	showAnyPanel: boolean;
 	activeAnyPanelPluginId: string | null;
 	showIdeSelectPanel: boolean;
-	connectionPanelApiUrl?: string;
 	profileSelectedIndex: number;
 	profileSearchQuery: string;
 	currentProfileName: string;
@@ -57,10 +56,8 @@ export type PanelActions = {
 	setShowMcpPanel: Dispatch<SetStateAction<boolean>>;
 	setShowUsagePanel: Dispatch<SetStateAction<boolean>>;
 	setShowHelpPanel: Dispatch<SetStateAction<boolean>>;
-	setShowConnectionPanel: Dispatch<SetStateAction<boolean>>;
 	setShowTelemetryPanel: Dispatch<SetStateAction<boolean>>;
 	setShowNewPromptPanel: Dispatch<SetStateAction<boolean>>;
-	setConnectionPanelApiUrl: Dispatch<SetStateAction<string | undefined>>;
 	setShowCustomCommandConfig: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsCreation: Dispatch<SetStateAction<boolean>>;
 	setShowSkillsInstall: Dispatch<SetStateAction<boolean>>;
@@ -70,6 +67,7 @@ export type PanelActions = {
 	setShowResourceManagerPanel: Dispatch<SetStateAction<boolean>>;
 	setShowPixelEditor: Dispatch<SetStateAction<boolean>>;
 	setShowGamesPanel: Dispatch<SetStateAction<boolean>>;
+	setShowConnectPanel: Dispatch<SetStateAction<boolean>>;
 	setShowAnyPanel: Dispatch<SetStateAction<boolean>>;
 	setActiveAnyPanelPluginId: Dispatch<SetStateAction<string | null>>;
 	setShowIdeSelectPanel: Dispatch<SetStateAction<boolean>>;
@@ -148,7 +146,6 @@ export function usePanelState(): PanelState & PanelActions {
 	const [showModelsPanel, setShowModelsPanel] = useState(false);
 	const [showOAuthPanel, setShowOAuthPanel] = useState(false);
 	const [showDiffReviewPanel, setShowDiffReviewPanel] = useState(false);
-	const [showConnectionPanel, setShowConnectionPanel] = useState(false);
 	const [showTelemetryPanel, setShowTelemetryPanel] = useState(false);
 	const [showNewPromptPanel, setShowNewPromptPanel] = useState(false);
 	const [showTodoListPanel, setShowTodoListPanel] = useState(false);
@@ -157,14 +154,12 @@ export function usePanelState(): PanelState & PanelActions {
 		useState(false);
 	const [showPixelEditor, setShowPixelEditor] = useState(false);
 	const [showGamesPanel, setShowGamesPanel] = useState(false);
+	const [showConnectPanel, setShowConnectPanel] = useState(false);
 	const [showAnyPanel, setShowAnyPanel] = useState(false);
 	const [activeAnyPanelPluginId, setActiveAnyPanelPluginId] = useState<
 		string | null
 	>(null);
 	const [showIdeSelectPanel, setShowIdeSelectPanel] = useState(false);
-	const [connectionPanelApiUrl, setConnectionPanelApiUrl] = useState<
-		string | undefined
-	>(undefined);
 	const [profileSelectedIndex, setProfileSelectedIndex] = useState(0);
 	const [profileSearchQuery, setProfileSearchQuery] = useState('');
 	const [currentProfileName, setCurrentProfileName] = useState(() => {
@@ -201,7 +196,6 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showOAuthPanel ||
 			showDiffReviewPanel ||
-			showConnectionPanel ||
 			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
@@ -209,6 +203,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showResourceManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
+			showConnectPanel ||
 			showAnyPanel ||
 			showIdeSelectPanel ||
 			options.hasPendingRollback ||
@@ -377,11 +372,6 @@ export function usePanelState(): PanelState & PanelActions {
 			return true;
 		}
 
-		// ConnectionPanel handles its own ESC key logic internally
-		if (showConnectionPanel) {
-			return false; // Let ConnectionPanel handle ESC
-		}
-
 		// TelemetryPanel handles its own ESC key logic internally
 		if (showTelemetryPanel) {
 			return false;
@@ -438,6 +428,10 @@ export function usePanelState(): PanelState & PanelActions {
 		if (showGamesPanel) {
 			return false; // Let GamesScreen handle ESC
 		}
+
+		if (showConnectPanel) {
+			return false; // Let ConnectScreen handle ESC
+		}
 		// AnyPanelScreen handles its own ESC key logic internally
 		if (showAnyPanel) {
 			return false; // Let AnyPanelScreen handle ESC
@@ -476,7 +470,6 @@ export function usePanelState(): PanelState & PanelActions {
 			showModelsPanel ||
 			showOAuthPanel ||
 			showDiffReviewPanel ||
-			showConnectionPanel ||
 			showTelemetryPanel ||
 			showNewPromptPanel ||
 			showTodoListPanel ||
@@ -484,6 +477,7 @@ export function usePanelState(): PanelState & PanelActions {
 			showResourceManagerPanel ||
 			showPixelEditor ||
 			showGamesPanel ||
+			showConnectPanel ||
 			showAnyPanel ||
 			showIdeSelectPanel
 		);
@@ -516,7 +510,6 @@ export function usePanelState(): PanelState & PanelActions {
 		showModelsPanel,
 		showOAuthPanel,
 		showDiffReviewPanel,
-		showConnectionPanel,
 		showTelemetryPanel,
 		showNewPromptPanel,
 		showTodoListPanel,
@@ -524,10 +517,10 @@ export function usePanelState(): PanelState & PanelActions {
 		showResourceManagerPanel,
 		showPixelEditor,
 		showGamesPanel,
+		showConnectPanel,
 		showAnyPanel,
 		activeAnyPanelPluginId,
 		showIdeSelectPanel,
-		connectionPanelApiUrl,
 		profileSelectedIndex,
 		profileSearchQuery,
 		currentProfileName,
@@ -559,7 +552,6 @@ export function usePanelState(): PanelState & PanelActions {
 		openProfileEdit,
 		closeProfileEditAndReturnToPicker,
 		setShowDiffReviewPanel,
-		setShowConnectionPanel,
 		setShowTelemetryPanel,
 		setShowNewPromptPanel,
 		setShowTodoListPanel,
@@ -567,10 +559,10 @@ export function usePanelState(): PanelState & PanelActions {
 		setShowResourceManagerPanel,
 		setShowPixelEditor,
 		setShowGamesPanel,
+		setShowConnectPanel,
 		setShowAnyPanel,
 		setActiveAnyPanelPluginId,
 		setShowIdeSelectPanel,
-		setConnectionPanelApiUrl,
 		setProfileSelectedIndex,
 		setProfileSearchQuery,
 		handleSwitchProfile,

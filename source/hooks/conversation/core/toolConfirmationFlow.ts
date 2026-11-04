@@ -2,7 +2,6 @@ import type {ToolCall} from '../../../utils/execution/toolExecutor.js';
 import type {ConfirmationResult} from '../../../ui/components/tools/ToolConfirmation.js';
 import type {Message} from '../../../ui/components/chat/MessageList.js';
 import {filterToolsBySensitivity} from '../../../utils/execution/yoloPermissionChecker.js';
-import {connectionManager} from '../../../utils/connection/ConnectionManager.js';
 import {handleToolRejection} from './toolRejectionHandler.js';
 import {logger} from '../../../utils/core/logger.js';
 
@@ -39,18 +38,6 @@ async function notifyAndRequestConfirmation(
 ): Promise<ConfirmationResult> {
 	const firstTool = tools[0]!;
 	const allTools = tools.length > 1 ? tools : undefined;
-
-	if (connectionManager.isConnected()) {
-		await connectionManager.notifyToolConfirmationNeeded(
-			firstTool.function.name,
-			firstTool.function.arguments,
-			firstTool.id,
-			allTools?.map(t => ({
-				name: t.function.name,
-				arguments: t.function.arguments,
-			})),
-		);
-	}
 
 	// Check abort before showing confirmation
 	if (abortSignal?.aborted) {

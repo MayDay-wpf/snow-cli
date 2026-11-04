@@ -5,7 +5,6 @@ import {codebaseSearchEvents} from '../../utils/codebase/codebaseSearchEvents.js
 import {useMessageProcessing} from './chatLogic/useMessageProcessing.js';
 import {useRollback} from './chatLogic/useRollback.js';
 import {useChatHandlers} from './chatLogic/useChatHandlers.js';
-import {useRemoteEvents} from './chatLogic/useRemoteEvents.js';
 import {useI18n} from '../../i18n/index.js';
 import {teamTracker} from '../../utils/execution/teamTracker.js';
 import {
@@ -61,14 +60,6 @@ export function useChatLogic(props: UseChatLogicProps) {
 		handleToggleCodebase,
 		handleReviewCommitConfirm,
 	} = useChatHandlers(props, {processMessage});
-
-	// Sub-hook: remote event subscriptions (SignalR/connectionManager)
-	useRemoteEvents(props, {
-		handleMessageSubmit,
-		handleUserQuestionAnswer,
-		handleHistorySelect,
-		handleRollbackConfirm,
-	});
 
 	// VSCode auto-connect logic
 	const hasAttemptedAutoVscodeConnect = useRef(false);

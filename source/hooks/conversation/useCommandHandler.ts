@@ -92,9 +92,7 @@ function prependActiveAndInitialUserPromptBlock(
 	);
 	const firstUserMessage = messages[firstUserIndex];
 	if (firstUserMessage) {
-		firstUserMessage.content = `${block}\n\n${
-			firstUserMessage.content ?? ''
-		}`;
+		firstUserMessage.content = `${block}\n\n${firstUserMessage.content ?? ''}`;
 		return;
 	}
 
@@ -884,11 +882,7 @@ type CommandHandlerOptions = {
 	 * 与 onResumeSessionById 区别——除了切换会话，还会启动 Ralph Loop 第一轮。
 	 */
 	onResumeGoalSession?: (sessionId: string) => Promise<void>;
-	setShowConnectionPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowTelemetryPanel: React.Dispatch<React.SetStateAction<boolean>>;
-	setConnectionPanelApiUrl: React.Dispatch<
-		React.SetStateAction<string | undefined>
-	>;
 	setShowMcpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowHelpPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	onCompressionStatus?: (
@@ -906,6 +900,7 @@ type CommandHandlerOptions = {
 	setShowResourceManagerPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowPixelEditor: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowGamesPanel: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowConnectPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setShowAnyPanel: React.Dispatch<React.SetStateAction<boolean>>;
 	setHybridCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 	setImageCompressEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -1088,10 +1083,9 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				import('../../utils/core/globalCleanup.js')
 					.then(({cleanupGlobalResources}) => cleanupGlobalResources())
 					.catch(err => {
-						log.debug(
-							'Failed to cleanup global resources on session delete',
-							{error: err},
-						);
+						log.debug('Failed to cleanup global resources on session delete', {
+							error: err,
+						});
 					});
 
 				const commandMessage: Message = {
@@ -1271,9 +1265,6 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				}
 			} else if (result.success && result.action === 'showDiffReviewPanel') {
 				options.setShowDiffReviewPanel(true);
-			} else if (result.success && result.action === 'showConnectionPanel') {
-				options.setConnectionPanelApiUrl(result.apiUrl);
-				options.setShowConnectionPanel(true);
 			} else if (result.success && result.action === 'showTelemetryPanel') {
 				options.setShowTelemetryPanel(true);
 			} else if (result.success && result.action === 'showMcpPanel') {
@@ -1357,6 +1348,10 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 			} else if (result.success && result.action === 'showGamesPanel') {
 				// Games panel shown as an overlay panel
 				options.setShowGamesPanel(true);
+				// Don't add command message to keep UI clean
+			} else if (result.success && result.action === 'showConnectPanel') {
+				// IM Connect panel shown as an overlay panel
+				options.setShowConnectPanel(true);
 				// Don't add command message to keep UI clean
 			} else if (
 				result.success &&
@@ -1556,11 +1551,14 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 						const todoService = getTodoService();
 						await todoService.copyTodoList(currentSession.id, forkedSession.id);
 					} catch (e) {
-						log.debug('Failed to copy todo list to forked session (non-critical)', {
-							sourceSessionId: currentSession.id,
-							forkedSessionId: forkedSession.id,
-							error: e instanceof Error ? e.message : String(e),
-						});
+						log.debug(
+							'Failed to copy todo list to forked session (non-critical)',
+							{
+								sourceSessionId: currentSession.id,
+								forkedSessionId: forkedSession.id,
+								error: e instanceof Error ? e.message : String(e),
+							},
+						);
 					}
 
 					if (options.onResumeSessionById) {

@@ -24,7 +24,6 @@ import {
 	getTpsTrackerSnapshot,
 } from '../../../hooks/conversation/core/tpsTracker.js';
 import type {
-	BackendConnectionStatus,
 	StatusLineCodebaseProgress,
 	StatusLineContextUsage,
 	StatusLineContextWindowMetrics,
@@ -237,10 +236,6 @@ type Props = {
 	vscodeConnectionStatus?: VSCodeConnectionStatus;
 	editorContext?: StatusLineEditorContext;
 
-	// 实例连接信息
-	connectionStatus?: BackendConnectionStatus;
-	connectionInstanceName?: string;
-
 	// 词元消耗信息
 	contextUsage?: StatusLineContextUsage;
 
@@ -362,8 +357,6 @@ export default function StatusLine({
 	telemetryEnabled = false,
 	vscodeConnectionStatus,
 	editorContext,
-	connectionStatus,
-	connectionInstanceName,
 	contextUsage,
 	codebaseIndexing = false,
 	codebaseProgress,
@@ -443,10 +436,6 @@ export default function StatusLine({
 					editorContext,
 					selectedTextLength: editorContext?.selectedText?.length ?? 0,
 				},
-				backend: {
-					connectionStatus: connectionStatus ?? 'disconnected',
-					instanceName: connectionInstanceName,
-				},
 				contextWindow: contextWindowState,
 				codebase: {
 					indexing: codebaseIndexing,
@@ -508,8 +497,6 @@ export default function StatusLine({
 		codebaseIndexing,
 		codebaseProgress,
 		compressBlockToast,
-		connectionInstanceName,
-		connectionStatus,
 		contextWindowState,
 		copyStatusMessage,
 		currentProfileName,
@@ -650,7 +637,6 @@ export default function StatusLine({
 		hybridCompressEnabled ||
 		imageCompressEnabled ||
 		(vscodeConnectionStatus && vscodeConnectionStatus !== 'disconnected') ||
-		(connectionStatus && connectionStatus !== 'disconnected') ||
 		contextUsage ||
 		codebaseIndexing ||
 		watcherEnabled ||
@@ -770,23 +756,6 @@ export default function StatusLine({
 				statusItems.push({text: '● IDE', color: 'green'});
 			} else if (vscodeConnectionStatus === 'error') {
 				statusItems.push({text: '○ IDE', color: 'gray'});
-			}
-		}
-
-		if (
-			connectionStatus &&
-			connectionStatus !== 'disconnected' &&
-			!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.backendConnection)
-		) {
-			if (connectionStatus === 'connecting') {
-				statusItems.push({text: '◐ Backend', color: 'yellow'});
-			} else if (connectionStatus === 'reconnecting') {
-				statusItems.push({text: '↻ Backend', color: 'yellow'});
-			} else if (connectionStatus === 'connected') {
-				const instanceLabel = connectionInstanceName
-					? `● ${connectionInstanceName}`
-					: '● Backend';
-				statusItems.push({text: instanceLabel, color: 'green'});
 			}
 		}
 
@@ -1097,39 +1066,6 @@ export default function StatusLine({
 											'{count}',
 											editorContext.selectedText.length.toString(),
 										)}
-								</>
-							)}
-						</Text>
-					</Box>
-				)}
-
-			{connectionStatus &&
-				!isBuiltinOverridden(BUILTIN_STATUSLINE_IDS.backendConnection) &&
-				(connectionStatus === 'connecting' ||
-					connectionStatus === 'connected' ||
-					connectionStatus === 'reconnecting') && (
-					<Box>
-						<Text
-							color={
-								connectionStatus === 'connecting' ||
-								connectionStatus === 'reconnecting'
-									? 'yellow'
-									: 'green'
-							}
-							dimColor
-						>
-							{connectionStatus === 'connecting' ? (
-								<>
-									<Spinner type="dots" /> 正在连接后端服务...
-								</>
-							) : connectionStatus === 'reconnecting' ? (
-								<>
-									<Spinner type="dots" /> 正在重连后端服务...
-								</>
-							) : (
-								<>
-									● 已连接后端服务
-									{connectionInstanceName && ` (${connectionInstanceName})`}
 								</>
 							)}
 						</Text>

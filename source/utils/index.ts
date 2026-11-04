@@ -14,7 +14,6 @@ import './commands/games.js';
 import './commands/clear.js';
 import './commands/codebase.js';
 import './commands/compact.js';
-import './commands/connect.js';
 import './commands/copyLast.js';
 import './commands/custom.js';
 import './commands/deepresearch.js';

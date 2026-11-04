@@ -430,24 +430,6 @@ export function useCommandPanel(
 					'Review file changes from a conversation in IDE diff view',
 			},
 			{
-				name: 'connect',
-				description:
-					t.commandPanel.commands.connect ||
-					'Connect to a Snow Instance for AI processing',
-			},
-			{
-				name: 'disconnect',
-				description:
-					t.commandPanel.commands.disconnect ||
-					'Disconnect from the current Snow Instance',
-			},
-			{
-				name: 'connection-status',
-				description:
-					t.commandPanel.commands.connectionStatus ||
-					'Show current connection status',
-			},
-			{
 				name: 'new-prompt',
 				description:
 					t.commandPanel.commands.newPrompt ||
@@ -482,6 +464,13 @@ export function useCommandPanel(
 				description:
 					t.commandPanel.commands.games ||
 					'Open the games panel - play built-in and plugin games',
+				mainFlowOnly: true,
+			},
+			{
+				name: 'connect',
+				description:
+					t.commandPanel.commands.connect ||
+					'Connect Telegram / Feishu bots and use IM as a lightweight Snow CLI entry',
 				mainFlowOnly: true,
 			},
 			{

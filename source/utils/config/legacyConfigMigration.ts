@@ -6,7 +6,6 @@
  * Files migrated (per scope: project `<cwd>/.snow/` and global `~/.snow/`):
  *   - settings.json                 -> kept; merged into unified shape (no-op if already shaped)
  *   - codebase.json                 -> settings.codebase
- *   - connection.json               -> settings.connection (project only)
  *   - working-dirs.json             -> settings.workingDirectories
  *   - disabled-builtin-tools.json   -> settings.disabledBuiltInServices
  *   - disabled-mcp-tools.json       -> settings.disabledMCPTools
@@ -32,7 +31,6 @@ import {
 
 const LEGACY_FILES = {
 	codebase: 'codebase.json',
-	connection: 'connection.json',
 	workingDirs: 'working-dirs.json',
 	disabledBuiltin: 'disabled-builtin-tools.json',
 	disabledMcp: 'disabled-mcp-tools.json',
@@ -134,21 +132,6 @@ function migrateScope(
 		}
 		return touched;
 	});
-
-	// connection.json — project scope only (global never used it).
-	if (scope === 'project') {
-		tryMigrate<UnifiedSettings['connection']>(LEGACY_FILES.connection, data => {
-			if (
-				data &&
-				typeof data === 'object' &&
-				settings.connection === undefined
-			) {
-				settings.connection = data;
-				return true;
-			}
-			return false;
-		});
-	}
 
 	// working-dirs.json
 	tryMigrate<{directories?: unknown}>(LEGACY_FILES.workingDirs, data => {
