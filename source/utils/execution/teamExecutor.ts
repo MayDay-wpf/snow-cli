@@ -18,9 +18,32 @@ import {interpretHookResult} from './hookResultInterpreter.js';
 import {compressionCoordinator} from '../core/compressionCoordinator.js';
 import {extractFilesystemEditDiffFromRawResult} from '../config/toolDisplayConfig.js';
 import {extractMultimodalContent} from './toolResultNormalizer.js';
+import {checkYoloPermission} from './yoloPermissionChecker.js';
 import {logger} from '../core/logger.js';
 
 const log = logger.child('execution.teamExecutor');
+
+/**
+ * 判断 teammate 的工具调用是否需要用户确认。
+ *
+ * YOLO 模式下普通工具自动批准，但敏感命令（rm -rf、git push --force 等）
+ * 与主 Agent / 子 Agent 保持一致，仍必须经过用户确认，除非该工具已被
+ * 用户显式加入“始终允许”列表。
+ */
+export async function resolveTeammateToolApproval(
+	toolName: string,
+	toolArgs: any,
+	yoloMode: boolean,
+	isToolAutoApproved?: (toolName: string) => boolean,
+): Promise<{approved: boolean; isSensitive: boolean}> {
+	const permission = await checkYoloPermission(toolName, toolArgs, yoloMode);
+	return {
+		approved:
+			!permission.needsConfirmation ||
+			Boolean(isToolAutoApproved && isToolAutoApproved(toolName)),
+		isSensitive: permission.isSensitive,
+	};
+}
 
 export interface TeammateExecutionOptions {
 	onMessage?: (message: SubAgentMessage) => void;
@@ -1145,9 +1168,20 @@ ${role ? `Your role: ${role}` : ''}
 						});
 					}
 
-					let approved = yoloMode || false;
-					if (!approved && isToolAutoApproved) {
-						approved = isToolAutoApproved(toolName);
+					// YOLO 模式下默认自动批准，但敏感命令必须与主 Agent 一样走用户确认，
+					// 避免 teammate 成为绕过敏感命令人工闸门的通道。
+					const approval = await resolveTeammateToolApproval(
+						toolName,
+						toolArgs,
+						yoloMode || false,
+						isToolAutoApproved,
+					);
+					let approved = approval.approved;
+					if (!approved && approval.isSensitive) {
+						log.debug('Teammate sensitive command requires user confirmation', {
+							toolName,
+							command: toolArgs.command,
+						});
 					}
 					if (!approved && requestToolConfirmation) {
 						const confirmResult = await requestToolConfirmation(
