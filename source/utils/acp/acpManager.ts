@@ -57,6 +57,7 @@ import type {AnthropicStreamChunk} from '../../api/anthropic.js';
 import type {GeminiStreamChunk} from '../../api/gemini.js';
 import type {StreamChunk} from '../../api/chat.js';
 import {executeToolCall, type ToolCall} from '../execution/toolExecutor.js';
+import type {ConfirmationResult} from '../../ui/components/tools/ToolConfirmation.js';
 
 // ACP 协议版本
 const ACP_PROTOCOL_VERSION: ProtocolVersion = 1;
@@ -163,10 +164,11 @@ class AcpManager {
 					try {
 						process.chdir(req.cwd);
 					} catch (error) {
-						log.debug(
-							'Failed to change directory for new ACP session',
-							{cwd: req.cwd, sessionId, error},
-						);
+						log.debug('Failed to change directory for new ACP session', {
+							cwd: req.cwd,
+							sessionId,
+							error,
+						});
 						// 忽略错误
 					}
 				}
@@ -209,10 +211,11 @@ class AcpManager {
 					try {
 						process.chdir(req.cwd);
 					} catch (error) {
-						log.debug(
-							'Failed to change directory for loaded ACP session',
-							{cwd: req.cwd, sessionId, error},
-						);
+						log.debug('Failed to change directory for loaded ACP session', {
+							cwd: req.cwd,
+							sessionId,
+							error,
+						});
 						// 忽略错误
 					}
 				}
@@ -358,10 +361,9 @@ class AcpManager {
 					} as SessionUpdate,
 				})
 				.catch(error => {
-					log.debug(
-						'Failed to send agent_message_chunk sessionUpdate',
-						{error},
-					);
+					log.debug('Failed to send agent_message_chunk sessionUpdate', {
+						error,
+					});
 				});
 		};
 
@@ -386,10 +388,9 @@ class AcpManager {
 					} as SessionUpdate,
 				})
 				.catch(error => {
-					log.debug(
-						'Failed to send agent_thought_chunk sessionUpdate',
-						{error},
-					);
+					log.debug('Failed to send agent_thought_chunk sessionUpdate', {
+						error,
+					});
 				});
 		};
 
@@ -563,10 +564,11 @@ class AcpManager {
 			const permissionsConfig = loadPermissionsConfig(workingDirectory);
 			const approvedToolsSet = new Set(permissionsConfig.alwaysApprovedTools);
 
+			// subagent-* 不在此处自动放行：spawn 子 Agent 本身也需要客户端审批，
+			// 子 Agent 内部工具则通过下方 requestToolConfirmation 回调逐个确认。
 			const isToolAutoApproved = (toolName: string) =>
 				approvedToolsSet.has(toolName) ||
 				toolName.startsWith('todo-') ||
-				toolName.startsWith('subagent-') ||
 				toolName === 'askuser-ask_question' ||
 				toolName === 'tool_search';
 
@@ -592,11 +594,9 @@ class AcpManager {
 				);
 
 				// 检查是否自动批准
-				let approved = isToolAutoApproved(toolCall.function.name);
-
-				if (!approved) {
-					// 请求权限
-					approved = await this.requestToolPermission(
+				let confirmation: ConfirmationResult = 'approve';
+				if (!isToolAutoApproved(toolCall.function.name)) {
+					confirmation = await this.requestToolConfirmation(
 						session.id,
 						toolCall,
 						conn,
@@ -604,14 +604,22 @@ class AcpManager {
 					);
 				}
 
+				const approved =
+					confirmation === 'approve' || confirmation === 'approve_always';
+
 				if (!approved) {
 					// 用户拒绝
+					const rejectionReason =
+						typeof confirmation === 'object' &&
+						confirmation.type === 'reject_with_reply'
+							? confirmation.reason
+							: 'Permission denied by user';
 					await this.sendToolCallUpdate(
 						conn,
 						session.id,
 						toolCall,
 						'failed',
-						'Permission denied by user',
+						rejectionReason,
 					);
 					continue;
 				}
@@ -627,12 +635,20 @@ class AcpManager {
 
 				try {
 					// 执行工具
+					// requestToolConfirmation 必须透传给 executeToolCall：
+					// 子 Agent / Team 内部工具也会触发确认，不能绕过 ACP 客户端审批。
 					const result = await executeToolCall(
 						toolCall,
 						controller.signal,
 						undefined,
 						undefined,
-						undefined,
+						async (subToolCall: ToolCall) =>
+							this.requestToolConfirmation(
+								session.id,
+								subToolCall,
+								conn,
+								workingDirectory,
+							),
 						isToolAutoApproved,
 						false,
 						addToAlwaysApproved,
@@ -710,15 +726,19 @@ class AcpManager {
 
 	/**
 	 * 请求工具权限
+	 *
+	 * 返回标准 ConfirmationResult，主 Agent 与子 Agent 共用同一套审批通道。
+	 * 没有可用连接或请求失败时 fail-closed（返回 reject），
+	 * 避免任何工具在无审批通道的情况下被直接执行。
 	 */
-	private async requestToolPermission(
+	private async requestToolConfirmation(
 		sessionId: string,
 		toolCall: ToolCall,
 		conn: AgentSideConnection,
 		workingDirectory: string,
-	): Promise<boolean> {
+	): Promise<ConfirmationResult> {
 		if (!this.connection) {
-			return false;
+			return 'reject';
 		}
 
 		// 检测是否为敏感命令
@@ -731,10 +751,10 @@ class AcpManager {
 					isSensitive = result.isSensitive;
 				}
 			} catch (error) {
-				log.debug(
-					'Failed to parse terminal arguments for sensitivity check',
-					{toolCallId: toolCall.id, error},
-				);
+				log.debug('Failed to parse terminal arguments for sensitivity check', {
+					toolCallId: toolCall.id,
+					error,
+				});
 				// 忽略解析错误
 			}
 		}
@@ -778,14 +798,11 @@ class AcpManager {
 			);
 			const autoResult = extractHookProvidedConfirmation(hookResult);
 			if (autoResult) {
-				if (autoResult === 'approve' || autoResult === 'approve_always') {
-					if (autoResult === 'approve_always') {
-						addToolToPermissions(workingDirectory, toolCall.function.name);
-					}
-					return true;
+				if (autoResult === 'approve_always') {
+					addToolToPermissions(workingDirectory, toolCall.function.name);
 				}
-				// reject 或 reject_with_reply 均拒绝
-				return false;
+
+				return autoResult;
 			}
 		} catch (error) {
 			log.debug(
@@ -809,26 +826,27 @@ class AcpManager {
 			});
 
 			if (response.outcome.outcome === 'cancelled') {
-				return false;
+				return 'reject';
 			}
 
 			const selectedOptionId = response.outcome.optionId;
-			const approved =
-				selectedOptionId === 'approve_once' ||
-				selectedOptionId === 'approve_always';
-
-			// 如果用户选择"总是同意"，保存到权限配置文件
-			if (approved && selectedOptionId === 'approve_always') {
-				addToolToPermissions(workingDirectory, toolCall.function.name);
+			if (selectedOptionId === 'approve_once') {
+				return 'approve';
 			}
 
-			return approved;
+			if (selectedOptionId === 'approve_always') {
+				// 如果用户选择"总是同意"，保存到权限配置文件
+				addToolToPermissions(workingDirectory, toolCall.function.name);
+				return 'approve_always';
+			}
+
+			return 'reject';
 		} catch (error) {
-			log.debug(
-				'Failed to request tool permission via ACP connection',
-				{toolCallId: toolCall.id, error},
-			);
-			return false;
+			log.debug('Failed to request tool permission via ACP connection', {
+				toolCallId: toolCall.id,
+				error,
+			});
+			return 'reject';
 		}
 	}
 

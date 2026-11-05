@@ -297,12 +297,21 @@ async function handleChildRequest(
 	try {
 		switch (message.kind) {
 			case 'toolConfirmation': {
-				const result = options.requestToolConfirmation
-					? await options.requestToolConfirmation(
-							message.payload.toolName,
-							message.payload.toolArgs,
-					  )
-					: 'approve';
+				// fail-closed：父进程没有提供确认回调时拒绝执行，
+				// 避免子 Agent 绕过审批直接运行敏感工具。
+				if (!options.requestToolConfirmation) {
+					log.debug(
+						'Rejecting child-process tool confirmation because no confirmation callback is available',
+						{toolName: message.payload.toolName},
+					);
+					reply({ok: true, value: 'reject'});
+					break;
+				}
+
+				const result = await options.requestToolConfirmation(
+					message.payload.toolName,
+					message.payload.toolArgs,
+				);
 				reply({ok: true, value: result});
 				break;
 			}

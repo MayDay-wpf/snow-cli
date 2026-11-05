@@ -769,7 +769,11 @@ ${role ? `Your role: ${role}` : ''}
 				try {
 					args = JSON.parse(tc.function.arguments);
 				} catch (error) {
-					log.debug('Failed to parse synthetic tool arguments', {callId: tc.id, toolName: tc.function.name, error});
+					log.debug('Failed to parse synthetic tool arguments', {
+						callId: tc.id,
+						toolName: tc.function.name,
+						error,
+					});
 				}
 
 				let resultContent = '';
@@ -885,7 +889,10 @@ ${role ? `Your role: ${role}` : ''}
 				try {
 					waitArgs = JSON.parse(waitCall.function.arguments);
 				} catch (error) {
-					log.debug('Failed to parse wait_for_messages arguments', {callId: waitCall.id, error});
+					log.debug('Failed to parse wait_for_messages arguments', {
+						callId: waitCall.id,
+						error,
+					});
 				}
 
 				const summary = waitArgs.summary || 'Work completed.';
@@ -1033,7 +1040,10 @@ ${role ? `Your role: ${role}` : ''}
 										continue;
 									}
 								} catch (error) {
-									log.debug('beforeToolCall hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug('beforeToolCall hook failed for customTool', {
+										toolName: tc.function.name,
+										error,
+									});
 								}
 
 								const result = await executeMCPTool(
@@ -1073,7 +1083,10 @@ ${role ? `Your role: ${role}` : ''}
 										resultContent = aInterp.replacedContent;
 									}
 								} catch (error) {
-									log.debug('afterToolCall hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug('afterToolCall hook failed for customTool', {
+										toolName: tc.function.name,
+										error,
+									});
 								}
 
 								messages.push({
@@ -1109,7 +1122,10 @@ ${role ? `Your role: ${role}` : ''}
 										error: e,
 									});
 								} catch (error) {
-									log.debug('afterToolCall error-handler hook failed for customTool', {toolName: tc.function.name, error});
+									log.debug(
+										'afterToolCall error-handler hook failed for customTool',
+										{toolName: tc.function.name, error},
+									);
 								}
 							}
 						}
@@ -1123,7 +1139,10 @@ ${role ? `Your role: ${role}` : ''}
 					try {
 						toolArgs = JSON.parse(tc.function.arguments || '{}');
 					} catch (error) {
-						log.debug('Failed to parse regular tool arguments', {toolName, error});
+						log.debug('Failed to parse regular tool arguments', {
+							toolName,
+							error,
+						});
 					}
 
 					let approved = yoloMode || false;
@@ -1157,8 +1176,18 @@ ${role ? `Your role: ${role}` : ''}
 							});
 							continue;
 						}
-					} else {
-						approved = true;
+					} else if (!approved) {
+						// fail-closed：需要确认但没有任何确认通道时拒绝执行，
+						// 与子 Agent 的审批策略保持一致。
+						const feedback =
+							'Tool execution requires user confirmation, but no confirmation channel is available';
+						emitToolResultEvent(tc.id, toolName, feedback);
+						messages.push({
+							role: 'tool' as const,
+							tool_call_id: tc.id,
+							content: feedback,
+						});
+						continue;
 					}
 
 					if (approved) {
@@ -1200,7 +1229,10 @@ ${role ? `Your role: ${role}` : ''}
 								continue;
 							}
 						} catch (error) {
-							log.debug('beforeToolCall hook failed for regular tool', {toolName, error});
+							log.debug('beforeToolCall hook failed for regular tool', {
+								toolName,
+								error,
+							});
 						}
 
 						try {
@@ -1237,7 +1269,10 @@ ${role ? `Your role: ${role}` : ''}
 									resultContent = aInterp.replacedContent;
 								}
 							} catch (error) {
-								log.debug('afterToolCall hook failed for regular tool', {toolName, error});
+								log.debug('afterToolCall hook failed for regular tool', {
+									toolName,
+									error,
+								});
 							}
 
 							messages.push({
@@ -1268,7 +1303,10 @@ ${role ? `Your role: ${role}` : ''}
 									error: e,
 								});
 							} catch (error) {
-								log.debug('afterToolCall error-handler hook failed for regular tool', {toolName, error});
+								log.debug(
+									'afterToolCall error-handler hook failed for regular tool',
+									{toolName, error},
+								);
 							}
 						}
 					}
@@ -1343,7 +1381,10 @@ ${role ? `Your role: ${role}` : ''}
 			);
 			autoCommitWorktreeChanges(worktreePath, memberName);
 		} catch (error) {
-			log.debug('Failed to auto-commit worktree changes on shutdown', {worktreePath, error});
+			log.debug('Failed to auto-commit worktree changes on shutdown', {
+				worktreePath,
+				error,
+			});
 		}
 
 		updateMember(teamName, memberId, {

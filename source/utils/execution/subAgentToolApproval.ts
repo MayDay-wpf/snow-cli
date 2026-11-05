@@ -68,6 +68,17 @@ export async function checkAndApproveTools(
 			needsConfirmation = false;
 		}
 
+		if (needsConfirmation && !ctx.requestToolConfirmation) {
+			// fail-closed：需要用户确认但没有任何确认通道时，拒绝执行。
+			// 绝不能让子 Agent 绕过主流程 / ACP 客户端的审批直接执行敏感工具。
+			rejectedToolCalls.push(toolCall);
+			rejectionReasons.set(
+				toolCall.id,
+				'Tool execution requires user confirmation, but no confirmation channel is available',
+			);
+			continue;
+		}
+
 		if (needsConfirmation && ctx.requestToolConfirmation) {
 			const confirmation = await ctx.requestToolConfirmation(toolName, args);
 
