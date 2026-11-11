@@ -51,14 +51,6 @@ _Agentic coding in your terminal_
     </tr>
     <tr>
       <td align="center">
-        <a href="https://go.apimart.ai/gh-snow-cli"><img src="docs/images/apimart.jpg" alt="APIMart" width="360"/></a>
-        <br/>
-        <a href="https://go.apimart.ai/gh-snow-cli"><b>APIMart</b></a>
-      </td>
-      <td>APIMart is a low-cost API platform for AI image & video generation — GPT-Image-2 from $0.006/image, 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, fetch results via polling or callback. Batch tens of thousands of images without timeouts, switch models without changing code. Pay-as-you-go with no monthly fee — <a href="https://go.apimart.ai/gh-snow-cli">sign up here</a> to get started.</td>
-    </tr>
-    <tr>
-      <td align="center">
         <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><img src="docs/images/bloome-home.png" alt="Bloome" width="360"/></a>
         <br/>
         ☁️ <a href="https://bloome.im/app?ref=MayDaywpf&utm_medium=github&utm_source=MayDay-wpf-snow-cli-ivor-202607"><b>Bloome</b></a>
