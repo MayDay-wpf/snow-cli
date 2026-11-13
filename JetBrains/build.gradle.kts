@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.snow"
-version = "0.4.23"
+version = "0.4.24"
 
 repositories {
     mavenCentral()
@@ -32,7 +32,8 @@ tasks {
 
     patchPluginXml {
         sinceBuild.set("241")
-        untilBuild.set("262.*")
+        // Leave until-build unset so the plugin remains installable on future IDE builds
+        untilBuild.set("")
     }
 
     signPlugin {
