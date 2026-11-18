@@ -31,7 +31,7 @@ jobs:
             platform: win32-x64
           - os: macos-15-intel
             platform: darwin-x64
-          - os: macos-14
+          - os: macos-15
             platform: darwin-arm64
           - os: ubuntu-latest
             platform: linux-x64
@@ -82,16 +82,23 @@ jobs:
       - name: Use CI npm config
         run: cp .npmrc.ci .npmrc
 
-      - name: Verify tag matches package version
-        if: github.event_name == 'push'
+      - name: Resolve release tag and verify package version
+        id: release
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Version mismatch: package.json=$PKG_VERSION, tag=$TAG_VERSION"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            TAG_NAME="$GITHUB_REF_NAME"
+            EXPECTED_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            EXPECTED_VERSION="${{ inputs.version }}"
+            TAG_NAME="v${EXPECTED_VERSION}"
+          fi
+          if [ "$PKG_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::Version mismatch: package.json=$PKG_VERSION, expected=$EXPECTED_VERSION"
             exit 1
           fi
           echo "Version matches: $PKG_VERSION"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -115,13 +122,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Release ${{ steps.release.outputs.tag }}
           body: |
-            ## Snow CLI ${{ github.ref_name }}
+            ## Snow CLI ${{ steps.release.outputs.tag }}
 
             ### What's New
 
