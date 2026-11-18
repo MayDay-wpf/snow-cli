@@ -472,7 +472,7 @@ export const en: TranslationKeys = {
 		groupExpandHint: '(Press Enter to expand/collapse)',
 		scopeSelectTitle: 'API & Model Configuration',
 		scopeSelectSubtitle:
-			'Choose what to configure: the LLM model, or the independent decision models',
+			'Choose what to configure: the LLM model, the independent decision models, or the retry policy',
 		llmConfigEntry: 'Configure LLM Model',
 		llmConfigEntrySubtitle:
 			'API connection, request method, models, reasoning, token & timeout',
@@ -480,6 +480,43 @@ export const en: TranslationKeys = {
 		decisionModelConfig: 'Decision Models',
 		decisionModelConfigSubtitle:
 			'Manage independent decision models (multiple entries, only one active)',
+		retryPolicyConfig: 'Retry Policy',
+		retryPolicyConfigSubtitle:
+			'Choose which errors are retried (applies to all profiles)',
+	},
+	retryPolicy: {
+		title: 'Retry Policy',
+		subtitle:
+			'Configure which errors are retried. Applies to all API profiles; changes are saved automatically. Max retries and retry delay are still set per profile.',
+		alwaysLabel: 'Retry any error',
+		alwaysHint:
+			'When enabled, any error is retried regardless of the categories below. Still capped by Max retries; aborted or cancelled requests are never retried.',
+		categoriesTitle: 'Retryable error categories',
+		categoryLabels: {
+			overloaded: 'Overloaded (529)',
+			network: 'Network',
+			rateLimit: 'Rate limit (429)',
+			serverError: 'Server error (5xx)',
+			unavailable: 'Service unavailable',
+			terminated: 'Connection terminated',
+			stream: 'Stream errors',
+			idleTimeout: 'Stream idle timeout',
+			toolCallJson: 'Malformed tool call JSON',
+		},
+		defaultKeywordsPrefix: 'Default: ',
+		customKeywordsLabel: 'Extra keywords',
+		customKeywordsHint:
+			'Comma-separated, matched against the error message in addition to the enabled categories (case-insensitive substring; pure numbers match whole numbers only)',
+		notSet: 'Not set',
+		navigationHint:
+			'↑↓ Navigate · Space toggle · Enter edit keywords · R restore default keywords · Esc Back',
+		editingHint:
+			'←→↑↓ Move cursor · Home/End line start/end · Ctrl+U clear · Enter save · Esc cancel',
+		emptyMeansDefault: 'Leave empty to use the default keywords',
+		saved: 'Retry policy saved',
+		saveError: 'Failed to save retry policy',
+		summaryAlways: 'Current: retry any error',
+		summaryCategories: 'Current: {enabled}/{total} categories enabled',
 	},
 	// Decision Models Screen
 	decisionModels: {

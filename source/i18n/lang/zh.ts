@@ -440,13 +440,49 @@ export const zh: TranslationKeys = {
 		tokenTimeoutGroup: '令牌与超时',
 		groupExpandHint: '(按 Enter 展开/收起)',
 		scopeSelectTitle: 'API 和模型配置',
-		scopeSelectSubtitle: '选择要配置的内容：LLM 模型，或独立的决策模型',
+		scopeSelectSubtitle: '选择要配置的内容：LLM 模型、独立的决策模型，或重试策略',
 		llmConfigEntry: '配置 LLM 模型',
 		llmConfigEntrySubtitle: 'API 连接、请求方案、模型、推理参数、令牌与超时',
 		scopeSelectHint: '↑↓ 选择 · Enter 进入 · Esc 返回',
 		decisionModelConfig: '决策模型配置',
 		decisionModelConfigSubtitle:
 			'管理独立的决策模型（可配置多个，同一时间仅一个生效）',
+		retryPolicyConfig: '重试策略',
+		retryPolicyConfigSubtitle: '配置哪些错误会触发重试（作用于所有档案）',
+	},
+	retryPolicy: {
+		title: '重试策略',
+		subtitle:
+			'配置哪些错误会触发重试。作用于所有 API 档案，修改自动保存；最大重试次数与重试间隔仍在各档案中单独设置。',
+		alwaysLabel: '任何错误都重试',
+		alwaysHint:
+			'开启后任何错误都会重试，忽略下方类别；重试次数仍受最大重试次数限制，被中断或取消的请求永不重试。',
+		categoriesTitle: '可重试的错误类别',
+		categoryLabels: {
+			overloaded: '服务过载 (529)',
+			network: '网络错误',
+			rateLimit: '限流 (429)',
+			serverError: '服务端错误 (5xx)',
+			unavailable: '服务不可用',
+			terminated: '连接被终止',
+			stream: '流式传输错误',
+			idleTimeout: '流空闲超时',
+			toolCallJson: '工具调用 JSON 不完整',
+		},
+		defaultKeywordsPrefix: '默认: ',
+		customKeywordsLabel: '额外关键词',
+		customKeywordsHint:
+			'逗号分隔，在已启用类别之外额外匹配错误消息（不区分大小写的子串匹配；纯数字按完整数字匹配）',
+		notSet: '未设置',
+		navigationHint:
+			'↑↓ 导航 · 空格 开关 · Enter 编辑关键词 · R 恢复默认关键词 · Esc 返回',
+		editingHint:
+			'←→↑↓ 移动光标 · Home/End 行首行尾 · Ctrl+U 清空 · Enter 保存 · Esc 取消',
+		emptyMeansDefault: '留空表示使用默认关键词',
+		saved: '重试策略已保存',
+		saveError: '保存重试策略失败',
+		summaryAlways: '当前: 任何错误都重试',
+		summaryCategories: '当前: 已启用 {enabled}/{total} 个类别',
 	},
 	// Decision Models Screen
 	decisionModels: {

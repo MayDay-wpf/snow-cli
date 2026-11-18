@@ -5,6 +5,10 @@ import {Alert, Spinner} from '@inkjs/ui';
 import TextInput from 'ink-text-input';
 import ScrollableSelectInput from '../../components/common/ScrollableSelectInput.js';
 import type {ResponsesReasoningMode} from '../../../utils/config/apiConfig.js';
+import {
+	DEFAULT_RETRY_CATEGORIES,
+	getRetryPolicyConfig,
+} from '../../../utils/config/retryPolicyConfig.js';
 import {stripFocusArtifacts} from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -274,7 +278,7 @@ export function ManualInputView({state, inlineMode}: SubViewProps) {
 }
 
 /**
- * API 配置页的顶层选择视图：先选「配置 LLM 模型」还是「决策模型配置」。
+ * API 配置页的顶层选择视图：「配置 LLM 模型」「决策模型配置」「重试策略」。
  * 默认光标停在 LLM（首选），按键交互由 useConfigInput 处理。
  */
 export function ConfigScopeSelectView({state, inlineMode}: SubViewProps) {
@@ -289,7 +293,22 @@ export function ConfigScopeSelectView({state, inlineMode}: SubViewProps) {
 			label: t.configScreen.decisionModelConfig,
 			subtitle: t.configScreen.decisionModelConfigSubtitle,
 		},
+		{
+			label: t.configScreen.retryPolicyConfig,
+			subtitle: t.configScreen.retryPolicyConfigSubtitle,
+		},
 	];
+
+	// 选择页展示当前重试策略摘要；每次回到选择页都会重新渲染并读取最新配置
+	const retryPolicy = getRetryPolicyConfig();
+	const enabledCategoryCount = DEFAULT_RETRY_CATEGORIES.filter(
+		category => retryPolicy.categories[category.id]?.enabled !== false,
+	).length;
+	const retryPolicySummary = retryPolicy.always
+		? t.retryPolicy.summaryAlways
+		: t.retryPolicy.summaryCategories
+				.replace('{enabled}', String(enabledCategoryCount))
+				.replace('{total}', String(DEFAULT_RETRY_CATEGORIES.length));
 
 	return (
 		<Box flexDirection="column" padding={1}>
@@ -333,6 +352,11 @@ export function ConfigScopeSelectView({state, inlineMode}: SubViewProps) {
 									<Text color={theme.colors.menuSecondary} dimColor>
 										{t.decisionModels.activeModel}{' '}
 										{activeDecisionModelName || t.decisionModels.none}
+									</Text>
+								)}
+								{index === 2 && (
+									<Text color={theme.colors.menuSecondary} dimColor>
+										{retryPolicySummary}
 									</Text>
 								)}
 							</Box>

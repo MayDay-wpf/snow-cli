@@ -13,6 +13,7 @@ import {useConfigInput} from './configScreen/useConfigInput.js';
 import ConfigFieldRenderer from './configScreen/ConfigFieldRenderer.js';
 import ConfigSelectPanel from './configScreen/ConfigSelectPanel.js';
 import DecisionModelConfigScreen from './DecisionModelConfigScreen.js';
+import RetryPolicyConfigScreen from './RetryPolicyConfigScreen.js';
 import {
 	ProfileCreateView,
 	ProfileDeleteView,
@@ -89,6 +90,10 @@ export default function ConfigScreen({
 				}}
 			/>
 		);
+	}
+
+	if (configScope === 'retry') {
+		return <RetryPolicyConfigScreen onBack={() => setConfigScope('select')} />;
 	}
 
 	const isSelectEditing = isEditing && isSelectField(currentField);

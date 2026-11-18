@@ -3,10 +3,16 @@
  * 提供统一的重试机制用于所有 AI 请求
  * - 支持5次重试
  * - 定长延时策略 (固定 baseDelay)
+ * - 可重试错误类别由重试策略配置决定 (API 设置 -> 重试策略)
  * - 支持 AbortSignal 中断
  */
 
 import {logger} from './logger.js';
+import {
+	IDLE_TIMEOUT_CATEGORY_ID,
+	matchesRetryKeywords,
+	resolveRetryRules,
+} from '../config/retryPolicyConfig.js';
 
 const log = logger.child('core:retryUtils');
 
@@ -123,80 +129,32 @@ export function createOverloadedApiError(
 }
 
 /**
- * 判断错误是否可重试
+ * 判断错误是否可重试。
+ *
+ * 规则来自可配置的重试策略（~/.snow/retry-policy.json，见 retryPolicyConfig.ts），
+ * 每次判定都重新读取，使 API 设置界面中的修改立即生效。
+ * 用户主动取消/中断的请求永远不重试。
  */
 function isRetriableError(error: Error): boolean {
-	// Overloaded 现在也会触发重试
-	if (isOverloadedError(error)) {
-		return true;
-	}
-
-	// 优先通过错误名称判定,降低对 message 内容的依赖
-	if (error.name === 'StreamIdleTimeoutError') {
-		return true;
-	}
-
 	const errorMessage = error.message.toLowerCase();
+	if (errorMessage.includes('aborted') || errorMessage.includes('cancel')) {
+		return false;
+	}
 
-	// 网络错误
+	const rules = resolveRetryRules();
+	if (rules.always) {
+		return true;
+	}
+
+	// 流空闲超时按错误类型判定，降低对 message 内容的依赖
 	if (
-		errorMessage.includes('network') ||
-		errorMessage.includes('econnrefused') ||
-		errorMessage.includes('econnreset') ||
-		errorMessage.includes('etimedout') ||
-		errorMessage.includes('timeout')
+		error.name === 'StreamIdleTimeoutError' &&
+		rules.enabledCategories.has(IDLE_TIMEOUT_CATEGORY_ID)
 	) {
 		return true;
 	}
 
-	// Rate limit errors
-	if (
-		errorMessage.includes('rate limit') ||
-		errorMessage.includes('too many requests') ||
-		errorMessage.includes('429')
-	) {
-		return true;
-	}
-
-	// Server errors (5xx - temporary server issues, retryable)
-	// Note: 400, 403, 405 are client errors - typically not retryable
-	// as they indicate request format issues that won't change on retry
-	if (
-		errorMessage.includes('500') ||
-		errorMessage.includes('502') ||
-		errorMessage.includes('503') ||
-		errorMessage.includes('504') ||
-		errorMessage.includes('internal server error') ||
-		errorMessage.includes('bad gateway') ||
-		errorMessage.includes('service unavailable') ||
-		errorMessage.includes('gateway timeout')
-	) {
-		return true;
-	}
-
-	// Temporary service unavailable
-	if (errorMessage.includes('unavailable')) {
-		return true;
-	}
-
-	// Connection terminated by server
-	if (
-		errorMessage.includes('terminated') ||
-		errorMessage.includes('connection reset') ||
-		errorMessage.includes('socket hang up')
-	) {
-		return true;
-	}
-
-	// JSON parsing errors from streaming (incomplete or malformed tool calls)
-	if (
-		errorMessage.includes('invalid tool call json') ||
-		errorMessage.includes('incomplete tool call json')
-	) {
-		return true;
-	}
-
-	return false;
+	return matchesRetryKeywords(errorMessage, rules.keywords);
 }
 
 /**

@@ -69,11 +69,19 @@ export type ProfileMode = 'normal' | 'creating' | 'renaming' | 'deleting';
 
 /**
  * API 配置页的顶层作用域。
- * select = 顶部选择页（配置 LLM 模型 / 决策模型配置）
+ * select = 顶部选择页（配置 LLM 模型 / 决策模型配置 / 重试策略）
  * llm = LLM 模型配置（原有的字段列表）
  * decision = 决策模型配置（独立页面）
+ * retry = 重试策略配置（独立页面，作用于所有档案）
  */
-export type ConfigScope = 'select' | 'llm' | 'decision';
+export type ConfigScope = 'select' | 'llm' | 'decision' | 'retry';
+
+/** 顶层选择页的入口顺序（索引即 configScopeIndex） */
+export const CONFIG_SCOPE_OPTIONS: Array<Exclude<ConfigScope, 'select'>> = [
+	'llm',
+	'decision',
+	'retry',
+];
 
 export type ConfigScreenProps = {
 	onBack: () => void;

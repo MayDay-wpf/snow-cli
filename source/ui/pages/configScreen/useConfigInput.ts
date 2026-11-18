@@ -5,6 +5,7 @@ import {
 	isSelectField,
 	isGroupField,
 	NUMERIC_FIELDS,
+	CONFIG_SCOPE_OPTIONS,
 } from './types.js';
 import type {ConfigStateReturn} from './useConfigState.js';
 
@@ -107,22 +108,23 @@ export function useConfigInput(
 	} = state;
 
 	useInput((rawInput, key) => {
-		// 决策模型配置是独立子页面，按键由 DecisionModelConfigScreen 自行处理，
+		// 决策模型 / 重试策略配置是独立子页面，按键由对应页面自行处理，
 		// 这里必须整体让出，避免同一个按键被两个组件同时消费。
-		if (configScope === 'decision') {
+		if (configScope === 'decision' || configScope === 'retry') {
 			return;
 		}
 
-		// 顶层选择页：选择「配置 LLM 模型」还是「决策模型配置」
+		// 顶层选择页：选择「配置 LLM 模型」「决策模型配置」还是「重试策略」
 		if (configScope === 'select') {
+			const lastIndex = CONFIG_SCOPE_OPTIONS.length - 1;
 			if (key.escape) {
 				onBack();
 			} else if (key.upArrow) {
-				setConfigScopeIndex(prev => (prev > 0 ? prev - 1 : 1));
+				setConfigScopeIndex(prev => (prev > 0 ? prev - 1 : lastIndex));
 			} else if (key.downArrow) {
-				setConfigScopeIndex(prev => (prev < 1 ? prev + 1 : 0));
+				setConfigScopeIndex(prev => (prev < lastIndex ? prev + 1 : 0));
 			} else if (key.return) {
-				setConfigScope(configScopeIndex === 0 ? 'llm' : 'decision');
+				setConfigScope(CONFIG_SCOPE_OPTIONS[configScopeIndex] ?? 'llm');
 			}
 			return;
 		}

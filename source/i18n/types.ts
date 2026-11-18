@@ -427,6 +427,38 @@ export type TranslationKeys = {
 		scopeSelectHint: string;
 		decisionModelConfig: string;
 		decisionModelConfigSubtitle: string;
+		retryPolicyConfig: string;
+		retryPolicyConfigSubtitle: string;
+	};
+	// Retry Policy Screen
+	retryPolicy: {
+		title: string;
+		subtitle: string;
+		alwaysLabel: string;
+		alwaysHint: string;
+		categoriesTitle: string;
+		categoryLabels: {
+			overloaded: string;
+			network: string;
+			rateLimit: string;
+			serverError: string;
+			unavailable: string;
+			terminated: string;
+			stream: string;
+			idleTimeout: string;
+			toolCallJson: string;
+		};
+		defaultKeywordsPrefix: string;
+		customKeywordsLabel: string;
+		customKeywordsHint: string;
+		notSet: string;
+		navigationHint: string;
+		editingHint: string;
+		emptyMeansDefault: string;
+		saved: string;
+		saveError: string;
+		summaryAlways: string;
+		summaryCategories: string;
 	};
 	// Decision Models Screen
 	decisionModels: {
