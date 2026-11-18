@@ -125,10 +125,7 @@ jobs:
 
             ### What's New
 
-            - `/connect` is now a full IM gateway: connect Telegram and Feishu bots and use chat apps as a lightweight entry to Snow CLI. A new full-screen panel configures bot tokens / app credentials, direct-message allowlists, group @mention rules, approval forwarding, working directory and reply mode (streaming updates or final result only); credentials live in `~/.snow/connect.json` with mode 600 and are masked in the UI. `/connect status|on|off` works headlessly, per-channel status, counters, bound sessions and recent logs are shown in the panel, and each IM turn runs in its own worker process so bot traffic stays isolated from the interactive TUI. With approval forwarding enabled, tool approvals and questions can be answered directly in the chat (Feishu text messages cannot be edited, so streaming applies to Telegram only). The legacy `/disconnect` and `/connection-status` commands, the old instance `ConnectionPanel` and the backend statusline item were removed
-            - Sub-agent tool calls now go through the same approval channel as the main agent: the ACP path no longer auto-approves `subagent-*`, and confirmations, including "always allow" and reject-with-reply reasons, are forwarded into the child process. If no confirmation channel is available the call fails closed instead of running unattended
-            - Teammates can no longer bypass sensitive-command approval in YOLO mode: ordinary tools remain auto-approved, while sensitive commands (`rm -rf`, `git push --force`, etc.) still require confirmation unless the tool is explicitly on the always-allowed list
-            - Test coverage was added for both sub-agent and teammate approval flows, including the fail-closed path
+            - add retry policy configuration screen and integrate with existing config
 
             ### Installation
             ```bash
