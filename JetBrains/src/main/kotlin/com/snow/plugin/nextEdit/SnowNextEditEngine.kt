@@ -117,7 +117,7 @@ class SnowNextEditEngine(private val project: Project) : Disposable {
     fun registerDocument(editor: Editor) {
         val doc = editor.document
         if (registeredDocs.add(doc)) {
-            doc.addDocumentListener(tracker)
+            doc.addDocumentListener(tracker, this)
             logger.info("Registered edit tracker for: ${FileDocumentManager.getInstance().getFile(doc)?.name ?: "unknown"}")
         }
         tracker.captureSnapshot(doc)

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.snow"
-version = "0.4.24"
+version = "0.4.25"
 
 repositories {
     mavenCentral()

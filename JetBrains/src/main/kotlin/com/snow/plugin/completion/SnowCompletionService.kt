@@ -142,7 +142,7 @@ private class EditorCompletionState(
     }
 
     init {
-        editor.document.addDocumentListener(docListener)
+        editor.document.addDocumentListener(docListener, this)
         editor.caretModel.addCaretListener(caretListener)
     }
 
