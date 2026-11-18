@@ -2,17 +2,33 @@ import {addProxyToFetchOptions} from '../utils/core/proxyUtils.js';
 import {getVersionHeader} from '../utils/core/version.js';
 import {normalizeBaseUrlValue} from './endpointResolver.js';
 import type {BaseUrlMode} from '../utils/config/apiConfig.js';
-import type {DecisionModelItem} from '../utils/config/decisionModelsConfig.js';
+import {
+	DECISION_MODEL_PROVIDER_DEFAULTS,
+	normalizeDecisionModelProvider,
+	type DecisionModelItem,
+	type DecisionModelProvider,
+} from '../utils/config/decisionModelsConfig.js';
 
 /**
- * 决策模型（TypeSafe System One / Jev）客户端，供 codebase agent review 使用。
+ * 决策模型客户端（TypeSafe System One / OpenAI Decisions / Gemini Decisions），
+ * 供 codebase agent review 与敏感命令判定使用。
  *
  * 决策模型不是文本生成模型：它把一段 `state` 与一组带类型的问题一起提交，
  * 逐题作答并返回置信度。这里用它回答「这条搜索结果是否与搜索词相关」的
  * choice 问题，它的判定本身就是审查结论，不需要再让 LLM 复核一遍。
  *
- * 设计约束（参考 https://docs.typesafe.ai/api）：
- * - state 加最长问题必须落在模型的上下文内，因此 state 按字符预算硬裁剪；
+ * 三种渠道共用同一条链路：构建 state 与问题 -> 按渠道生成请求体 ->
+ * 把响应折叠成 `answers: { <name>: { choice, confidence } }` -> 同一段解释代码。
+ * - TypeSafe（Jev）：`/v1/systemone`，Bearer 鉴权，state 为结构化 JSON，
+ *   questions 是 map（choice 选项在 `criteria`）。
+ * - OpenAI Decisions：`/v1/decisions`，Bearer 鉴权，state 作为 JSON 文本放进
+ *   user 消息的 `input_text`，questions 是数组（choice 选项在 `choices`），
+ *   answers 也是按 name 标识的数组，refusal 答案按错误处理。
+ * - Gemini Decisions：`/v1beta/decisions`，`x-goog-api-key` 鉴权（中转端点
+ *   再补 Bearer），state 作为 text 内容块放进 `input`，questions 是 map。
+ *
+ * 设计约束：
+ * - state 加问题必须落在模型的上下文内，因此 state 按渠道字符预算硬裁剪；
  *   放不下的结果一律保留为「相关」，而不是被静默丢弃。
  * - 决策模型无法改写搜索词。它的判定触发重新检索时，改写搜索词这一件事
  *   由调用方交给 LLM 完成，失败则保留决策模型的判定结果。
@@ -20,17 +36,31 @@ import type {DecisionModelItem} from '../utils/config/decisionModelsConfig.js';
  *   自身绝不降级搜索结果。
  */
 
-/** 官方 TypeSafe 端点；决策模型未填写 baseUrl 时使用。 */
-const DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1';
-
-/** 单次请求最多转成问题的结果数量。 */
-const MAX_QUESTIONS = 40;
+/** Gemini API Key 请求头。 */
+const GOOGLE_API_KEY_HEADER = 'x-goog-api-key';
 
 /** 每条结果正文最多截取的字符数。 */
 const MAX_EXCERPT_CHARS = 800;
 
-/** 整个 state（query + 所有摘要）的字符预算，避开决策模型的上下文上限。 */
-const MAX_STATE_CHARS = 40_000;
+/** 按渠道区分的请求预算（字符估算，不做实时 token 计数）。 */
+interface DecisionLimits {
+	/** 单次请求最多转成问题的结果数量。 */
+	maxQuestions: number;
+	/** 整个 state（query + 所有摘要）的字符预算。 */
+	maxStateChars: number;
+}
+
+/**
+ * 各渠道预算，与 Snow App 保持一致：
+ * - TypeSafe Jev：state + 全部问题 <= 64k token，按 2 字符/token 估算取 48k 字符。
+ * - OpenAI Decisions：每请求 1-400 题，上下文 1.05M token，取 200k 字符。
+ * - Gemini Decisions：每请求 1-1000 题，上下文 262k token，取 200k 字符。
+ */
+const DECISION_LIMITS: Record<DecisionModelProvider, DecisionLimits> = {
+	typesafe: {maxQuestions: 50, maxStateChars: 48_000},
+	openai: {maxQuestions: 50, maxStateChars: 200_000},
+	gemini: {maxQuestions: 50, maxStateChars: 200_000},
+};
 
 /** 请求超时（毫秒）：决策模型通常在几十毫秒内返回，短超时可避免拖慢搜索。 */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -104,8 +134,9 @@ export interface SensitiveCommandDecisionContext {
 	matchedRules?: Array<{pattern: string; description: string}>;
 }
 
-/** 决策模型的请求配置（baseUrl / apiKey / model）。 */
+/** 决策模型的请求配置（provider / baseUrl / apiKey / model）。 */
 export interface DecisionModelReviewConfig {
+	provider: DecisionModelProvider;
 	baseUrl: string;
 	baseUrlMode: BaseUrlMode;
 	apiKey: string;
@@ -141,6 +172,7 @@ export function resolveDecisionModelReviewConfig(
 	}
 
 	return {
+		provider: normalizeDecisionModelProvider(item.provider),
 		baseUrl: item.baseUrl,
 		baseUrlMode: item.baseUrlMode,
 		apiKey,
@@ -149,37 +181,50 @@ export function resolveDecisionModelReviewConfig(
 }
 
 /**
- * 解析 System One 评估端点。
+ * 按渠道解析决策模型的完整请求端点。
  *
- * - 空 baseUrl → 官方端点 `/v1/systemone`
+ * 通用规则：
+ * - 空 baseUrl → 该渠道的官方端点
  * - `endpoint` 模式 → 视为完整端点直接使用
- * - 已以 `/systemone` 结尾 → 原样使用
- * - 已以 `/v1` 结尾 → 追加 `/systemone`
- * - 其它 → 追加 `/v1/systemone`
+ *
+ * 其余按渠道补齐路径：
+ * - typesafe：`/systemone`（已以 `/v1` 结尾只追加 `/systemone`，否则追加 `/v1/systemone`）
+ * - openai：`/decisions`（已以 `/v1` 结尾只追加 `/decisions`，否则追加 `/v1/decisions`）
+ * - gemini：`/decisions`（已以 `/v1beta` 或 `/v1` 结尾只追加 `/decisions`，否则追加 `/v1beta/decisions`）
  */
-export function resolveSystemOneEndpoint(
+export function resolveDecisionEndpoint(
 	baseUrl: string,
 	mode: BaseUrlMode = 'auto',
+	provider: DecisionModelProvider = 'typesafe',
 ): string {
 	const normalized = normalizeBaseUrlValue(baseUrl);
+	const defaultBaseUrl = DECISION_MODEL_PROVIDER_DEFAULTS[provider].baseUrl;
+	const suffix = provider === 'typesafe' ? '/systemone' : '/decisions';
 
 	if (!normalized) {
-		return `${DEFAULT_BASE_URL}/systemone`;
+		return `${defaultBaseUrl}${suffix}`;
 	}
 
 	if (mode === 'endpoint') {
 		return normalized;
 	}
 
-	if (normalized.endsWith('/systemone')) {
+	if (normalized.endsWith(suffix)) {
 		return normalized;
 	}
 
-	if (normalized.endsWith('/v1')) {
-		return `${normalized}/systemone`;
+	if (provider === 'gemini') {
+		if (normalized.endsWith('/v1beta') || normalized.endsWith('/v1')) {
+			return `${normalized}${suffix}`;
+		}
+		return `${normalized}/v1beta${suffix}`;
 	}
 
-	return `${normalized}/v1/systemone`;
+	if (normalized.endsWith('/v1')) {
+		return `${normalized}${suffix}`;
+	}
+
+	return `${normalized}/v1${suffix}`;
 }
 
 /**
@@ -203,7 +248,11 @@ export async function evaluateRelevance(
 		return [];
 	}
 
-	const {state, asked} = buildState(query, results);
+	const {state, asked} = buildState(
+		query,
+		results,
+		DECISION_LIMITS[config.provider],
+	);
 
 	// state 预算放不下任何结果：与其发送一个只拿 query 做判断的空请求，
 	// 不如直接报告全部相关。
@@ -211,7 +260,7 @@ export async function evaluateRelevance(
 		return results.map((_, index) => index);
 	}
 
-	const questions: Record<string, unknown> = {};
+	const questions: Record<string, DecisionChoiceQuestion> = {};
 	for (const {id} of asked) {
 		questions[id] = {
 			type: 'choice',
@@ -224,16 +273,7 @@ export async function evaluateRelevance(
 		};
 	}
 
-	const parsed = await postEvaluation(
-		config,
-		{state, model: config.model, questions},
-		abortSignal,
-	);
-
-	const answers =
-		parsed && typeof parsed === 'object'
-			? (parsed as {answers?: Record<string, unknown>}).answers ?? {}
-			: {};
+	const answers = await postEvaluation(config, state, questions, abortSignal);
 
 	const askedIndices = new Set<number>();
 	const relevant: number[] = [];
@@ -307,7 +347,7 @@ export async function evaluateSensitiveCommand(
 		reasonCriteria[key] = description;
 	}
 
-	const questions = {
+	const questions: Record<string, DecisionChoiceQuestion> = {
 		[VERDICT_QUESTION_ID]: {
 			type: 'choice',
 			instructions:
@@ -326,22 +366,10 @@ export async function evaluateSensitiveCommand(
 		},
 	};
 
-	const parsed = await postEvaluation(
-		config,
-		{state, model: config.model, questions},
-		abortSignal,
-	);
-
-	const answers =
-		parsed && typeof parsed === 'object'
-			? (parsed as {answers?: Record<string, unknown>}).answers ?? {}
-			: {};
+	const answers = await postEvaluation(config, state, questions, abortSignal);
 
 	const verdictAnswer = answers[VERDICT_QUESTION_ID];
-	const verdict =
-		verdictAnswer && typeof verdictAnswer === 'object'
-			? (verdictAnswer as {choice?: unknown}).choice
-			: undefined;
+	const verdict = verdictAnswer?.choice;
 
 	if (typeof verdict !== 'string') {
 		throw new Error(
@@ -350,23 +378,14 @@ export async function evaluateSensitiveCommand(
 	}
 
 	// 未知或缺失的原因分类降级为 unclear：判定本身仍然成立，只是解释不够具体。
-	const rawReason =
-		answers[REASON_QUESTION_ID] &&
-		typeof answers[REASON_QUESTION_ID] === 'object'
-			? ((answers[REASON_QUESTION_ID] as {choice?: unknown}).choice as
-					| unknown
-					| undefined)
-			: undefined;
+	const rawReason = answers[REASON_QUESTION_ID]?.choice;
 	const reason =
 		typeof rawReason === 'string' &&
 		SENSITIVE_COMMAND_REASON_CATEGORIES.some(([key]) => key === rawReason)
 			? rawReason
 			: REASON_UNKNOWN;
 
-	const confidence =
-		verdictAnswer && typeof verdictAnswer === 'object'
-			? (verdictAnswer as {confidence?: unknown}).confidence
-			: undefined;
+	const confidence = verdictAnswer?.confidence;
 
 	return {
 		// 除显式的 allow 外，一律保留确认提示。
@@ -381,17 +400,19 @@ export async function evaluateSensitiveCommand(
 
 /**
  * 构建评估 state，并返回落在预算内的 `(结果下标, 问题 id)` 列表。
+ * 题数与字符按渠道预算截止，超预算的结果不提问、按保留处理。
  */
 function buildState(
 	query: string,
 	results: DecisionModelReviewResult[],
+	limits: DecisionLimits,
 ): {state: unknown; asked: Array<{index: number; id: string}>} {
 	const items: Array<Record<string, unknown>> = [];
 	const asked: Array<{index: number; id: string}> = [];
 	let usedChars = query.length;
 
 	for (let index = 0; index < results.length; index++) {
-		if (asked.length >= MAX_QUESTIONS) {
+		if (asked.length >= limits.maxQuestions) {
 			break;
 		}
 
@@ -399,7 +420,7 @@ function buildState(
 		const excerpt = result.content.slice(0, MAX_EXCERPT_CHARS);
 		// 路径、行号区间、id 以及外围 JSON 键也会占用预算，用一个小常量近似。
 		const cost = excerpt.length + result.filePath.length + 96;
-		if (usedChars + cost > MAX_STATE_CHARS) {
+		if (usedChars + cost > limits.maxStateChars) {
 			break;
 		}
 		usedChars += cost;
@@ -417,18 +438,208 @@ function buildState(
 	return {state: {query, results: items}, asked};
 }
 
+/** 内部统一的 choice 问题：`criteria` 为「选项值 -> 选项说明」。 */
+interface DecisionChoiceQuestion {
+	type: 'choice';
+	instructions: string;
+	criteria: Record<string, string>;
+}
+
+/** 折叠后的单条答案；三种渠道的响应都会归一化成这个形状。 */
+interface DecisionAnswer {
+	choice?: unknown;
+	confidence?: unknown;
+}
+
 /**
- * 发送一次评估请求并返回解析后的响应体。
+ * OpenAI / Gemini 的 `input` 不接受结构化 JSON 块：state 一律按 pretty JSON
+ * 文本发送。
+ */
+function stateToInputText(state: unknown): string {
+	try {
+		return JSON.stringify(state, null, 2);
+	} catch {
+		return String(state);
+	}
+}
+
+/**
+ * 按渠道生成请求体。
  *
- * 任何失败（传输、HTTP 状态、响应体非 JSON）都会抛出错误，交由调用方决定
- * 回退策略。
+ * - typesafe：`{state, model, questions}`，questions 原样作为 map 发送。
+ * - openai：state 放进 user 消息的 `input_text`，questions 转为数组，
+ *   choice 的 criteria 映射为 `choices: [{value, description}]`。
+ * - gemini：state 放进 `input` 的 text 内容块，questions 保持 map，
+ *   choice 选项仍在 `criteria`。
+ */
+function buildRequestBody(
+	config: DecisionModelReviewConfig,
+	state: unknown,
+	questions: Record<string, DecisionChoiceQuestion>,
+): unknown {
+	switch (config.provider) {
+		case 'openai':
+			return {
+				model: config.model,
+				input: [
+					{
+						role: 'user',
+						content: [{type: 'input_text', text: stateToInputText(state)}],
+					},
+				],
+				questions: Object.entries(questions).map(([name, question]) => ({
+					type: question.type,
+					name,
+					instructions: question.instructions,
+					choices: Object.entries(question.criteria).map(
+						([value, description]) => ({value, description}),
+					),
+				})),
+			};
+		case 'gemini':
+			return {
+				model: config.model,
+				input: [{type: 'text', text: stateToInputText(state)}],
+				questions,
+			};
+		case 'typesafe':
+		default:
+			return {
+				state,
+				model: config.model,
+				questions,
+			};
+	}
+}
+
+/**
+ * 把三种响应折叠成 `name -> { choice, confidence }`。
+ *
+ * typesafe / gemini 的 answers 是以问题名为键的对象；openai 的 answers 是
+ * 数组，按 `name` 折叠。refusal 答案按错误返回，绝不当作 allow / relevant。
+ */
+function normalizeAnswers(
+	provider: DecisionModelProvider,
+	parsed: unknown,
+): Record<string, DecisionAnswer> {
+	const answers =
+		parsed && typeof parsed === 'object'
+			? (parsed as {answers?: unknown}).answers
+			: undefined;
+
+	if (answers === undefined || answers === null) {
+		throw new Error(
+			`The ${provider} decision model response is missing the 'answers' field`,
+		);
+	}
+
+	if (provider === 'openai') {
+		if (!Array.isArray(answers)) {
+			throw new Error(
+				`The ${provider} decision model response is missing the 'answers' array`,
+			);
+		}
+
+		const normalized: Record<string, DecisionAnswer> = {};
+		for (const item of answers) {
+			if (!item || typeof item !== 'object') {
+				continue;
+			}
+			const record = item as Record<string, unknown>;
+			const name = typeof record['name'] === 'string' ? record['name'].trim() : '';
+			if (!name) {
+				throw new Error(
+					`The ${provider} decision model returned an answer without a name`,
+				);
+			}
+			if (record['type'] === 'refusal') {
+				throw new Error(`Decision refused for ${name}`);
+			}
+			normalized[name] = {
+				choice: record['choice'],
+				confidence: record['confidence'],
+			};
+		}
+		return normalized;
+	}
+
+	if (typeof answers !== 'object' || Array.isArray(answers)) {
+		throw new Error(
+			`The ${provider} decision model response is missing the 'answers' object`,
+		);
+	}
+
+	const normalized: Record<string, DecisionAnswer> = {};
+	for (const [name, answer] of Object.entries(
+		answers as Record<string, unknown>,
+	)) {
+		if (!answer || typeof answer !== 'object') {
+			continue;
+		}
+		const record = answer as Record<string, unknown>;
+		normalized[name] = {
+			choice: record['choice'],
+			confidence: record['confidence'],
+		};
+	}
+	return normalized;
+}
+
+/** Google 官方域名（googleapis.com）只认 `x-goog-api-key`。 */
+function isGoogleEndpoint(endpoint: string): boolean {
+	try {
+		const host = new URL(endpoint).hostname.toLowerCase();
+		return host === 'googleapis.com' || host.endsWith('.googleapis.com');
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * 按渠道生成请求头。Gemini 用 `x-goog-api-key`；官方端点带无效 Bearer 会被拒，
+ * 只有中转端点再补 Bearer。TypeSafe / OpenAI 一律使用 Bearer。
+ */
+function buildHeaders(
+	config: DecisionModelReviewConfig,
+	endpoint: string,
+): Record<string, string> {
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		Accept: 'application/json',
+		'x-snow': getVersionHeader(),
+	};
+
+	let withBearer = true;
+	if (config.provider === 'gemini') {
+		headers[GOOGLE_API_KEY_HEADER] = config.apiKey;
+		withBearer = !isGoogleEndpoint(endpoint);
+	}
+
+	if (withBearer) {
+		headers['Authorization'] = `Bearer ${config.apiKey}`;
+	}
+
+	return headers;
+}
+
+/**
+ * 发送一次评估请求，返回折叠后的答案。
+ *
+ * 任何失败（传输、HTTP 状态、响应体非 JSON、缺少 answers、refusal）都会抛出
+ * 错误，交由调用方决定回退策略。
  */
 async function postEvaluation(
 	config: DecisionModelReviewConfig,
-	body: unknown,
+	state: unknown,
+	questions: Record<string, DecisionChoiceQuestion>,
 	abortSignal?: AbortSignal,
-): Promise<unknown> {
-	const endpoint = resolveSystemOneEndpoint(config.baseUrl, config.baseUrlMode);
+): Promise<Record<string, DecisionAnswer>> {
+	const endpoint = resolveDecisionEndpoint(
+		config.baseUrl,
+		config.baseUrlMode,
+		config.provider,
+	);
+	const body = buildRequestBody(config, state, questions);
 
 	// fetch 无法同时接收「超时」与「外部取消」两个信号，这里用同一个
 	// AbortController 承载两者。
@@ -447,12 +658,7 @@ async function postEvaluation(
 	try {
 		const fetchOptions = addProxyToFetchOptions(endpoint, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json',
-				'x-snow': getVersionHeader(),
-				Authorization: `Bearer ${config.apiKey}`,
-			},
+			headers: buildHeaders(config, endpoint),
 			body: JSON.stringify(body),
 			signal: controller.signal,
 		});
@@ -462,14 +668,14 @@ async function postEvaluation(
 		if (!response.ok) {
 			const errorText = await response.text();
 			throw new Error(
-				`Decision model API error (${response.status}): ${errorText.slice(
-					0,
-					500,
-				)}`,
+				`Decision model API error (${response.status}, provider: ${
+					config.provider
+				}): ${errorText.slice(0, 500)}`,
 			);
 		}
 
-		return await response.json();
+		const parsed: unknown = await response.json();
+		return normalizeAnswers(config.provider, parsed);
 	} finally {
 		clearTimeout(timer);
 		if (abortSignal) {

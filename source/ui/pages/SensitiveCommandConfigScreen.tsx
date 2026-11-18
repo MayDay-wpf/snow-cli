@@ -14,6 +14,7 @@ import {
 } from '../../utils/execution/sensitiveCommandManager.js';
 import {
 	getDecisionModelsConfig,
+	DECISION_MODEL_PROVIDER_DEFAULTS,
 	type DecisionModelItem,
 } from '../../utils/config/decisionModelsConfig.js';
 import {
@@ -193,7 +194,9 @@ export default function SensitiveCommandConfigScreen({
 		const options: Array<{label: string; value: string}> = [
 			{label: t.sensitiveCommandConfig.assistModelNone, value: ''},
 			...decisionModels.map(model => ({
-				label: model.name.trim() || model.model.trim() || model.id,
+				label: `${model.name.trim() || model.model.trim() || model.id} [${
+					DECISION_MODEL_PROVIDER_DEFAULTS[model.provider].label
+				}]`,
 				value: model.id,
 			})),
 		];

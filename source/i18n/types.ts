@@ -478,6 +478,7 @@ export type TranslationKeys = {
 		navigationHint: string;
 		addNewTitle: string;
 		editTitle: string;
+		providerLabel: string;
 		nameLabel: string;
 		namePlaceholder: string;
 		baseUrlLabel: string;

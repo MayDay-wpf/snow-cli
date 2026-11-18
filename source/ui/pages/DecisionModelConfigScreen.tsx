@@ -6,7 +6,11 @@ import ScrollableSelectInput from '../components/common/ScrollableSelectInput.js
 import {
 	getDecisionModelsConfig,
 	saveDecisionModelsConfig,
+	DECISION_MODEL_PROVIDERS,
+	DECISION_MODEL_PROVIDER_DEFAULTS,
+	DEFAULT_DECISION_MODEL_PROVIDER,
 	type DecisionModelItem,
+	type DecisionModelProvider,
 	type DecisionModelsConfig,
 } from '../../utils/config/decisionModelsConfig.js';
 import type {BaseUrlMode} from '../../utils/config/apiConfig.js';
@@ -29,9 +33,16 @@ type ListAction =
 	| 'add'
 	| 'back';
 
-type FormField = 'name' | 'baseUrl' | 'baseUrlMode' | 'apiKey' | 'model';
+type FormField =
+	| 'provider'
+	| 'name'
+	| 'baseUrl'
+	| 'baseUrlMode'
+	| 'apiKey'
+	| 'model';
 
 const FORM_FIELDS: FormField[] = [
+	'provider',
 	'name',
 	'baseUrl',
 	'baseUrlMode',
@@ -39,15 +50,16 @@ const FORM_FIELDS: FormField[] = [
 	'model',
 ];
 
-// 只有 URL 模式需要下拉选择：决策模型有自己的请求体，没有 LLM 式的「请求方案」
-const SELECT_FORM_FIELDS: FormField[] = ['baseUrlMode'];
+// 需要下拉选择的字段：渠道与 URL 模式。决策模型有自己的请求体，没有 LLM 式的「请求方案」
+const SELECT_FORM_FIELDS: FormField[] = ['provider', 'baseUrlMode'];
 
 const buildEmptyForm = () => ({
+	provider: DEFAULT_DECISION_MODEL_PROVIDER as DecisionModelProvider,
 	name: '',
 	baseUrl: '',
 	baseUrlMode: 'auto' as BaseUrlMode,
 	apiKey: '',
-	model: '',
+	model: DECISION_MODEL_PROVIDER_DEFAULTS[DEFAULT_DECISION_MODEL_PROVIDER].model,
 });
 
 type FormState = ReturnType<typeof buildEmptyForm>;
@@ -139,6 +151,7 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 
 		const target = config.models[selectedIndex]!;
 		setForm({
+			provider: target.provider,
 			name: target.name,
 			baseUrl: target.baseUrl,
 			baseUrlMode: target.baseUrlMode,
@@ -182,8 +195,11 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 	};
 
 	const saveForm = () => {
+		const providerDefaults = DECISION_MODEL_PROVIDER_DEFAULTS[form.provider];
 		const payload = {
-			name: form.name.trim() || t.decisionModels.untitled,
+			name:
+				form.name.trim() || providerDefaults.name || t.decisionModels.untitled,
+			provider: form.provider,
 			baseUrl: form.baseUrl.trim(),
 			baseUrlMode: form.baseUrlMode,
 			apiKey: form.apiKey.trim(),
@@ -336,6 +352,67 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 			? theme.colors.menuSelected
 			: theme.colors.menuNormal;
 
+		if (field === 'provider') {
+			const options: Array<{label: string; value: string}> =
+				DECISION_MODEL_PROVIDERS.map(provider => ({
+					label: DECISION_MODEL_PROVIDER_DEFAULTS[provider].label,
+					value: provider,
+				}));
+			const currentValue = form.provider;
+			const display = DECISION_MODEL_PROVIDER_DEFAULTS[currentValue].label;
+
+			return (
+				<Box key={field} flexDirection="column" marginBottom={1}>
+					<Text color={color}>
+						{indicator}
+						{t.decisionModels.providerLabel}
+					</Text>
+					{isCurrentlyEditing ? (
+						<Box marginLeft={3} flexDirection="column">
+							<ScrollableSelectInput
+								items={options}
+								initialIndex={Math.max(
+									0,
+									options.findIndex(option => option.value === currentValue),
+								)}
+								isFocused={true}
+								onSelect={item => {
+									const nextProvider = item.value as DecisionModelProvider;
+									setForm(prev => {
+										const prevDefaults =
+											DECISION_MODEL_PROVIDER_DEFAULTS[prev.provider];
+										const nextDefaults =
+											DECISION_MODEL_PROVIDER_DEFAULTS[nextProvider];
+										// 模型名与名称仍是上一个渠道的默认值（或为空）时，跟随切换为新渠道的默认值；
+										// 用户手动填写过的值保持不变。
+										const model = prev.model.trim();
+										const name = prev.name.trim();
+										return {
+											...prev,
+											provider: nextProvider,
+											model:
+												!model || model === prevDefaults.model
+													? nextDefaults.model
+													: prev.model,
+											name: name === prevDefaults.name ? nextDefaults.name : prev.name,
+										};
+									});
+									setIsEditing(false);
+								}}
+							/>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.decisionModels.selectHint}
+							</Text>
+						</Box>
+					) : (
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary}>{display}</Text>
+						</Box>
+					)}
+				</Box>
+			);
+		}
+
 		if (field === 'baseUrlMode') {
 			const options: Array<{label: string; value: string}> = [
 				{label: t.configScreen.baseUrlModeAuto, value: 'auto'},
@@ -402,7 +479,7 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 			baseUrl: {
 				label: t.decisionModels.baseUrlLabel,
 				value: form.baseUrl,
-				placeholder: 'https://openrouter.ai/api/v1',
+				placeholder: DECISION_MODEL_PROVIDER_DEFAULTS[form.provider].baseUrl,
 				onChange: value =>
 					setForm(prev => ({...prev, baseUrl: stripFocusArtifacts(value)})),
 			},
@@ -417,7 +494,7 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 			model: {
 				label: t.decisionModels.modelLabel,
 				value: form.model,
-				placeholder: 'typesafe/jev-1.13',
+				placeholder: DECISION_MODEL_PROVIDER_DEFAULTS[form.provider].model,
 				onChange: value =>
 					setForm(prev => ({...prev, model: stripFocusArtifacts(value)})),
 			},
@@ -501,6 +578,10 @@ export default function DecisionModelConfigScreen({onBack}: Props) {
 									{index === selectedIndex ? '❯ ' : '  '}
 									{item.id === config.active ? '✓ ' : '  '}
 									{item.name}
+									<Text dimColor>
+										{' '}
+										[{DECISION_MODEL_PROVIDER_DEFAULTS[item.provider].label}]
+									</Text>
 									{item.model ? <Text dimColor> - {item.model}</Text> : null}
 								</Text>
 							</Box>

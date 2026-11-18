@@ -9,7 +9,10 @@ import {
 	saveCodebaseConfig,
 	type CodebaseConfig,
 } from '../../utils/config/codebaseConfig.js';
-import {getDecisionModelsConfig} from '../../utils/config/decisionModelsConfig.js';
+import {
+	getDecisionModelsConfig,
+	DECISION_MODEL_PROVIDER_DEFAULTS,
+} from '../../utils/config/decisionModelsConfig.js';
 import {useI18n} from '../../i18n/index.js';
 import {useTheme} from '../contexts/ThemeContext.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
@@ -219,13 +222,18 @@ export default function CodeBaseConfigScreen({
 		const decisionConfig = getDecisionModelsConfig();
 		setReviewModelOptions([
 			{label: t.codebaseConfig.agentReviewModelLlm, value: ''},
-			...(decisionConfig?.models ?? []).map(model => ({
-				label:
+			...(decisionConfig?.models ?? []).map(model => {
+				const base =
 					model.name && model.model
 						? `${model.name} (${model.model})`
-						: model.name || model.model || model.id,
-				value: model.id,
-			})),
+						: model.name || model.model || model.id;
+				return {
+					label: `${base} [${
+						DECISION_MODEL_PROVIDER_DEFAULTS[model.provider].label
+					}]`,
+					value: model.id,
+				};
+			}),
 		]);
 
 		setEnableReranking(config.enableReranking);
