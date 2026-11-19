@@ -131,7 +131,7 @@ jobs:
 
             ### What's New
 
-            - add retry policy configuration screen and integrate with existing config
+            - Enhance support for decision model providers, update relevant configurations and interfaces
 
             ### Installation
             ```bash
