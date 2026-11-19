@@ -2,7 +2,7 @@
 	"name": "snow-cli",
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
-	"version": "0.4.35",
+	"version": "0.4.36",
 	"publisher": "mufasa",
 	"icon": "snow.png",
 	"repository": {

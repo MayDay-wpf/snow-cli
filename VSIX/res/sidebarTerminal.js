@@ -2,6 +2,50 @@
 	const vscode = acquireVsCodeApi();
 	const isRemoteSsh = document.body?.dataset?.remoteSsh === 'true';
 
+	// @xterm/addon-webgl builds its glyph atlas font as `${style} ${weight} ...`,
+	// which starts with a space for non-italic text. Some Electron/Chromium
+	// builds shipped with newer VS Code reject leading whitespace in ctx.font,
+	// leaving the canvas on the 10px sans-serif default so glyphs render tiny
+	// and widely spaced (xtermjs/xterm.js#6297). Trim the value before it
+	// reaches the native setter so every renderer path stays valid.
+	const patchCanvasFontSetter = prototype => {
+		if (!prototype || prototype.__snowFontSetterPatched) {
+			return;
+		}
+		const descriptor = Object.getOwnPropertyDescriptor(prototype, 'font');
+		if (
+			!descriptor ||
+			typeof descriptor.set !== 'function' ||
+			typeof descriptor.get !== 'function' ||
+			!descriptor.configurable
+		) {
+			return;
+		}
+		const nativeSet = descriptor.set;
+		Object.defineProperty(prototype, 'font', {
+			configurable: true,
+			enumerable: descriptor.enumerable,
+			get: descriptor.get,
+			set(value) {
+				nativeSet.call(this, typeof value === 'string' ? value.trim() : value);
+			},
+		});
+		Object.defineProperty(prototype, '__snowFontSetterPatched', {
+			value: true,
+		});
+	};
+
+	try {
+		if (typeof CanvasRenderingContext2D === 'function') {
+			patchCanvasFontSetter(CanvasRenderingContext2D.prototype);
+		}
+		if (typeof OffscreenCanvasRenderingContext2D === 'function') {
+			patchCanvasFontSetter(OffscreenCanvasRenderingContext2D.prototype);
+		}
+	} catch {
+		// Ignore patch failures; rendering falls back to native behavior.
+	}
+
 	const normalizeLogMessage = value => {
 		if (typeof value === 'string') {
 			const trimmed = value.trim();
