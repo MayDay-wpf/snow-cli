@@ -131,7 +131,7 @@ jobs:
 
             ### What's New
 
-            - Enhance support for decision model providers, update relevant configurations and interfaces
+            - add OAuth 2.1 support for MCP servers
 
             ### Installation
             ```bash
