@@ -2327,6 +2327,21 @@ export type TranslationKeys = {
 		toolScopeProject: string;
 		mcpSourceProject: string;
 		mcpSourceGlobal: string;
+		oauth: {
+			actionHint: string;
+			authRequired: string;
+			title: string;
+			starting: string;
+			waiting: string;
+			hint: string;
+			reloading: string;
+			success: string;
+			cancelled: string;
+			failed: string;
+			unknownError: string;
+			pendingNavigationHint: string;
+			doneNavigationHint: string;
+		};
 	};
 	skillsListPanel: {
 		title: string;

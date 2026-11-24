@@ -1,10 +1,19 @@
-import React, {useState, useEffect, useMemo} from 'react';
+import React, {useState, useEffect, useMemo, useRef} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
 	getMCPServicesInfo,
 	refreshMCPToolsCache,
 	reconnectMCPService,
+	canStartMCPOAuthLogin,
+	startMCPServiceOAuthLogin,
+	completeMCPServiceOAuthLogin,
 } from '../../../utils/execution/mcpToolsManager.js';
+import {
+	getMCPOAuthLoginStatus,
+	cancelMCPOAuthLogin,
+	MCP_AUTH_REQUIRED_PREFIX,
+} from '../../../utils/execution/mcpOAuth.js';
+import {openExternalUrl} from '../../../utils/oauth/openBrowser.js';
 import {
 	getMCPConfigByScope,
 	updateMCPConfig,
@@ -178,6 +187,26 @@ interface Props {
 	onClose: () => void;
 }
 
+type OAuthFlowStatus =
+	| 'starting'
+	| 'pending'
+	| 'reloading'
+	| 'success'
+	| 'error'
+	| 'cancelled';
+
+interface OAuthFlowState {
+	serviceName: string;
+	status: OAuthFlowStatus;
+	sessionId?: string;
+	authUrl?: string;
+	error?: string;
+}
+
+function isAuthRequiredError(error?: string): boolean {
+	return !!error && error.startsWith(MCP_AUTH_REQUIRED_PREFIX);
+}
+
 export default function MCPInfoPanel({onClose}: Props) {
 	const {t} = useI18n();
 	const {theme} = useTheme();
@@ -196,6 +225,121 @@ export default function MCPInfoPanel({onClose}: Props) {
 		{},
 	);
 	const [toolScopeMap, setToolScopeMap] = useState<Record<string, string>>({});
+	const [oauthFlow, setOauthFlow] = useState<OAuthFlowState | null>(null);
+	const oauthFlowRef = useRef<OAuthFlowState | null>(null);
+	oauthFlowRef.current = oauthFlow;
+
+	// 可发起 OAuth 授权的外部服务（远程 HTTP 且开启 oauth），随状态刷新重算
+	const oauthCapableServices = useMemo(
+		() =>
+			new Set(
+				mcpStatus
+					.filter(s => !s.isBuiltIn && canStartMCPOAuthLogin(s.name))
+					.map(s => s.name),
+			),
+		[mcpStatus],
+	);
+
+	// 面板关闭时取消仍在等待的授权会话，释放本地回调端口
+	useEffect(() => {
+		return () => {
+			const flow = oauthFlowRef.current;
+			if (flow?.sessionId && flow.status === 'pending') {
+				cancelMCPOAuthLogin(flow.sessionId);
+			}
+		};
+	}, []);
+
+	// 轮询授权会话状态；成功后用新令牌重连并刷新列表
+	useEffect(() => {
+		if (!oauthFlow || oauthFlow.status !== 'pending' || !oauthFlow.sessionId) {
+			return;
+		}
+		const {sessionId, serviceName} = oauthFlow;
+		let disposed = false;
+		const timer = setInterval(() => {
+			const snapshot = getMCPOAuthLoginStatus(sessionId);
+			if (disposed || !snapshot || snapshot.status === 'pending') {
+				return;
+			}
+			clearInterval(timer);
+			if (snapshot.status === 'success') {
+				setOauthFlow(prev =>
+					prev && prev.sessionId === sessionId
+						? {...prev, status: 'reloading'}
+						: prev,
+				);
+				void (async () => {
+					try {
+						await completeMCPServiceOAuthLogin(serviceName);
+						await loadMCPStatus();
+						if (!disposed) {
+							setOauthFlow(prev =>
+								prev && prev.sessionId === sessionId
+									? {...prev, status: 'success'}
+									: prev,
+							);
+						}
+					} catch (error) {
+						if (!disposed) {
+							setOauthFlow(prev =>
+								prev && prev.sessionId === sessionId
+									? {
+											...prev,
+											status: 'error',
+											error:
+												error instanceof Error ? error.message : String(error),
+									  }
+									: prev,
+							);
+						}
+					}
+				})();
+				return;
+			}
+			setOauthFlow(prev =>
+				prev && prev.sessionId === sessionId
+					? {
+							...prev,
+							status: snapshot.status === 'cancelled' ? 'cancelled' : 'error',
+							error: snapshot.error,
+					  }
+					: prev,
+			);
+		}, 500);
+		return () => {
+			disposed = true;
+			clearInterval(timer);
+		};
+	}, [oauthFlow?.sessionId, oauthFlow?.status]);
+
+	const startOAuthFlow = async (serviceName: string) => {
+		setOauthFlow({serviceName, status: 'starting'});
+		try {
+			const started = await startMCPServiceOAuthLogin(serviceName);
+			setOauthFlow({
+				serviceName,
+				status: 'pending',
+				sessionId: started.sessionId,
+				authUrl: started.authUrl,
+			});
+			openExternalUrl(started.authUrl);
+		} catch (error) {
+			setOauthFlow({
+				serviceName,
+				status: 'error',
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
+	const closeOAuthFlow = () => {
+		const flow = oauthFlowRef.current;
+		if (flow?.sessionId && flow.status === 'pending') {
+			cancelMCPOAuthLogin(flow.sessionId);
+		}
+		setOauthFlow(null);
+	};
 
 	const loadMCPStatus = async () => {
 		try {
@@ -327,6 +471,28 @@ export default function MCPInfoPanel({onClose}: Props) {
 
 	// Listen for keyboard input
 	useInput(async (input, key) => {
+		// OAuth 授权页：Esc 取消/关闭，O 重新打开浏览器
+		if (oauthFlow) {
+			if (key.escape || (key.return && oauthFlow.status !== 'pending')) {
+				if (
+					oauthFlow.status === 'starting' ||
+					oauthFlow.status === 'reloading'
+				) {
+					return;
+				}
+				closeOAuthFlow();
+				return;
+			}
+			if (
+				input.toLowerCase() === 'o' &&
+				oauthFlow.status === 'pending' &&
+				oauthFlow.authUrl
+			) {
+				openExternalUrl(oauthFlow.authUrl);
+			}
+			return;
+		}
+
 		if (isReconnecting || togglingService || togglingTool) return;
 
 		// ESC key to return to main page from tools page, or close panel from main page
@@ -413,6 +579,19 @@ export default function MCPInfoPanel({onClose}: Props) {
 			const currentItem = selectItems[selectedIndex];
 			if (currentItem) {
 				await handleServiceSelect(currentItem);
+			}
+			return;
+		}
+
+		// 'a' key to start OAuth sign-in for the selected remote service
+		if (input.toLowerCase() === 'a') {
+			const currentItem = selectItems[selectedIndex];
+			if (
+				currentItem &&
+				!currentItem.isRefreshAll &&
+				oauthCapableServices.has(currentItem.value)
+			) {
+				await startOAuthFlow(currentItem.value);
 			}
 			return;
 		}
@@ -516,6 +695,72 @@ export default function MCPInfoPanel({onClose}: Props) {
 				<Text color={theme.colors.menuSecondary} dimColor>
 					{t.mcpInfoPanel.noServices}
 				</Text>
+			</Box>
+		);
+	}
+
+	if (oauthFlow) {
+		const oauthText = t.mcpInfoPanel.oauth;
+		const isBusy =
+			oauthFlow.status === 'starting' || oauthFlow.status === 'reloading';
+		return (
+			<Box
+				borderColor={
+					oauthFlow.status === 'error'
+						? theme.colors.error
+						: theme.colors.menuInfo
+				}
+				borderStyle="round"
+				paddingX={2}
+				paddingY={0}
+			>
+				<Box flexDirection="column">
+					<Text color={theme.colors.menuInfo} bold>
+						{oauthText.title.replace('{service}', oauthFlow.serviceName)}
+					</Text>
+					{oauthFlow.status === 'starting' && (
+						<Text color={theme.colors.warning}>{oauthText.starting}</Text>
+					)}
+					{oauthFlow.status === 'pending' && (
+						<>
+							<Text color={theme.colors.warning}>{oauthText.waiting}</Text>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{oauthText.hint}
+							</Text>
+							{oauthFlow.authUrl && (
+								<Text color={theme.colors.text}>{oauthFlow.authUrl}</Text>
+							)}
+						</>
+					)}
+					{oauthFlow.status === 'reloading' && (
+						<Text color={theme.colors.warning}>{oauthText.reloading}</Text>
+					)}
+					{oauthFlow.status === 'success' && (
+						<Text color={theme.colors.success}>{oauthText.success}</Text>
+					)}
+					{oauthFlow.status === 'cancelled' && (
+						<Text color={theme.colors.menuSecondary}>
+							{oauthText.cancelled}
+						</Text>
+					)}
+					{oauthFlow.status === 'error' && (
+						<Text color={theme.colors.error}>
+							{oauthText.failed.replace(
+								'{message}',
+								oauthFlow.error || oauthText.unknownError,
+							)}
+						</Text>
+					)}
+					{!isBusy && (
+						<Box marginTop={1}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{oauthFlow.status === 'pending'
+									? oauthText.pendingNavigationHint
+									: oauthText.doneNavigationHint}
+							</Text>
+						</Box>
+					)}
+				</Box>
 			</Box>
 		);
 	}
@@ -627,6 +872,8 @@ export default function MCPInfoPanel({onClose}: Props) {
 									? t.mcpInfoPanel.statusSystem
 									: item.connected
 									? `${t.mcpInfoPanel.statusExternal}${sourceSuffix}`
+									: isAuthRequiredError(item.error)
+									? ` - ${t.mcpInfoPanel.oauth.authRequired}`
 									: ` - ${item.error || t.mcpInfoPanel.statusFailed}`;
 
 								return (
@@ -660,6 +907,14 @@ export default function MCPInfoPanel({onClose}: Props) {
 						{!isReconnecting && !togglingService && (
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.mcpInfoPanel.navigationHint}
+								{(() => {
+									const current = selectItems[selectedIndex];
+									return current &&
+										!current.isRefreshAll &&
+										oauthCapableServices.has(current.value)
+										? ` • ${t.mcpInfoPanel.oauth.actionHint}`
+										: '';
+								})()}
 								{selectItems.length > MAX_DISPLAY_ITEMS &&
 									hiddenAboveCount > 0 &&
 									` · ${t.mcpInfoPanel.moreAbove.replace(

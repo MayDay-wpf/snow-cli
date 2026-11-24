@@ -1,0 +1,15 @@
+{
+  "client_id": "https://cdn.jsdelivr.net/gh/MayDay-wpf/snow-cli@main/resources/mcp-oauth/client-metadata.json",
+  "client_name": "Snow CLI",
+  "client_uri": "https://github.com/MayDay-wpf/snow-cli",
+  "redirect_uris": [
+    "http://127.0.0.1:45881/callback",
+    "http://127.0.0.1:45882/callback",
+    "http://127.0.0.1:45883/callback",
+    "http://127.0.0.1:45884/callback"
+  ],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "application_type": "native"
+}

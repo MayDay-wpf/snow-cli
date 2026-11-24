@@ -12,6 +12,14 @@ import {
 	SSEClientTransport,
 } from '@modelcontextprotocol/client';
 import {StdioClientTransport} from '@modelcontextprotocol/client/stdio';
+import type {AuthProvider} from '@modelcontextprotocol/client';
+import {
+	createMCPOAuthAuthProvider,
+	isMCPAuthError,
+	normalizeMCPAuthError,
+	startMCPOAuthLogin,
+	type MCPOAuthLoginStart,
+} from './mcpOAuth.js';
 import {
 	getMCPConfig,
 	getMCPServerSource,
@@ -888,6 +896,116 @@ export async function reconnectMCPService(serviceName: string): Promise<void> {
 			tool => !tool.function.name.startsWith(`${serviceName}-`),
 		);
 	}
+
+	// 同步落盘：否则重启后会从磁盘目录缓存恢复旧的连接结果（如未授权状态）
+	await persistExternalCatalogFromCache();
+}
+
+/**
+ * 把内存缓存中的外部 MCP 服务状态写回磁盘目录缓存。
+ */
+async function persistExternalCatalogFromCache(): Promise<void> {
+	if (!toolsCache) {
+		return;
+	}
+	try {
+		const externalNames = new Set(Object.keys(getMCPConfig().mcpServers));
+		const diskHintsRecord: Record<string, MCPCacheHints> = {};
+		for (const [k, v] of toolsCache.cacheHints.entries()) {
+			if (externalNames.has(k)) {
+				diskHintsRecord[k] = v;
+			}
+		}
+		saveDiskCatalog({
+			version: 1,
+			configHash: await generateConfigHash(),
+			lastUpdate: Date.now(),
+			servicesInfo: toolsCache.servicesInfo.filter(
+				service => !service.isBuiltIn && externalNames.has(service.serviceName),
+			),
+			cacheHints: diskHintsRecord,
+		});
+	} catch (error) {
+		log.debug('[MCP] Failed to persist external catalog after reconnect', {
+			error,
+		});
+	}
+}
+
+/**
+ * 关闭某个服务的持久连接（授权状态变化后需要用新令牌重建连接）。
+ */
+async function dropPersistentClient(serviceName: string): Promise<void> {
+	const existing = persistentClients.get(serviceName);
+	if (!existing) {
+		return;
+	}
+	persistentClients.delete(serviceName);
+	try {
+		await existing.client.close();
+	} catch (error) {
+		log.debug('Failed to close persistent client', {serviceName, error});
+	}
+	resourceMonitor.trackMCPConnectionClosed(serviceName);
+}
+
+/**
+ * 判断外部 MCP 服务是否可以发起 OAuth 授权（远程 HTTP 服务且开启了 oauth）。
+ */
+export function canStartMCPOAuthLogin(serviceName: string): boolean {
+	const server = getMCPConfig().mcpServers[serviceName];
+	return (
+		!!server &&
+		server.oauth === true &&
+		getMCPServerTransportType(server) === 'http'
+	);
+}
+
+/**
+ * 为外部 MCP 服务发起浏览器 OAuth 授权，返回会话 id 与授权地址。
+ */
+export async function startMCPServiceOAuthLogin(
+	serviceName: string,
+): Promise<MCPOAuthLoginStart> {
+	const server = getMCPConfig().mcpServers[serviceName];
+	if (!server) {
+		throw new Error(`Service ${serviceName} not found in configuration`);
+	}
+	if (getMCPServerTransportType(server) !== 'http') {
+		throw new Error('OAuth sign-in is only available for HTTP MCP servers');
+	}
+	if (server.oauth !== true) {
+		throw new Error(
+			'OAuth sign-in is not enabled for this MCP server (set "oauth": true in its configuration)',
+		);
+	}
+
+	const {url, requestInit} = getHttpTransportConfig(server);
+	const headers: Record<string, string> = {};
+	const rawHeaders = requestInit.headers;
+	if (rawHeaders && typeof rawHeaders === 'object' && !Array.isArray(rawHeaders)) {
+		for (const [name, value] of Object.entries(
+			rawHeaders as Record<string, string>,
+		)) {
+			headers[name] = value;
+		}
+	}
+
+	return await startMCPOAuthLogin({serviceName, serverUrl: url, headers});
+}
+
+/**
+ * OAuth 授权成功后：丢弃旧连接，用新令牌重连并刷新工具缓存。
+ */
+export async function completeMCPServiceOAuthLogin(
+	serviceName: string,
+): Promise<void> {
+	await dropPersistentClient(serviceName);
+	// 先确保内存缓存存在：否则 reconnect 会走全量刷新并命中旧的磁盘目录缓存
+	if (!toolsCache) {
+		await refreshToolsCache();
+	}
+	await reconnectMCPService(serviceName);
 }
 
 /**
@@ -1028,6 +1146,7 @@ function interpolateMCPConfigValue(
 function getHttpTransportConfig(server: MCPServer): {
 	url: URL;
 	requestInit: RequestInit;
+	authProvider?: AuthProvider;
 } {
 	if (!server.url) {
 		throw new Error('No URL specified');
@@ -1054,11 +1173,24 @@ function getHttpTransportConfig(server: MCPServer): {
 		});
 	}
 
+	// OAuth 开启时由 authProvider 负责 Bearer 令牌：SDK 会用 requestInit.headers
+	// 覆盖它生成的 Authorization，必须移除静态授权头，否则令牌永远发不出去。
+	let authProvider: AuthProvider | undefined;
+	if (server.oauth === true) {
+		for (const key of Object.keys(headers)) {
+			if (key.toLowerCase() === 'authorization') {
+				delete headers[key];
+			}
+		}
+		authProvider = createMCPOAuthAuthProvider(url.toString());
+	}
+
 	return {
 		url,
 		// MCP SDK 将 requestInit 传给 Node fetch。显式注入 dispatcher，
 		// 让 localhost/私有地址覆盖全局代理并直连，外部地址继续走代理。
 		requestInit: addProxyToFetchOptions(url.toString(), {headers}),
+		authProvider,
 	};
 }
 
@@ -1175,7 +1307,7 @@ async function connectAndGetTools(
 
 		const transportType = getMCPServerTransportType(server);
 		if (transportType === 'http') {
-			const {url, requestInit} = getHttpTransportConfig(server);
+			const {url, requestInit, authProvider} = getHttpTransportConfig(server);
 
 			try {
 				log.debug(
@@ -1184,6 +1316,7 @@ async function connectAndGetTools(
 
 				transport = new StreamableHTTPClientTransport(url, {
 					requestInit,
+					authProvider,
 				});
 				await runWithTimeout(
 					client.connect(transport),
@@ -1209,8 +1342,9 @@ async function connectAndGetTools(
 					throw new Error('Connection aborted due to timeout');
 				}
 
-				if (!shouldFallbackToSSE(httpError)) {
-					throw httpError;
+				// 服务器要求授权时任何协议回退都没有意义，直接上报需授权
+				if (isMCPAuthError(httpError) || !shouldFallbackToSSE(httpError)) {
+					throw normalizeMCPAuthError(httpError, server.oauth === true);
 				}
 
 				// [MCP 2026-07-28] Legacy HTTP+SSE transport is officially
@@ -1224,6 +1358,7 @@ async function connectAndGetTools(
 				try {
 					transport = new SSEClientTransport(url, {
 						requestInit,
+						authProvider,
 					});
 					await runWithTimeout(
 						client.connect(transport),
@@ -1234,6 +1369,9 @@ async function connectAndGetTools(
 						`[MCP] Successfully connected to ${serviceName} using legacy SSE (deprecated, removal ~2027-07)`,
 					);
 				} catch (sseError) {
+					if (isMCPAuthError(sseError)) {
+						throw normalizeMCPAuthError(sseError, server.oauth === true);
+					}
 					throw new Error(
 						`StreamableHTTP failed for ${serviceName}: ${streamableHttpErrorMessage}; SSE fallback failed: ${getMCPErrorMessage(
 							sseError,
@@ -1336,11 +1474,12 @@ async function getPersistentClient(
 
 	try {
 		if (transportType === 'http') {
-			const {url, requestInit} = getHttpTransportConfig(server);
+			const {url, requestInit, authProvider} = getHttpTransportConfig(server);
 
 			try {
 				transport = new StreamableHTTPClientTransport(url, {
 					requestInit,
+					authProvider,
 				});
 				await client.connect(transport);
 			} catch (httpError) {
@@ -1355,8 +1494,8 @@ async function getPersistentClient(
 					});
 				}
 
-				if (!shouldFallbackToSSE(httpError)) {
-					throw httpError;
+				if (isMCPAuthError(httpError) || !shouldFallbackToSSE(httpError)) {
+					throw normalizeMCPAuthError(httpError, server.oauth === true);
 				}
 
 				// [MCP 2026-07-28] Legacy SSE deprecated (SEP-2577), removal ~2027-07
@@ -1367,11 +1506,15 @@ async function getPersistentClient(
 				client = createMCPClient(serviceName);
 				transport = new SSEClientTransport(url, {
 					requestInit,
+					authProvider,
 				});
 
 				try {
 					await client.connect(transport);
 				} catch (sseError) {
+					if (isMCPAuthError(sseError)) {
+						throw normalizeMCPAuthError(sseError, server.oauth === true);
+					}
 					throw new Error(
 						`StreamableHTTP failed for ${serviceName}: ${streamableHttpErrorMessage}; SSE fallback failed: ${getMCPErrorMessage(
 							sseError,

@@ -134,6 +134,9 @@ export interface MCPServer {
 	endpoints?: MCPServerApiEndpoint[]; // 'api' 类型的接口定义
 	enabled?: boolean; // 是否启用该MCP服务，默认为true
 	timeout?: number; // 工具调用超时时间（毫秒），默认 1200000 (20分钟)
+	// 远程 HTTP 服务是否启用 OAuth 2.1 授权（与 Snow APP 的 oauth 开关一致）；
+	// 开启后连接自动携带并刷新 Bearer 令牌，未授权时在 /mcp 面板按 A 发起浏览器授权
+	oauth?: boolean;
 }
 
 export interface MCPConfig {
