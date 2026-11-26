@@ -152,6 +152,8 @@ export interface UnifiedSettings {
 		modelId?: string;
 		/** 托管：开启后判定直接生效，关闭时仅作为建议展示 */
 		delegate?: boolean;
+		/** 拒绝时仍让我确认：仅托管开启时生效，允许仍直接放行，拒绝转人工确认 */
+		askOnDeny?: boolean;
 	};
 
 	// === 隐私设置 ===

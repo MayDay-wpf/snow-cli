@@ -652,6 +652,8 @@ export type TranslationKeys = {
 		assistModelNone: string;
 		assistDelegate: string;
 		assistDelegateInfo: string;
+		assistAskOnDeny: string;
+		assistAskOnDenyInfo: string;
 		assistModelUnavailable: string;
 		assistModelUnavailableInfo: string;
 		assistSaveSuccess: string;
@@ -2085,6 +2087,8 @@ export type TranslationKeys = {
 		decisionReason: string;
 		decisionModel: string;
 		decisionDelegated: string;
+		decisionDenyEscalated: string;
+		decisionDeniedReply: string;
 		decisionReasons: {
 			readOnly: string;
 			regenerable: string;

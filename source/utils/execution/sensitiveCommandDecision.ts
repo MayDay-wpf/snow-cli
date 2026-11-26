@@ -16,7 +16,8 @@ import {
  * - `none`：辅助未启用、未选中模型、命令未命中规则，或请求失败——调用方保持
  *   原有的普通确认流程。
  * - `decision`：得到了一次判定。`delegate` 为 true 时判定直接生效（允许则放行、
- *   拒绝则拒绝），否则只作为建议随确认提示展示。
+ *   拒绝则拒绝），否则只作为建议随确认提示展示。`askOnDeny` 为 true（仅托管下
+ *   可能为 true）时，托管拒绝不直接生效，而是转为人工确认。
  */
 export type SensitiveCommandGateResult =
 	| {kind: 'none'}
@@ -25,7 +26,35 @@ export type SensitiveCommandGateResult =
 			decision: SensitiveCommandDecision;
 			modelName: string;
 			delegate: boolean;
+			askOnDeny: boolean;
 	  };
+
+/**
+ * 判定是否应直接生效（无需弹出确认提示）：托管开启，且判定允许或未开启
+ * 「拒绝时仍让我确认」。
+ */
+export function isSensitiveDecisionAutoApplied(
+	result: SensitiveCommandGateResult,
+): boolean {
+	if (result.kind !== 'decision' || !result.delegate) {
+		return false;
+	}
+	return result.decision.allow || !result.askOnDeny;
+}
+
+/**
+ * 托管拒绝已转人工复核：用户此时确认执行即表示覆盖了决策模型的拒绝判定。
+ */
+export function isSensitiveDecisionDenyEscalated(
+	result: SensitiveCommandGateResult,
+): boolean {
+	return (
+		result.kind === 'decision' &&
+		result.delegate &&
+		result.askOnDeny &&
+		!result.decision.allow
+	);
+}
 
 /** 参与判定所需的上下文（全部可选，缺失时模型仅依据命令文本判断）。 */
 export interface SensitiveCommandGateContext {
@@ -98,10 +127,24 @@ export async function evaluateSensitiveCommandGate(
 
 	const modelName = item.name.trim() || item.model.trim();
 
+	// 每次判定都留痕：托管下确认卡片一闪而过，日志是事后追查误判的唯一依据。
+	log.info('Sensitive command decision', {
+		command: trimmedCommand.slice(0, 200),
+		pattern: match.matchedCommand?.pattern,
+		allow: decision.allow,
+		reason: decision.reason,
+		confidence: decision.confidence,
+		model: modelName,
+		provider: item.provider,
+		delegate: assist.delegate,
+		askOnDeny: assist.delegate && assist.askOnDeny,
+	});
+
 	return {
 		kind: 'decision',
 		decision,
 		modelName,
 		delegate: assist.delegate,
+		askOnDeny: assist.delegate && assist.askOnDeny,
 	};
 }

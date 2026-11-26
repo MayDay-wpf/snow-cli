@@ -5,6 +5,8 @@ import SelectInput from 'ink-select-input';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {
 	evaluateSensitiveCommandGate,
+	isSensitiveDecisionAutoApplied,
+	isSensitiveDecisionDenyEscalated,
 	type SensitiveCommandGateResult,
 } from '../../../utils/execution/sensitiveCommandDecision.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -229,11 +231,12 @@ export default function ToolConfirmation({
 	}, [sensitiveCommandCheck.isSensitive, sensitiveGateInput]);
 
 	// 托管模式：判定直接生效（允许则放行、拒绝则拒绝），无需再弹确认。
+	// 开启「拒绝时仍让我确认」时，托管拒绝不直接生效，保留确认提示交由用户复核。
 	useEffect(() => {
-		if (sensitiveDecision.kind !== 'decision') {
+		if (!isSensitiveDecisionAutoApplied(sensitiveDecision) || hasSelected) {
 			return;
 		}
-		if (!sensitiveDecision.delegate || hasSelected) {
+		if (sensitiveDecision.kind !== 'decision') {
 			return;
 		}
 		if (sensitiveDecisionHandledRef.current) {
@@ -242,8 +245,23 @@ export default function ToolConfirmation({
 
 		sensitiveDecisionHandledRef.current = true;
 		setHasSelected(true);
-		onConfirm(sensitiveDecision.decision.allow ? 'approve' : 'reject');
-	}, [sensitiveDecision, hasSelected, onConfirm]);
+		if (sensitiveDecision.decision.allow) {
+			onConfirm('approve');
+			return;
+		}
+		// 托管拒绝只否决这一条命令：以带理由的拒绝回复回传，理由会显示在会话里
+		// 并作为工具结果交给 AI，让它换一种做法继续，而不是结束整个会话。
+		const {decision, modelName} = sensitiveDecision;
+		const reasonText =
+			t.toolConfirmation.decisionReasons[decision.reason] ?? decision.reason;
+		onConfirm({
+			type: 'reject_with_reply',
+			reason: t.toolConfirmation.decisionDeniedReply
+				.replace('{model}', modelName)
+				.replace('{reason}', reasonText)
+				.replace('{confidence}', String(Math.round(decision.confidence * 100))),
+		});
+	}, [sensitiveDecision, hasSelected, onConfirm, t]);
 
 	// Parse and format tool arguments for display (single tool)
 	const formattedArgs = useMemo(() => {
@@ -787,12 +805,31 @@ export default function ToolConfirmation({
 		}
 	});
 
+	// 托管拒绝转人工复核时，记录用户的复核选择，便于评估决策模型的误判率。
+	const logDenyEscalatedReview = (choice: string) => {
+		if (
+			sensitiveDecision.kind !== 'decision' ||
+			!isSensitiveDecisionDenyEscalated(sensitiveDecision)
+		) {
+			return;
+		}
+		log.info('Sensitive command delegated deny reviewed by user', {
+			choice,
+			pattern: sensitiveCommandCheck.matchedCommand?.pattern,
+			modelName: sensitiveDecision.modelName,
+			reason: sensitiveDecision.decision.reason,
+			confidence: sensitiveDecision.decision.confidence,
+			command: sensitiveGateInput?.command.slice(0, 200),
+		});
+	};
+
 	const handleSelect = (item: {label: string; value: string}) => {
 		if (!hasSelected) {
 			if (item.value === 'reject_with_reply') {
 				setShowRejectInput(true);
 			} else {
 				setHasSelected(true);
+				logDenyEscalatedReview(item.value);
 				onConfirm(item.value as ConfirmationResult);
 			}
 		}
@@ -801,6 +838,7 @@ export default function ToolConfirmation({
 	const handleRejectReasonSubmit = () => {
 		if (!hasSelected && rejectReason.trim()) {
 			setHasSelected(true);
+			logDenyEscalatedReview('reject_with_reply');
 			onConfirm({type: 'reject_with_reply', reason: rejectReason.trim()});
 		}
 	};
@@ -891,7 +929,11 @@ export default function ToolConfirmation({
 										sensitiveDecision.modelName,
 									)}
 								</Text>
-								{sensitiveDecision.delegate ? (
+								{isSensitiveDecisionDenyEscalated(sensitiveDecision) ? (
+									<Text color={theme.colors.warning} bold>
+										{t.toolConfirmation.decisionDenyEscalated}
+									</Text>
+								) : sensitiveDecision.delegate ? (
 									<Text color={theme.colors.menuSecondary} dimColor>
 										{t.toolConfirmation.decisionDelegated}
 									</Text>

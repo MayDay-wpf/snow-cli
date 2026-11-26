@@ -65,11 +65,11 @@ type ViewMode = 'list' | 'scope-select' | 'add' | 'assist';
 type ScopeSelectPurpose = 'add' | 'reset';
 
 /** 决策模型辅助标签页内的可交互行。 */
-type AssistRow = 'toggle' | 'model' | 'delegate';
+type AssistRow = 'toggle' | 'model' | 'delegate' | 'askOnDeny';
 
 const SCOPE_OPTIONS: SensitiveCommandScope[] = ['project', 'global'];
 
-const ASSIST_ROWS: AssistRow[] = ['toggle', 'model', 'delegate'];
+const ASSIST_ROWS: AssistRow[] = ['toggle', 'model', 'delegate', 'askOnDeny'];
 
 export default function SensitiveCommandConfigScreen({
 	onBack,
@@ -274,6 +274,7 @@ export default function SensitiveCommandConfigScreen({
 					enabled: nextEnabled,
 					// 辅助关闭后托管不再有意义，一并关闭以免留下悬空状态。
 					delegate: nextEnabled ? assistSettings.delegate : false,
+					askOnDeny: nextEnabled ? assistSettings.askOnDeny : false,
 				});
 			} else if (activeAssistRow === 'model' && key.return) {
 				if (assistSettings.enabled) {
@@ -285,9 +286,23 @@ export default function SensitiveCommandConfigScreen({
 				}
 			} else if (activeAssistRow === 'delegate' && isToggle) {
 				if (assistSettings.enabled && assistSettings.modelId) {
+					const nextDelegate = !assistSettings.delegate;
 					saveAssistSettings({
 						...assistSettings,
-						delegate: !assistSettings.delegate,
+						delegate: nextDelegate,
+						// 「拒绝时仍让我确认」只在托管下生效，托管关闭时一并关闭。
+						askOnDeny: nextDelegate ? assistSettings.askOnDeny : false,
+					});
+				}
+			} else if (activeAssistRow === 'askOnDeny' && isToggle) {
+				if (
+					assistSettings.enabled &&
+					assistSettings.modelId &&
+					assistSettings.delegate
+				) {
+					saveAssistSettings({
+						...assistSettings,
+						askOnDeny: !assistSettings.askOnDeny,
 					});
 				}
 			}
@@ -708,6 +723,30 @@ export default function SensitiveCommandConfigScreen({
 						<Box marginLeft={3}>
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.sensitiveCommandConfig.assistDelegateInfo}
+							</Text>
+						</Box>
+					</Box>
+
+					<Box marginTop={1} flexDirection="column">
+						<Text
+							color={
+								assistRowIndex === 3
+									? theme.colors.menuInfo
+									: theme.colors.menuNormal
+							}
+							bold={assistRowIndex === 3}
+							dimColor={!(isEnabled && assistSettings.delegate)}
+						>
+							{renderRowMarker('askOnDeny')}{' '}
+							{t.sensitiveCommandConfig.assistAskOnDeny}: [
+							{isEnabled && assistSettings.delegate && assistSettings.askOnDeny
+								? '✓'
+								: ' '}
+							]
+						</Text>
+						<Box marginLeft={3}>
+							<Text color={theme.colors.menuSecondary} dimColor>
+								{t.sensitiveCommandConfig.assistAskOnDenyInfo}
 							</Text>
 						</Box>
 					</Box>

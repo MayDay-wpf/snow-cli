@@ -6,6 +6,8 @@ import {useI18n} from '../../../i18n/I18nContext.js';
 import {isSensitiveCommand} from '../../../utils/execution/sensitiveCommandManager.js';
 import {
 	evaluateSensitiveCommandGate,
+	isSensitiveDecisionAutoApplied,
+	isSensitiveDecisionDenyEscalated,
 	type SensitiveCommandGateResult,
 } from '../../../utils/execution/sensitiveCommandDecision.js';
 import {useTheme} from '../../contexts/ThemeContext.js';
@@ -83,11 +85,12 @@ export function BashCommandConfirmation({
 	}, [command, sensitiveCheck.isSensitive]);
 
 	// 托管模式：判定直接生效（允许则放行、拒绝则拒绝），无需再弹确认。
+	// 开启「拒绝时仍让我确认」时，托管拒绝不直接生效，保留确认提示交由用户复核。
 	useEffect(() => {
 		if (sensitiveDecision.kind !== 'decision') {
 			return;
 		}
-		if (!sensitiveDecision.delegate) {
+		if (!isSensitiveDecisionAutoApplied(sensitiveDecision)) {
 			return;
 		}
 		if (sensitiveDecisionHandledRef.current) {
@@ -197,7 +200,11 @@ export function BashCommandConfirmation({
 								sensitiveDecision.modelName,
 							)}
 						</Text>
-						{sensitiveDecision.delegate ? (
+						{isSensitiveDecisionDenyEscalated(sensitiveDecision) ? (
+							<Text color={theme.colors.warning} bold>
+								{t.toolConfirmation.decisionDenyEscalated}
+							</Text>
+						) : sensitiveDecision.delegate ? (
 							<Text color={theme.colors.menuSecondary} dimColor>
 								{t.toolConfirmation.decisionDelegated}
 							</Text>

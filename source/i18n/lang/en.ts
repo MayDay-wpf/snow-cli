@@ -723,6 +723,9 @@ export const en: TranslationKeys = {
 		assistDelegate: 'Let the decision model handle the gate',
 		assistDelegateInfo:
 			'When on, an allow verdict runs the command directly and a deny verdict rejects it, without showing the prompt.',
+		assistAskOnDeny: 'Still ask me when denied',
+		assistAskOnDenyInfo:
+			'Off by default; only available while delegated. An allow verdict still runs directly, while a deny verdict shows the confirmation prompt so you decide whether to run it.',
 		assistModelUnavailable: 'Unavailable',
 		assistModelUnavailableInfo:
 			'The selected decision model was deleted; the assist stays idle until another one is selected.',
@@ -2425,6 +2428,10 @@ export const en: TranslationKeys = {
 		decisionReason: 'Reason',
 		decisionModel: 'Judged by: {name}',
 		decisionDelegated: '(delegated - applied automatically)',
+		decisionDenyEscalated:
+			'The decision model denied this command; confirming overrides that verdict',
+		decisionDeniedReply:
+			'The sensitive command was denied by the delegated decision model ({model}) with {confidence}% confidence. Reason: {reason}. Continue with an approach that does not need this command.',
 		decisionReasons: {
 			readOnly:
 				'Only reads information; files, system and remote state stay untouched',

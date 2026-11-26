@@ -678,6 +678,9 @@ export const zh: TranslationKeys = {
 		assistDelegate: '由决策模型直接放行/拒绝',
 		assistDelegateInfo:
 			'开启后判定直接生效：允许则放行、拒绝则拒绝，不再显示确认提示。',
+		assistAskOnDeny: '拒绝时仍让我确认',
+		assistAskOnDenyInfo:
+			'默认关闭，仅托管开启时可用。开启后允许仍直接放行，拒绝则不直接生效，改为弹出确认提示由你决定是否执行。',
 		assistModelUnavailable: '不可用',
 		assistModelUnavailableInfo:
 			'所选决策模型已被删除；在重新选择之前辅助保持空闲。',
@@ -2265,6 +2268,10 @@ export const zh: TranslationKeys = {
 		decisionReason: '原因',
 		decisionModel: '判定模型: {name}',
 		decisionDelegated: '（托管生效中）',
+		decisionDenyEscalated:
+			'决策模型判定拒绝，确认执行即表示你正在覆盖该判定',
+		decisionDeniedReply:
+			'敏感命令被决策模型（{model}）托管拒绝，置信度 {confidence}%，理由：{reason}。请换一种不需要执行该命令的做法继续。',
 		decisionReasons: {
 			readOnly: '仅读取信息，不修改文件、系统或远端状态',
 			regenerable: '只涉及可再生成的内容（构建产物、缓存、临时文件、依赖）',
