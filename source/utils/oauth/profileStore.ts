@@ -5,6 +5,7 @@
  * - 为请求注入 provider 专属请求头
  */
 
+import {createHash} from 'crypto';
 import {
 	clearConfigCache,
 	loadConfig,
@@ -170,6 +171,77 @@ export function saveOAuthProfile(draft: OAuthProfileDraft): OAuthLoginOutcome {
 		accountId: draft.patch.oauth.accountId,
 		availableModels: [],
 		expiresAt: draft.patch.oauth.expiresAt,
+	};
+}
+
+function shortHash(value: string): string {
+	return createHash('sha1').update(value).digest('hex').slice(0, 8);
+}
+
+/** Snow AI Router 档案名：按分组生成稳定的可读名称。 */
+export function snowRouterProfileName(group: string): string {
+	const normalized = group.trim();
+	const sanitized = normalized
+		.toLowerCase()
+		.replace(/[^a-z0-9._-]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 48);
+	if (!sanitized) {
+		return `snowrouter-${shortHash(normalized)}`;
+	}
+	if (sanitized !== normalized.toLowerCase()) {
+		return `snowrouter-${sanitized}-${shortHash(normalized)}`;
+	}
+	return `snowrouter-${sanitized}`;
+}
+
+/** 该分组对应的档案是否已经带有 API Key（有则跳过，不重建）。 */
+export function snowRouterProfileHasKey(profileName: string): boolean {
+	return !!loadProfile(profileName)?.snowcfg.apiKey.trim();
+}
+
+/**
+ * 保存 Snow AI Router 渠道档案：使用静态 API Key，不写 oauth 元数据，
+ * 因此不会触发票据刷新，也不会注入订阅账号的请求头。
+ */
+export function saveSnowRouterProfile(options: {
+	profileName: string;
+	displayName: string;
+	accountId: string;
+	serverUrl: string;
+	group: string;
+	apiKey: string;
+	advancedModel: string;
+	basicModel: string;
+	maxContextTokens: number;
+}): OAuthLoginOutcome {
+	const existing = loadProfile(options.profileName);
+	const base: AppConfig = existing ?? loadConfig();
+	const snowcfg: ApiConfig = {
+		...base.snowcfg,
+		baseUrl: `${options.serverUrl}/v1`,
+		baseUrlMode: 'auto',
+		apiKey: options.apiKey,
+		requestMethod: 'chat',
+		advancedModel: options.advancedModel,
+		basicModel: options.basicModel,
+		supportsVision: true,
+		maxContextTokens: options.maxContextTokens,
+		customHeadersSchemeId: '',
+	};
+	delete snowcfg.oauth;
+	const updated: AppConfig = {...base, snowcfg};
+	saveProfile(options.profileName, updated);
+
+	return {
+		provider: 'snowrouter',
+		profileName: options.profileName,
+		displayName: options.displayName,
+		email: '',
+		planType: '',
+		accountId: options.accountId,
+		availableModels: [],
+		expiresAt: 0,
 	};
 }
 

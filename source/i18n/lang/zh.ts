@@ -1466,6 +1466,11 @@ export const zh: TranslationKeys = {
 		providerAnthropic: 'Anthropic (Claude)',
 		providerAntigravity: 'Antigravity (Google)',
 		providerXai: 'xAI (Grok)',
+		providerSnowrouter: 'Snow AI Router',
+		channelsTitle: '选择要接入的渠道',
+		channelsHint: '↑↓ 选择 · 空格勾选 · Enter 接入 · ESC 取消',
+		connectingChannels: '正在接入渠道...',
+		modelsCount: '{count} 个模型',
 	},
 	profilePanel: {
 		title: '选择配置',

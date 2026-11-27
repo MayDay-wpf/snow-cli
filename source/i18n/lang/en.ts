@@ -1565,6 +1565,11 @@ export const en: TranslationKeys = {
 		providerAnthropic: 'Anthropic (Claude)',
 		providerAntigravity: 'Antigravity (Google)',
 		providerXai: 'xAI (Grok)',
+		providerSnowrouter: 'Snow AI Router',
+		channelsTitle: 'Choose channels to connect',
+		channelsHint: '↑↓ move • Space toggle • Enter connect • ESC cancel',
+		connectingChannels: 'Connecting channels...',
+		modelsCount: '{count} models',
 	},
 	profilePanel: {
 		title: 'Select Profile',

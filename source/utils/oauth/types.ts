@@ -7,6 +7,7 @@
  * - anthropic：Anthropic（Claude，Claude Code 同款 OAuth）
  * - antigravity：Antigravity（Google，Cloud Code Assist）
  * - xai：xAI（Grok）
+ * - snowrouter：Snow AI Router（自建路由，登录后选择渠道导入）
  */
 
 export type OAuthProviderId =
@@ -14,7 +15,8 @@ export type OAuthProviderId =
 	| 'chatgpt'
 	| 'anthropic'
 	| 'antigravity'
-	| 'xai';
+	| 'xai'
+	| 'snowrouter';
 
 export interface OAuthPkceCodes {
 	verifier: string;
@@ -27,6 +29,8 @@ export interface OAuthTokenSet {
 	refreshToken: string;
 	idToken: string;
 	email: string;
+	/** 登录账号名（Snow AI Router 使用；其它 provider 为空串） */
+	username: string;
 	planType: string;
 	projectId: string;
 	/**
@@ -65,6 +69,16 @@ export interface OAuthProfileMetadata {
 
 export type OAuthLoginStatus = 'pending' | 'success' | 'error' | 'cancelled';
 
+/** Snow AI Router 登录后可选的渠道（路由分组）。 */
+export interface OAuthRouterChannel {
+	id: string;
+	name: string;
+	description: string;
+	ratio: string;
+	models: string[];
+	hasKey: boolean;
+}
+
 /** 登录成功后生成的档案信息 */
 export interface OAuthLoginOutcome {
 	provider: OAuthProviderId;
@@ -75,6 +89,11 @@ export interface OAuthLoginOutcome {
 	accountId: string;
 	availableModels: string[];
 	expiresAt: number;
+	/** Snow AI Router 登录后可选的分组渠道。 */
+	channels?: OAuthRouterChannel[];
+	serverUrl?: string;
+	connectedProfiles?: string[];
+	skippedProfiles?: string[];
 }
 
 /** startOAuthLogin 的返回结果（面板据此展示授权链接） */
@@ -86,6 +105,8 @@ export interface OAuthLoginStartResult {
 	/** true 表示本地回调端口不可用，需要用户手动粘贴回调地址/授权码 */
 	manualMode: boolean;
 	defaultModel: string;
+	/** Snow AI Router 的站点地址（其它 provider 为空） */
+	serverUrl?: string;
 }
 
 /** 面板轮询的登录状态 */

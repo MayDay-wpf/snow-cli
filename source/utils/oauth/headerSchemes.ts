@@ -51,6 +51,7 @@ export function providerHeaderSchemeName(
 			return 'Antigravity';
 		case 'chatgpt':
 		case 'xai':
+		case 'snowrouter':
 			return null;
 	}
 }
@@ -87,6 +88,7 @@ export function providerRequiredHeaders(
 			];
 		case 'chatgpt':
 		case 'xai':
+		case 'snowrouter':
 			return [];
 	}
 }

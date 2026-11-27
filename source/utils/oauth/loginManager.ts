@@ -6,7 +6,11 @@
 import {mkdir, readFile, writeFile} from 'fs/promises';
 import {dirname, join} from 'path';
 import {resolveSnowConfigDir} from '../config/apiConfig.js';
-import {CHATGPT_HOST_ID_FILE_NAME, OAUTH_PROVIDERS} from './constants.js';
+import {
+	CHATGPT_HOST_ID_FILE_NAME,
+	OAUTH_PROVIDERS,
+	resolveSnowRouterServerUrl,
+} from './constants.js';
 import {
 	startCallbackServer,
 	type CallbackServerHandle,
@@ -17,11 +21,16 @@ import {
 	exchangeCode,
 	fetchModels,
 	parseClaims,
+	snowRouterEnsureKey,
+	snowRouterFetchChannels,
 } from './flows.js';
 import {
 	buildProfileDraft,
 	pickModel,
 	saveOAuthProfile,
+	saveSnowRouterProfile,
+	snowRouterProfileHasKey,
+	snowRouterProfileName,
 } from './profileStore.js';
 import {logger} from '../core/logger.js';
 
@@ -32,6 +41,7 @@ import type {
 	OAuthLoginStatus,
 	OAuthLoginStatusView,
 	OAuthProviderId,
+	OAuthRouterChannel,
 	OAuthTokenSet,
 } from './types.js';
 import {generatePkce, generateSessionId, generateState} from './utils.js';
@@ -51,6 +61,10 @@ interface OAuthLoginSession {
 	authUrl: string;
 	localPort: number;
 	manualMode: boolean;
+	/** Snow AI Router 站点地址（其它 provider 为空串） */
+	serverUrl: string;
+	/** Snow AI Router 登录换到的访问令牌，仅在渠道接入完成前保留 */
+	routerAccessToken: string;
 	advancedModel: string;
 	basicModel: string;
 }
@@ -85,8 +99,11 @@ export async function startOAuthLogin(
 	provider: OAuthProviderId,
 	advancedModel?: string,
 	basicModel?: string,
+	serverUrl?: string,
 ): Promise<OAuthLoginStartResult> {
 	const def = OAUTH_PROVIDERS[provider];
+	const routerServerUrl =
+		provider === 'snowrouter' ? resolveSnowRouterServerUrl(serverUrl) : '';
 	const pkce = generatePkce();
 	const state = generateState();
 	const nonce = generateState();
@@ -120,6 +137,7 @@ export async function startOAuthLogin(
 		state,
 		nonce,
 		hostId,
+		routerServerUrl,
 	);
 
 	const session: OAuthLoginSession = {
@@ -133,6 +151,8 @@ export async function startOAuthLogin(
 		authUrl,
 		localPort: manualMode ? 0 : port,
 		manualMode,
+		serverUrl: routerServerUrl,
+		routerAccessToken: '',
 		advancedModel: (advancedModel ?? '').trim(),
 		basicModel: (basicModel ?? '').trim(),
 	};
@@ -160,6 +180,7 @@ export async function startOAuthLogin(
 		port,
 		manualMode,
 		defaultModel: def.defaultModel,
+		serverUrl: routerServerUrl || undefined,
 	};
 }
 
@@ -383,6 +404,9 @@ async function performLogin(
 	issuedClientId: string,
 ): Promise<OAuthLoginOutcome> {
 	const provider = session.provider;
+	if (provider === 'snowrouter') {
+		return performSnowRouterLogin(session, code);
+	}
 	const tokens = await exchangeCode(
 		provider,
 		code,
@@ -390,6 +414,7 @@ async function performLogin(
 		session.codeVerifier,
 		session.state,
 		issuedClientId,
+		session.serverUrl,
 	);
 	if (provider === 'chatgpt') {
 		chatgptVerifyIdentity(tokens.idToken, session.nonce);
@@ -427,6 +452,137 @@ async function performLogin(
 		...outcome,
 		availableModels,
 	};
+}
+
+/**
+ * Snow AI Router：授权码只换取访问令牌与渠道列表，
+ * 渠道由用户在面板中确认后再创建 Key 并落盘。
+ */
+async function performSnowRouterLogin(
+	session: OAuthLoginSession,
+	code: string,
+): Promise<OAuthLoginOutcome> {
+	const tokens = await exchangeCode(
+		'snowrouter',
+		code,
+		session.redirectUri,
+		session.codeVerifier,
+		session.state,
+		'',
+		session.serverUrl,
+	);
+	session.routerAccessToken = tokens.accessToken;
+	const channels = await snowRouterFetchChannels(
+		session.serverUrl,
+		tokens.accessToken,
+	);
+	if (channels.length === 0) {
+		throw new Error('This account has no available channels on the router');
+	}
+	const claims = parseClaims('snowrouter', tokens);
+	const availableModels: string[] = [];
+	for (const channel of channels) {
+		for (const model of channel.models) {
+			if (!availableModels.includes(model)) {
+				availableModels.push(model);
+			}
+		}
+	}
+	const accountLabel = claims.accountId || claims.email || 'account';
+	return {
+		provider: 'snowrouter',
+		profileName: '',
+		displayName: `Snow AI Router (${accountLabel})`,
+		email: claims.email,
+		planType: '',
+		accountId: claims.accountId,
+		availableModels,
+		expiresAt: tokens.expiresAt,
+		channels,
+		serverUrl: session.serverUrl,
+		connectedProfiles: [],
+		skippedProfiles: [],
+	};
+}
+
+/**
+ * 按选中的渠道接入 Snow AI Router：已有 Key 的档案跳过，
+ * 其余渠道创建/复用路由 Key 后写入本地档案。
+ */
+export async function finalizeSnowRouterLogin(
+	sessionId: string,
+	groups: string[],
+): Promise<OAuthLoginStatusView | null> {
+	const entry = sessions.get(sessionId);
+	if (!entry || entry.session.provider !== 'snowrouter') {
+		return null;
+	}
+	if (entry.status !== 'success' || !entry.outcome) {
+		throw new Error('The Snow AI Router sign-in is not complete yet');
+	}
+	const accessToken = entry.session.routerAccessToken.trim();
+	if (!accessToken) {
+		throw new Error(
+			'Snow AI Router access token is missing; please sign in again',
+		);
+	}
+	const requested = Array.from(
+		new Set(groups.map(group => group.trim()).filter(Boolean)),
+	);
+	if (requested.length === 0) {
+		throw new Error('Select at least one channel');
+	}
+	const channels = entry.outcome.channels ?? [];
+	const selected = requested
+		.map(id => channels.find(channel => channel.id === id))
+		.filter((channel): channel is OAuthRouterChannel => !!channel);
+	if (selected.length === 0) {
+		throw new Error('The selected channels are no longer available');
+	}
+
+	const connected: string[] = [];
+	const skipped: string[] = [];
+	let firstProfileName = '';
+	for (const channel of selected) {
+		const profileName = snowRouterProfileName(channel.id);
+		if (!firstProfileName) {
+			firstProfileName = profileName;
+		}
+		if (snowRouterProfileHasKey(profileName)) {
+			skipped.push(profileName);
+			continue;
+		}
+		const model = channel.models[0]?.trim() ?? '';
+		if (!model) {
+			throw new Error(`The channel "${channel.name}" has no available models`);
+		}
+		const {key} = await snowRouterEnsureKey(
+			entry.session.serverUrl,
+			accessToken,
+			channel.id,
+		);
+		saveSnowRouterProfile({
+			profileName,
+			displayName: `Snow AI Router · ${channel.name}`,
+			accountId: entry.outcome.accountId,
+			serverUrl: entry.session.serverUrl,
+			group: channel.id,
+			apiKey: key,
+			advancedModel: model,
+			basicModel: model,
+			maxContextTokens: OAUTH_PROVIDERS.snowrouter.maxContextTokens,
+		});
+		connected.push(profileName);
+	}
+
+	entry.outcome = {
+		...entry.outcome,
+		profileName: connected[0] ?? firstProfileName,
+		connectedProfiles: connected,
+		skippedProfiles: skipped,
+	};
+	entry.session.routerAccessToken = '';
+	return toStatusView(entry);
 }
 
 /** 供测试与诊断：当前进行中的登录会话数 */

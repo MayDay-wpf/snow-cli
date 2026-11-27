@@ -1,12 +1,14 @@
 /**
- * OAuth 模块入口：对外暴露 4 种订阅账号登录能力。
+ * OAuth 模块入口：订阅账号登录与 Snow AI Router 渠道接入。
  */
 
 export {
 	OAUTH_PROVIDERS,
 	OAUTH_PROVIDER_ORDER,
+	SNOW_ROUTER_DEFAULT_URL,
 	parseOAuthProviderId,
 	isOAuthProviderId,
+	resolveSnowRouterServerUrl,
 } from './constants.js';
 export type {OAuthProviderDefinition} from './constants.js';
 export type {
@@ -18,11 +20,13 @@ export type {
 	OAuthProfileDraft,
 	OAuthProfileMetadata,
 	OAuthProviderId,
+	OAuthRouterChannel,
 	OAuthTokenSet,
 } from './types.js';
 export {
 	cancelOAuthLogin,
 	disposeOAuthSessions,
+	finalizeSnowRouterLogin,
 	getActiveOAuthSessionCount,
 	getOAuthLoginStatus,
 	parseCallbackInput,

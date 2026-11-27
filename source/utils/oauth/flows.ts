@@ -27,6 +27,7 @@ import type {
 	OAuthPkceCodes,
 	OAuthProfileMetadata,
 	OAuthProviderId,
+	OAuthRouterChannel,
 	OAuthTokenSet,
 } from './types.js';
 import {
@@ -97,8 +98,20 @@ export function buildAuthorizeUrl(
 	state: string,
 	nonce: string = '',
 	hostId: string = '',
+	serverUrl: string = '',
 ): string {
 	const def = providerDef(provider);
+	if (provider === 'snowrouter') {
+		const routerUrl = new URL(`${serverUrl}/snow/authorize`);
+		const query = routerUrl.searchParams;
+		query.append('client_id', def.clientId);
+		query.append('response_type', 'code');
+		query.append('redirect_uri', redirectUri);
+		query.append('code_challenge', pkce.challenge);
+		query.append('code_challenge_method', 'S256');
+		query.append('state', state);
+		return routerUrl.toString();
+	}
 	const url = new URL(def.authorizeUrl);
 	const query = url.searchParams;
 
@@ -184,6 +197,7 @@ function parseCodexTokenResponse(body: Record<string, unknown>): OAuthTokenSet {
 		refreshToken: readString(body, 'refresh_token'),
 		idToken: readString(body, 'id_token'),
 		email: '',
+		username: '',
 		planType: '',
 		projectId: '',
 		clientId: '',
@@ -328,6 +342,7 @@ function parseChatGptTokenResponse(
 			refreshToken: readString(body, 'refresh_token'),
 			idToken: readString(body, 'id_token'),
 			email: '',
+			username: '',
 			planType: '',
 			projectId: '',
 			clientId: '',
@@ -514,6 +529,7 @@ function parseAnthropicTokenResponse(
 		refreshToken: readString(body, 'refresh_token'),
 		idToken: '',
 		email,
+		username: '',
 		planType: '',
 		projectId: '',
 		clientId: '',
@@ -627,6 +643,7 @@ function parseAntigravityTokenResponse(
 		refreshToken: readString(body, 'refresh_token'),
 		idToken: readString(body, 'id_token'),
 		email: '',
+		username: '',
 		planType: '',
 		projectId: '',
 		clientId: '',
@@ -877,6 +894,7 @@ function parseXaiTokenResponse(body: Record<string, unknown>): OAuthTokenSet {
 		refreshToken: readString(body, 'refresh_token'),
 		idToken,
 		email: claims.email,
+		username: '',
 		planType: claims.planType,
 		projectId: '',
 		clientId: '',
@@ -959,6 +977,143 @@ async function xaiFetchModels(accessToken: string): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Snow AI Router
+// ---------------------------------------------------------------------------
+
+function snowAppData(body: Record<string, unknown>): Record<string, unknown> {
+	const data = body['data'];
+	return data && typeof data === 'object'
+		? (data as Record<string, unknown>)
+		: {};
+}
+
+async function snowRouterExchangeCode(
+	serverUrl: string,
+	code: string,
+	redirectUri: string,
+	codeVerifier: string,
+): Promise<OAuthTokenSet> {
+	const response = await fetchWithProxy(`${serverUrl}/api/snow-app/token`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({
+			client_id: providerDef('snowrouter').clientId,
+			code,
+			redirect_uri: redirectUri,
+			code_verifier: codeVerifier,
+		}),
+	});
+	const body = await readJson(response);
+	if (!response.ok || body['success'] !== true) {
+		const message = readString(body, 'message') || `${response.status}`;
+		throw new Error(`Token exchange failed: ${message}`);
+	}
+	const data = snowAppData(body);
+	const accessToken = readString(data, 'access_token');
+	if (!accessToken) {
+		throw new Error('Token exchange did not include an access token');
+	}
+	const userValue = data['user'];
+	const user =
+		userValue && typeof userValue === 'object'
+			? (userValue as Record<string, unknown>)
+			: null;
+	return {
+		accessToken,
+		refreshToken: '',
+		idToken: '',
+		email: readString(user, 'email'),
+		username: readString(user, 'username') || readString(user, 'display_name'),
+		planType: '',
+		projectId: '',
+		clientId: '',
+		expiresAt: nowEpochSecs() + 365 * 24 * 60 * 60,
+	};
+}
+
+export async function snowRouterFetchChannels(
+	serverUrl: string,
+	accessToken: string,
+): Promise<OAuthRouterChannel[]> {
+	const response = await fetchWithProxy(`${serverUrl}/api/snow-app/channels`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			Authorization: `Bearer ${accessToken}`,
+		},
+	});
+	const body = await readJson(response);
+	if (!response.ok || body['success'] !== true) {
+		const message = readString(body, 'message') || `${response.status}`;
+		throw new Error(`Channel request failed: ${message}`);
+	}
+	const records = snowAppData(body)['channels'];
+	const channels: OAuthRouterChannel[] = [];
+	for (const item of Array.isArray(records) ? records : []) {
+		if (!item || typeof item !== 'object') {
+			continue;
+		}
+		const record = item as Record<string, unknown>;
+		const id = readString(record, 'id');
+		if (!id) {
+			continue;
+		}
+		const modelsValue = record['models'];
+		const models = Array.isArray(modelsValue)
+			? modelsValue.filter(
+					(model): model is string =>
+						typeof model === 'string' && model.trim() !== '',
+			  )
+			: [];
+		const ratioValue = record['ratio'];
+		channels.push({
+			id,
+			name: readString(record, 'name') || id,
+			description: readString(record, 'description'),
+			ratio:
+				typeof ratioValue === 'string'
+					? ratioValue.trim()
+					: typeof ratioValue === 'number'
+					? String(ratioValue)
+					: '',
+			models,
+			hasKey: record['has_key'] === true,
+		});
+	}
+	return channels;
+}
+
+export async function snowRouterEnsureKey(
+	serverUrl: string,
+	accessToken: string,
+	group: string,
+): Promise<{key: string; created: boolean}> {
+	const response = await fetchWithProxy(`${serverUrl}/api/snow-app/key`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accessToken}`,
+		},
+		body: JSON.stringify({group}),
+	});
+	const body = await readJson(response);
+	if (!response.ok || body['success'] !== true) {
+		const message = readString(body, 'message') || `${response.status}`;
+		throw new Error(`API key request failed: ${message}`);
+	}
+	const data = snowAppData(body);
+	const key = readString(data, 'key');
+	if (!key) {
+		throw new Error('API key request returned an empty key');
+	}
+	return {key, created: data['created'] === true};
+}
+
+// ---------------------------------------------------------------------------
 // 统一入口
 // ---------------------------------------------------------------------------
 
@@ -969,6 +1124,7 @@ export async function exchangeCode(
 	codeVerifier: string,
 	state: string,
 	issuedClientId: string = '',
+	serverUrl: string = '',
 ): Promise<OAuthTokenSet> {
 	switch (provider) {
 		case 'codex':
@@ -981,6 +1137,8 @@ export async function exchangeCode(
 			return antigravityExchangeCode(code, redirectUri, codeVerifier);
 		case 'xai':
 			return xaiExchangeCode(code, redirectUri, codeVerifier);
+		case 'snowrouter':
+			return snowRouterExchangeCode(serverUrl, code, redirectUri, codeVerifier);
 	}
 }
 
@@ -1000,6 +1158,8 @@ export async function refreshTokens(
 			return antigravityRefreshTokens(refreshToken);
 		case 'xai':
 			return xaiRefreshTokens(refreshToken);
+		case 'snowrouter':
+			throw new Error('Snow AI Router uses a static API key');
 	}
 }
 
@@ -1022,6 +1182,12 @@ export function parseClaims(
 			};
 		case 'xai':
 			return xaiParseClaims(tokens.idToken);
+		case 'snowrouter':
+			return {
+				email: tokens.email.trim(),
+				accountId: tokens.username.trim(),
+				planType: '',
+			};
 	}
 }
 
@@ -1041,6 +1207,8 @@ export async function fetchModels(
 			return antigravityFetchModels(accessToken, accountId);
 		case 'xai':
 			return xaiFetchModels(accessToken);
+		case 'snowrouter':
+			return [];
 	}
 }
 
@@ -1078,6 +1246,8 @@ export function applyProviderRequestHeaders(
 			// ChatGPT API 直接使用标准 Authorization 头，无额外请求头
 			return;
 		case 'xai':
+			return;
+		case 'snowrouter':
 			return;
 	}
 }

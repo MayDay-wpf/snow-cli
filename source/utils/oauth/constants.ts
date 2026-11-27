@@ -7,6 +7,9 @@
 
 import type {OAuthProviderId} from './types.js';
 
+/** Snow AI Router 默认站点；本地调试可通过 SNOW_ROUTER_URL 覆盖。 */
+export const SNOW_ROUTER_DEFAULT_URL = 'https://kfccrazythursday.com';
+
 export interface OAuthProviderDefinition {
 	id: OAuthProviderId;
 	/** 面板中的展示名 */
@@ -138,7 +141,51 @@ export const OAUTH_PROVIDERS: Record<OAuthProviderId, OAuthProviderDefinition> =
 			requestMethod: 'responses',
 			supportsVision: true,
 		},
+		snowrouter: {
+			id: 'snowrouter',
+			displayName: 'Snow AI Router',
+			description: 'Sign in and import the router channels as profiles',
+			clientId: 'snow-cli',
+			clientSecret: '',
+			// 实际地址由 SNOW_ROUTER_DEFAULT_URL / SNOW_ROUTER_URL 解析
+			authorizeUrl: `${SNOW_ROUTER_DEFAULT_URL}/snow/authorize`,
+			tokenUrl: `${SNOW_ROUTER_DEFAULT_URL}/api/snow-app/token`,
+			scope: '',
+			refreshScope: '',
+			callbackPath: '/oauth/callback',
+			callbackPorts: [42820, 42821, 42822, 42823],
+			redirectHost: '127.0.0.1',
+			defaultModel: '',
+			maxContextTokens: 200000,
+			backendBaseUrl: `${SNOW_ROUTER_DEFAULT_URL}/v1`,
+			requestMethod: 'chat',
+			supportsVision: true,
+		},
 	};
+
+/** 解析路由站点根地址：去掉尾部斜杠与 `/v1`，仅接受 http(s)。 */
+export function resolveSnowRouterServerUrl(raw?: string): string {
+	const candidate = (
+		raw?.trim() ||
+		process.env['SNOW_ROUTER_URL']?.trim() ||
+		SNOW_ROUTER_DEFAULT_URL
+	).trim();
+	const withScheme = candidate.includes('://')
+		? candidate
+		: `http://${candidate}`;
+	const url = new URL(withScheme);
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+		throw new Error('Snow AI Router URL must use http or https');
+	}
+	url.search = '';
+	url.hash = '';
+	let path = url.pathname.replace(/\/+$/, '');
+	if (path.endsWith('/v1')) {
+		path = path.slice(0, -3);
+	}
+	url.pathname = path || '/';
+	return url.toString().replace(/\/+$/, '');
+}
 
 /** 面板展示顺序（与 Snow App 保持一致） */
 export const OAUTH_PROVIDER_ORDER: OAuthProviderId[] = [
@@ -147,6 +194,7 @@ export const OAUTH_PROVIDER_ORDER: OAuthProviderId[] = [
 	'anthropic',
 	'antigravity',
 	'xai',
+	'snowrouter',
 ];
 
 export function isOAuthProviderId(value: unknown): value is OAuthProviderId {
@@ -155,7 +203,8 @@ export function isOAuthProviderId(value: unknown): value is OAuthProviderId {
 		value === 'chatgpt' ||
 		value === 'anthropic' ||
 		value === 'antigravity' ||
-		value === 'xai'
+		value === 'xai' ||
+		value === 'snowrouter'
 	);
 }
 

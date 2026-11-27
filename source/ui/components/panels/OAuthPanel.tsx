@@ -9,6 +9,7 @@ import {
 	OAUTH_PROVIDER_ORDER,
 	activateOAuthProfile,
 	cancelOAuthLogin,
+	finalizeSnowRouterLogin,
 	getOAuthLoginStatus,
 	openExternalUrl,
 	startOAuthLogin,
@@ -17,6 +18,7 @@ import {
 	type OAuthLoginStartResult,
 	type OAuthLoginStatusView,
 	type OAuthProviderId,
+	type OAuthRouterChannel,
 } from '../../../utils/oauth/index.js';
 
 type Props = {
@@ -26,7 +28,13 @@ type Props = {
 	onActivated?: (profileName: string) => void;
 };
 
-type PanelMode = 'list' | 'connecting' | 'manual' | 'success' | 'error';
+type PanelMode =
+	| 'list'
+	| 'connecting'
+	| 'manual'
+	| 'channels'
+	| 'success'
+	| 'error';
 
 type OAuthPanelMessages = {
 	title?: string;
@@ -55,6 +63,11 @@ type OAuthPanelMessages = {
 	providerAnthropic?: string;
 	providerAntigravity?: string;
 	providerXai?: string;
+	providerSnowrouter?: string;
+	channelsTitle?: string;
+	channelsHint?: string;
+	connectingChannels?: string;
+	modelsCount?: string;
 };
 
 const DEFAULT_PROVIDER_LABELS: Record<OAuthProviderId, string> = {
@@ -63,6 +76,7 @@ const DEFAULT_PROVIDER_LABELS: Record<OAuthProviderId, string> = {
 	anthropic: 'Anthropic (Claude)',
 	antigravity: 'Antigravity (Google)',
 	xai: 'xAI (Grok)',
+	snowrouter: 'Snow AI Router',
 };
 
 const POLL_INTERVAL_MS = 1000;
@@ -91,6 +105,10 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 					);
 				case 'xai':
 					return messages.providerXai ?? DEFAULT_PROVIDER_LABELS.xai;
+				case 'snowrouter':
+					return (
+						messages.providerSnowrouter ?? DEFAULT_PROVIDER_LABELS.snowrouter
+					);
 			}
 		},
 		[messages],
@@ -113,6 +131,12 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 		null,
 	);
 	const [outcome, setOutcome] = useState<OAuthLoginOutcome | null>(null);
+	const [channels, setChannels] = useState<OAuthRouterChannel[]>([]);
+	const [selectedChannels, setSelectedChannels] = useState<Set<string>>(
+		new Set(),
+	);
+	const [channelIndex, setChannelIndex] = useState(0);
+	const [channelBusy, setChannelBusy] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [manualInput, setManualInput] = useState('');
 	const [showCursor, setShowCursor] = useState(true);
@@ -144,6 +168,10 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 		sessionRef.current = null;
 		setStatusView(null);
 		setOutcome(null);
+		setChannels([]);
+		setSelectedChannels(new Set());
+		setChannelIndex(0);
+		setChannelBusy(false);
 		setErrorMessage('');
 		setManualInput('');
 	}, [visible]);
@@ -162,6 +190,15 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 		setStatusView(view);
 		if (view.status === 'success' && view.outcome) {
 			setOutcome(view.outcome);
+			const routerChannels = view.outcome.channels ?? [];
+			if (view.outcome.provider === 'snowrouter' && routerChannels.length > 0) {
+				setChannels(routerChannels);
+				setSelectedChannels(new Set(routerChannels.map(channel => channel.id)));
+				setChannelIndex(0);
+				setChannelBusy(false);
+				setMode('channels');
+				return;
+			}
 			setMode('success');
 			return;
 		}
@@ -263,6 +300,31 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 		closePanel();
 	}, [outcome, onActivated, closePanel]);
 
+	const handleConnectChannels = useCallback(async () => {
+		const active = sessionRef.current;
+		if (!active || channelBusy) {
+			return;
+		}
+		const groups = Array.from(selectedChannels);
+		if (groups.length === 0) {
+			return;
+		}
+		setChannelBusy(true);
+		setErrorMessage('');
+		try {
+			const view = await finalizeSnowRouterLogin(active.sessionId, groups);
+			if (!view?.outcome) {
+				throw new Error('Sign-in session expired');
+			}
+			setOutcome(view.outcome);
+			setMode('success');
+		} catch (error) {
+			setErrorMessage(error instanceof Error ? error.message : String(error));
+		} finally {
+			setChannelBusy(false);
+		}
+	}, [channelBusy, selectedChannels]);
+
 	useInput(
 		(input, key) => {
 			if (mode === 'manual') {
@@ -281,6 +343,45 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 				}
 				if (input && !key.ctrl && !key.meta && !key.tab) {
 					setManualInput(prev => prev + input);
+				}
+				return;
+			}
+
+			if (mode === 'channels') {
+				if (channelBusy) {
+					return;
+				}
+				if (key.escape) {
+					closePanel();
+					return;
+				}
+				if (key.upArrow) {
+					setChannelIndex(prev =>
+						prev === 0 ? Math.max(channels.length - 1, 0) : prev - 1,
+					);
+					return;
+				}
+				if (key.downArrow) {
+					setChannelIndex(prev => (prev >= channels.length - 1 ? 0 : prev + 1));
+					return;
+				}
+				if (key.return) {
+					void handleConnectChannels();
+					return;
+				}
+				if (input === ' ') {
+					const channel = channels[channelIndex];
+					if (channel) {
+						setSelectedChannels(prev => {
+							const next = new Set(prev);
+							if (next.has(channel.id)) {
+								next.delete(channel.id);
+							} else {
+								next.add(channel.id);
+							}
+							return next;
+						});
+					}
 				}
 				return;
 			}
@@ -363,6 +464,10 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 				setErrorMessage('');
 				setStatusView(null);
 				setOutcome(null);
+				setChannels([]);
+				setSelectedChannels(new Set());
+				setChannelIndex(0);
+				setChannelBusy(false);
 				setSession(null);
 				sessionRef.current = null;
 				setMode('list');
@@ -498,6 +603,71 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 					</Text>
 				</Box>
 				{hint('Enter submit • ESC back')}
+			</Box>
+		);
+	}
+
+	if (mode === 'channels') {
+		return (
+			<Box
+				flexDirection="column"
+				borderStyle="round"
+				borderColor={theme.colors.menuInfo}
+				paddingX={2}
+				paddingY={1}
+			>
+				<Text color={theme.colors.menuInfo} bold>
+					{messages.channelsTitle ?? 'Choose channels to connect'}
+				</Text>
+				<Box flexDirection="column" marginTop={1}>
+					{channels.map((channel, index) => {
+						const selected = selectedChannels.has(channel.id);
+						const active = index === channelIndex;
+						const modelsCount = (
+							messages.modelsCount ?? '{count} models'
+						).replace('{count}', String(channel.models.length));
+						const meta = [channel.id, channel.ratio, modelsCount]
+							.filter(Boolean)
+							.join(' · ');
+						return (
+							<Text
+								key={channel.id}
+								color={
+									active ? theme.colors.menuSelected : theme.colors.menuNormal
+								}
+								bold={active}
+							>
+								{active ? '❯ ' : '  '}
+								{selected ? '[x] ' : '[ ] '}
+								{channel.name}
+								<Text color={theme.colors.menuSecondary} dimColor>
+									{'  '}
+									{meta}
+								</Text>
+							</Text>
+						);
+					})}
+				</Box>
+				{channelBusy ? (
+					<Box marginTop={1}>
+						<Text color={theme.colors.menuSelected}>
+							<Spinner type="dots" />
+						</Text>
+						<Text color={theme.colors.menuInfo}>
+							{' '}
+							{messages.connectingChannels ?? 'Connecting channels...'}
+						</Text>
+					</Box>
+				) : null}
+				{errorMessage ? (
+					<Box marginTop={1}>
+						<Text color={theme.colors.error}>{errorMessage}</Text>
+					</Box>
+				) : null}
+				{hint(
+					messages.channelsHint ??
+						'↑↓ move • Space toggle • Enter connect • ESC cancel',
+				)}
 			</Box>
 		);
 	}

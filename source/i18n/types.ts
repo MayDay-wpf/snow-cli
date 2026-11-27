@@ -1430,6 +1430,11 @@ export type TranslationKeys = {
 		providerAnthropic: string;
 		providerAntigravity: string;
 		providerXai: string;
+		providerSnowrouter: string;
+		channelsTitle: string;
+		channelsHint: string;
+		connectingChannels: string;
+		modelsCount: string;
 	};
 
 	// Hooks
