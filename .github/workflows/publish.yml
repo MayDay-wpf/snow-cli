@@ -131,7 +131,8 @@ jobs:
 
             ### What's New
 
-            - add OAuth 2.1 support for MCP servers
+            - add Snow AI Router support with channel selection and OAuth integration
+            - add "Still let me confirm when rejected" option for sensitive commands; rejected decisions now prompt for confirmation instead of ending the session
 
             ### Installation
             ```bash
