@@ -362,7 +362,7 @@ export default function FileRollbackConfirmation({
 											dimColor={!isHighlighted && !isSelected}
 											bold={isHighlighted}
 										>
-											{showFullList ? (isSelected ? '[x] ' : '[ ] ') : '• '}
+										{showFullList ? (isSelected ? '[✓] ' : '[ ] ') : '• '}
 											{file}
 										</Text>
 									</Box>

@@ -323,7 +323,7 @@ export default function RetryPolicyConfigScreen({onBack}: Props) {
 			<Box key="always" flexDirection="column" marginBottom={1}>
 				<Text color={rowColor(index)} bold={isActive}>
 					{truncateToWidth(
-						`${renderIndicator(index)}${policy.always ? '[x] ' : '[ ] '}${
+						`${renderIndicator(index)}${policy.always ? '[✓] ' : '[ ] '}${
 							t.retryPolicy.alwaysLabel
 						}`,
 						contentWidth,
@@ -360,7 +360,7 @@ export default function RetryPolicyConfigScreen({onBack}: Props) {
 				>
 					{truncateToWidth(
 						`${renderIndicator(index)}${
-							state.enabled ? '[x] ' : '[ ] '
+							state.enabled ? '[✓] ' : '[ ] '
 						}${categoryLabel(row.id)}`,
 						contentWidth,
 					)}

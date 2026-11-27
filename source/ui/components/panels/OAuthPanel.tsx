@@ -638,7 +638,7 @@ export default function OAuthPanel({visible, onClose, onActivated}: Props) {
 								bold={active}
 							>
 								{active ? '❯ ' : '  '}
-								{selected ? '[x] ' : '[ ] '}
+								{selected ? '[✓] ' : '[ ] '}
 								{channel.name}
 								<Text color={theme.colors.menuSecondary} dimColor>
 									{'  '}

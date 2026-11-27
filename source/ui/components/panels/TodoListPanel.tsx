@@ -455,7 +455,7 @@ export default function TodoListPanel({onClose}: Props) {
 									bold
 								>
 									{isSelected ? '❯ ' : '  '}
-									{isMarked ? '[x]' : '[ ]'} {indent}
+									{isMarked ? '[✓]' : '[ ]'} {indent}
 									{branch}
 									{statusIcon} {todo.content}
 								</Text>
