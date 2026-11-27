@@ -43,6 +43,14 @@ _Agentic coding in your terminal_
   <tbody>
     <tr>
       <td align="center">
+        <a href="https://kfccrazythursday.com"><img src="docs/images/logo.png" alt="Snow AI Router" width="120"/></a>
+        <br/>
+        <a href="https://kfccrazythursday.com"><b>Snow AI Router</b></a>
+      </td>
+      <td>Snow AI Router provides low-cost, full-power CCMAX access — as low as 0.2–0.5.<br/><a href="https://kfccrazythursday.com">Sign up through the link</a> and start using it right away.</td>
+    </tr>
+    <tr>
+      <td align="center">
         <a href="https://www.packyapi.ai/"><img src="docs/images/packyapi.jpg" alt="PackyCode" width="360"/></a>
         <br/>
         <a href="https://www.packyapi.ai/"><b>PackyCode</b></a>

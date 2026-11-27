@@ -43,6 +43,14 @@ _在终端中进行 Agentic 编程_
   <tbody>
     <tr>
       <td align="center">
+        <a href="https://kfccrazythursday.com"><img src="docs/images/logo.png" alt="Snow AI Router" width="120"/></a>
+        <br/>
+        <a href="https://kfccrazythursday.com"><b>Snow AI Router</b></a>
+      </td>
+      <td>Snow AI Router 提供低价满血 CCMAX，价格低至 0.2～0.5，<br/><a href="https://kfccrazythursday.com">点此链接注册</a>，即刻开始使用。</td>
+    </tr>
+    <tr>
+      <td align="center">
         <a href="https://www.packyapi.ai/"><img src="docs/images/packyapi.jpg" alt="PackyCode" width="360"/></a>
         <br/>
         <a href="https://www.packyapi.ai/"><b>PackyCode</b></a>
