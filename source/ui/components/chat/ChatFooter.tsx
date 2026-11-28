@@ -324,7 +324,11 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 	}, [props.showReviewCommitPanel, props.showIdeSelectPanel, props.showDiffReviewPanel, props.showSkillsListPanel]);
 
 	return (
-		<>
+		// Bottom dock. flexShrink={0} keeps the footer at its natural height so
+		// in full-screen mode the conversation area (flexGrow + flexBasis 0)
+		// absorbs all remaining space and the input stays pinned to the bottom
+		// edge instead of being squeezed / pushed by conversation content.
+		<Box flexDirection="column" flexShrink={0}>
 			{!props.showReviewCommitPanel &&
 				!props.showIdeSelectPanel &&
 				!props.showDiffReviewPanel &&
@@ -531,7 +535,7 @@ const ChatFooter = React.memo(function ChatFooter(props: ChatFooterProps) {
 					/>
 				</Suspense>
 			)}
-		</>
+		</Box>
 	);
 });
 

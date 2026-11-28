@@ -27,5 +27,13 @@ export {default as useFocus} from './hooks/use-focus.js';
 export {default as useFocusManager} from './hooks/use-focus-manager.js';
 export {default as useCursor} from './hooks/use-cursor.js';
 export {default as measureElement} from './measure-element.js';
-export {clearInkStaticOutput} from './ink.js';
+export {
+	clearInkStaticOutput,
+	enterFullScreen,
+	leaveFullScreen,
+	requestFullScreenRepaint,
+	isFullScreenActive,
+} from './ink.js';
+export {default as useMouse} from './hooks/use-mouse.js';
+export type {MouseEvent, MouseAction, MouseButton} from './mouse.js';
 export type {DOMElement} from './dom.js';

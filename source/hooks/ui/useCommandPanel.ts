@@ -394,6 +394,12 @@ export function useCommandPanel(
 					'Toggle theme simple mode. Usage: /simple [on|off|status]',
 			},
 			{
+				name: 'tui',
+				description:
+					t.commandPanel.commands.tui ||
+					'Switch chat UI between classic and full-screen TUI. Usage: /tui [fullscreen|classic|status]',
+			},
+			{
 				name: 'buddy',
 				description:
 					t.commandPanel.commands.buddy ||

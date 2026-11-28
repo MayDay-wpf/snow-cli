@@ -10,6 +10,7 @@ import FocusContext from './FocusContext.js';
 import CursorContext from './CursorContext.js';
 import ErrorOverview from './ErrorOverview.js';
 import {type CursorRegistration} from './CursorContext.js';
+import {extractMouseEvents} from '../mouse.js';
 
 const tab = '\t';
 const shiftTab = '\u001B[Z';
@@ -192,12 +193,31 @@ export default class App extends PureComponent<Props, State> {
 		}
 	};
 
+	// Incomplete SGR mouse sequence carried over from the previous chunk.
+	private pendingMouseChunk = '';
+
 	handleReadable = (): void => {
 		let chunk;
 		// eslint-disable-next-line @typescript-eslint/ban-types
 		while ((chunk = this.props.stdin.read() as string | null) !== null) {
-			this.handleInput(chunk);
-			this.internal_eventEmitter.emit('input', chunk);
+			let data = this.pendingMouseChunk + chunk;
+			this.pendingMouseChunk = '';
+
+			// Strip terminal mouse reports so they never reach useInput handlers
+			// (they would otherwise be typed into text inputs as garbage).
+			const {rest, events, pending} = extractMouseEvents(data);
+			this.pendingMouseChunk = pending;
+			for (const event of events) {
+				this.internal_eventEmitter.emit('mouse', event);
+			}
+
+			data = rest;
+			if (data.length === 0) {
+				continue;
+			}
+
+			this.handleInput(data);
+			this.internal_eventEmitter.emit('input', data);
 		}
 	};
 

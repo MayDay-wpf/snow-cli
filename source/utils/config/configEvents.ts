@@ -4,6 +4,7 @@ export type ConfigChangeEvent = {
 	type:
 		| 'showThinking'
 		| 'simpleMode'
+		| 'tuiMode'
 		| 'toolDisplayMode'
 		| 'toolIcons'
 		| 'toolStatusIcons'

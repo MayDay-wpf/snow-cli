@@ -1,5 +1,5 @@
 import {useStdout} from 'ink';
-import ansiEscapes from 'ansi-escapes';
+import {clearTerminalScreen} from '../../../utils/execution/terminal.js';
 import {useI18n} from '../../../i18n/index.js';
 import type {UseChatLogicProps, Message} from './types.js';
 import type {ReviewCommitSelection} from '../../../ui/components/panels/ReviewCommitPanel.js';
@@ -85,7 +85,7 @@ export function useChatHandlers(
 			if (session) {
 				const uiMessages = convertSessionMessagesToUI(session.messages);
 
-				stdout.write(ansiEscapes.clearTerminal);
+				clearTerminalScreen(stdout);
 				setPendingMessages([]);
 				streamingState.setIsStreaming(false);
 				setMessages([]);
@@ -314,7 +314,7 @@ Please provide your review in a clear, structured format.`;
 			clearSavedMessages();
 			// The review flow starts a fresh Static tree. Clear the terminal before
 			// remounting it so ChatHeader is not appended below the previous header.
-			stdout.write(ansiEscapes.clearTerminal);
+			clearTerminalScreen(stdout);
 			setMessages([]);
 			setRemountKey(prev => prev + 1);
 			streamingState.setContextUsage(null);

@@ -1798,6 +1798,19 @@ export function useCommandHandler(options: CommandHandlerOptions) {
 				// 让 <Static> 重新挂载，按新模式重绘静态区域。
 				resetTerminal(stdout);
 				options.setRemountKey(prev => prev + 1);
+			} else if (result.success && result.action === 'toggleTui') {
+				// /tui 切换经典/全屏渲染模式：setTuiMode 已通过 tuiMode 事件同步 state。
+				// 清屏 + bump remountKey 不在这里做，而是由 ChatScreen 中
+				// useFullScreen 的 onActiveChange 回调在渲染器真正进入/离开备用屏
+				// 之后统一处理（任何修改 tuiMode 的入口都生效，且无需定时器）。
+				if (result.message) {
+					const commandMessage: Message = {
+						role: 'command',
+						content: result.message,
+						commandName: commandName,
+					};
+					options.setMessages(prev => [...prev, commandMessage]);
+				}
 			} else if (result.success && result.action === 'toggleToolDisplay') {
 				// /tool-display 切换工具显示模式后，<Static> 区域中的历史工具消息
 				// 不会随 toolDisplayMode 变化自动重绘，必须强制清屏并 bump remountKey。

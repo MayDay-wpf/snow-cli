@@ -34,6 +34,7 @@ import {useChatScreenModes} from './chatScreen/useChatScreenModes.js';
 import {useChatScreenSessionLifecycle} from './chatScreen/useChatScreenSessionLifecycle.js';
 import {useCodebaseIndexing} from './chatScreen/useCodebaseIndexing.js';
 import {useTerminalTitle} from '../../hooks/ui/useTerminalTitle.js';
+import {useFullScreen} from '../../hooks/ui/useFullScreen.js';
 import {useElapsedSeconds} from '../../hooks/ui/useElapsedSeconds.js';
 import type {ActiveBusyKind} from '../components/chat/statusVerbs.js';
 import {resetTerminal} from '../../utils/execution/terminal.js';
@@ -135,10 +136,34 @@ export default function ChatScreen({
 		ultraTodoEnabled,
 		setUltraTodoEnabled,
 		simpleMode,
+		tuiMode,
 		showThinking,
 		toolDisplayMode,
 		thinkDisplayMode,
 	} = useChatScreenModes({enableYolo, enablePlan});
+	// Render mode (switched with /tui). Classic is the default inline renderer;
+	// full-screen uses the alternate screen + fixed-height frame so the
+	// conversation scrolls inside a virtual viewport between the header and
+	// the pinned input box, and nothing accumulates in the terminal scrollback.
+	//
+	// Layout is driven by the ACTUAL renderer state returned by useFullScreen,
+	// not by the requested tuiMode: Ink refuses full-screen in CI / debug /
+	// non-TTY, and a fixed-height layout under the inline renderer would clear
+	// the terminal on every frame.
+	//
+	// Whenever the renderer really switches (whatever changed tuiMode: /tui,
+	// settings, config events...), clear the screen and remount <Static>.
+	// The callback runs right after enter/leave, so when returning to classic
+	// mode the main screen is already current and the remounted <Static>
+	// history is written to the real scrollback instead of being discarded.
+	const handleFullScreenChange = useCallback(() => {
+		resetTerminal();
+		setRemountKey(prev => prev + 1);
+	}, [setRemountKey]);
+	const isFullscreen = useFullScreen(
+		tuiMode === 'fullscreen',
+		handleFullScreenChange,
+	);
 	const streamingState = useStreamingState();
 	const vscodeState = useVSCodeState();
 	const snapshotState = useSnapshotState(messages.length);
@@ -601,7 +626,15 @@ export default function ChatScreen({
 
 	if (terminalHeight < MIN_TERMINAL_HEIGHT) {
 		return (
-			<Box flexDirection="column" padding={2}>
+			// Fixed height only in full-screen mode. Under the inline renderer a
+			// frame that reaches `rows` lines makes Ink clear the terminal (incl.
+			// scrollback) on every render.
+			<Box
+				flexDirection="column"
+				padding={2}
+				height={isFullscreen ? terminalHeight : undefined}
+				overflow={isFullscreen ? 'hidden' : 'visible'}
+			>
 				<Box borderStyle="round" borderColor="red" padding={1}>
 					<Text color="red" bold>
 						{t.chatScreen.terminalTooSmall}
@@ -629,7 +662,9 @@ export default function ChatScreen({
 				flexDirection="column"
 				justifyContent="center"
 				alignItems="center"
-				height="100%"
+				// See above: a fixed height in classic mode would make the spinner
+				// clear the whole terminal on every tick.
+				height={isFullscreen ? terminalHeight : undefined}
 				width={terminalWidth}
 			>
 				<Text color="cyan">
@@ -645,8 +680,20 @@ export default function ChatScreen({
 	}
 
 	return (
-		<Box flexDirection="column" height="100%" width={terminalWidth}>
+		<Box
+			flexDirection="column"
+			height={isFullscreen ? terminalHeight : undefined}
+			width={terminalWidth}
+			overflow={isFullscreen ? 'hidden' : 'visible'}
+			// Full-screen: anchor children to the bottom edge. If header +
+			// panels + footer ever exceed the screen, the overflow is clipped
+			// at the TOP, so the input box always stays pinned to the bottom.
+			justifyContent={isFullscreen ? 'flex-end' : 'flex-start'}
+		>
 			<ChatScreenConversationView
+				fullscreen={isFullscreen}
+				terminalHeight={terminalHeight}
+				scrollKeyboardActive={!hasBlockingPanel}
 				remountKey={remountKey}
 				terminalWidth={terminalWidth}
 				workingDirectory={workingDirectory}

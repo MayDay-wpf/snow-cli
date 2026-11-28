@@ -49,6 +49,24 @@ type UnclipOperation = {
 	type: 'unclip';
 };
 
+const intersectStart = (
+	a: number | undefined,
+	b: number | undefined,
+): number | undefined => {
+	if (a === undefined) return b;
+	if (b === undefined) return a;
+	return Math.max(a, b);
+};
+
+const intersectEnd = (
+	a: number | undefined,
+	b: number | undefined,
+): number | undefined => {
+	if (a === undefined) return b;
+	if (b === undefined) return a;
+	return Math.min(a, b);
+};
+
 export default class Output {
 	width: number;
 	height: number;
@@ -125,7 +143,21 @@ export default class Output {
 
 		for (const operation of this.operations) {
 			if (operation.type === 'clip') {
-				clips.push(operation.clip);
+				// Intersect with the enclosing clip region so that nested
+				// overflow:hidden boxes can never draw outside an outer
+				// viewport (required by virtual scroll containers).
+				const parent = clips.at(-1);
+				const next = operation.clip;
+				clips.push(
+					parent
+						? {
+								x1: intersectStart(parent.x1, next.x1),
+								x2: intersectEnd(parent.x2, next.x2),
+								y1: intersectStart(parent.y1, next.y1),
+								y2: intersectEnd(parent.y2, next.y2),
+						  }
+						: next,
+				);
 			}
 
 			if (operation.type === 'unclip') {

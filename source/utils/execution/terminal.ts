@@ -34,10 +34,62 @@ export function getAvailableTerminalColumns(
 	return Math.max(1, getTerminalColumns(stream) - safeReservedColumns);
 }
 
+type FullScreenControllerLike = {
+	isActive: () => boolean;
+	requestRepaint: () => void;
+	leave: () => void;
+};
+
+// Must match FULLSCREEN_CONTROLLER_KEY in source/vendor/ink/src/fullscreen.ts.
+const FULLSCREEN_CONTROLLER_KEY = Symbol.for(
+	'snow-cli.ink.fullscreen-controller',
+);
+
+function getFullScreenController(): FullScreenControllerLike | undefined {
+	const controller = (globalThis as Record<symbol, unknown>)[
+		FULLSCREEN_CONTROLLER_KEY
+	] as FullScreenControllerLike | undefined;
+	return controller && controller.isActive() ? controller : undefined;
+}
+
+/**
+ * Whether the Ink renderer currently owns the alternate screen.
+ */
+export function isFullScreenTUI(): boolean {
+	return getFullScreenController() !== undefined;
+}
+
+/**
+ * Clear the visible screen in a way that is safe for both render modes.
+ * - Full-screen: ask Ink to repaint the whole frame (no raw escape writes).
+ * - Inline: emit the classic clearTerminal sequence.
+ */
+export function clearTerminalScreen(stream?: WritableStreamLike): void {
+	const controller = getFullScreenController();
+	if (controller) {
+		controller.requestRepaint();
+		return;
+	}
+
+	const target = stream ?? process.stdout;
+	if (target && typeof target.write === 'function') {
+		target.write('\x1B[2J\x1B[3J\x1B[H');
+	}
+}
+
 export function resetTerminal(stream?: WritableStreamLike): void {
 	const target = stream ?? process.stdout;
 
 	if (!target || typeof target.write !== 'function') {
+		return;
+	}
+
+	// In full-screen mode a RIS would drop the alternate screen, mouse
+	// tracking and every other mode Ink set up. A forced repaint is enough
+	// because nothing accumulates outside the viewport.
+	const controller = getFullScreenController();
+	if (controller) {
+		controller.requestRepaint();
 		return;
 	}
 
@@ -76,6 +128,14 @@ export function emitTerminalExitSequence(stream?: WritableStreamLike): void {
 	const target = stream ?? process.stdout;
 	if (target && typeof target.write === 'function') {
 		try {
+			// If the process exits while the full-screen TUI is still active
+			// (e.g. process.exit without Ink unmount), restore the main screen
+			// and disable mouse tracking first.
+			const controller = getFullScreenController();
+			if (controller) {
+				controller.leave();
+			}
+
 			target.write(TERMINAL_EXIT_SEQUENCES);
 		} catch (e) {
 			log.debug('Failed to emit terminal exit sequence (stream error)', {

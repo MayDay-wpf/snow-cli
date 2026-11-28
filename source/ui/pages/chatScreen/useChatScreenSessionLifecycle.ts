@@ -1,7 +1,7 @@
 import {useEffect, useRef} from 'react';
 import type {Dispatch, SetStateAction} from 'react';
 import {useStdout} from 'ink';
-import ansiEscapes from 'ansi-escapes';
+import {clearTerminalScreen} from '../../../utils/execution/terminal.js';
 import type {Message} from '../../components/chat/MessageList.js';
 import type {UsageInfo} from '../../../api/types.js';
 import {
@@ -80,7 +80,7 @@ export function useChatScreenSessionLifecycle({
 		}
 
 		const handler = setTimeout(() => {
-			stdout.write(ansiEscapes.clearTerminal);
+			clearTerminalScreen(stdout);
 			setRemountKey(prev => prev + 1);
 		}, 200);
 

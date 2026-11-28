@@ -1033,6 +1033,7 @@ export const en: TranslationKeys = {
 			toolCorrection:
 				'Toggle tool-call correction: the basic model repairs failed tool arguments and the call is retried. Usage: /tool-correction [on|off|status]',
 			simple: 'Toggle theme simple mode. Usage: /simple [on|off|status]',
+			tui: 'Switch chat UI between classic inline mode and full-screen TUI (fixed header/input, virtual scrolling, mouse wheel). Usage: /tui [fullscreen|classic|status]',
 			buddy:
 				'Manage your terminal companion. Usage: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch:
@@ -1107,6 +1108,13 @@ export const en: TranslationKeys = {
 				disabled: 'Simple mode: Disabled',
 				statusEnabled: 'Simple mode: Enabled',
 				statusDisabled: 'Simple mode: Disabled',
+			},
+			tuiMode: {
+				fullscreen:
+					'TUI mode: Full-screen (mouse wheel / PageUp / PageDown to scroll, hold Shift to select text)',
+				classic: 'TUI mode: Classic',
+				statusFullscreen: 'TUI mode: Full-screen',
+				statusClassic: 'TUI mode: Classic',
 			},
 			// Tool display mode command messages
 			toolDisplay: {
@@ -2699,7 +2707,8 @@ export const en: TranslationKeys = {
 			starting: 'Discovering the authorization server...',
 			waiting: 'Waiting for the browser to complete authorization...',
 			hint: 'The authorization page was opened in your browser. If it did not open, visit this URL manually:',
-			reloading: 'Authorized. Reconnecting this server with the new credentials...',
+			reloading:
+				'Authorized. Reconnecting this server with the new credentials...',
 			success: 'Authorization complete. Server tools have been reloaded.',
 			cancelled: 'OAuth authorization was cancelled.',
 			failed: 'OAuth authorization failed: {message}',

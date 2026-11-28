@@ -43,6 +43,7 @@ import './commands/resume.js';
 import './commands/review.js';
 import './commands/role.js';
 import './commands/simple.js';
+import './commands/tui.js';
 import './commands/skills.js';
 import './commands/skillsPicker.js';
 import './commands/todoPicker.js';

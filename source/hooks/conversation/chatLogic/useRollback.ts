@@ -1,6 +1,6 @@
 import {useCallback} from 'react';
 import {useStdout} from 'ink';
-import ansiEscapes from 'ansi-escapes';
+import {clearTerminalScreen} from '../../../utils/execution/terminal.js';
 import type {UseChatLogicProps} from './types.js';
 import type {RollbackMode} from '../../../ui/components/tools/FileRollbackConfirmation.js';
 import {sessionManager} from '../../../utils/session/sessionManager.js';
@@ -216,7 +216,7 @@ export function useRollback(props: UseChatLogicProps) {
 					setMessages(prev => prev.slice(0, selectedIndex));
 					clearSavedMessages();
 
-					stdout.write(ansiEscapes.clearTerminal);
+					clearTerminalScreen(stdout);
 					setTimeout(() => {
 						setRemountKey(prev => prev + 1);
 						snapshotState.setPendingRollback(null);
@@ -261,7 +261,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 				snapshotState.setSnapshotFileCount(new Map());
 
-				stdout.write(ansiEscapes.clearTerminal);
+				clearTerminalScreen(stdout);
 				onResetTerminalTitle?.();
 				setTimeout(() => {
 					setRemountKey(prev => prev + 1);
@@ -299,7 +299,7 @@ export function useRollback(props: UseChatLogicProps) {
 
 		clearSavedMessages();
 
-		stdout.write(ansiEscapes.clearTerminal);
+		clearTerminalScreen(stdout);
 		onResetTerminalTitle?.();
 		setTimeout(() => {
 			setRemountKey(prev => prev + 1);
@@ -479,7 +479,7 @@ export function useRollback(props: UseChatLogicProps) {
 							shouldRollbackFiles ? undefined : compressedSessionId,
 						);
 					if (switchedToOriginalSession) {
-						stdout.write(ansiEscapes.clearTerminal);
+						clearTerminalScreen(stdout);
 						setTimeout(() => {
 							setRemountKey(prev => prev + 1);
 							snapshotState.setPendingRollback(null);

@@ -16,8 +16,50 @@ import instances from './instances.js';
 import App from './components/App.js';
 import {type CursorRegistration} from './components/CursorContext.js';
 import {type DOMElement} from './dom.js';
+import {
+	ENTER_FULLSCREEN_SEQUENCE,
+	LEAVE_FULLSCREEN_SEQUENCE,
+	buildFullScreenFrame,
+	createFullScreenFrameState,
+	registerFullScreenController,
+	type FullScreenFrameState,
+} from './fullscreen.js';
 
 const noop = () => {};
+
+/**
+ * Switch the Ink instance bound to `stdout` into full-screen mode
+ * (alternate screen + mouse tracking + differential repaint).
+ */
+export function enterFullScreen(
+	stdout: NodeJS.WriteStream = process.stdout,
+): void {
+	instances.get(stdout)?.enterFullScreen();
+}
+
+/**
+ * Leave full-screen mode and return to the normal inline renderer.
+ */
+export function leaveFullScreen(
+	stdout: NodeJS.WriteStream = process.stdout,
+): void {
+	instances.get(stdout)?.leaveFullScreen();
+}
+
+/**
+ * Force a full repaint of the full-screen frame (no-op in inline mode).
+ */
+export function requestFullScreenRepaint(
+	stdout: NodeJS.WriteStream = process.stdout,
+): void {
+	instances.get(stdout)?.requestFullScreenRepaint();
+}
+
+export function isFullScreenActive(
+	stdout: NodeJS.WriteStream = process.stdout,
+): boolean {
+	return instances.get(stdout)?.isFullScreen ?? false;
+}
 
 export type Options = {
 	stdout: NodeJS.WriteStream;
@@ -60,6 +102,8 @@ export default class Ink {
 	private restoreConsole?: () => void;
 	private readonly unsubscribeResize?: () => void;
 	private cursorRegistration?: CursorRegistration;
+	isFullScreen = false;
+	private fullScreenFrame: FullScreenFrameState = createFullScreenFrameState();
 
 	constructor(options: Options) {
 		autoBind(this);
@@ -135,9 +179,99 @@ export default class Ink {
 	}
 
 	resized = () => {
+		if (this.isFullScreen) {
+			this.fullScreenFrame.needsClear = true;
+		}
+
 		this.calculateLayout();
 		this.onRender();
 	};
+
+	enterFullScreen = (): void => {
+		if (this.isFullScreen || this.isUnmounted || isInCi || this.options.debug) {
+			return;
+		}
+
+		if (!this.options.stdout.isTTY) {
+			return;
+		}
+
+		// Drop any pending trailing inline render so it can't leak into the
+		// alternate screen.
+		(this.throttledLog as unknown as {cancel?: () => void}).cancel?.();
+		// Erase inline dynamic output from the main screen so it is clean when
+		// we come back.
+		this.log.clear();
+
+		this.isFullScreen = true;
+		this.fullScreenFrame = createFullScreenFrameState();
+		this.lastOutput = '';
+		writeSafely(this.options.stdout, ENTER_FULLSCREEN_SEQUENCE);
+
+		registerFullScreenController({
+			isActive: () => this.isFullScreen,
+			requestRepaint: this.requestFullScreenRepaint,
+			// Used on abrupt process exit: restore the main screen without
+			// re-rendering the inline frame on top of the user's shell.
+			leave: () => {
+				if (!this.isFullScreen) {
+					return;
+				}
+
+				this.isFullScreen = false;
+				registerFullScreenController(undefined);
+				writeSafely(this.options.stdout, LEAVE_FULLSCREEN_SEQUENCE);
+				this.lastOutput = '';
+			},
+		});
+
+		this.calculateLayout();
+		this.onRender();
+	};
+
+	leaveFullScreen = (): void => {
+		if (!this.isFullScreen) {
+			return;
+		}
+
+		this.isFullScreen = false;
+		registerFullScreenController(undefined);
+		writeSafely(this.options.stdout, LEAVE_FULLSCREEN_SEQUENCE + '\u001B[?25l');
+		this.lastOutput = '';
+		this.fullScreenFrame = createFullScreenFrameState();
+
+		if (!this.isUnmounted) {
+			this.calculateLayout();
+			this.onRender();
+		}
+	};
+
+	requestFullScreenRepaint = (): void => {
+		if (!this.isFullScreen) {
+			return;
+		}
+
+		this.fullScreenFrame.needsClear = true;
+		this.onRender();
+	};
+
+	private renderFullScreen(
+		output: string,
+		cursor: {x: number; y: number} | undefined,
+	): void {
+		const rows = this.options.stdout.rows || 24;
+		const {sequence} = buildFullScreenFrame(
+			this.fullScreenFrame,
+			output,
+			rows,
+			cursor,
+		);
+		if (sequence) {
+			writeSafely(this.options.stdout, sequence);
+		}
+
+		this.lastOutput = output;
+	}
 
 	resolveExitPromise: () => void = () => {};
 	rejectExitPromise: (reason?: Error) => void = () => {};
@@ -179,6 +313,22 @@ export default class Ink {
 		}
 
 		const {output, outputHeight, staticOutput} = this.renderFrame();
+
+		if (this.isFullScreen) {
+			// <Static> output has no place in full-screen mode (there is no
+			// scrollback to append to); it is intentionally discarded.
+			let cursor: {x: number; y: number} | undefined;
+			if (this.cursorRegistration) {
+				const {nodeRef, offsetX, offsetY} = this.cursorRegistration;
+				if (nodeRef.current?.yogaNode) {
+					const abs = this.getAbsolutePosition(nodeRef.current);
+					cursor = {x: abs.x + offsetX, y: abs.y + offsetY};
+				}
+			}
+
+			this.renderFullScreen(output, cursor);
+			return;
+		}
 
 		// Resolve cursor position from registration after layout computation
 		if (this.cursorRegistration) {
@@ -287,6 +437,12 @@ export default class Ink {
 			return;
 		}
 
+		if (this.isFullScreen) {
+			// Raw console output would corrupt the alternate screen and there
+			// is no scrollback to keep it in. Drop it.
+			return;
+		}
+
 		this.log.clear();
 		writeSafely(this.options.stdout, data);
 		this.log(this.lastOutput);
@@ -305,6 +461,11 @@ export default class Ink {
 
 		if (isInCi) {
 			writeSafely(this.options.stderr, data);
+			return;
+		}
+
+		if (this.isFullScreen) {
+			// stderr shares the same terminal; writing would corrupt the frame.
 			return;
 		}
 
@@ -329,6 +490,14 @@ export default class Ink {
 
 		if (typeof this.unsubscribeResize === 'function') {
 			this.unsubscribeResize();
+		}
+
+		if (this.isFullScreen) {
+			// Restore the main screen (and its scrollback) before exiting.
+			this.isFullScreen = false;
+			registerFullScreenController(undefined);
+			writeSafely(this.options.stdout, LEAVE_FULLSCREEN_SEQUENCE);
+			this.lastOutput = '';
 		}
 
 		// CIs don't handle erasing ansi escapes well, so it's better to

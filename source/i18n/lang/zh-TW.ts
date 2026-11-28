@@ -441,7 +441,8 @@ export const zhTW: TranslationKeys = {
 		tokenTimeoutGroup: '令牌與逾時',
 		groupExpandHint: '(按 Enter 展開/收起)',
 		scopeSelectTitle: 'API 和模型配置',
-		scopeSelectSubtitle: '選擇要配置的內容：LLM 模型、獨立的決策模型，或重試策略',
+		scopeSelectSubtitle:
+			'選擇要配置的內容：LLM 模型、獨立的決策模型，或重試策略',
 		llmConfigEntry: '配置 LLM 模型',
 		llmConfigEntrySubtitle: 'API 連接、請求方案、模型、推理參數、令牌與逾時',
 		scopeSelectHint: '↑↓ 選擇 · Enter 進入 · Esc 返回',
@@ -969,6 +970,7 @@ export const zhTW: TranslationKeys = {
 			toolCorrection:
 				'工具呼叫糾錯開關：呼叫失敗時由基礎模型修復參數並重試。用法: /tool-correction [on|off|status]',
 			simple: '切換主題簡易模式。用法: /simple [on|off|status]',
+			tui: '切換對話介面：經典模式 / 全螢幕 TUI（固定標題與輸入框、虛擬捲動、滑鼠滾輪）。用法: /tui [fullscreen|classic|status]',
 			buddy:
 				'管理終端寵物夥伴。用法: /buddy [hatch|pet|rename|set|say|mute|unmute|status|reset]',
 			toolSearch: '切換工具搜尋（漸進式工具載入）。預設啟用以節省上下文',
@@ -1040,6 +1042,13 @@ export const zhTW: TranslationKeys = {
 				disabled: '簡易模式: 已停用',
 				statusEnabled: '簡易模式: 已啟用',
 				statusDisabled: '簡易模式: 已停用',
+			},
+			tuiMode: {
+				fullscreen:
+					'介面模式: 全螢幕 TUI（滑鼠滾輪 / PageUp / PageDown 捲動，按住 Shift 可選取文字）',
+				classic: '介面模式: 經典模式',
+				statusFullscreen: '介面模式: 全螢幕 TUI',
+				statusClassic: '介面模式: 經典模式',
 			},
 			// 工具顯示模式命令訊息
 			toolDisplay: {
@@ -2275,8 +2284,7 @@ export const zhTW: TranslationKeys = {
 		decisionReason: '原因',
 		decisionModel: '判定模型: {name}',
 		decisionDelegated: '（託管生效中）',
-		decisionDenyEscalated:
-			'決策模型判定拒絕，確認執行即表示你正在覆蓋該判定',
+		decisionDenyEscalated: '決策模型判定拒絕，確認執行即表示你正在覆蓋該判定',
 		decisionDeniedReply:
 			'敏感命令被決策模型（{model}）託管拒絕，信心度 {confidence}%，理由：{reason}。請換一種不需要執行該命令的做法繼續。',
 		decisionReasons: {

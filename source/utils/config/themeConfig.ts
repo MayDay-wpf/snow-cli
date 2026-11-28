@@ -63,6 +63,12 @@ interface ThemeConfig {
 	theme: ThemeType;
 	customColors?: ThemeColors;
 	simpleMode?: boolean;
+	/**
+	 * Chat screen render mode.
+	 * - classic: inline renderer, history is appended to terminal scrollback (default)
+	 * - fullscreen: alternate-screen TUI with virtual scrolling (bounded memory)
+	 */
+	tuiMode?: TuiMode;
 	diffOpacity?: number;
 	toolDisplayMode?: ToolDisplayMode;
 	thinkDisplayMode?: ThinkDisplayMode;
@@ -77,6 +83,7 @@ interface ThemeConfig {
 
 export type ToolDisplayMode = 'full' | 'compact' | 'hidden';
 export type ThinkDisplayMode = 'full' | 'compact';
+export type TuiMode = 'classic' | 'fullscreen';
 
 const DEFAULT_CONFIG: ThemeConfig = {
 	theme: 'tiffany',
@@ -182,6 +189,23 @@ export function getSimpleMode(): boolean {
 export function setSimpleMode(simpleMode: boolean): void {
 	const config = loadThemeConfig();
 	saveThemeConfig({...config, simpleMode});
+}
+
+/**
+ * Get chat screen render mode. Defaults to the classic inline renderer.
+ */
+export function getTuiMode(): TuiMode {
+	const config = loadThemeConfig();
+	return config.tuiMode === 'fullscreen' ? 'fullscreen' : 'classic';
+}
+
+/**
+ * Set chat screen render mode, persist it and notify subscribers.
+ */
+export function setTuiMode(tuiMode: TuiMode): void {
+	const config = loadThemeConfig();
+	saveThemeConfig({...config, tuiMode});
+	configEvents.emitConfigChange({type: 'tuiMode', value: tuiMode});
 }
 
 /**

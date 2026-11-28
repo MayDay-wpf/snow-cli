@@ -21,7 +21,8 @@ import {
 	getSpeedometerEnabled,
 } from '../../../utils/config/projectSettings.js';
 import {tpsTracker} from '../../../hooks/conversation/core/tpsTracker.js';
-import {getSimpleMode} from '../../../utils/config/themeConfig.js';
+import {getSimpleMode, getTuiMode} from '../../../utils/config/themeConfig.js';
+import type {TuiMode} from '../../../utils/config/themeConfig.js';
 import {getToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import type {ToolDisplayMode} from '../../../utils/config/themeConfig.js';
 import {getThinkDisplayMode} from '../../../utils/config/themeConfig.js';
@@ -64,6 +65,8 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		getUltraTodoEnabled(),
 	);
 	const [simpleMode, setSimpleMode] = useState(() => getSimpleMode());
+	// Chat render mode: classic (default, inline + scrollback) or fullscreen TUI.
+	const [tuiMode, setTuiModeState] = useState<TuiMode>(() => getTuiMode());
 	const [showThinking, setShowThinking] = useState(() => {
 		const config = getSnowConfig();
 		return config.showThinking !== false;
@@ -138,6 +141,10 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 					const next = Boolean(event.value);
 					return prev === next ? prev : next;
 				});
+			} else if (event.type === 'tuiMode') {
+				setTuiModeState(
+					event.value === 'fullscreen' ? 'fullscreen' : 'classic',
+				);
 			} else if (event.type === 'toolDisplayMode') {
 				setToolDisplayMode(event.value);
 			} else if (event.type === 'thinkDisplayMode') {
@@ -224,6 +231,7 @@ export function useChatScreenModes({enableYolo, enablePlan}: Options) {
 		ultraTodoEnabled,
 		setUltraTodoEnabled,
 		simpleMode,
+		tuiMode,
 		showThinking,
 		toolDisplayMode,
 		thinkDisplayMode,

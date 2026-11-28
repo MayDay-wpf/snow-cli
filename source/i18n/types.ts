@@ -925,6 +925,7 @@ export type TranslationKeys = {
 			autoFormat: string;
 			toolCorrection: string;
 			simple: string;
+			tui: string;
 			buddy: string;
 			toolSearch: string;
 			hybridCompress: string;
@@ -984,6 +985,13 @@ export type TranslationKeys = {
 				disabled: string;
 				statusEnabled: string;
 				statusDisabled: string;
+			};
+			// TUI render mode command messages
+			tuiMode: {
+				fullscreen: string;
+				classic: string;
+				statusFullscreen: string;
+				statusClassic: string;
 			};
 			// Tool display mode command messages
 			toolDisplay: {
